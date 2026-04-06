@@ -12,6 +12,8 @@ import {
   type Row,
 } from "@tanstack/react-table";
 import React from "react";
+import { Button } from "../components/ui/button";
+import { AddChangeItemDialog } from "../components/AddChangeItemDialog";
 
 type Changelog = {
   id: number;
@@ -65,6 +67,7 @@ const TableCell = ({
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onBlur={onBlur}
+      className="w-full"
     />
   );
 };
@@ -92,7 +95,11 @@ const TableDropdown = ({
   };
 
   return (
-    <select onChange={(e) => setValue(e.target.value)} onBlur={onBlur}>
+    <select
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={onBlur}
+      className="w-full"
+    >
       <option value="requested" selected={initialValue === "Requested"}>
         Requested
       </option>
@@ -220,6 +227,9 @@ function Home() {
     <main>
       <div className="flex justify-center flex-col p-4">
         <div>
+          <div className="mb-4">
+            <AddChangeItemDialog />
+          </div>
           <table className="w-full">
             <thead>
               {table.getHeaderGroups().map((headerGroup) => (
@@ -251,7 +261,7 @@ function Home() {
                 </tr>
               ))}
             </tbody>
-            <tfoot>
+            {/* <tfoot>
               {table.getFooterGroups().map((footerGroup) => (
                 <tr key={footerGroup.id}>
                   {footerGroup.headers.map((header) => (
@@ -266,13 +276,16 @@ function Home() {
                   ))}
                 </tr>
               ))}
-            </tfoot>
+            </tfoot> */}
           </table>
         </div>
         <div>
-          <button onClick={async () => await updateData({ data: data })}>
+          <Button
+            className="mt-4"
+            onClick={async () => await updateData({ data: data })}
+          >
             Submit{" "}
-          </button>
+          </Button>
         </div>
       </div>
     </main>

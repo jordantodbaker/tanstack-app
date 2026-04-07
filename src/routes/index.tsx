@@ -13,17 +13,10 @@ import {
 } from "@tanstack/react-table";
 import React from "react";
 import { Button } from "../components/ui/button";
-import { AddChangeItemDialog } from "../components/AddChangeItemDialog";
-
-type Changelog = {
-  id: number;
-  projectId: number;
-  cvrId: number;
-  description: string;
-  status: string;
-  createdAt: Date;
-  updatedAt: Date;
-};
+import { AddChangeItemDialog } from "../components/Changelog/AddChangeItemDialog";
+import { columns } from "~/components/Changelog/ChangelogTable";
+import { Changelog } from "../lib/types";
+import { ChangelogScalarFieldEnum } from "~/generated/prisma/internal/prismaNamespace";
 
 export const Route = createFileRoute("/")({
   component: Home,
@@ -43,135 +36,31 @@ async function toFreshRequest(request: Request) {
   });
 }
 
-const TableCell = ({
-  getValue,
-  row,
-  column,
-  table,
-}: {
-  getValue: any;
-  row: Row<Changelog>;
-  column: any;
-  table: any;
-}) => {
-  const initialValue = getValue();
-  const [value, setValue] = useState(initialValue);
-  useEffect(() => {
-    setValue(initialValue);
-  }, [initialValue]);
-  const onBlur = () => {
-    table.options.meta?.updateData(row.index, column.id, value);
-  };
-  return (
-    <input
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={onBlur}
-      className="w-full"
-    />
-  );
-};
-
-const TableDropdown = ({
-  getValue,
-  row,
-  column,
-  table,
-}: {
-  getValue: any;
-  row: Row<Changelog>;
-  column: any;
-  table: any;
-}) => {
-  const initialValue = getValue();
-  const [value, setValue] = useState(initialValue);
-
-  useEffect(() => {
-    setValue(initialValue);
-  }, [initialValue]);
-
-  const onBlur = () => {
-    table.options.meta?.updateData(row.index, column.id, value);
-  };
-
-  return (
-    <select
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={onBlur}
-      className="w-full"
-    >
-      <option value="requested" selected={initialValue === "Requested"}>
-        Requested
-      </option>
-      <option value="pending" selected={initialValue === "Pending"}>
-        Pending
-      </option>
-      <option value="approved" selected={initialValue === "Approved"}>
-        Approved
-      </option>
-      <option value="denied" selected={initialValue === "Denied"}>
-        Denied
-      </option>
-      <option value="executed" selected={initialValue === "Executed"}>
-        Executed
-      </option>
-    </select>
-  );
-};
-
 const getChangelogs = createServerFn({ method: "GET" }).handler(async () => {
   return prisma.changelog.findMany();
 });
 
 const updateChangelogs = createServerFn({ method: "POST" })
-  .inputValidator((data: Changelog[]) => data)
+  .inputValidator((data: ChangelogForm[]) => data)
   .handler(async (data) => {
-    const logs: Changelog[] = data.data;
-    console.log("THE DATA: ", logs);
-    return Promise.all(
-      logs.map((log) =>
-        prisma.changelog.update({
-          where: { id: log.id },
-          data: { ...log, updatedAt: new Date() },
-        }),
-      ),
+    const logs: ChangelogForm[] = data.data;
+    return await Promise.all(
+      logs.map((log) => {
+        if (log.isDirty) {
+          return prisma.changelog.update({
+            where: { id: log.id },
+            data: {
+              projectId: log.projectId,
+              cvrId: log.cvrId,
+              description: log.description,
+              status: log.status,
+              updatedAt: new Date(),
+            },
+          });
+        }
+      }),
     );
-    //return prisma.changelog.updateMany<ChangelogUpdate>({ data: log });
   });
-
-// const updateChangelogs = () => {
-//   console.log("DIRKA");
-// };
-
-const columnHelper = createColumnHelper<Changelog>();
-
-const columns = [
-  columnHelper.accessor("id", {
-    cell: (info) => info.getValue(),
-    footer: (info) => info.column.id,
-  }),
-  columnHelper.accessor((row) => row.projectId, {
-    id: "projectId",
-    cell: (info) => <i>{info.getValue()}</i>,
-    header: () => <span>Project Id</span>,
-    footer: (info) => info.column.id,
-  }),
-  columnHelper.accessor("cvrId", {
-    header: () => "CVR ID",
-    cell: (info) => info.renderValue(),
-    footer: (info) => info.column.id,
-  }),
-  columnHelper.accessor("description", {
-    header: () => <span>Description</span>,
-    footer: (info) => info.column.id,
-    cell: TableCell,
-  }),
-  columnHelper.accessor("status", {
-    header: "Status",
-    footer: (info) => info.column.id,
-    cell: TableDropdown,
-  }),
-];
 
 const defaultData: Changelog[] = [
   {
@@ -185,11 +74,21 @@ const defaultData: Changelog[] = [
   },
 ];
 
+function isNotUndefined<T>(value: T | undefined): value is T {
+  return value !== undefined;
+}
+
+type ChangelogForm = Changelog & { isDirty: boolean };
+
 function Home() {
   const rerender = React.useReducer(() => ({}), {})[1];
 
   const logs: Changelog[] = Route.useLoaderData();
-  const [data, _setData] = React.useState(() => [...logs]);
+  const logForms = logs.map((log: Changelog): ChangelogForm => {
+    return { ...log, isDirty: false };
+  });
+  const [data, _setData] = React.useState(() => [...logForms]);
+  const [newLog, setNewLog] = React.useState([]);
 
   const updateData = useServerFn(updateChangelogs);
 
@@ -214,11 +113,24 @@ function Home() {
               return {
                 ...old[rowIndex],
                 [columnId]: value,
+                isDirty: true,
               };
             }
             return row;
           }),
         );
+      },
+      deleteLog: (rowIndex: number) => {
+        const newLogs = data.map((log) => {
+          if (data[rowIndex].id !== log.id) {
+            return log;
+          }
+        });
+        const filteredArray = newLogs.filter(isNotUndefined);
+
+        _setData(filteredArray);
+
+        console.log("The new logs are: ", newLogs);
       },
     },
   });
@@ -261,22 +173,6 @@ function Home() {
                 </tr>
               ))}
             </tbody>
-            {/* <tfoot>
-              {table.getFooterGroups().map((footerGroup) => (
-                <tr key={footerGroup.id}>
-                  {footerGroup.headers.map((header) => (
-                    <th key={header.id}>
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.footer,
-                            header.getContext(),
-                          )}
-                    </th>
-                  ))}
-                </tr>
-              ))}
-            </tfoot> */}
           </table>
         </div>
         <div>

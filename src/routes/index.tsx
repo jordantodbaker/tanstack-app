@@ -14,9 +14,13 @@ import {
 import React from "react";
 import { Button } from "../components/ui/button";
 import { AddChangeItemDialog } from "../components/Changelog/AddChangeItemDialog";
-import { columns } from "~/components/Changelog/ChangelogTable";
-import { Changelog } from "../lib/types";
-import { ChangelogScalarFieldEnum } from "~/generated/prisma/internal/prismaNamespace";
+import { getColumns } from "~/components/Changelog/ChangelogTable";
+import { ChangeLog, StatusLookup } from "../lib/types";
+
+interface PageLoadData {
+  changeLogs: ChangeLog[];
+  statusLookup: StatusLookup[];
+}
 
 export const Route = createFileRoute("/")({
   component: Home,
@@ -37,7 +41,10 @@ async function toFreshRequest(request: Request) {
 }
 
 const getChangelogs = createServerFn({ method: "GET" }).handler(async () => {
-  return prisma.changelog.findMany();
+  return {
+    changeLogs: await prisma.changeLog.findMany({ include: { status: true } }),
+    statusLookup: await prisma.statusLookup.findMany(),
+  };
 });
 
 const updateChangelogs = createServerFn({ method: "POST" })
@@ -47,13 +54,13 @@ const updateChangelogs = createServerFn({ method: "POST" })
     return await Promise.all(
       logs.map((log) => {
         if (log.isDirty) {
-          return prisma.changelog.update({
+          return prisma.changeLog.update({
             where: { id: log.id },
             data: {
               projectId: log.projectId,
               cvrId: log.cvrId,
               description: log.description,
-              status: log.status,
+              statusId: +log.statusId,
               updatedAt: new Date(),
             },
           });
@@ -62,39 +69,48 @@ const updateChangelogs = createServerFn({ method: "POST" })
     );
   });
 
-const defaultData: Changelog[] = [
-  {
-    id: 0,
-    projectId: 0,
-    cvrId: 0,
-    description: "",
-    status: "",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-];
+const addChangelog = createServerFn({ method: "POST" })
+  .inputValidator((data: Omit<ChangeLog, "id">) => data)
+  .handler(async (data) => {
+    const log: Omit<ChangeLog, "id"> = data.data;
+    const result = await prisma.changeLog.create({
+      data: {
+        projectId: log.projectId,
+        cvrId: log.cvrId,
+        description: log.description,
+        statusId: +log.statusId,
+        updatedAt: new Date(),
+      },
+    });
+    console.log("THE RESULT IS: ", result);
+    return result;
+  });
 
 function isNotUndefined<T>(value: T | undefined): value is T {
   return value !== undefined;
 }
 
-type ChangelogForm = Changelog & { isDirty: boolean };
+type ChangelogForm = ChangeLog & { isDirty: boolean };
 
 function Home() {
   const rerender = React.useReducer(() => ({}), {})[1];
 
-  const logs: Changelog[] = Route.useLoaderData();
-  const logForms = logs.map((log: Changelog): ChangelogForm => {
+  const pageData: PageLoadData = Route.useLoaderData();
+
+  const logForms = pageData.changeLogs.map((log: ChangeLog): ChangelogForm => {
     return { ...log, isDirty: false };
   });
   const [data, _setData] = React.useState(() => [...logForms]);
   const [newLog, setNewLog] = React.useState([]);
 
   const updateData = useServerFn(updateChangelogs);
+  const addLog = useServerFn(addChangelog);
+
+  console.log("NEW DATA: ", data);
 
   const table = useReactTable({
     data,
-    columns,
+    columns: getColumns(pageData.statusLookup),
     getCoreRowModel: getCoreRowModel(),
     filterFns: {
       fuzzy: () => {
@@ -129,9 +145,13 @@ function Home() {
         const filteredArray = newLogs.filter(isNotUndefined);
 
         _setData(filteredArray);
-
-        console.log("The new logs are: ", newLogs);
       },
+      addLog: (log: ChangeLog) => {
+        const newLogs = data;
+        newLogs.push({ ...log, isDirty: false });
+        _setData([...newLogs]);
+      },
+      statusLookup: pageData.statusLookup,
     },
   });
 
@@ -140,7 +160,13 @@ function Home() {
       <div className="flex justify-center flex-col p-4">
         <div>
           <div className="mb-4">
-            <AddChangeItemDialog />
+            <AddChangeItemDialog
+              statusLookup={pageData.statusLookup}
+              onAddLog={async (log: any) => {
+                const newLog = await addLog(log);
+                await table.options.meta?.addLog!(newLog);
+              }}
+            />
           </div>
           <table className="w-full">
             <thead>

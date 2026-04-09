@@ -19,12 +19,19 @@ model Post {
   createdAt DateTime @default(now())
 }
 
-model Changelog {
-  id          Int      @id @default(autoincrement())
+model ChangeLog {
+  id          Int          @id @default(autoincrement())
   projectId   Int
   cvrId       Int
   description String
-  status      String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @default(now())
+  status      StatusLookup @relation(fields: [statusId], references: [id])
+  statusId    Int
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @default(now())
+}
+
+model StatusLookup {
+  id         Int         @id
+  status     String
+  changelogs ChangeLog[]
 }

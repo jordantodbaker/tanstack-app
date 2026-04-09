@@ -22,7 +22,7 @@ import {
 
 import { Button } from "../ui/button";
 
-import { Changelog } from "../../lib/types";
+import { ChangeLog, StatusLookup } from "../../lib/types";
 
 const TableCell = ({
   getValue,
@@ -31,7 +31,7 @@ const TableCell = ({
   table,
 }: {
   getValue: any;
-  row: Row<Changelog>;
+  row: Row<ChangeLog>;
   column: any;
   table: any;
 }) => {
@@ -60,7 +60,7 @@ const TableDropdown = ({
   table,
 }: {
   getValue: any;
-  row: Row<Changelog>;
+  row: Row<ChangeLog>;
   column: any;
   table: any;
 }) => {
@@ -81,28 +81,22 @@ const TableDropdown = ({
       onBlur={onBlur}
       className="w-full"
     >
-      <option value="requested" selected={initialValue === "Requested"}>
-        Requested
-      </option>
-      <option value="pending" selected={initialValue === "Pending"}>
-        Pending
-      </option>
-      <option value="approved" selected={initialValue === "Approved"}>
-        Approved
-      </option>
-      <option value="denied" selected={initialValue === "Denied"}>
-        Denied
-      </option>
-      <option value="executed" selected={initialValue === "Executed"}>
-        Executed
-      </option>
+      {table.options.meta.statusLookup.map((item: StatusLookup) => (
+        <option
+          key={item.id}
+          value={item.id}
+          selected={initialValue === item.id}
+        >
+          {item.status}
+        </option>
+      ))}
     </select>
   );
 };
 
-const columnHelper = createColumnHelper<Changelog>();
+const columnHelper = createColumnHelper<ChangeLog>();
 
-export const columns = [
+export const getColumns = (statusLookup: StatusLookup[]) => [
   columnHelper.accessor("id", {
     cell: (info) => info.getValue(),
     footer: (info) => info.column.id,
@@ -123,15 +117,16 @@ export const columns = [
     footer: (info) => info.column.id,
     cell: TableCell,
   }),
-  columnHelper.accessor("status", {
+  columnHelper.accessor("statusId", {
     header: "Status",
     footer: (info) => info.column.id,
     cell: TableDropdown,
+    meta: { statusLookup: statusLookup },
   }),
   {
     id: "delete",
     header: "Delete",
-    cell: (info: CellContext<Changelog, string>) => (
+    cell: (info: CellContext<ChangeLog, string>) => (
       <div className="flex justify-center">
         <Dialog>
           <DialogTrigger>
@@ -155,7 +150,6 @@ export const columns = [
                 <Button
                   onClick={() => {
                     info.table.options.meta?.deleteLog?.(info.row.index);
-                    console.log(info);
                   }}
                 >
                   Delete

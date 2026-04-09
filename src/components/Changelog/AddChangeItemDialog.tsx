@@ -8,8 +8,6 @@ import {
   DialogTrigger,
 } from "../ui/dialog";
 import { Button } from "../ui/button";
-
-import { Checkbox } from "../ui/checkbox";
 import {
   Field,
   FieldDescription,
@@ -29,8 +27,42 @@ import {
   SelectValue,
 } from "../ui/select";
 import { Textarea } from "../ui/textarea";
+import { StatusLookup } from "~/generated/prisma/client";
+import { useState } from "react";
+import { ChangeLog } from "~/lib/types";
+import { RequiredFetcher } from "@tanstack/react-start";
 
-export function AddChangeItemDialog() {
+export function AddChangeItemDialog({
+  statusLookup,
+  onAddLog,
+}: {
+  statusLookup: StatusLookup[];
+  onAddLog: any;
+}) {
+  const [projectId, setProjectId] = useState("");
+  const [cvrId, setCvrId] = useState("");
+  const [status, setStatus] = useState("");
+  const [description, setDescription] = useState("");
+
+  const onUpdateProjectId = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setProjectId(e.target.value);
+  };
+
+  const onUpdateCvrId = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCvrId(e.target.value);
+  };
+
+  const onUpdateStatus = (status: string) => {
+    console.log("Updating Status: ", status);
+    setStatus(status);
+  };
+
+  const onUpdateDescription = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setDescription(e.target.value);
+  };
+
+  console.log("STATUS: ", status);
+
   return (
     <div>
       <Dialog>
@@ -38,48 +70,67 @@ export function AddChangeItemDialog() {
           <Button>Add Change Item</Button>
         </DialogTrigger>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Are you absolutely sure?</DialogTitle>
-            <DialogDescription>
-              This action cannot be undone. This will permanently delete your
-              account and remove your data from our servers.
-            </DialogDescription>
-          </DialogHeader>
           <FieldSet>
             <FieldLegend>Add</FieldLegend>
             <FieldDescription>Add an item to the changelog</FieldDescription>
             <Field>
               <FieldLabel>Project ID</FieldLabel>
-              <Input id="projectId" />
+              <Input
+                id="projectId"
+                onChange={onUpdateProjectId}
+                value={projectId}
+              />
             </Field>
             <Field>
               <FieldLabel>CVR ID</FieldLabel>
-              <Input id="cvrId" />
+              <Input id="cvrId" onChange={onUpdateCvrId} value={cvrId} />
             </Field>
             <Field>
               <FieldLabel>Status</FieldLabel>
-              <Select defaultValue="">
+              <Select defaultValue="" onValueChange={onUpdateStatus}>
                 <SelectTrigger id="status">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="Requested">Requested</SelectItem>
-                    <SelectItem value="Pending">Pending</SelectItem>
-                    <SelectItem value="Approved">Approved</SelectItem>
-                    <SelectItem value="Denied">Denied</SelectItem>
-                    <SelectItem value="Executed">Executed</SelectItem>
+                    {statusLookup.map((item) => (
+                      <SelectItem value={`${item.id}`}>
+                        {item.status}
+                      </SelectItem>
+                    ))}
                   </SelectGroup>
                 </SelectContent>
               </Select>
             </Field>
             <Field>
               <FieldLabel>Description</FieldLabel>
-              <Textarea id="description"></Textarea>
+              <Textarea
+                id="description"
+                onChange={onUpdateDescription}
+                value={description}
+              ></Textarea>
             </Field>
           </FieldSet>
           <Field orientation="horizontal">
-            <Button type="submit">Submit</Button>
+            <DialogClose>
+              <Button
+                type="submit"
+                onClick={async () =>
+                  await onAddLog({
+                    data: {
+                      projectId: +projectId,
+                      cvrId: +cvrId,
+                      statusId: +status,
+                      description: description,
+                      createdAt: new Date(),
+                      updatedAt: new Date(),
+                    },
+                  })
+                }
+              >
+                Submit
+              </Button>
+            </DialogClose>
             <DialogClose>
               <Button variant="outline" type="button">
                 Cancel

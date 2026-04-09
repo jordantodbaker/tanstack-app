@@ -36,9 +36,10 @@
   "devDependencies": {
     "@prisma/config": "^7.6.0",
     "@tailwindcss/vite": "^4.2.2",
-    "@types/node": "^22.5.4",
+    "@types/node": "^22.19.17",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
+    "@types/react-query": "^1.2.8",
     "@vitejs/plugin-react": "^6.0.1",
     "tailwindcss": "^4.2.2",
     "typescript": "^6.0.2",

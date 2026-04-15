@@ -21,7 +21,6 @@ import {
 } from "../ui/dialog";
 
 import { Button } from "../ui/button";
-
 import { ChangeLog, StatusLookup } from "../../lib/types";
 
 const TableCell = ({
@@ -96,7 +95,10 @@ const TableDropdown = ({
 
 const columnHelper = createColumnHelper<ChangeLog>();
 
-export const getColumns = (statusLookup: StatusLookup[]) => [
+export const getColumns = (
+  statusLookup: StatusLookup[],
+  deleteLog: (id: number) => void,
+) => [
   columnHelper.accessor("id", {
     cell: (info) => info.getValue(),
     footer: (info) => info.column.id,
@@ -122,6 +124,8 @@ export const getColumns = (statusLookup: StatusLookup[]) => [
     footer: (info) => info.column.id,
     cell: TableDropdown,
     meta: { statusLookup: statusLookup },
+    filterFn: (row, columnId, filterValue) =>
+      row.getValue(columnId) === filterValue,
   }),
   {
     id: "delete",
@@ -148,8 +152,9 @@ export const getColumns = (statusLookup: StatusLookup[]) => [
               </DialogClose>
               <DialogClose>
                 <Button
-                  onClick={() => {
+                  onClick={async () => {
                     info.table.options.meta?.deleteLog?.(info.row.index);
+                    await deleteLog(info.row.original.id);
                   }}
                 >
                   Delete

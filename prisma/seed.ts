@@ -1,6 +1,7 @@
 import { prisma } from "../src/server/db";
 import { ChangeLog } from "~/lib/types";
 import { StatusLookup } from "~/lib/types";
+import { Project } from "~/lib/types";
 
 const changeLogItems: Omit<ChangeLog, 'id'>[] = [
     {projectId: 1, cvrId: 1, description: "Change log description for CVR ID: 1", statusId: 1, createdAt: new Date, updatedAt: new Date },
@@ -12,6 +13,12 @@ const changeLogItems: Omit<ChangeLog, 'id'>[] = [
     {projectId: 3, cvrId: 7, description: "Increased budget for site indirects and support roles", statusId: 4, createdAt: new Date, updatedAt: new Date },
     {projectId: 3, cvrId: 8, description: "Scope increased after re-evaluation and testing for tracing and containment", statusId: 6, createdAt: new Date, updatedAt: new Date },
     {projectId: 3, cvrId: 9, description: "New CVR to repair front gate after Jorge crashed into it", statusId: 2, createdAt: new Date, updatedAt: new Date },
+]
+
+const projects: Project[] = [
+    {id: 1, displayId: "1901", name: "1901 - FIME Engineering", description: "Description for the FIME engineering project", createdAt: new Date, updatedAt: new Date},
+    {id: 2, displayId: "1902", name: "1902 - FIME Mechanical", description: "Description for the FIME mechanical project", createdAt: new Date, updatedAt: new Date},
+    {id: 3, displayId: "1903", name: "1903 - FIME Product Handling", description: "Description for the FIME product handling project", createdAt: new Date, updatedAt: new Date}
 ]
 
 const statusLookups: StatusLookup[] = [
@@ -26,9 +33,11 @@ const statusLookups: StatusLookup[] = [
 async function main() {
     await prisma.statusLookup.deleteMany();
     await prisma.changeLog.deleteMany();
+    await prisma.project.deleteMany();
 
-    const status = await prisma.statusLookup.createMany({data: statusLookups})
-    const logs = await prisma.changeLog.createMany({data: changeLogItems})
+    await prisma.project.createMany({data: projects})
+    await prisma.statusLookup.createMany({data: statusLookups})
+    await prisma.changeLog.createMany({data: changeLogItems})
 }
 
 main().then(async () => {

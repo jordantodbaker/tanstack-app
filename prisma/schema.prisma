@@ -19,8 +19,19 @@ model Post {
   createdAt DateTime @default(now())
 }
 
+model Project {
+  id          Int         @id @default(autoincrement())
+  displayId   String
+  name        String
+  description String
+  changeLogs  ChangeLog[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @default(now())
+}
+
 model ChangeLog {
   id          Int          @id @default(autoincrement())
+  project     Project      @relation(fields: [projectId], references: [id])
   projectId   Int
   cvrId       Int
   description String

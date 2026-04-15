@@ -8,6 +8,7 @@ import {
   createColumnHelper,
   flexRender,
   getCoreRowModel,
+  getFilteredRowModel,
   useReactTable,
   type Row,
 } from "@tanstack/react-table";
@@ -86,6 +87,15 @@ const addChangelog = createServerFn({ method: "POST" })
     return result;
   });
 
+const deleteChangelog = createServerFn({ method: "POST" })
+  .inputValidator((data: { id: number }) => data)
+  .handler(async (data) => {
+    const result = await prisma.changeLog.delete({
+      where: { id: data.data.id },
+    });
+    return result;
+  });
+
 function isNotUndefined<T>(value: T | undefined): value is T {
   return value !== undefined;
 }
@@ -102,16 +112,23 @@ function Home() {
   });
   const [data, _setData] = React.useState(() => [...logForms]);
   const [newLog, setNewLog] = React.useState([]);
+  const [columnFilters, setColumnFilters] = React.useState<
+    { id: string; value: unknown }[]
+  >([]);
 
   const updateData = useServerFn(updateChangelogs);
   const addLog = useServerFn(addChangelog);
-
-  console.log("NEW DATA: ", data);
+  const deleteLog = useServerFn(deleteChangelog);
 
   const table = useReactTable({
     data,
-    columns: getColumns(pageData.statusLookup),
+    columns: getColumns(pageData.statusLookup, (id) =>
+      deleteLog({ data: { id } }),
+    ),
     getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    onColumnFiltersChange: setColumnFilters,
+    state: { columnFilters },
     filterFns: {
       fuzzy: () => {
         return true;
@@ -162,7 +179,7 @@ function Home() {
           <div className="mb-4">
             <AddChangeItemDialog
               statusLookup={pageData.statusLookup}
-              onAddLog={async (log: any) => {
+              onAddLog={async (log: { data: Omit<ChangeLog, "id"> }) => {
                 const newLog = await addLog(log);
                 await table.options.meta?.addLog!(newLog);
               }}
@@ -180,6 +197,24 @@ function Home() {
                             header.column.columnDef.header,
                             header.getContext(),
                           )}
+                      {header.column.id === "statusId" && (
+                        <div >
+                          <select className="w-full"
+                            onChange={(e) =>
+                              header.column.setFilterValue(
+                                e.target.value ? +e.target.value : undefined,
+                              )
+                            }
+                          >
+                            <option value="">All</option>
+                            {pageData.statusLookup.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.status}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                     </th>
                   ))}
                 </tr>
@@ -206,7 +241,7 @@ function Home() {
             className="mt-4"
             onClick={async () => await updateData({ data: data })}
           >
-            Submit{" "}
+            Save Changes{" "}
           </Button>
         </div>
       </div>

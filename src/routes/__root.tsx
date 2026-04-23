@@ -15,14 +15,8 @@ import { NotFound } from "~/components/NotFound";
 import appCss from "~/styles/app.css?url";
 import { seo } from "~/utils/seo";
 import { ClerkProvider, SignOutButton } from "@clerk/tanstack-react-start";
-
-import {
-  UserButton,
-  Show,
-  SignIn,
-  SignInButton,
-  SignUpButton,
-} from "@clerk/tanstack-react-start";
+import { UserButton, Show, SignIn } from "@clerk/tanstack-react-start";
+import { Sidebar } from "~/components/Sidebar";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -90,80 +84,80 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <head>
         <HeadContent />
       </head>
-      <body>
+      <body className="bg-slate-50 text-slate-900 antialiased">
         <ClerkProvider
           publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}
         >
           <Show when="signed-out">
-            <div className="grid h-screen place-items-center">
+            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-8">
+              <div className="flex flex-col items-center gap-3">
+                <img
+                  src="/logo.png"
+                  alt="Company Logo"
+                  className="h-16 w-auto"
+                />
+                <h1 className="text-2xl font-bold text-slate-800">
+                  EPC Manager
+                </h1>
+                <p className="text-sm text-slate-500">
+                  Project Controls Platform
+                </p>
+              </div>
               <SignIn />
             </div>
           </Show>
           <Show when="signed-in">
-            <div className="p-2 flex gap-2 text-lg">
-              <Link
-                to="/"
-                activeProps={{
-                  className: "font-bold",
-                }}
-                activeOptions={{ exact: true }}
-              >
-                Home
-              </Link>{" "}
-              <Link
-                to="/fef"
-                activeProps={{
-                  className: "font-bold",
-                }}
-                activeOptions={{ exact: true }}
-              >
-                Field Estimate Form
-              </Link>{" "}
-              <Link
-                to="/posts"
-                activeProps={{
-                  className: "font-bold",
-                }}
-              >
-                Posts
-              </Link>{" "}
-              <Link
-                to="/users"
-                activeProps={{
-                  className: "font-bold",
-                }}
-              >
-                Users
-              </Link>{" "}
-              <Link
-                to="/route-a"
-                activeProps={{
-                  className: "font-bold",
-                }}
-              >
-                Pathless Layout
-              </Link>{" "}
-              <Link
-                to="/deferred"
-                activeProps={{
-                  className: "font-bold",
-                }}
-              >
-                Deferred
-              </Link>{" "}
-              <Link
-                // @ts-expect-error
-                to="/this-route-does-not-exist"
-                activeProps={{
-                  className: "font-bold",
-                }}
-              >
-                This Route Does Not Exist
-              </Link>
-              <SignOutButton />
+            <div className="min-h-screen flex flex-col">
+              <header className="bg-white border-b border-slate-200 shadow-sm z-10">
+                <div className="px-6 h-16 flex items-center gap-6">
+                  <div className="flex items-center gap-3 shrink-0">
+                    <img
+                      src="/logo.png"
+                      alt="Company Logo"
+                      className="h-9 w-auto"
+                    />
+                    <div className="flex flex-col leading-tight">
+                      <span className="font-bold text-slate-800 text-base">
+                        Haskell
+                      </span>
+                      <span className="text-xs text-slate-400">
+                        Project Controls Platform
+                      </span>
+                    </div>
+                  </div>
+                  <nav className="flex items-center gap-1 flex-1">
+                    <Link
+                      to="/"
+                      className="px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                      activeProps={{ className: "text-red-800 bg-red-50" }}
+                      inactiveProps={{ className: "text-slate-600 hover:text-slate-900 hover:bg-slate-100" }}
+                      activeOptions={{ exact: true }}
+                    >
+                      Change Log
+                    </Link>
+                    <Link
+                      to="/fef"
+                      className="px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                      activeProps={{ className: "text-red-800 bg-red-50" }}
+                      inactiveProps={{ className: "text-slate-600 hover:text-slate-900 hover:bg-slate-100" }}
+                      activeOptions={{ exact: true }}
+                    >
+                      Field Estimate Form
+                    </Link>
+                  </nav>
+                  <div className="shrink-0 flex items-center gap-3">
+                    <UserButton />
+                    <SignOutButton />
+                  </div>
+                </div>
+              </header>
+              <div className="flex flex-1 overflow-hidden">
+                <Sidebar />
+                <main className="flex-1 overflow-auto bg-slate-50">
+                  {children}
+                </main>
+              </div>
             </div>
-            <hr />
-            {children}
             <TanStackRouterDevtools position="bottom-right" />
             <ReactQueryDevtools buttonPosition="bottom-left" />
           </Show>

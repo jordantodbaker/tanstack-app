@@ -17,6 +17,13 @@ import { Button } from "../components/ui/button";
 import { AddChangeItemDialog } from "../components/Changelog/AddChangeItemDialog";
 import { getColumns } from "~/components/Changelog/ChangelogTable";
 import { ChangeLog, StatusLookup } from "../lib/types";
+import {
+  UserButton,
+  Show,
+  SignIn,
+  SignInButton,
+  SignUpButton,
+} from "@clerk/tanstack-react-start";
 
 interface PageLoadData {
   changeLogs: ChangeLog[];
@@ -198,8 +205,9 @@ function Home() {
                             header.getContext(),
                           )}
                       {header.column.id === "statusId" && (
-                        <div >
-                          <select className="w-full"
+                        <div>
+                          <select
+                            className="w-full"
                             onChange={(e) =>
                               header.column.setFilterValue(
                                 e.target.value ? +e.target.value : undefined,

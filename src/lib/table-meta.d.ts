@@ -7,6 +7,6 @@ declare module '@tanstack/react-table' {
     updateData?: (rowIndex: number, columnId: string, value: any) => void
     deleteLog?: (rowIndex: number) => void
     addLog?: (log: changeLog) => void
-    statusLookup: StatusLookup[]
+    statusLookup?: StatusLookup[]
   }
 }

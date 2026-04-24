@@ -9,7 +9,25 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SteelRouteImport } from './routes/steel'
+import { Route as ProjectDevelopmentRouteImport } from './routes/project-development'
+import { Route as ProcurementRouteImport } from './routes/procurement'
+import { Route as PipingRouteImport } from './routes/piping'
+import { Route as OperationsRouteImport } from './routes/operations'
+import { Route as InstrumentsRouteImport } from './routes/instruments'
+import { Route as IndirectsRouteImport } from './routes/indirects'
 import { Route as FefRouteImport } from './routes/fef'
+import { Route as EquipmentRouteImport } from './routes/equipment'
+import { Route as EngineeringRouteImport } from './routes/engineering'
+import { Route as ElectricRouteImport } from './routes/electric'
+import { Route as DemolitionRouteImport } from './routes/demolition'
+import { Route as ContingencyRouteImport } from './routes/contingency'
+import { Route as ConcreteRouteImport } from './routes/concrete'
+import { Route as CommissioningRouteImport } from './routes/commissioning'
+import { Route as CoatingsRouteImport } from './routes/coatings'
+import { Route as CivilRouteImport } from './routes/civil'
+import { Route as BuildingsRouteImport } from './routes/buildings'
+import { Route as AdministrationRouteImport } from './routes/administration'
 import { Route as PathlessLayoutRouteImport } from './routes/_pathlessLayout'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiUsersRouteImport } from './routes/api/users'
@@ -19,9 +37,99 @@ import { Route as ApiUsersIdRouteImport } from './routes/api/users.$id'
 import { Route as PathlessLayoutNestedLayoutRouteBRouteImport } from './routes/_pathlessLayout/_nested-layout/route-b'
 import { Route as PathlessLayoutNestedLayoutRouteARouteImport } from './routes/_pathlessLayout/_nested-layout/route-a'
 
+const SteelRoute = SteelRouteImport.update({
+  id: '/steel',
+  path: '/steel',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProjectDevelopmentRoute = ProjectDevelopmentRouteImport.update({
+  id: '/project-development',
+  path: '/project-development',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProcurementRoute = ProcurementRouteImport.update({
+  id: '/procurement',
+  path: '/procurement',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PipingRoute = PipingRouteImport.update({
+  id: '/piping',
+  path: '/piping',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OperationsRoute = OperationsRouteImport.update({
+  id: '/operations',
+  path: '/operations',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InstrumentsRoute = InstrumentsRouteImport.update({
+  id: '/instruments',
+  path: '/instruments',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IndirectsRoute = IndirectsRouteImport.update({
+  id: '/indirects',
+  path: '/indirects',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FefRoute = FefRouteImport.update({
   id: '/fef',
   path: '/fef',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EquipmentRoute = EquipmentRouteImport.update({
+  id: '/equipment',
+  path: '/equipment',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EngineeringRoute = EngineeringRouteImport.update({
+  id: '/engineering',
+  path: '/engineering',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ElectricRoute = ElectricRouteImport.update({
+  id: '/electric',
+  path: '/electric',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DemolitionRoute = DemolitionRouteImport.update({
+  id: '/demolition',
+  path: '/demolition',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContingencyRoute = ContingencyRouteImport.update({
+  id: '/contingency',
+  path: '/contingency',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConcreteRoute = ConcreteRouteImport.update({
+  id: '/concrete',
+  path: '/concrete',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommissioningRoute = CommissioningRouteImport.update({
+  id: '/commissioning',
+  path: '/commissioning',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CoatingsRoute = CoatingsRouteImport.update({
+  id: '/coatings',
+  path: '/coatings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CivilRoute = CivilRouteImport.update({
+  id: '/civil',
+  path: '/civil',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BuildingsRoute = BuildingsRouteImport.update({
+  id: '/buildings',
+  path: '/buildings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdministrationRoute = AdministrationRouteImport.update({
+  id: '/administration',
+  path: '/administration',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PathlessLayoutRoute = PathlessLayoutRouteImport.update({
@@ -68,7 +176,25 @@ const PathlessLayoutNestedLayoutRouteARoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/administration': typeof AdministrationRoute
+  '/buildings': typeof BuildingsRoute
+  '/civil': typeof CivilRoute
+  '/coatings': typeof CoatingsRoute
+  '/commissioning': typeof CommissioningRoute
+  '/concrete': typeof ConcreteRoute
+  '/contingency': typeof ContingencyRoute
+  '/demolition': typeof DemolitionRoute
+  '/electric': typeof ElectricRoute
+  '/engineering': typeof EngineeringRoute
+  '/equipment': typeof EquipmentRoute
   '/fef': typeof FefRoute
+  '/indirects': typeof IndirectsRoute
+  '/instruments': typeof InstrumentsRoute
+  '/operations': typeof OperationsRoute
+  '/piping': typeof PipingRoute
+  '/procurement': typeof ProcurementRoute
+  '/project-development': typeof ProjectDevelopmentRoute
+  '/steel': typeof SteelRoute
   '/api/posts': typeof ApiPostsRoute
   '/api/users': typeof ApiUsersRouteWithChildren
   '/route-a': typeof PathlessLayoutNestedLayoutRouteARoute
@@ -77,7 +203,25 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/administration': typeof AdministrationRoute
+  '/buildings': typeof BuildingsRoute
+  '/civil': typeof CivilRoute
+  '/coatings': typeof CoatingsRoute
+  '/commissioning': typeof CommissioningRoute
+  '/concrete': typeof ConcreteRoute
+  '/contingency': typeof ContingencyRoute
+  '/demolition': typeof DemolitionRoute
+  '/electric': typeof ElectricRoute
+  '/engineering': typeof EngineeringRoute
+  '/equipment': typeof EquipmentRoute
   '/fef': typeof FefRoute
+  '/indirects': typeof IndirectsRoute
+  '/instruments': typeof InstrumentsRoute
+  '/operations': typeof OperationsRoute
+  '/piping': typeof PipingRoute
+  '/procurement': typeof ProcurementRoute
+  '/project-development': typeof ProjectDevelopmentRoute
+  '/steel': typeof SteelRoute
   '/api/posts': typeof ApiPostsRoute
   '/api/users': typeof ApiUsersRouteWithChildren
   '/route-a': typeof PathlessLayoutNestedLayoutRouteARoute
@@ -88,7 +232,25 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_pathlessLayout': typeof PathlessLayoutRouteWithChildren
+  '/administration': typeof AdministrationRoute
+  '/buildings': typeof BuildingsRoute
+  '/civil': typeof CivilRoute
+  '/coatings': typeof CoatingsRoute
+  '/commissioning': typeof CommissioningRoute
+  '/concrete': typeof ConcreteRoute
+  '/contingency': typeof ContingencyRoute
+  '/demolition': typeof DemolitionRoute
+  '/electric': typeof ElectricRoute
+  '/engineering': typeof EngineeringRoute
+  '/equipment': typeof EquipmentRoute
   '/fef': typeof FefRoute
+  '/indirects': typeof IndirectsRoute
+  '/instruments': typeof InstrumentsRoute
+  '/operations': typeof OperationsRoute
+  '/piping': typeof PipingRoute
+  '/procurement': typeof ProcurementRoute
+  '/project-development': typeof ProjectDevelopmentRoute
+  '/steel': typeof SteelRoute
   '/_pathlessLayout/_nested-layout': typeof PathlessLayoutNestedLayoutRouteWithChildren
   '/api/posts': typeof ApiPostsRoute
   '/api/users': typeof ApiUsersRouteWithChildren
@@ -100,7 +262,25 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/administration'
+    | '/buildings'
+    | '/civil'
+    | '/coatings'
+    | '/commissioning'
+    | '/concrete'
+    | '/contingency'
+    | '/demolition'
+    | '/electric'
+    | '/engineering'
+    | '/equipment'
     | '/fef'
+    | '/indirects'
+    | '/instruments'
+    | '/operations'
+    | '/piping'
+    | '/procurement'
+    | '/project-development'
+    | '/steel'
     | '/api/posts'
     | '/api/users'
     | '/route-a'
@@ -109,7 +289,25 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/administration'
+    | '/buildings'
+    | '/civil'
+    | '/coatings'
+    | '/commissioning'
+    | '/concrete'
+    | '/contingency'
+    | '/demolition'
+    | '/electric'
+    | '/engineering'
+    | '/equipment'
     | '/fef'
+    | '/indirects'
+    | '/instruments'
+    | '/operations'
+    | '/piping'
+    | '/procurement'
+    | '/project-development'
+    | '/steel'
     | '/api/posts'
     | '/api/users'
     | '/route-a'
@@ -119,7 +317,25 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_pathlessLayout'
+    | '/administration'
+    | '/buildings'
+    | '/civil'
+    | '/coatings'
+    | '/commissioning'
+    | '/concrete'
+    | '/contingency'
+    | '/demolition'
+    | '/electric'
+    | '/engineering'
+    | '/equipment'
     | '/fef'
+    | '/indirects'
+    | '/instruments'
+    | '/operations'
+    | '/piping'
+    | '/procurement'
+    | '/project-development'
+    | '/steel'
     | '/_pathlessLayout/_nested-layout'
     | '/api/posts'
     | '/api/users'
@@ -131,18 +347,162 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   PathlessLayoutRoute: typeof PathlessLayoutRouteWithChildren
+  AdministrationRoute: typeof AdministrationRoute
+  BuildingsRoute: typeof BuildingsRoute
+  CivilRoute: typeof CivilRoute
+  CoatingsRoute: typeof CoatingsRoute
+  CommissioningRoute: typeof CommissioningRoute
+  ConcreteRoute: typeof ConcreteRoute
+  ContingencyRoute: typeof ContingencyRoute
+  DemolitionRoute: typeof DemolitionRoute
+  ElectricRoute: typeof ElectricRoute
+  EngineeringRoute: typeof EngineeringRoute
+  EquipmentRoute: typeof EquipmentRoute
   FefRoute: typeof FefRoute
+  IndirectsRoute: typeof IndirectsRoute
+  InstrumentsRoute: typeof InstrumentsRoute
+  OperationsRoute: typeof OperationsRoute
+  PipingRoute: typeof PipingRoute
+  ProcurementRoute: typeof ProcurementRoute
+  ProjectDevelopmentRoute: typeof ProjectDevelopmentRoute
+  SteelRoute: typeof SteelRoute
   ApiPostsRoute: typeof ApiPostsRoute
   ApiUsersRoute: typeof ApiUsersRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/steel': {
+      id: '/steel'
+      path: '/steel'
+      fullPath: '/steel'
+      preLoaderRoute: typeof SteelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/project-development': {
+      id: '/project-development'
+      path: '/project-development'
+      fullPath: '/project-development'
+      preLoaderRoute: typeof ProjectDevelopmentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/procurement': {
+      id: '/procurement'
+      path: '/procurement'
+      fullPath: '/procurement'
+      preLoaderRoute: typeof ProcurementRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/piping': {
+      id: '/piping'
+      path: '/piping'
+      fullPath: '/piping'
+      preLoaderRoute: typeof PipingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/operations': {
+      id: '/operations'
+      path: '/operations'
+      fullPath: '/operations'
+      preLoaderRoute: typeof OperationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/instruments': {
+      id: '/instruments'
+      path: '/instruments'
+      fullPath: '/instruments'
+      preLoaderRoute: typeof InstrumentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/indirects': {
+      id: '/indirects'
+      path: '/indirects'
+      fullPath: '/indirects'
+      preLoaderRoute: typeof IndirectsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/fef': {
       id: '/fef'
       path: '/fef'
       fullPath: '/fef'
       preLoaderRoute: typeof FefRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/equipment': {
+      id: '/equipment'
+      path: '/equipment'
+      fullPath: '/equipment'
+      preLoaderRoute: typeof EquipmentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/engineering': {
+      id: '/engineering'
+      path: '/engineering'
+      fullPath: '/engineering'
+      preLoaderRoute: typeof EngineeringRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/electric': {
+      id: '/electric'
+      path: '/electric'
+      fullPath: '/electric'
+      preLoaderRoute: typeof ElectricRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/demolition': {
+      id: '/demolition'
+      path: '/demolition'
+      fullPath: '/demolition'
+      preLoaderRoute: typeof DemolitionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contingency': {
+      id: '/contingency'
+      path: '/contingency'
+      fullPath: '/contingency'
+      preLoaderRoute: typeof ContingencyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/concrete': {
+      id: '/concrete'
+      path: '/concrete'
+      fullPath: '/concrete'
+      preLoaderRoute: typeof ConcreteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/commissioning': {
+      id: '/commissioning'
+      path: '/commissioning'
+      fullPath: '/commissioning'
+      preLoaderRoute: typeof CommissioningRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/coatings': {
+      id: '/coatings'
+      path: '/coatings'
+      fullPath: '/coatings'
+      preLoaderRoute: typeof CoatingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/civil': {
+      id: '/civil'
+      path: '/civil'
+      fullPath: '/civil'
+      preLoaderRoute: typeof CivilRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/buildings': {
+      id: '/buildings'
+      path: '/buildings'
+      fullPath: '/buildings'
+      preLoaderRoute: typeof BuildingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/administration': {
+      id: '/administration'
+      path: '/administration'
+      fullPath: '/administration'
+      preLoaderRoute: typeof AdministrationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_pathlessLayout': {
@@ -249,7 +609,25 @@ const ApiUsersRouteWithChildren = ApiUsersRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   PathlessLayoutRoute: PathlessLayoutRouteWithChildren,
+  AdministrationRoute: AdministrationRoute,
+  BuildingsRoute: BuildingsRoute,
+  CivilRoute: CivilRoute,
+  CoatingsRoute: CoatingsRoute,
+  CommissioningRoute: CommissioningRoute,
+  ConcreteRoute: ConcreteRoute,
+  ContingencyRoute: ContingencyRoute,
+  DemolitionRoute: DemolitionRoute,
+  ElectricRoute: ElectricRoute,
+  EngineeringRoute: EngineeringRoute,
+  EquipmentRoute: EquipmentRoute,
   FefRoute: FefRoute,
+  IndirectsRoute: IndirectsRoute,
+  InstrumentsRoute: InstrumentsRoute,
+  OperationsRoute: OperationsRoute,
+  PipingRoute: PipingRoute,
+  ProcurementRoute: ProcurementRoute,
+  ProjectDevelopmentRoute: ProjectDevelopmentRoute,
+  SteelRoute: SteelRoute,
   ApiPostsRoute: ApiPostsRoute,
   ApiUsersRoute: ApiUsersRouteWithChildren,
 }

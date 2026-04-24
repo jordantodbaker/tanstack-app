@@ -2,6 +2,11 @@ import { prisma } from "../src/server/db";
 import { ChangeLog } from "~/lib/types";
 import { StatusLookup } from "~/lib/types";
 import { Project } from "~/lib/types";
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const changeLogItems: Omit<ChangeLog, 'id'>[] = [
     {projectId: 1, cvrId: 1, description: "Change log description for CVR ID: 1", statusId: 1, createdAt: new Date, updatedAt: new Date },
@@ -30,14 +35,86 @@ const statusLookups: StatusLookup[] = [
     {id: 6, status: "Void"},
 ]
 
-async function main() {
-    await prisma.statusLookup.deleteMany();
-    await prisma.changeLog.deleteMany();
-    await prisma.project.deleteMany();
+function parseCSVLine(line: string): string[] {
+  const fields: string[] = [];
+  let field = "";
+  let inQuote = false;
 
-    await prisma.project.createMany({data: projects})
-    await prisma.statusLookup.createMany({data: statusLookups})
-    await prisma.changeLog.createMany({data: changeLogItems})
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQuote && line[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else {
+        inQuote = !inQuote;
+      }
+    } else if (c === "," && !inQuote) {
+      fields.push(field);
+      field = "";
+    } else {
+      field += c;
+    }
+  }
+  fields.push(field);
+  return fields;
+}
+
+function loadCbsItems() {
+  const csvPath = join(__dirname, "data", "cbs.csv");
+  const lines = readFileSync(csvPath, "utf-8").split(/\r?\n/);
+
+  // Skip header row and any trailing empty lines
+  return lines
+    .slice(1)
+    .filter((line) => line.trim() !== "")
+    .map((line) => {
+      const cols = parseCSVLine(line);
+      const or = (v: string) => v.trim() || null;
+      return {
+        l1:                cols[0]?.trim() ?? "",
+        l2:                cols[1]?.trim() ?? "",
+        l3:                cols[2]?.trim() ?? "",
+        l4:                cols[3]?.trim() ?? "",
+        l5:                cols[4]?.trim() ?? "",
+        l6:                cols[5]?.trim() ?? "",
+        name:              cols[6]?.trim() ?? "",
+        displayCode:       cols[7]?.trim() ?? "",
+        uom:               cols[8]?.trim() ?? "",
+        accountDescription: cols[9]?.trim() ?? "",
+        l2Description:     or(cols[10] ?? ""),
+        core:              or(cols[11] ?? ""),
+        coreExtension:     or(cols[12] ?? ""),
+        wbs:               or(cols[13] ?? ""),
+        p6CostAccount:     or(cols[14] ?? ""),
+        gl:                or(cols[15] ?? ""),
+        costTypePC:        or(cols[16] ?? ""),
+        costTypeSpectrum:  or(cols[17] ?? ""),
+        costCategory:      or(cols[18] ?? ""),
+        discipline:        or(cols[19] ?? ""),
+        subReporting:      or(cols[20] ?? ""),
+        costCode:          or(cols[21] ?? ""),
+        description:       or(cols[22] ?? ""),
+      };
+    });
+}
+
+async function main() {
+    await prisma.changeLog.deleteMany();
+    await prisma.statusLookup.deleteMany();
+    await prisma.project.deleteMany();
+    await prisma.cbsItem.deleteMany();
+
+    await prisma.project.createMany({ data: projects });
+    await prisma.statusLookup.createMany({ data: statusLookups });
+    await prisma.changeLog.createMany({ data: changeLogItems });
+
+    const cbsItems = loadCbsItems();
+    const batchSize = 500;
+    for (let i = 0; i < cbsItems.length; i += batchSize) {
+      await prisma.cbsItem.createMany({ data: cbsItems.slice(i, i + batchSize) });
+      console.log(`Inserted CBS items ${i + 1}–${Math.min(i + batchSize, cbsItems.length)} of ${cbsItems.length}`);
+    }
 }
 
 main().then(async () => {

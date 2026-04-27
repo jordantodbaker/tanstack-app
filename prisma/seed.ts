@@ -8,32 +8,117 @@ import { dirname, join } from "path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const changeLogItems: Omit<ChangeLog, 'id'>[] = [
-    {projectId: 1, cvrId: 1, description: "Change log description for CVR ID: 1", statusId: 1, createdAt: new Date, updatedAt: new Date },
-    {projectId: 1, cvrId: 2, description: "Reallocated funds for subcontracts", statusId: 2, createdAt: new Date, updatedAt: new Date },
-    {projectId: 1, cvrId: 3, description: "New steel supports arrived unexepected", statusId: 1, createdAt: new Date, updatedAt: new Date },
-    {projectId: 2, cvrId: 4, description: "Install underground piping in caramel mocha", statusId: 3, createdAt: new Date, updatedAt: new Date },
-    {projectId: 2, cvrId: 5, description: "Scaffolding for electric crews working in RAMA 2", statusId: 5, createdAt: new Date, updatedAt: new Date },
-    {projectId: 2, cvrId: 6, description: "New SoV for insulation subcontracts", statusId: 4, createdAt: new Date, updatedAt: new Date },
-    {projectId: 3, cvrId: 7, description: "Increased budget for site indirects and support roles", statusId: 4, createdAt: new Date, updatedAt: new Date },
-    {projectId: 3, cvrId: 8, description: "Scope increased after re-evaluation and testing for tracing and containment", statusId: 6, createdAt: new Date, updatedAt: new Date },
-    {projectId: 3, cvrId: 9, description: "New CVR to repair front gate after Jorge crashed into it", statusId: 2, createdAt: new Date, updatedAt: new Date },
-]
+const changeLogItems: Omit<ChangeLog, "id">[] = [
+  {
+    projectId: 1,
+    cvrId: 1,
+    description: "Change log description for CVR ID: 1",
+    statusId: 1,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    projectId: 1,
+    cvrId: 2,
+    description: "Reallocated funds for subcontracts",
+    statusId: 2,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    projectId: 1,
+    cvrId: 3,
+    description: "New steel supports arrived unexepected",
+    statusId: 1,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    projectId: 2,
+    cvrId: 4,
+    description: "Install underground piping in caramel mocha",
+    statusId: 3,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    projectId: 2,
+    cvrId: 5,
+    description: "Scaffolding for electric crews working in RAMA 2",
+    statusId: 5,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    projectId: 2,
+    cvrId: 6,
+    description: "New SoV for insulation subcontracts",
+    statusId: 4,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    projectId: 3,
+    cvrId: 7,
+    description: "Increased budget for site indirects and support roles",
+    statusId: 4,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    projectId: 3,
+    cvrId: 8,
+    description:
+      "Scope increased after re-evaluation and testing for tracing and containment",
+    statusId: 6,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    projectId: 3,
+    cvrId: 9,
+    description: "New CVR to repair front gate after Jorge crashed into it",
+    statusId: 2,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+];
 
 const projects: Project[] = [
-    {id: 1, displayId: "1901", name: "1901 - FIME Engineering", description: "Description for the FIME engineering project", createdAt: new Date, updatedAt: new Date},
-    {id: 2, displayId: "1902", name: "1902 - FIME Mechanical", description: "Description for the FIME mechanical project", createdAt: new Date, updatedAt: new Date},
-    {id: 3, displayId: "1903", name: "1903 - FIME Product Handling", description: "Description for the FIME product handling project", createdAt: new Date, updatedAt: new Date}
-]
+  {
+    id: 1,
+    displayId: "1901",
+    name: "1901 - FIME Engineering",
+    description: "Description for the FIME engineering project",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: 2,
+    displayId: "1902",
+    name: "1902 - FIME Mechanical",
+    description: "Description for the FIME mechanical project",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: 3,
+    displayId: "1903",
+    name: "1903 - FIME Product Handling",
+    description: "Description for the FIME product handling project",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+];
 
 const statusLookups: StatusLookup[] = [
-    {id: 1, status: "Requested"},
-    {id: 2, status: "Pending"},
-    {id: 3, status: "Approved"},
-    {id: 4, status: "Denied"},
-    {id: 5, status: "Executed"},
-    {id: 6, status: "Void"},
-]
+  { id: 1, status: "Requested" },
+  { id: 2, status: "Pending" },
+  { id: 3, status: "Approved" },
+  { id: 4, status: "Denied" },
+  { id: 5, status: "Executed" },
+  { id: 6, status: "Void" },
+];
 
 function parseCSVLine(line: string): string[] {
   const fields: string[] = [];
@@ -72,51 +157,54 @@ function loadCbsItems() {
       const cols = parseCSVLine(line);
       const or = (v: string) => v.trim() || null;
       return {
-        l1:                cols[0]?.trim() ?? "",
-        l2:                cols[1]?.trim() ?? "",
-        l3:                cols[2]?.trim() ?? "",
-        l4:                cols[3]?.trim() ?? "",
-        l5:                cols[4]?.trim() ?? "",
-        l6:                cols[5]?.trim() ?? "",
-        name:              cols[6]?.trim() ?? "",
-        displayCode:       cols[7]?.trim() ?? "",
-        uom:               cols[8]?.trim() ?? "",
+        l1: cols[0]?.trim() ?? "",
+        l2: cols[1]?.trim() ?? "",
+        l3: cols[2]?.trim() ?? "",
+        l4: cols[3]?.trim() ?? "",
+        l5: cols[4]?.trim() ?? "",
+        l6: cols[5]?.trim() ?? "",
+        name: cols[6]?.trim() ?? "",
+        displayCode: cols[7]?.trim() ?? "",
+        uom: cols[8]?.trim() ?? "",
         accountDescription: cols[9]?.trim() ?? "",
-        l2Description:     or(cols[10] ?? ""),
-        core:              or(cols[11] ?? ""),
-        coreExtension:     or(cols[12] ?? ""),
-        wbs:               or(cols[13] ?? ""),
-        p6CostAccount:     or(cols[14] ?? ""),
-        gl:                or(cols[15] ?? ""),
-        costTypePC:        or(cols[16] ?? ""),
-        costTypeSpectrum:  or(cols[17] ?? ""),
-        costCategory:      or(cols[18] ?? ""),
-        discipline:        or(cols[19] ?? ""),
-        subReporting:      or(cols[20] ?? ""),
-        costCode:          or(cols[21] ?? ""),
-        description:       or(cols[22] ?? ""),
+        l2Description: or(cols[10] ?? ""),
+        core: or(cols[11] ?? ""),
+        coreExtension: or(cols[12] ?? ""),
+        wbs: or(cols[13] ?? ""),
+        p6CostAccount: or(cols[14] ?? ""),
+        gl: or(cols[15] ?? ""),
+        costTypePC: or(cols[16] ?? ""),
+        costTypeSpectrum: or(cols[17] ?? ""),
+        costCategory: or(cols[18] ?? ""),
+        discipline: or(cols[19] ?? ""),
+        subReporting: or(cols[20] ?? ""),
+        costCode: or(cols[21] ?? ""),
+        description: or(cols[22] ?? ""),
+        displayDescription: `${or(cols[7] ?? "")}:  ${or(cols[6] ?? "")}`,
       };
     });
 }
 
 async function main() {
-    await prisma.changeLog.deleteMany();
-    await prisma.statusLookup.deleteMany();
-    await prisma.project.deleteMany();
-    await prisma.cbsItem.deleteMany();
+  await prisma.changeLog.deleteMany();
+  await prisma.statusLookup.deleteMany();
+  await prisma.project.deleteMany();
+  await prisma.cbsItem.deleteMany();
 
-    await prisma.project.createMany({ data: projects });
-    await prisma.statusLookup.createMany({ data: statusLookups });
-    await prisma.changeLog.createMany({ data: changeLogItems });
+  await prisma.project.createMany({ data: projects });
+  await prisma.statusLookup.createMany({ data: statusLookups });
+  await prisma.changeLog.createMany({ data: changeLogItems });
 
-    const cbsItems = loadCbsItems();
-    const batchSize = 500;
-    for (let i = 0; i < cbsItems.length; i += batchSize) {
-      await prisma.cbsItem.createMany({ data: cbsItems.slice(i, i + batchSize) });
-      console.log(`Inserted CBS items ${i + 1}–${Math.min(i + batchSize, cbsItems.length)} of ${cbsItems.length}`);
-    }
+  const cbsItems = loadCbsItems();
+  const batchSize = 500;
+  for (let i = 0; i < cbsItems.length; i += batchSize) {
+    await prisma.cbsItem.createMany({ data: cbsItems.slice(i, i + batchSize) });
+    console.log(
+      `Inserted CBS items ${i + 1}–${Math.min(i + batchSize, cbsItems.length)} of ${cbsItems.length}`,
+    );
+  }
 }
 
 main().then(async () => {
-    await prisma.$disconnect()
-})
+  await prisma.$disconnect();
+});

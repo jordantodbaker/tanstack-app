@@ -72,5 +72,6 @@ model CbsItem {
   subReporting       String?
   costCode           String  @unique
   description        String?
+  displayDescription  String?
 }
 

@@ -10,5 +10,6 @@ declare module '@tanstack/react-table' {
     statusLookup?: StatusLookup[]
     cbsOptions?: { displayCode: string; name: string; uom: string; displayDescription: string | null }[]
     weldGroupOptions?: string[]
+    weldGroupMaterialMap?: Record<string, { shopCode: string; installCode: string }>
   }
 }

@@ -154,7 +154,8 @@ function loadPipingGroups() {
     {
       groupNo: number;
       materialClassification: string;
-      metallurgyCode: string;
+      installCode: string;
+      shopCode: string;
       parentCode: string;
       weightCode: string;
       material: string;
@@ -177,11 +178,12 @@ function loadPipingGroups() {
         groups.set(groupNo, {
           groupNo,
           materialClassification: cols[1]?.trim() ?? "",
-          metallurgyCode: cols[2]?.trim() ?? "",
-          parentCode: cols[3]?.trim() ?? "",
-          weightCode: cols[4]?.trim() ?? "",
-          material: cols[5]?.trim() ?? "",
-          sched: cols[7]?.trim() ?? "",
+          installCode: cols[2]?.trim() ?? "",
+          shopCode: cols[3]?.trim() ?? "",
+          parentCode: cols[4]?.trim() ?? "",
+          weightCode: cols[5]?.trim() ?? "",
+          material: cols[6]?.trim() ?? "",
+          sched: cols[8]?.trim() ?? "",
           percentAdder: parseFloat(cols[8]?.trim() ?? "0"),
           values: [],
         });

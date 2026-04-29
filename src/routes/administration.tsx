@@ -1,5 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { DisciplinePage, type CbsOption, type FefRow } from "~/components/FefTable";
+import {
+  DisciplinePage,
+  type CbsOption,
+  type FefRow,
+} from "~/components/FefTable";
 import { fetchCbsItemsByL1 } from "~/utils/cbs";
 
 export const Route = createFileRoute("/administration")({
@@ -20,10 +24,13 @@ function AdministrationPage() {
   const rows: FefRow[] = cbsItems.map((item) => ({
     id: item.displayCode,
     description: item.name ?? "",
-    location: "",
+    shopField: "",
     weldGroupDescription: "",
     quantity: "",
+    size: "",
     unit: item.uom,
+    metallurgyCode: "",
+    boreSize: "",
     laborHours: "",
     laborRate: "",
     materialCost: "",

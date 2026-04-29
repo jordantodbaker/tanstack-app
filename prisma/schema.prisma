@@ -51,7 +51,8 @@ model PipingGroup {
   id                     Int                @id @default(autoincrement())
   groupNo                Int                @unique
   materialClassification String
-  metallurgyCode         String
+  installCode            String
+  shopCode               String
   parentCode             String
   weightCode             String
   material               String
@@ -93,6 +94,5 @@ model CbsItem {
   subReporting       String?
   costCode           String  @unique
   description        String?
-  displayDescription  String?
+  displayDescription String?
 }
-

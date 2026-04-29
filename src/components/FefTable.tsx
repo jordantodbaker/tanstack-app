@@ -14,10 +14,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 export type FefRow = {
   id: string;
   description: string;
-  location: string;
+  shopField: string;
   weldGroupDescription: string;
   quantity: string;
+  size: string;
   unit: string;
+  metallurgyCode: string;
+  boreSize: string;
   laborHours: string;
   laborRate: string;
   materialCost: string;
@@ -144,8 +147,8 @@ const columns = [
     cell: CbsSelectCell,
     size: 300,
   }),
-  columnHelper.accessor("location", { header: "Location", cell: EditableCell }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: EditableCell }),
+  columnHelper.accessor("size", { header: "Size", cell: EditableCell }),
   columnHelper.accessor("unit", { header: "Unit", cell: EditableCell }),
   columnHelper.accessor("laborHours", {
     header: "Labor Hours",
@@ -170,10 +173,13 @@ const defaultRows: FefRow[] = [
   {
     id: "FEF-001",
     description: "Excavation - Site A",
-    location: "Zone 1",
+    shopField: "",
     weldGroupDescription: "",
     quantity: "150",
+    size: "4",
     unit: "CY",
+    metallurgyCode: "",
+    boreSize: "MB",
     laborHours: "12",
     laborRate: "75",
     materialCost: "0",
@@ -183,10 +189,13 @@ const defaultRows: FefRow[] = [
   {
     id: "FEF-002",
     description: "Concrete Footing",
-    location: "Zone 1",
+    shopField: "",
     weldGroupDescription: "",
     quantity: "20",
+    size: "6",
     unit: "CY",
+    metallurgyCode: "",
+    boreSize: "MB",
     laborHours: "8",
     laborRate: "75",
     materialCost: "2400",
@@ -196,10 +205,13 @@ const defaultRows: FefRow[] = [
   {
     id: "FEF-003",
     description: "Steel Reinforcement",
-    location: "Zone 1",
+    shopField: "",
     weldGroupDescription: "",
     quantity: "500",
+    size: "6",
     unit: "LF",
+    metallurgyCode: "",
+    boreSize: "MB",
     laborHours: "6",
     laborRate: "80",
     materialCost: "1800",
@@ -209,10 +221,13 @@ const defaultRows: FefRow[] = [
   {
     id: "FEF-004",
     description: "Block Wall - 8in CMU",
-    location: "Zone 2",
+    shopField: "",
     weldGroupDescription: "",
     quantity: "120",
+    size: "6",
     unit: "SF",
+    metallurgyCode: "",
+    boreSize: "MB",
     laborHours: "10",
     laborRate: "75",
     materialCost: "960",
@@ -222,10 +237,13 @@ const defaultRows: FefRow[] = [
   {
     id: "FEF-005",
     description: "Waterproofing Membrane",
-    location: "Zone 2",
+    shopField: "",
     weldGroupDescription: "",
     quantity: "200",
+    size: "6",
     unit: "SF",
+    metallurgyCode: "",
+    boreSize: "MB",
     laborHours: "4",
     laborRate: "70",
     materialCost: "600",
@@ -235,10 +253,13 @@ const defaultRows: FefRow[] = [
   {
     id: "FEF-006",
     description: "Backfill & Compact",
-    location: "Zone 2",
+    shopField: "",
     weldGroupDescription: "",
     quantity: "80",
+    size: "6",
     unit: "CY",
+    metallurgyCode: "",
+    boreSize: "MB",
     laborHours: "5",
     laborRate: "65",
     materialCost: "0",
@@ -248,10 +269,13 @@ const defaultRows: FefRow[] = [
   {
     id: "FEF-007",
     description: "Electrical Conduit",
-    location: "Zone 3",
+    shopField: "",
     weldGroupDescription: "",
     quantity: "300",
+    size: "6",
     unit: "LF",
+    metallurgyCode: "",
+    boreSize: "MB",
     laborHours: "9",
     laborRate: "90",
     materialCost: "1200",
@@ -261,10 +285,13 @@ const defaultRows: FefRow[] = [
   {
     id: "FEF-008",
     description: "Plumbing - Rough In",
-    location: "Zone 3",
+    shopField: "",
     weldGroupDescription: "",
     quantity: "5",
+    size: "6",
     unit: "EA",
+    metallurgyCode: "",
+    boreSize: "MB",
     laborHours: "16",
     laborRate: "95",
     materialCost: "850",
@@ -274,10 +301,13 @@ const defaultRows: FefRow[] = [
   {
     id: "FEF-009",
     description: "Framing - Exterior Wall",
-    location: "Zone 4",
+    shopField: "",
     weldGroupDescription: "",
     quantity: "400",
+    size: "6",
     unit: "SF",
+    metallurgyCode: "",
+    boreSize: "MB",
     laborHours: "14",
     laborRate: "75",
     materialCost: "3200",
@@ -287,10 +317,13 @@ const defaultRows: FefRow[] = [
   {
     id: "FEF-010",
     description: "Roofing - Underlayment",
-    location: "Zone 4",
+    shopField: "",
     weldGroupDescription: "",
     quantity: "25",
+    size: "6",
     unit: "SQ",
+    metallurgyCode: "",
+    boreSize: "MB",
     laborHours: "8",
     laborRate: "80",
     materialCost: "1500",
@@ -424,7 +457,8 @@ function TableContent({
           </button>
         </div>
         <span>
-          Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()} &mdash;{" "}
+          Page {table.getState().pagination.pageIndex + 1} of{" "}
+          {table.getPageCount()} &mdash;{" "}
           {table.getFilteredRowModel().rows.length} rows
         </span>
       </div>

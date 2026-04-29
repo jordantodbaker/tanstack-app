@@ -23,6 +23,7 @@ import {
   ChevronRight,
   PanelLeftClose,
   PanelLeftOpen,
+  HardHat,
 } from "lucide-react";
 import React from "react";
 
@@ -158,6 +159,26 @@ const disciplines: Discipline[] = [
     icon: AlertTriangle,
     to: "/contingency",
   },
+  {
+    id: "materials",
+    label: "Materials",
+    icon: Layers,
+    items: [
+      { label: "Civil Materials", to: "/" },
+      { label: "Concrete Materials", to: "/fef" },
+      { label: "Steel Materials", to: "/fef" },
+    ],
+  },
+  {
+    id: "subcontracts",
+    label: "Subcontracts",
+    icon: HardHat,
+    items: [
+      { label: "Civil Subcontracts", to: "/" },
+      { label: "Concrete Subcontracts", to: "/fef" },
+      { label: "Steel Subcontracts", to: "/fef" },
+    ],
+  },
 ];
 
 export function Sidebar() {
@@ -201,7 +222,9 @@ export function Sidebar() {
                   to={discipline.to}
                   title={collapsed ? discipline.label : undefined}
                   className={navClassName}
-                  activeProps={{ className: `${navClassName} bg-red-50 text-red-800 [&>svg]:text-red-700` }}
+                  activeProps={{
+                    className: `${navClassName} bg-red-50 text-red-800 [&>svg]:text-red-700`,
+                  }}
                 >
                   <Icon size={17} className="shrink-0 text-slate-500" />
                   {!collapsed && (
@@ -217,7 +240,9 @@ export function Sidebar() {
                   <Icon size={17} className="shrink-0 text-slate-500" />
                   {!collapsed && (
                     <>
-                      <span className="flex-1 text-left">{discipline.label}</span>
+                      <span className="flex-1 text-left">
+                        {discipline.label}
+                      </span>
                       {discipline.items &&
                         (isOpen ? (
                           <ChevronDown size={13} className="text-slate-400" />

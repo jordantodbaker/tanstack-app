@@ -22,6 +22,13 @@ export type FefRow = {
   notes: string;
 };
 
+export type CbsOption = {
+  displayCode: string;
+  name: string;
+  uom: string;
+  displayDescription: string | null;
+};
+
 const columnHelper = createColumnHelper<FefRow>();
 
 function EditableCell({
@@ -53,6 +60,45 @@ function EditableCell({
       onChange={(e) => setValue(e.target.value)}
       onBlur={onBlur}
     />
+  );
+}
+
+function CbsSelectCell({
+  row,
+  table,
+}: {
+  getValue: () => unknown;
+  row: { index: number; original: FefRow };
+  column: { id: string };
+  table: ReturnType<typeof useReactTable<FefRow>>;
+}) {
+  const cbsOptions = table.options.meta?.cbsOptions ?? [];
+  const currentDisplayCode = row.original.id;
+
+  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selected = cbsOptions.find((o) => o.displayCode === e.target.value);
+    if (selected) {
+      table.options.meta?.updateRow?.(row.index, {
+        id: selected.displayCode,
+        description: selected.name,
+        unit: selected.uom,
+      });
+    }
+  };
+
+  return (
+    <select
+      className="w-full border border-transparent px-2 py-1 text-sm focus:border-blue-400 focus:outline-none rounded bg-white"
+      value={currentDisplayCode}
+      onChange={handleChange}
+    >
+      <option value="">-- Select --</option>
+      {cbsOptions.map((opt) => (
+        <option key={opt.displayCode} value={opt.displayCode}>
+          {opt.displayDescription ?? `${opt.displayCode}: ${opt.name}`}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -92,7 +138,7 @@ const columns = [
   columnHelper.accessor("id", { header: "ID", cell: EditableCell, size: 150 }),
   columnHelper.accessor("description", {
     header: "Description",
-    cell: EditableCell,
+    cell: CbsSelectCell,
     size: 300,
   }),
   columnHelper.accessor("location", { header: "Location", cell: EditableCell }),
@@ -245,6 +291,7 @@ type TableState = {
   setData: React.Dispatch<React.SetStateAction<FefRow[]>>;
   columnFilters: ColumnFiltersState;
   setColumnFilters: React.Dispatch<React.SetStateAction<ColumnFiltersState>>;
+  cbsOptions?: CbsOption[];
 };
 
 function TableContent({
@@ -252,6 +299,7 @@ function TableContent({
   setData,
   columnFilters,
   setColumnFilters,
+  cbsOptions,
 }: TableState) {
   const table = useReactTable({
     data,
@@ -261,10 +309,18 @@ function TableContent({
     onColumnFiltersChange: setColumnFilters,
     state: { columnFilters },
     meta: {
+      cbsOptions: cbsOptions ?? [],
       updateData: (rowIndex: number, columnId: string, value: string) => {
         setData((old) =>
           old.map((row, index) =>
             index === rowIndex ? { ...row, [columnId]: value } : row,
+          ),
+        );
+      },
+      updateRow: (rowIndex: number, updates: Record<string, string>) => {
+        setData((old) =>
+          old.map((row, index) =>
+            index === rowIndex ? { ...row, ...updates } : row,
           ),
         );
       },
@@ -320,12 +376,12 @@ function TableContent({
   );
 }
 
-function useTableState(initialRows?: FefRow[]) {
+function useTableState(initialRows?: FefRow[], cbsOptions?: CbsOption[]) {
   const [data, setData] = React.useState<FefRow[]>(initialRows ?? defaultRows);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     [],
   );
-  return { data, setData, columnFilters, setColumnFilters };
+  return { data, setData, columnFilters, setColumnFilters, cbsOptions };
 }
 
 export function FefTable({ title }: { title: string }) {
@@ -344,12 +400,14 @@ const tabTriggerClass =
 export function DisciplinePage({
   title,
   initialRows,
+  cbsOptions,
 }: {
   title: string;
   initialRows?: FefRow[];
+  cbsOptions?: CbsOption[];
 }) {
-  const estimateState = useTableState(initialRows);
-  const takeoffState = useTableState();
+  const estimateState = useTableState(initialRows, cbsOptions);
+  const takeoffState = useTableState(undefined, cbsOptions);
 
   return (
     <main className="p-4">

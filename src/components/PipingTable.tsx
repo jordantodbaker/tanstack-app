@@ -286,7 +286,7 @@ function ColumnFilter({
   );
 }
 
-const takeOffColumns: ColumnDef<FefRow>[] = [
+const takeOffColumns: ColumnDef<FefRow, any>[] = [
   columnHelper.accessor("id", { header: "ID", cell: EditableCell, size: 150 }),
   columnHelper.accessor("description", {
     header: "Description",
@@ -335,7 +335,7 @@ const takeOffColumns: ColumnDef<FefRow>[] = [
   columnHelper.accessor("notes", { header: "Notes", cell: EditableCell }),
 ];
 
-const fieldEstimateColumns: ColumnDef<FefRow>[] = [
+const fieldEstimateColumns: ColumnDef<FefRow, any>[] = [
   columnHelper.accessor("id", { header: "ID", cell: EditableCell, size: 150 }),
   columnHelper.accessor("description", {
     header: "Description",
@@ -426,7 +426,10 @@ function TableContent({
   weldGroupMaterialMap,
   serverPagination,
   columns,
-}: TableState & { serverPagination?: ServerPagination; columns: ColumnDef<FefRow>[] }) {
+}: TableState & {
+  serverPagination?: ServerPagination;
+  columns: ColumnDef<FefRow, any>[];
+}) {
   const [localPageIndex, setLocalPageIndex] = React.useState(0);
 
   const pagination: PaginationState = serverPagination
@@ -706,7 +709,25 @@ export function PipingDisciplinePage({
     weldGroupOptions,
     weldGroupMaterialMap,
   );
-  const takeoffState = useTableState(undefined, cbsOptions);
+  const takeoffState = useTableState(
+    undefined,
+    cbsOptions,
+    weldGroupOptions,
+    weldGroupMaterialMap,
+  );
+
+  React.useEffect(() => {
+    const qualifiedRows = estimateState.data.filter(
+      (r) => Number(r.quantity) > 1,
+    );
+    takeoffState.setData((prev) => {
+      const prevMap = new Map(prev.map((r) => [r.id, r]));
+      return qualifiedRows.map((takeOffRow) => {
+        const existing = prevMap.get(takeOffRow.id);
+        return existing ?? { ...takeOffRow };
+      });
+    });
+  }, [estimateState.data]);
 
   return (
     <main className="p-4">

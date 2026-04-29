@@ -2,9 +2,11 @@ import {
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
+  getPaginationRowModel,
   useReactTable,
   createColumnHelper,
   type ColumnFiltersState,
+  type PaginationState,
 } from "@tanstack/react-table";
 import React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
@@ -301,13 +303,20 @@ function TableContent({
   setColumnFilters,
   cbsOptions,
 }: TableState) {
+  const [pagination, setPagination] = React.useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 25,
+  });
+
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
     onColumnFiltersChange: setColumnFilters,
-    state: { columnFilters },
+    onPaginationChange: setPagination,
+    state: { columnFilters, pagination },
     meta: {
       cbsOptions: cbsOptions ?? [],
       updateData: (rowIndex: number, columnId: string, value: string) => {
@@ -372,6 +381,42 @@ function TableContent({
           ))}
         </tbody>
       </table>
+      <div className="flex items-center justify-between mt-3 text-sm text-gray-600">
+        <div className="flex items-center gap-2">
+          <button
+            className="px-2 py-1 border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-100"
+            onClick={() => table.firstPage()}
+            disabled={!table.getCanPreviousPage()}
+          >
+            {"<<"}
+          </button>
+          <button
+            className="px-2 py-1 border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-100"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+          >
+            {"<"}
+          </button>
+          <button
+            className="px-2 py-1 border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-100"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+          >
+            {">"}
+          </button>
+          <button
+            className="px-2 py-1 border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-100"
+            onClick={() => table.lastPage()}
+            disabled={!table.getCanNextPage()}
+          >
+            {">>"}
+          </button>
+        </div>
+        <span>
+          Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()} &mdash;{" "}
+          {table.getFilteredRowModel().rows.length} rows
+        </span>
+      </div>
     </div>
   );
 }

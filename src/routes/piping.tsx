@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  DisciplinePage,
+  PipingDisciplinePage,
   type CbsOption,
   type FefRow,
-} from "~/components/FefTable";
+} from "~/components/PipingTable";
 import { fetchCbsItemsByL1Paged } from "~/utils/cbs";
+import { fetchPipingGroups } from "~/utils/piping";
 
 const PIPING_L1 = [
   "600",
@@ -33,18 +34,19 @@ export const Route = createFileRoute("/piping")({
   }),
   loaderDeps: ({ search }) => ({ page: search.page }),
   loader: ({ deps }) =>
-    fetchCbsItemsByL1Paged({
-      data: { l1Values: PIPING_L1, page: deps.page, pageSize: PAGE_SIZE },
-    }),
+    Promise.all([
+      fetchCbsItemsByL1Paged({
+        data: { l1Values: PIPING_L1, page: deps.page, pageSize: PAGE_SIZE },
+      }),
+      fetchPipingGroups(),
+    ]).then(([cbsData, pipingGroups]) => ({ ...cbsData, pipingGroups })),
   component: PipingPage,
 });
 
 function PipingPage() {
-  const { items, total } = Route.useLoaderData();
+  const { items, total, pipingGroups } = Route.useLoaderData();
   const { page } = Route.useSearch();
   const navigate = Route.useNavigate();
-
-  console.log("Items: ", items);
 
   const cbsOptions: CbsOption[] = items.map((item) => ({
     displayCode: item.displayCode,
@@ -57,6 +59,7 @@ function PipingPage() {
     id: item.displayCode,
     description: item.name ?? "",
     location: "",
+    weldGroupDescription: "",
     quantity: "",
     unit: item.uom,
     laborHours: "",
@@ -66,18 +69,17 @@ function PipingPage() {
     notes: "",
   }));
 
-  console.log("Rows: ", rows);
-
   return (
-    <DisciplinePage
+    <PipingDisciplinePage
       title="Piping"
       initialRows={rows}
       cbsOptions={cbsOptions}
+      pipingGroups={pipingGroups}
       serverPagination={{
         totalCount: total,
         pageIndex: page,
         pageSize: PAGE_SIZE,
-        onPageChange: (newPage) =>
+        onPageChange: (newPage: number) =>
           navigate({ search: (prev) => ({ ...prev, page: newPage }) }),
       }}
     />

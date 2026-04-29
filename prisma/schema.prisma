@@ -47,6 +47,27 @@ model StatusLookup {
   changelogs ChangeLog[]
 }
 
+model PipingGroup {
+  id                     Int                @id @default(autoincrement())
+  groupNo                Int                @unique
+  materialClassification String
+  metallurgyCode         String
+  parentCode             String
+  weightCode             String
+  material               String
+  sched                  String
+  percentAdder           Float
+  values                 PipingGroupValue[]
+}
+
+model PipingGroupValue {
+  id            Int         @id @default(autoincrement())
+  pipingGroup   PipingGroup @relation(fields: [pipingGroupId], references: [id])
+  pipingGroupId Int
+  size          Float
+  value         Float
+}
+
 model CbsItem {
   id                 Int     @id @default(autoincrement())
   l1                 String

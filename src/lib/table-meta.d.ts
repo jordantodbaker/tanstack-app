@@ -9,5 +9,6 @@ declare module '@tanstack/react-table' {
     addLog?: (log: changeLog) => void
     statusLookup?: StatusLookup[]
     cbsOptions?: { displayCode: string; name: string; uom: string; displayDescription: string | null }[]
+    weldGroupOptions?: string[]
   }
 }

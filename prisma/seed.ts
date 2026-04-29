@@ -145,6 +145,54 @@ function parseCSVLine(line: string): string[] {
   return fields;
 }
 
+function loadPipingGroups() {
+  const csvPath = join(__dirname, "data", "piping_groups.csv");
+  const lines = readFileSync(csvPath, "utf-8").split(/\r?\n/);
+
+  const groups = new Map<
+    number,
+    {
+      groupNo: number;
+      materialClassification: string;
+      metallurgyCode: string;
+      parentCode: string;
+      weightCode: string;
+      material: string;
+      sched: string;
+      percentAdder: number;
+      values: { size: number; value: number }[];
+    }
+  >();
+
+  lines
+    .slice(1)
+    .filter((line) => line.trim() !== "")
+    .forEach((line) => {
+      const cols = parseCSVLine(line);
+      const groupNo = parseInt(cols[0]?.trim() ?? "0", 10);
+      const size = parseFloat(cols[9]?.trim() ?? "0");
+      const value = parseFloat(cols[10]?.trim() ?? "0");
+
+      if (!groups.has(groupNo)) {
+        groups.set(groupNo, {
+          groupNo,
+          materialClassification: cols[1]?.trim() ?? "",
+          metallurgyCode: cols[2]?.trim() ?? "",
+          parentCode: cols[3]?.trim() ?? "",
+          weightCode: cols[4]?.trim() ?? "",
+          material: cols[5]?.trim() ?? "",
+          sched: cols[7]?.trim() ?? "",
+          percentAdder: parseFloat(cols[8]?.trim() ?? "0"),
+          values: [],
+        });
+      }
+
+      groups.get(groupNo)!.values.push({ size, value });
+    });
+
+  return groups;
+}
+
 function loadCbsItems() {
   const csvPath = join(__dirname, "data", "cbs.csv");
   const lines = readFileSync(csvPath, "utf-8").split(/\r?\n/);
@@ -190,6 +238,8 @@ async function main() {
   await prisma.statusLookup.deleteMany();
   await prisma.project.deleteMany();
   await prisma.cbsItem.deleteMany();
+  await prisma.pipingGroupValue.deleteMany();
+  await prisma.pipingGroup.deleteMany();
 
   await prisma.project.createMany({ data: projects });
   await prisma.statusLookup.createMany({ data: statusLookups });
@@ -203,6 +253,18 @@ async function main() {
       `Inserted CBS items ${i + 1}–${Math.min(i + batchSize, cbsItems.length)} of ${cbsItems.length}`,
     );
   }
+
+  const pipingGroupsMap = loadPipingGroups();
+  for (const [, groupData] of pipingGroupsMap) {
+    const { values, ...groupFields } = groupData;
+    await prisma.pipingGroup.create({
+      data: {
+        ...groupFields,
+        values: { createMany: { data: values } },
+      },
+    });
+  }
+  console.log(`Inserted ${pipingGroupsMap.size} piping groups`);
 }
 
 main().then(async () => {

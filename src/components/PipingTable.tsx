@@ -10,26 +10,29 @@ import {
 } from "@tanstack/react-table";
 import React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import type { CbsOption, FefRow } from "./FefTable";
 
-export type FefRow = {
-  id: string;
-  description: string;
-  location: string;
-  weldGroupDescription: string;
-  quantity: string;
-  unit: string;
-  laborHours: string;
-  laborRate: string;
-  materialCost: string;
-  equipment: string;
-  notes: string;
+export type { CbsOption, FefRow };
+
+type PipingGroupValue = { id: number; size: number; value: number; pipingGroupId: number };
+type PipingGroup = {
+  id: number;
+  groupNo: number;
+  materialClassification: string;
+  metallurgyCode: string;
+  parentCode: string;
+  weightCode: string;
+  material: string;
+  sched: string;
+  percentAdder: number;
+  values: PipingGroupValue[];
 };
 
-export type CbsOption = {
-  displayCode: string;
-  name: string;
-  uom: string;
-  displayDescription: string | null;
+type ServerPagination = {
+  totalCount: number;
+  pageIndex: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
 };
 
 const columnHelper = createColumnHelper<FefRow>();
@@ -105,6 +108,37 @@ function CbsSelectCell({
   );
 }
 
+function WeldGroupSelectCell({
+  getValue,
+  row,
+  table,
+}: {
+  getValue: () => unknown;
+  row: { index: number };
+  column: { id: string };
+  table: ReturnType<typeof useReactTable<FefRow>>;
+}) {
+  const value = getValue() as string;
+  const options = (table.options.meta as { weldGroupOptions?: string[] })?.weldGroupOptions ?? [];
+
+  return (
+    <select
+      className="w-full border border-transparent px-2 py-1 text-sm focus:border-blue-400 focus:outline-none rounded bg-white"
+      value={value}
+      onChange={(e) =>
+        table.options.meta?.updateData(row.index, "weldGroupDescription", e.target.value)
+      }
+    >
+      <option value="">-- Select --</option>
+      {options.map((opt) => (
+        <option key={opt} value={opt}>
+          {opt}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function ColumnFilter({
   column,
   data,
@@ -145,6 +179,11 @@ const columns = [
     size: 300,
   }),
   columnHelper.accessor("location", { header: "Location", cell: EditableCell }),
+  columnHelper.accessor("weldGroupDescription", {
+    header: "Weld Group Description",
+    cell: WeldGroupSelectCell,
+    size: 220,
+  }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: EditableCell }),
   columnHelper.accessor("unit", { header: "Unit", cell: EditableCell }),
   columnHelper.accessor("laborHours", {
@@ -180,123 +219,6 @@ const defaultRows: FefRow[] = [
     equipment: "Excavator",
     notes: "Soft soil",
   },
-  {
-    id: "FEF-002",
-    description: "Concrete Footing",
-    location: "Zone 1",
-    weldGroupDescription: "",
-    quantity: "20",
-    unit: "CY",
-    laborHours: "8",
-    laborRate: "75",
-    materialCost: "2400",
-    equipment: "Mixer",
-    notes: "3000 PSI mix",
-  },
-  {
-    id: "FEF-003",
-    description: "Steel Reinforcement",
-    location: "Zone 1",
-    weldGroupDescription: "",
-    quantity: "500",
-    unit: "LF",
-    laborHours: "6",
-    laborRate: "80",
-    materialCost: "1800",
-    equipment: "None",
-    notes: "#4 rebar",
-  },
-  {
-    id: "FEF-004",
-    description: "Block Wall - 8in CMU",
-    location: "Zone 2",
-    weldGroupDescription: "",
-    quantity: "120",
-    unit: "SF",
-    laborHours: "10",
-    laborRate: "75",
-    materialCost: "960",
-    equipment: "None",
-    notes: "Grouted cells",
-  },
-  {
-    id: "FEF-005",
-    description: "Waterproofing Membrane",
-    location: "Zone 2",
-    weldGroupDescription: "",
-    quantity: "200",
-    unit: "SF",
-    laborHours: "4",
-    laborRate: "70",
-    materialCost: "600",
-    equipment: "None",
-    notes: "Below grade",
-  },
-  {
-    id: "FEF-006",
-    description: "Backfill & Compact",
-    location: "Zone 2",
-    weldGroupDescription: "",
-    quantity: "80",
-    unit: "CY",
-    laborHours: "5",
-    laborRate: "65",
-    materialCost: "0",
-    equipment: "Compactor",
-    notes: "95% compaction",
-  },
-  {
-    id: "FEF-007",
-    description: "Electrical Conduit",
-    location: "Zone 3",
-    weldGroupDescription: "",
-    quantity: "300",
-    unit: "LF",
-    laborHours: "9",
-    laborRate: "90",
-    materialCost: "1200",
-    equipment: "None",
-    notes: "2in PVC",
-  },
-  {
-    id: "FEF-008",
-    description: "Plumbing - Rough In",
-    location: "Zone 3",
-    weldGroupDescription: "",
-    quantity: "5",
-    unit: "EA",
-    laborHours: "16",
-    laborRate: "95",
-    materialCost: "850",
-    equipment: "None",
-    notes: "PEX supply lines",
-  },
-  {
-    id: "FEF-009",
-    description: "Framing - Exterior Wall",
-    location: "Zone 4",
-    weldGroupDescription: "",
-    quantity: "400",
-    unit: "SF",
-    laborHours: "14",
-    laborRate: "75",
-    materialCost: "3200",
-    equipment: "None",
-    notes: "2x6 @ 16 OC",
-  },
-  {
-    id: "FEF-010",
-    description: "Roofing - Underlayment",
-    location: "Zone 4",
-    weldGroupDescription: "",
-    quantity: "25",
-    unit: "SQ",
-    laborHours: "8",
-    laborRate: "80",
-    materialCost: "1500",
-    equipment: "None",
-    notes: "30lb felt paper",
-  },
 ];
 
 type TableState = {
@@ -305,6 +227,7 @@ type TableState = {
   columnFilters: ColumnFiltersState;
   setColumnFilters: React.Dispatch<React.SetStateAction<ColumnFiltersState>>;
   cbsOptions?: CbsOption[];
+  weldGroupOptions?: string[];
 };
 
 function TableContent({
@@ -313,23 +236,39 @@ function TableContent({
   columnFilters,
   setColumnFilters,
   cbsOptions,
-}: TableState) {
-  const [pagination, setPagination] = React.useState<PaginationState>({
-    pageIndex: 0,
-    pageSize: 25,
-  });
+  weldGroupOptions,
+  serverPagination,
+}: TableState & { serverPagination?: ServerPagination }) {
+  const [localPageIndex, setLocalPageIndex] = React.useState(0);
+
+  const pagination: PaginationState = serverPagination
+    ? { pageIndex: serverPagination.pageIndex, pageSize: serverPagination.pageSize }
+    : { pageIndex: localPageIndex, pageSize: 25 };
 
   const table = useReactTable({
     data,
     columns,
+    manualPagination: !!serverPagination,
+    pageCount: serverPagination
+      ? Math.ceil(serverPagination.totalCount / serverPagination.pageSize)
+      : undefined,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onColumnFiltersChange: setColumnFilters,
-    onPaginationChange: setPagination,
+    onPaginationChange: (updater) => {
+      const next =
+        typeof updater === "function" ? updater(pagination) : updater;
+      if (serverPagination) {
+        serverPagination.onPageChange(next.pageIndex);
+      } else {
+        setLocalPageIndex(next.pageIndex);
+      }
+    },
     state: { columnFilters, pagination },
     meta: {
       cbsOptions: cbsOptions ?? [],
+      weldGroupOptions: weldGroupOptions ?? [],
       updateData: (rowIndex: number, columnId: string, value: string) => {
         setData((old) =>
           old.map((row, index) =>
@@ -424,15 +363,19 @@ function TableContent({
           </button>
         </div>
         <span>
-          Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()} &mdash;{" "}
-          {table.getFilteredRowModel().rows.length} rows
+          Page {table.getState().pagination.pageIndex + 1} of{" "}
+          {table.getPageCount()} &mdash;{" "}
+          {serverPagination
+            ? serverPagination.totalCount
+            : table.getFilteredRowModel().rows.length}{" "}
+          rows
         </span>
       </div>
     </div>
   );
 }
 
-function useTableState(initialRows?: FefRow[], cbsOptions?: CbsOption[]) {
+function useTableState(initialRows?: FefRow[], cbsOptions?: CbsOption[], weldGroupOptions?: string[]) {
   const [data, setData] = React.useState<FefRow[]>(initialRows ?? defaultRows);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     [],
@@ -440,32 +383,67 @@ function useTableState(initialRows?: FefRow[], cbsOptions?: CbsOption[]) {
   React.useEffect(() => {
     if (initialRows !== undefined) setData(initialRows);
   }, [initialRows]);
-  return { data, setData, columnFilters, setColumnFilters, cbsOptions };
+  return { data, setData, columnFilters, setColumnFilters, cbsOptions, weldGroupOptions };
 }
 
-export function FefTable({ title }: { title: string }) {
-  const state = useTableState();
+function PipingGroupsTable({ groups }: { groups: PipingGroup[] }) {
+  const rows = groups.flatMap((g) =>
+    g.values.map((v) => ({ ...g, size: v.size, value: v.value })),
+  );
+
   return (
-    <main className="p-4">
-      <h1 className="text-2xl font-bold mb-4">{title}</h1>
-      <TableContent {...state} />
-    </main>
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="bg-gray-100">
+            {["Group No", "Material Classification", "Material", "Metallurgy Code", "Parent Code", "Weight Code", "Sched", "% Adder", "Size", "Value"].map((h) => (
+              <th key={h} className="border border-gray-300 px-3 py-2 text-left font-semibold whitespace-nowrap">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+              <td className="border border-gray-300 px-3 py-1">{row.groupNo}</td>
+              <td className="border border-gray-300 px-3 py-1">{row.materialClassification}</td>
+              <td className="border border-gray-300 px-3 py-1">{row.material}</td>
+              <td className="border border-gray-300 px-3 py-1">{row.metallurgyCode}</td>
+              <td className="border border-gray-300 px-3 py-1">{row.parentCode}</td>
+              <td className="border border-gray-300 px-3 py-1">{row.weightCode}</td>
+              <td className="border border-gray-300 px-3 py-1">{row.sched}</td>
+              <td className="border border-gray-300 px-3 py-1">{row.percentAdder}</td>
+              <td className="border border-gray-300 px-3 py-1">{row.size}</td>
+              <td className="border border-gray-300 px-3 py-1">{row.value}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="mt-2 text-sm text-gray-500">{rows.length} rows</div>
+    </div>
   );
 }
 
 const tabTriggerClass =
   "rounded-none border-b-2 border-transparent bg-transparent px-5 py-2.5 text-sm font-medium text-slate-500 shadow-none transition-colors hover:text-slate-800 data-active:border-red-700 data-active:text-red-800 data-active:bg-transparent";
 
-export function DisciplinePage({
+export function PipingDisciplinePage({
   title,
   initialRows,
   cbsOptions,
+  pipingGroups,
+  serverPagination,
 }: {
   title: string;
-  initialRows?: FefRow[];
-  cbsOptions?: CbsOption[];
+  initialRows: FefRow[];
+  cbsOptions: CbsOption[];
+  pipingGroups: PipingGroup[];
+  serverPagination: ServerPagination;
 }) {
-  const estimateState = useTableState(initialRows, cbsOptions);
+  const weldGroupOptions = React.useMemo(
+    () => Array.from(new Set(pipingGroups.map((g) => g.materialClassification))).sort(),
+    [pipingGroups],
+  );
+  const estimateState = useTableState(initialRows, cbsOptions, weldGroupOptions);
   const takeoffState = useTableState(undefined, cbsOptions);
 
   return (
@@ -479,12 +457,18 @@ export function DisciplinePage({
           <TabsTrigger value="takeoff" className={tabTriggerClass}>
             Take Off
           </TabsTrigger>
+          <TabsTrigger value="groups" className={tabTriggerClass}>
+            Piping Groups
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="estimate" className="mt-4">
-          <TableContent {...estimateState} />
+          <TableContent {...estimateState} serverPagination={serverPagination} />
         </TabsContent>
         <TabsContent value="takeoff" className="mt-4">
           <TableContent {...takeoffState} />
+        </TabsContent>
+        <TabsContent value="groups" className="mt-4">
+          <PipingGroupsTable groups={pipingGroups} />
         </TabsContent>
       </Tabs>
     </main>

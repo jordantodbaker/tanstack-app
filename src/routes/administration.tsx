@@ -21,6 +21,7 @@ function AdministrationPage() {
     id: item.displayCode,
     description: item.name ?? "",
     location: "",
+    weldGroupDescription: "",
     quantity: "",
     unit: item.uom,
     laborHours: "",

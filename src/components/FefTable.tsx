@@ -288,12 +288,20 @@ const defaultRows: FefRow[] = [
   },
 ];
 
+type ServerPagination = {
+  totalCount: number;
+  pageIndex: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+};
+
 type TableState = {
   data: FefRow[];
   setData: React.Dispatch<React.SetStateAction<FefRow[]>>;
   columnFilters: ColumnFiltersState;
   setColumnFilters: React.Dispatch<React.SetStateAction<ColumnFiltersState>>;
   cbsOptions?: CbsOption[];
+  serverPagination?: ServerPagination;
 };
 
 function TableContent({
@@ -302,20 +310,34 @@ function TableContent({
   columnFilters,
   setColumnFilters,
   cbsOptions,
+  serverPagination,
 }: TableState) {
-  const [pagination, setPagination] = React.useState<PaginationState>({
-    pageIndex: 0,
-    pageSize: 25,
-  });
+  const [localPageIndex, setLocalPageIndex] = React.useState(0);
+
+  const pagination: PaginationState = serverPagination
+    ? { pageIndex: serverPagination.pageIndex, pageSize: serverPagination.pageSize }
+    : { pageIndex: localPageIndex, pageSize: 25 };
 
   const table = useReactTable({
     data,
     columns,
+    manualPagination: !!serverPagination,
+    pageCount: serverPagination
+      ? Math.ceil(serverPagination.totalCount / serverPagination.pageSize)
+      : undefined,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onColumnFiltersChange: setColumnFilters,
-    onPaginationChange: setPagination,
+    onPaginationChange: (updater) => {
+      const next =
+        typeof updater === "function" ? updater(pagination) : updater;
+      if (serverPagination) {
+        serverPagination.onPageChange(next.pageIndex);
+      } else {
+        setLocalPageIndex(next.pageIndex);
+      }
+    },
     state: { columnFilters, pagination },
     meta: {
       cbsOptions: cbsOptions ?? [],
@@ -414,7 +436,7 @@ function TableContent({
         </div>
         <span>
           Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()} &mdash;{" "}
-          {table.getFilteredRowModel().rows.length} rows
+          {serverPagination ? serverPagination.totalCount : table.getFilteredRowModel().rows.length} rows
         </span>
       </div>
     </div>
@@ -426,6 +448,9 @@ function useTableState(initialRows?: FefRow[], cbsOptions?: CbsOption[]) {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     [],
   );
+  React.useEffect(() => {
+    if (initialRows !== undefined) setData(initialRows);
+  }, [initialRows]);
   return { data, setData, columnFilters, setColumnFilters, cbsOptions };
 }
 
@@ -446,10 +471,12 @@ export function DisciplinePage({
   title,
   initialRows,
   cbsOptions,
+  serverPagination,
 }: {
   title: string;
   initialRows?: FefRow[];
   cbsOptions?: CbsOption[];
+  serverPagination?: ServerPagination;
 }) {
   const estimateState = useTableState(initialRows, cbsOptions);
   const takeoffState = useTableState(undefined, cbsOptions);
@@ -467,7 +494,7 @@ export function DisciplinePage({
           </TabsTrigger>
         </TabsList>
         <TabsContent value="estimate" className="mt-4">
-          <TableContent {...estimateState} />
+          <TableContent {...estimateState} serverPagination={serverPagination} />
         </TabsContent>
         <TabsContent value="takeoff" className="mt-4">
           <TableContent {...takeoffState} />

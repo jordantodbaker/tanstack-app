@@ -40,6 +40,21 @@ export const fetchCbsItemsByL1Paged = createServerFn({ method: "GET" })
     return { items, total };
   });
 
+export const fetchCbsItemsByL1EndsWith = createServerFn({ method: "GET" })
+  .inputValidator((suffix: string) => suffix)
+  .handler(({ data }) => {
+    return prisma.cbsItem.findMany({
+      where: { l1: { endsWith: data } },
+      orderBy: { id: "asc" },
+      select: {
+        displayCode: true,
+        name: true,
+        uom: true,
+        displayDescription: true,
+      },
+    });
+  });
+
 export const cbsItemsQueryOptions = () =>
   queryOptions({
     queryKey: ["cbsItems"],

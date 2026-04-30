@@ -163,11 +163,7 @@ const disciplines: Discipline[] = [
     id: "materials",
     label: "Materials",
     icon: Layers,
-    items: [
-      { label: "Civil Materials", to: "/" },
-      { label: "Concrete Materials", to: "/fef" },
-      { label: "Steel Materials", to: "/fef" },
-    ],
+    to: "/materials",
   },
   {
     id: "subcontracts",

@@ -14,6 +14,7 @@ import { Route as ProjectDevelopmentRouteImport } from './routes/project-develop
 import { Route as ProcurementRouteImport } from './routes/procurement'
 import { Route as PipingRouteImport } from './routes/piping'
 import { Route as OperationsRouteImport } from './routes/operations'
+import { Route as MaterialsRouteImport } from './routes/materials'
 import { Route as InstrumentsRouteImport } from './routes/instruments'
 import { Route as IndirectsRouteImport } from './routes/indirects'
 import { Route as FefRouteImport } from './routes/fef'
@@ -60,6 +61,11 @@ const PipingRoute = PipingRouteImport.update({
 const OperationsRoute = OperationsRouteImport.update({
   id: '/operations',
   path: '/operations',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MaterialsRoute = MaterialsRouteImport.update({
+  id: '/materials',
+  path: '/materials',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InstrumentsRoute = InstrumentsRouteImport.update({
@@ -190,6 +196,7 @@ export interface FileRoutesByFullPath {
   '/fef': typeof FefRoute
   '/indirects': typeof IndirectsRoute
   '/instruments': typeof InstrumentsRoute
+  '/materials': typeof MaterialsRoute
   '/operations': typeof OperationsRoute
   '/piping': typeof PipingRoute
   '/procurement': typeof ProcurementRoute
@@ -217,6 +224,7 @@ export interface FileRoutesByTo {
   '/fef': typeof FefRoute
   '/indirects': typeof IndirectsRoute
   '/instruments': typeof InstrumentsRoute
+  '/materials': typeof MaterialsRoute
   '/operations': typeof OperationsRoute
   '/piping': typeof PipingRoute
   '/procurement': typeof ProcurementRoute
@@ -246,6 +254,7 @@ export interface FileRoutesById {
   '/fef': typeof FefRoute
   '/indirects': typeof IndirectsRoute
   '/instruments': typeof InstrumentsRoute
+  '/materials': typeof MaterialsRoute
   '/operations': typeof OperationsRoute
   '/piping': typeof PipingRoute
   '/procurement': typeof ProcurementRoute
@@ -276,6 +285,7 @@ export interface FileRouteTypes {
     | '/fef'
     | '/indirects'
     | '/instruments'
+    | '/materials'
     | '/operations'
     | '/piping'
     | '/procurement'
@@ -303,6 +313,7 @@ export interface FileRouteTypes {
     | '/fef'
     | '/indirects'
     | '/instruments'
+    | '/materials'
     | '/operations'
     | '/piping'
     | '/procurement'
@@ -331,6 +342,7 @@ export interface FileRouteTypes {
     | '/fef'
     | '/indirects'
     | '/instruments'
+    | '/materials'
     | '/operations'
     | '/piping'
     | '/procurement'
@@ -361,6 +373,7 @@ export interface RootRouteChildren {
   FefRoute: typeof FefRoute
   IndirectsRoute: typeof IndirectsRoute
   InstrumentsRoute: typeof InstrumentsRoute
+  MaterialsRoute: typeof MaterialsRoute
   OperationsRoute: typeof OperationsRoute
   PipingRoute: typeof PipingRoute
   ProcurementRoute: typeof ProcurementRoute
@@ -405,6 +418,13 @@ declare module '@tanstack/react-router' {
       path: '/operations'
       fullPath: '/operations'
       preLoaderRoute: typeof OperationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/materials': {
+      id: '/materials'
+      path: '/materials'
+      fullPath: '/materials'
+      preLoaderRoute: typeof MaterialsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/instruments': {
@@ -623,6 +643,7 @@ const rootRouteChildren: RootRouteChildren = {
   FefRoute: FefRoute,
   IndirectsRoute: IndirectsRoute,
   InstrumentsRoute: InstrumentsRoute,
+  MaterialsRoute: MaterialsRoute,
   OperationsRoute: OperationsRoute,
   PipingRoute: PipingRoute,
   ProcurementRoute: ProcurementRoute,

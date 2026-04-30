@@ -21,6 +21,8 @@ export type FefRow = {
   unit: string;
   metallurgyCode: string;
   boreSize: string;
+  role: string;
+  schedule: string;
   laborHours: string;
   laborRate: string;
   materialCost: string;
@@ -180,6 +182,8 @@ const defaultRows: FefRow[] = [
     unit: "CY",
     metallurgyCode: "",
     boreSize: "MB",
+    role: "",
+    schedule: "",
     laborHours: "12",
     laborRate: "75",
     materialCost: "0",
@@ -196,6 +200,8 @@ const defaultRows: FefRow[] = [
     unit: "CY",
     metallurgyCode: "",
     boreSize: "MB",
+    role: "",
+    schedule: "",
     laborHours: "8",
     laborRate: "75",
     materialCost: "2400",
@@ -212,6 +218,8 @@ const defaultRows: FefRow[] = [
     unit: "LF",
     metallurgyCode: "",
     boreSize: "MB",
+    role: "",
+    schedule: "",
     laborHours: "6",
     laborRate: "80",
     materialCost: "1800",
@@ -228,6 +236,8 @@ const defaultRows: FefRow[] = [
     unit: "SF",
     metallurgyCode: "",
     boreSize: "MB",
+    role: "",
+    schedule: "",
     laborHours: "10",
     laborRate: "75",
     materialCost: "960",
@@ -244,6 +254,8 @@ const defaultRows: FefRow[] = [
     unit: "SF",
     metallurgyCode: "",
     boreSize: "MB",
+    role: "",
+    schedule: "",
     laborHours: "4",
     laborRate: "70",
     materialCost: "600",
@@ -260,6 +272,8 @@ const defaultRows: FefRow[] = [
     unit: "CY",
     metallurgyCode: "",
     boreSize: "MB",
+    role: "",
+    schedule: "",
     laborHours: "5",
     laborRate: "65",
     materialCost: "0",
@@ -276,6 +290,8 @@ const defaultRows: FefRow[] = [
     unit: "LF",
     metallurgyCode: "",
     boreSize: "MB",
+    role: "",
+    schedule: "",
     laborHours: "9",
     laborRate: "90",
     materialCost: "1200",
@@ -292,6 +308,8 @@ const defaultRows: FefRow[] = [
     unit: "EA",
     metallurgyCode: "",
     boreSize: "MB",
+    role: "",
+    schedule: "",
     laborHours: "16",
     laborRate: "95",
     materialCost: "850",
@@ -308,6 +326,8 @@ const defaultRows: FefRow[] = [
     unit: "SF",
     metallurgyCode: "",
     boreSize: "MB",
+    role: "",
+    schedule: "",
     laborHours: "14",
     laborRate: "75",
     materialCost: "3200",
@@ -324,6 +344,8 @@ const defaultRows: FefRow[] = [
     unit: "SQ",
     metallurgyCode: "",
     boreSize: "MB",
+    role: "",
+    schedule: "",
     laborHours: "8",
     laborRate: "80",
     materialCost: "1500",

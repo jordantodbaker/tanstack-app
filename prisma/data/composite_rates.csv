@@ -1,0 +1,276 @@
+﻿Role,Schedule,Rate
+Office Staff,1x4x10,91
+Office Staff,1x5x10,101
+Office Staff,1x6x10,111
+Office Staff,1x7x10,122
+Office Staff,1x6x12,133
+Office Staff,1x7x12,144
+Office Staff,2x5x10,155
+Office Staff,2x6x10,166
+Office Staff,2x7x10,177
+Office Staff,2x6x12,188
+Office Staff,2x7x12,199
+Indirect Labor & Support,1x4x10,91
+Indirect Labor & Support,1x5x10,101
+Indirect Labor & Support,1x6x10,111
+Indirect Labor & Support,1x7x10,122
+Indirect Labor & Support,1x6x12,133
+Indirect Labor & Support,1x7x12,144
+Indirect Labor & Support,2x5x10,155
+Indirect Labor & Support,2x6x10,166
+Indirect Labor & Support,2x7x10,177
+Indirect Labor & Support,2x6x12,188
+Indirect Labor & Support,2x7x12,199
+Demolition,1x4x10,91
+Demolition,1x5x10,101
+Demolition,1x6x10,111
+Demolition,1x7x10,122
+Demolition,1x6x12,133
+Demolition,1x7x12,144
+Demolition,2x5x10,155
+Demolition,2x6x10,166
+Demolition,2x7x10,177
+Demolition,2x6x12,188
+Demolition,2x7x12,199
+Civil,1x4x10,91
+Civil,1x5x10,101
+Civil,1x6x10,111
+Civil,1x7x10,122
+Civil,1x6x12,133
+Civil,1x7x12,144
+Civil,2x5x10,155
+Civil,2x6x10,166
+Civil,2x7x10,177
+Civil,2x6x12,188
+Civil,2x7x12,199
+Concrete,1x4x10,91
+Concrete,1x5x10,101
+Concrete,1x6x10,111
+Concrete,1x7x10,122
+Concrete,1x6x12,133
+Concrete,1x7x12,144
+Concrete,2x5x10,155
+Concrete,2x6x10,166
+Concrete,2x7x10,177
+Concrete,2x6x12,188
+Concrete,2x7x12,199
+Buildings,1x4x10,91
+Buildings,1x5x10,101
+Buildings,1x6x10,111
+Buildings,1x7x10,122
+Buildings,1x6x12,133
+Buildings,1x7x12,144
+Buildings,2x5x10,155
+Buildings,2x6x10,166
+Buildings,2x7x10,177
+Buildings,2x6x12,188
+Buildings,2x7x12,199
+Steel Install,1x4x10,91
+Steel Install,1x5x10,101
+Steel Install,1x6x10,111
+Steel Install,1x7x10,122
+Steel Install,1x6x12,133
+Steel Install,1x7x12,144
+Steel Install,2x5x10,155
+Steel Install,2x6x10,166
+Steel Install,2x7x10,177
+Steel Install,2x6x12,188
+Steel Install,2x7x12,199
+Steel Shop,1x4x10,91
+Steel Shop,1x5x10,101
+Steel Shop,1x6x10,111
+Steel Shop,1x7x10,122
+Steel Shop,1x6x12,133
+Steel Shop,1x7x12,144
+Steel Shop,2x5x10,155
+Steel Shop,2x6x10,166
+Steel Shop,2x7x10,177
+Steel Shop,2x6x12,188
+Steel Shop,2x7x12,199
+Equipment,1x4x10,91
+Equipment,1x5x10,101
+Equipment,1x6x10,111
+Equipment,1x7x10,122
+Equipment,1x6x12,133
+Equipment,1x7x12,144
+Equipment,2x5x10,155
+Equipment,2x6x10,166
+Equipment,2x7x10,177
+Equipment,2x6x12,188
+Equipment,2x7x12,199
+Pipe Install,1x4x10,91
+Pipe Install,1x5x10,101
+Pipe Install,1x6x10,111
+Pipe Install,1x7x10,122
+Pipe Install,1x6x12,133
+Pipe Install,1x7x12,144
+Pipe Install,2x5x10,155
+Pipe Install,2x6x10,166
+Pipe Install,2x7x10,177
+Pipe Install,2x6x12,188
+Pipe Install,2x7x12,199
+Pipe Shop,1x4x10,91
+Pipe Shop,1x5x10,101
+Pipe Shop,1x6x10,111
+Pipe Shop,1x7x10,122
+Pipe Shop,1x6x12,133
+Pipe Shop,1x7x12,144
+Pipe Shop,2x5x10,155
+Pipe Shop,2x6x10,166
+Pipe Shop,2x7x10,177
+Pipe Shop,2x6x12,188
+Pipe Shop,2x7x12,199
+Electrical,1x4x10,91
+Electrical,1x5x10,101
+Electrical,1x6x10,111
+Electrical,1x7x10,122
+Electrical,1x6x12,133
+Electrical,1x7x12,144
+Electrical,2x5x10,155
+Electrical,2x6x10,166
+Electrical,2x7x10,177
+Electrical,2x6x12,188
+Electrical,2x7x12,199
+Instrumentation,1x4x10,91
+Instrumentation,1x5x10,101
+Instrumentation,1x6x10,111
+Instrumentation,1x7x10,122
+Instrumentation,1x6x12,133
+Instrumentation,1x7x12,144
+Instrumentation,2x5x10,155
+Instrumentation,2x6x10,166
+Instrumentation,2x7x10,177
+Instrumentation,2x6x12,188
+Instrumentation,2x7x12,199
+Coatings,1x4x10,91
+Coatings,1x5x10,101
+Coatings,1x6x10,111
+Coatings,1x7x10,122
+Coatings,1x6x12,133
+Coatings,1x7x12,144
+Coatings,2x5x10,155
+Coatings,2x6x10,166
+Coatings,2x7x10,177
+Coatings,2x6x12,188
+Coatings,2x7x12,199
+Ironworker,1x4x10,91
+Ironworker,1x5x10,101
+Ironworker,1x6x10,111
+Ironworker,1x7x10,122
+Ironworker,1x6x12,133
+Ironworker,1x7x12,144
+Ironworker,2x5x10,155
+Ironworker,2x6x10,166
+Ironworker,2x7x10,177
+Ironworker,2x6x12,188
+Ironworker,2x7x12,199
+Machinist,1x4x10,91
+Machinist,1x5x10,101
+Machinist,1x6x10,111
+Machinist,1x7x10,122
+Machinist,1x6x12,133
+Machinist,1x7x12,144
+Machinist,2x5x10,155
+Machinist,2x6x10,166
+Machinist,2x7x10,177
+Machinist,2x6x12,188
+Machinist,2x7x12,199
+Laborer,1x4x10,91
+Laborer,1x5x10,101
+Laborer,1x6x10,111
+Laborer,1x7x10,122
+Laborer,1x6x12,133
+Laborer,1x7x12,144
+Laborer,2x5x10,155
+Laborer,2x6x10,166
+Laborer,2x7x10,177
+Laborer,2x6x12,188
+Laborer,2x7x12,199
+Carpenter,1x4x10,91
+Carpenter,1x5x10,101
+Carpenter,1x6x10,111
+Carpenter,1x7x10,122
+Carpenter,1x6x12,133
+Carpenter,1x7x12,144
+Carpenter,2x5x10,155
+Carpenter,2x6x10,166
+Carpenter,2x7x10,177
+Carpenter,2x6x12,188
+Carpenter,2x7x12,199
+Pipefitter,1x4x10,91
+Pipefitter,1x5x10,101
+Pipefitter,1x6x10,111
+Pipefitter,1x7x10,122
+Pipefitter,1x6x12,133
+Pipefitter,1x7x12,144
+Pipefitter,2x5x10,155
+Pipefitter,2x6x10,166
+Pipefitter,2x7x10,177
+Pipefitter,2x6x12,188
+Pipefitter,2x7x12,199
+Instrument,1x4x10,91
+Instrument,1x5x10,101
+Instrument,1x6x10,111
+Instrument,1x7x10,122
+Instrument,1x6x12,133
+Instrument,1x7x12,144
+Instrument,2x5x10,155
+Instrument,2x6x10,166
+Instrument,2x7x10,177
+Instrument,2x6x12,188
+Instrument,2x7x12,199
+Mason,1x4x10,91
+Mason,1x5x10,101
+Mason,1x6x10,111
+Mason,1x7x10,122
+Mason,1x6x12,133
+Mason,1x7x12,144
+Mason,2x5x10,155
+Mason,2x6x10,166
+Mason,2x7x10,177
+Mason,2x6x12,188
+Mason,2x7x12,199
+Insulation,1x4x10,91
+Insulation,1x5x10,101
+Insulation,1x6x10,111
+Insulation,1x7x10,122
+Insulation,1x6x12,133
+Insulation,1x7x12,144
+Insulation,2x5x10,155
+Insulation,2x6x10,166
+Insulation,2x7x10,177
+Insulation,2x6x12,188
+Insulation,2x7x12,199
+Painter,1x4x10,91
+Painter,1x5x10,101
+Painter,1x6x10,111
+Painter,1x7x10,122
+Painter,1x6x12,133
+Painter,1x7x12,144
+Painter,2x5x10,155
+Painter,2x6x10,166
+Painter,2x7x10,177
+Painter,2x6x12,188
+Painter,2x7x12,199
+Equipment Operator,1x4x10,91
+Equipment Operator,1x5x10,101
+Equipment Operator,1x6x10,111
+Equipment Operator,1x7x10,122
+Equipment Operator,1x6x12,133
+Equipment Operator,1x7x12,144
+Equipment Operator,2x5x10,155
+Equipment Operator,2x6x10,166
+Equipment Operator,2x7x10,177
+Equipment Operator,2x6x12,188
+Equipment Operator,2x7x12,199
+Scaffold,1x4x10,91
+Scaffold,1x5x10,101
+Scaffold,1x6x10,111
+Scaffold,1x7x10,122
+Scaffold,1x6x12,133
+Scaffold,1x7x12,144
+Scaffold,2x5x10,155
+Scaffold,2x6x10,166
+Scaffold,2x7x10,177
+Scaffold,2x6x12,188
+Scaffold,2x7x12,199

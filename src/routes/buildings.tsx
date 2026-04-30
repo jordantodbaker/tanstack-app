@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import {
   DisciplinePage,
   type CbsOption,
@@ -32,6 +32,8 @@ function BuildingsPage() {
     unit: item.uom,
     metallurgyCode: "",
     boreSize: "",
+    role: "",
+    schedule: "",
     laborHours: "",
     laborRate: "",
     materialCost: "",

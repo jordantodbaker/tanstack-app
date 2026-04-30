@@ -31,6 +31,8 @@ function AdministrationPage() {
     unit: item.uom,
     metallurgyCode: "",
     boreSize: "",
+    role: "",
+    schedule: "",
     laborHours: "",
     laborRate: "",
     materialCost: "",

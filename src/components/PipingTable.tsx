@@ -11,7 +11,15 @@ import {
 } from "@tanstack/react-table";
 import React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "~/components/ui/accordion";
 import type { CbsOption, FefRow } from "./FefTable";
+import { computeBoreSize } from "~/lib/utils";
+import { EditableCell, SizeCell } from "~/lib/table-utils";
 
 export type { CbsOption, FefRow };
 
@@ -43,38 +51,6 @@ type ServerPagination = {
 };
 
 const columnHelper = createColumnHelper<FefRow>();
-
-function EditableCell({
-  getValue,
-  row,
-  column,
-  table,
-}: {
-  getValue: () => unknown;
-  row: { index: number };
-  column: { id: string };
-  table: ReturnType<typeof useReactTable<FefRow>>;
-}) {
-  const initialValue = getValue() as string;
-  const [value, setValue] = React.useState(initialValue);
-
-  React.useEffect(() => {
-    setValue(initialValue);
-  }, [initialValue]);
-
-  const onBlur = () => {
-    table.options.meta?.updateData(row.index, column.id, value);
-  };
-
-  return (
-    <input
-      className="w-full border border-transparent px-2 py-1 text-sm focus:border-blue-400 focus:outline-none rounded"
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={onBlur}
-    />
-  );
-}
 
 function CbsSelectCell({
   row,
@@ -203,18 +179,10 @@ function WeldGroupSelectCell({
   );
 }
 
-function computeBoreSize(size: string): string {
-  const n = parseFloat(size);
-  if (!size || isNaN(n)) return "";
-  if (n < 3) return "SB";
-  if (n <= 12) return "MB";
-  if (n <= 24) return "LB";
-  return "XB";
-}
-
-function SizeCell({
+function TakeOffIdCell({
   getValue,
   row,
+  column,
   table,
 }: {
   getValue: () => unknown;
@@ -222,18 +190,16 @@ function SizeCell({
   column: { id: string };
   table: ReturnType<typeof useReactTable<FefRow>>;
 }) {
-  const initialValue = getValue() as string;
+  const raw = getValue() as string;
+  const initialValue = raw.startsWith("__fe-blank-") ? "" : raw;
   const [value, setValue] = React.useState(initialValue);
 
   React.useEffect(() => {
-    setValue(initialValue);
-  }, [initialValue]);
+    setValue(raw.startsWith("__fe-blank-") ? "" : raw);
+  }, [raw]);
 
   const onBlur = () => {
-    table.options.meta?.updateRow?.(row.index, {
-      size: value,
-      boreSize: computeBoreSize(value),
-    });
+    table.options.meta?.updateData(row.index, column.id, value);
   };
 
   return (
@@ -251,6 +217,91 @@ function ReadOnlyCell({ getValue }: { getValue: () => unknown }) {
     <span className="block px-2 py-1 text-sm text-gray-700">
       {getValue() as string}
     </span>
+  );
+}
+
+function TotalCostCell({ row }: { row: { original: FefRow }; getValue: () => unknown }) {
+  const hours = parseFloat(row.original.laborHours);
+  const rate = parseFloat(row.original.laborRate);
+  const total = !isNaN(hours) && !isNaN(rate) && row.original.laborRate !== "" ? (hours * rate).toFixed(2) : "";
+  return (
+    <span className="block px-2 py-1 text-sm text-gray-700">{total}</span>
+  );
+}
+
+function RoleSelectCell({
+  getValue,
+  row,
+  table,
+}: {
+  getValue: () => unknown;
+  row: { index: number };
+  column: { id: string };
+  table: ReturnType<typeof useReactTable<FefRow>>;
+}) {
+  const value = getValue() as string;
+  const { roleOptions = [], roleRates = [] } = table.options.meta ?? {};
+  return (
+    <select
+      className="w-full border border-transparent px-2 py-1 text-sm focus:border-blue-400 focus:outline-none rounded bg-white"
+      value={value}
+      onChange={(e) => {
+        const newRole = e.target.value;
+        const schedule = table.getRowModel().rows[row.index].original.schedule;
+        const match = roleRates.find(
+          (r) => r.roleName === newRole && r.schedule === schedule,
+        );
+        table.options.meta?.updateRow?.(row.index, {
+          role: newRole,
+          laborRate: match ? String(match.rate) : "",
+        });
+      }}
+    >
+      <option value="">-- Select --</option>
+      {roleOptions.map((opt) => (
+        <option key={opt} value={opt}>
+          {opt}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function ScheduleSelectCell({
+  getValue,
+  row,
+  table,
+}: {
+  getValue: () => unknown;
+  row: { index: number };
+  column: { id: string };
+  table: ReturnType<typeof useReactTable<FefRow>>;
+}) {
+  const value = getValue() as string;
+  const { scheduleOptions = [], roleRates = [] } = table.options.meta ?? {};
+  return (
+    <select
+      className="w-full border border-transparent px-2 py-1 text-sm focus:border-blue-400 focus:outline-none rounded bg-white"
+      value={value}
+      onChange={(e) => {
+        const newSchedule = e.target.value;
+        const role = table.getRowModel().rows[row.index].original.role;
+        const match = roleRates.find(
+          (r) => r.roleName === role && r.schedule === newSchedule,
+        );
+        table.options.meta?.updateRow?.(row.index, {
+          schedule: newSchedule,
+          laborRate: match ? String(match.rate) : "",
+        });
+      }}
+    >
+      <option value="">-- Select --</option>
+      {scheduleOptions.map((opt) => (
+        <option key={opt} value={opt}>
+          {opt}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -287,7 +338,7 @@ function ColumnFilter({
 }
 
 const takeOffColumns: ColumnDef<FefRow, any>[] = [
-  columnHelper.accessor("id", { header: "ID", cell: EditableCell, size: 150 }),
+  columnHelper.accessor("id", { header: "ID", cell: TakeOffIdCell, size: 150 }),
   columnHelper.accessor("description", {
     header: "Description",
     cell: CbsSelectCell,
@@ -384,6 +435,42 @@ const fieldEstimateColumns: ColumnDef<FefRow, any>[] = [
   columnHelper.accessor("notes", { header: "Notes", cell: EditableCell }),
 ];
 
+const supportLaborColumns: ColumnDef<FefRow, any>[] = [
+  columnHelper.accessor("id", { header: "ID", cell: EditableCell, size: 150 }),
+  columnHelper.accessor("description", {
+    header: "Description",
+    cell: ReadOnlyCell,
+    size: 300,
+  }),
+  columnHelper.accessor("role", {
+    header: "Role",
+    cell: RoleSelectCell,
+    size: 180,
+  }),
+  columnHelper.accessor("schedule", {
+    header: "Schedule",
+    cell: ScheduleSelectCell,
+    size: 150,
+  }),
+  columnHelper.accessor("unit", { header: "Unit", cell: EditableCell }),
+  columnHelper.accessor("laborHours", {
+    header: "Labor Hours",
+    cell: EditableCell,
+  }),
+  columnHelper.accessor("laborRate", {
+    header: "Labor Rate ($)",
+    cell: ReadOnlyCell,
+    size: 130,
+  }),
+  columnHelper.display({
+    id: "totalCost",
+    header: "Total Cost ($)",
+    cell: TotalCostCell,
+    size: 130,
+  }),
+  columnHelper.accessor("notes", { header: "Notes", cell: EditableCell }),
+];
+
 const defaultRows: FefRow[] = [
   {
     id: "FEF-001",
@@ -395,6 +482,8 @@ const defaultRows: FefRow[] = [
     unit: "CY",
     metallurgyCode: "",
     boreSize: "XB",
+    role: "",
+    schedule: "",
     laborHours: "12",
     laborRate: "75",
     materialCost: "0",
@@ -402,6 +491,33 @@ const defaultRows: FefRow[] = [
     notes: "Soft soil",
   },
 ];
+
+function makeBlankRow(i: number): FefRow {
+  return {
+    id: `__fe-blank-${i}`,
+    description: "",
+    shopField: "",
+    weldGroupDescription: "",
+    quantity: "",
+    size: "",
+    unit: "",
+    metallurgyCode: "",
+    boreSize: "",
+    role: "",
+    schedule: "",
+    laborHours: "",
+    laborRate: "",
+    materialCost: "",
+    equipment: "",
+    notes: "",
+  };
+}
+
+const TAKE_OFF_INITIAL_ROWS: FefRow[] = Array.from({ length: 25 }, (_, i) =>
+  makeBlankRow(i),
+);
+
+const FIELD_ESTIMATE_INITIAL_ROWS: FefRow[] = [];
 
 type TableState = {
   data: FefRow[];
@@ -414,6 +530,9 @@ type TableState = {
     string,
     { shopCode: string; installCode: string }
   >;
+  roleOptions?: string[];
+  scheduleOptions?: string[];
+  roleRates?: { roleName: string; schedule: string; rate: number }[];
 };
 
 function TableContent({
@@ -424,6 +543,9 @@ function TableContent({
   cbsOptions,
   weldGroupOptions,
   weldGroupMaterialMap,
+  roleOptions,
+  scheduleOptions,
+  roleRates,
   serverPagination,
   columns,
 }: TableState & {
@@ -464,6 +586,9 @@ function TableContent({
       cbsOptions: cbsOptions ?? [],
       weldGroupOptions: weldGroupOptions ?? [],
       weldGroupMaterialMap: weldGroupMaterialMap ?? {},
+      roleOptions: roleOptions ?? [],
+      scheduleOptions: scheduleOptions ?? [],
+      roleRates: roleRates ?? [],
       updateData: (rowIndex: number, columnId: string, value: string) => {
         setData((old) =>
           old.map((row, index) =>
@@ -578,6 +703,9 @@ function useTableState(
     string,
     { shopCode: string; installCode: string }
   >,
+  roleOptions?: string[],
+  scheduleOptions?: string[],
+  roleRates?: { roleName: string; schedule: string; rate: number }[],
 ) {
   const [data, setData] = React.useState<FefRow[]>(initialRows ?? defaultRows);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
@@ -594,6 +722,9 @@ function useTableState(
     cbsOptions,
     weldGroupOptions,
     weldGroupMaterialMap,
+    roleOptions,
+    scheduleOptions,
+    roleRates,
   };
 }
 
@@ -673,16 +804,22 @@ const tabTriggerClass =
 
 export function PipingDisciplinePage({
   title,
-  initialRows,
   cbsOptions,
   pipingGroups,
   serverPagination,
+  supportLaborInitialRows,
+  roleOptions,
+  scheduleOptions,
+  roleRates,
 }: {
   title: string;
-  initialRows: FefRow[];
   cbsOptions: CbsOption[];
   pipingGroups: PipingGroup[];
   serverPagination: ServerPagination;
+  supportLaborInitialRows?: FefRow[];
+  roleOptions?: string[];
+  scheduleOptions?: string[];
+  roleRates?: { roleName: string; schedule: string; rate: number }[];
 }) {
   const weldGroupOptions = React.useMemo(
     () =>
@@ -704,29 +841,48 @@ export function PipingDisciplinePage({
   );
 
   const estimateState = useTableState(
-    initialRows,
+    TAKE_OFF_INITIAL_ROWS,
     cbsOptions,
     weldGroupOptions,
     weldGroupMaterialMap,
   );
   const takeoffState = useTableState(
-    undefined,
+    FIELD_ESTIMATE_INITIAL_ROWS,
     cbsOptions,
     weldGroupOptions,
     weldGroupMaterialMap,
   );
+  const supportLaborState = useTableState(
+    supportLaborInitialRows,
+    cbsOptions,
+    weldGroupOptions,
+    weldGroupMaterialMap,
+    roleOptions,
+    scheduleOptions,
+    roleRates,
+  );
+
+  const takeoffSyncedIds = React.useRef(new Set<string>());
 
   React.useEffect(() => {
     const qualifiedRows = estimateState.data.filter(
       (r) => Number(r.quantity) > 1,
     );
+    const qualifiedIds = new Set(qualifiedRows.map((r) => r.id));
+    const prevSyncedIds = takeoffSyncedIds.current;
+
     takeoffState.setData((prev) => {
       const prevMap = new Map(prev.map((r) => [r.id, r]));
-      return qualifiedRows.map((takeOffRow) => {
-        const existing = prevMap.get(takeOffRow.id);
-        return existing ?? { ...takeOffRow };
-      });
+      const retained = prev.filter(
+        (r) => !prevSyncedIds.has(r.id) || qualifiedIds.has(r.id),
+      );
+      const added = qualifiedRows
+        .filter((r) => !prevMap.has(r.id))
+        .map((r) => ({ ...r }));
+      return [...retained, ...added];
     });
+
+    takeoffSyncedIds.current = qualifiedIds;
   }, [estimateState.data]);
 
   return (
@@ -752,7 +908,23 @@ export function PipingDisciplinePage({
           />
         </TabsContent>
         <TabsContent value="takeoff" className="mt-4">
-          <TableContent {...takeoffState} columns={fieldEstimateColumns} />
+          <Accordion type="multiple" defaultValue={["support", "craft"]}>
+            <AccordionItem value="support">
+              <AccordionTrigger>Support Labor</AccordionTrigger>
+              <AccordionContent>
+                <TableContent
+                  {...supportLaborState}
+                  columns={supportLaborColumns}
+                />
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="craft">
+              <AccordionTrigger>Craft Labor</AccordionTrigger>
+              <AccordionContent>
+                <TableContent {...takeoffState} columns={fieldEstimateColumns} />
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </TabsContent>
         <TabsContent value="groups" className="mt-4">
           <PipingGroupsTable groups={pipingGroups} />

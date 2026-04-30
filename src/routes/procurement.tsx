@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { DisciplinePage, type CbsOption, type FefRow } from "~/components/FefTable";
 import { fetchCbsItemsByL1 } from "~/utils/cbs";
 
@@ -27,6 +27,8 @@ function ProcurementPage() {
     unit: item.uom,
     metallurgyCode: "",
     boreSize: "",
+    role: "",
+    schedule: "",
     laborHours: "",
     laborRate: "",
     materialCost: "",

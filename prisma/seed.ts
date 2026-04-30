@@ -195,6 +195,28 @@ function loadPipingGroups() {
   return groups;
 }
 
+function loadCompositeRates() {
+  const csvPath = join(__dirname, "data", "composite_rates.csv");
+  const lines = readFileSync(csvPath, "utf-8").split(/\r?\n/);
+
+  const roles = new Map<string, { schedule: string; rate: number }[]>();
+
+  lines
+    .slice(1)
+    .filter((line) => line.trim() !== "")
+    .forEach((line) => {
+      const cols = parseCSVLine(line);
+      const name = cols[0]?.trim() ?? "";
+      const schedule = cols[1]?.trim() ?? "";
+      const rate = parseFloat(cols[2]?.trim() ?? "0");
+
+      if (!roles.has(name)) roles.set(name, []);
+      roles.get(name)!.push({ schedule, rate });
+    });
+
+  return roles;
+}
+
 function loadCbsItems() {
   const csvPath = join(__dirname, "data", "cbs.csv");
   const lines = readFileSync(csvPath, "utf-8").split(/\r?\n/);
@@ -242,6 +264,8 @@ async function main() {
   await prisma.cbsItem.deleteMany();
   await prisma.pipingGroupValue.deleteMany();
   await prisma.pipingGroup.deleteMany();
+  await prisma.roleRate.deleteMany();
+  await prisma.role.deleteMany();
 
   await prisma.project.createMany({ data: projects });
   await prisma.statusLookup.createMany({ data: statusLookups });
@@ -267,6 +291,17 @@ async function main() {
     });
   }
   console.log(`Inserted ${pipingGroupsMap.size} piping groups`);
+
+  const compositeRates = loadCompositeRates();
+  for (const [name, rates] of compositeRates) {
+    await prisma.role.create({
+      data: {
+        name,
+        rates: { createMany: { data: rates } },
+      },
+    });
+  }
+  console.log(`Inserted ${compositeRates.size} roles`);
 }
 
 main().then(async () => {

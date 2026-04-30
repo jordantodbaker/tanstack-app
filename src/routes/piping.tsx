@@ -2,10 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   PipingDisciplinePage,
   type CbsOption,
-  type FefRow,
 } from "~/components/PipingTable";
-import { fetchCbsItemsByL1Paged } from "~/utils/cbs";
+import { fetchCbsItemsByL1, fetchCbsItemsByL1Paged } from "~/utils/cbs";
 import { fetchPipingGroups } from "~/utils/piping";
+import { fetchRoleOptions, fetchScheduleOptions, fetchRoleRates } from "~/utils/roles";
 
 const PIPING_L1 = [
   "600",
@@ -39,12 +39,24 @@ export const Route = createFileRoute("/piping")({
         data: { l1Values: PIPING_L1, page: deps.page, pageSize: PAGE_SIZE },
       }),
       fetchPipingGroups(),
-    ]).then(([cbsData, pipingGroups]) => ({ ...cbsData, pipingGroups })),
+      fetchCbsItemsByL1({ data: ["602", "632"] }),
+      fetchRoleOptions(),
+      fetchScheduleOptions(),
+      fetchRoleRates(),
+    ]).then(([cbsData, pipingGroups, supportLaborItems, roleOptions, scheduleOptions, roleRates]) => ({
+      ...cbsData,
+      pipingGroups,
+      supportLaborItems,
+      roleOptions,
+      scheduleOptions,
+      roleRates,
+    })),
   component: PipingPage,
 });
 
 function PipingPage() {
-  const { items, total, pipingGroups } = Route.useLoaderData();
+  const { items, total, pipingGroups, supportLaborItems, roleOptions, scheduleOptions, roleRates } =
+    Route.useLoaderData();
   const { page } = Route.useSearch();
   const navigate = Route.useNavigate();
 
@@ -55,7 +67,7 @@ function PipingPage() {
     displayDescription: item.displayDescription ?? null,
   }));
 
-  const rows: FefRow[] = items.map((item) => ({
+  const supportLaborRows = supportLaborItems.map((item) => ({
     id: item.displayCode,
     description: item.name ?? "",
     shopField: "",
@@ -63,9 +75,10 @@ function PipingPage() {
     quantity: "",
     size: "",
     unit: item.uom,
-    installCode: "",
     metallurgyCode: "",
     boreSize: "",
+    role: "",
+    schedule: "",
     laborHours: "",
     laborRate: "",
     materialCost: "",
@@ -76,9 +89,12 @@ function PipingPage() {
   return (
     <PipingDisciplinePage
       title="Piping"
-      initialRows={rows}
       cbsOptions={cbsOptions}
       pipingGroups={pipingGroups}
+      supportLaborInitialRows={supportLaborRows}
+      roleOptions={roleOptions}
+      scheduleOptions={scheduleOptions}
+      roleRates={roleRates}
       serverPagination={{
         totalCount: total,
         pageIndex: page,

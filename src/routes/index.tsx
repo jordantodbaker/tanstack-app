@@ -2,28 +2,17 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn, createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import "../index.css";
-import { useState, useEffect } from "react";
 import {
-  createColumn,
-  createColumnHelper,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
   useReactTable,
-  type Row,
 } from "@tanstack/react-table";
 import React from "react";
 import { Button } from "../components/ui/button";
 import { AddChangeItemDialog } from "../components/Changelog/AddChangeItemDialog";
 import { getColumns } from "~/components/Changelog/ChangelogTable";
-import { ChangeLog, StatusLookup } from "../lib/types";
-import {
-  UserButton,
-  Show,
-  SignIn,
-  SignInButton,
-  SignUpButton,
-} from "@clerk/tanstack-react-start";
+import type { ChangeLog, StatusLookup } from "../lib/types";
 
 interface PageLoadData {
   changeLogs: ChangeLog[];
@@ -32,21 +21,8 @@ interface PageLoadData {
 
 export const Route = createFileRoute("/")({
   component: Home,
-  loader: () => {
-    return getChangelogs();
-  },
+  loader: () => getChangelogs(),
 });
-
-async function toFreshRequest(request: Request) {
-  if (request.method === "GET" || request.method === "HEAD") return request;
-
-  const body = await request.arrayBuffer();
-  return new Request(request.url, {
-    method: request.method,
-    headers: request.headers,
-    body,
-  });
-}
 
 const getChangelogs = createServerFn({ method: "GET" }).handler(async () => {
   return {
@@ -81,7 +57,7 @@ const addChangelog = createServerFn({ method: "POST" })
   .inputValidator((data: Omit<ChangeLog, "id">) => data)
   .handler(async (data) => {
     const log: Omit<ChangeLog, "id"> = data.data;
-    const result = await prisma.changeLog.create({
+    return await prisma.changeLog.create({
       data: {
         projectId: log.projectId,
         cvrId: log.cvrId,
@@ -90,17 +66,12 @@ const addChangelog = createServerFn({ method: "POST" })
         updatedAt: new Date(),
       },
     });
-    console.log("THE RESULT IS: ", result);
-    return result;
   });
 
 const deleteChangelog = createServerFn({ method: "POST" })
   .inputValidator((data: { id: number }) => data)
   .handler(async (data) => {
-    const result = await prisma.changeLog.delete({
-      where: { id: data.data.id },
-    });
-    return result;
+    return await prisma.changeLog.delete({ where: { id: data.data.id } });
   });
 
 function isNotUndefined<T>(value: T | undefined): value is T {
@@ -110,15 +81,13 @@ function isNotUndefined<T>(value: T | undefined): value is T {
 type ChangelogForm = ChangeLog & { isDirty: boolean };
 
 function Home() {
-  const rerender = React.useReducer(() => ({}), {})[1];
-
   const pageData: PageLoadData = Route.useLoaderData();
 
-  const logForms = pageData.changeLogs.map((log: ChangeLog): ChangelogForm => {
-    return { ...log, isDirty: false };
-  });
+  const logForms = pageData.changeLogs.map((log: ChangeLog): ChangelogForm => ({
+    ...log,
+    isDirty: false,
+  }));
   const [data, _setData] = React.useState(() => [...logForms]);
-  const [newLog, setNewLog] = React.useState([]);
   const [columnFilters, setColumnFilters] = React.useState<
     { id: string; value: unknown }[]
   >([]);
@@ -137,43 +106,28 @@ function Home() {
     onColumnFiltersChange: setColumnFilters,
     state: { columnFilters },
     filterFns: {
-      fuzzy: () => {
-        return true;
-      },
+      fuzzy: () => true,
     },
     meta: {
-      updateData: (
-        rowIndex: number,
-        columnId: string,
-        value: string | unknown,
-      ) => {
+      updateData: (rowIndex: number, columnId: string, value: string | unknown) => {
         _setData((old) =>
           old.map((row, index) => {
             if (index === rowIndex) {
-              return {
-                ...old[rowIndex],
-                [columnId]: value,
-                isDirty: true,
-              };
+              return { ...old[rowIndex], [columnId]: value, isDirty: true };
             }
             return row;
           }),
         );
       },
       deleteLog: (rowIndex: number) => {
-        const newLogs = data.map((log) => {
-          if (data[rowIndex].id !== log.id) {
-            return log;
-          }
-        });
-        const filteredArray = newLogs.filter(isNotUndefined);
-
-        _setData(filteredArray);
+        _setData(
+          data
+            .map((log) => (data[rowIndex].id !== log.id ? log : undefined))
+            .filter(isNotUndefined),
+        );
       },
       addLog: (log: ChangeLog) => {
-        const newLogs = data;
-        newLogs.push({ ...log, isDirty: false });
-        _setData([...newLogs]);
+        _setData((old) => [...old, { ...log, isDirty: false }]);
       },
       statusLookup: pageData.statusLookup,
     },
@@ -188,7 +142,7 @@ function Home() {
               statusLookup={pageData.statusLookup}
               onAddLog={async (log: { data: Omit<ChangeLog, "id"> }) => {
                 const newLog = await addLog(log);
-                await table.options.meta?.addLog!(newLog);
+                table.options.meta?.addLog?.(newLog);
               }}
             />
           </div>
@@ -249,7 +203,7 @@ function Home() {
             className="mt-4"
             onClick={async () => await updateData({ data: data })}
           >
-            Save Changes{" "}
+            Save Changes
           </Button>
         </div>
       </div>

@@ -1,8 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import {
-  PipingDisciplinePage,
-  type CbsOption,
-} from "~/components/PipingTable";
+import { PipingDisciplinePage } from "~/components/PipingTable";
+import type { CbsOption } from "~/lib/types";
+import { disciplineById } from "~/config/disciplines";
 import { fetchCbsItemsByL1, fetchCbsItemsByL1Paged } from "~/utils/cbs";
 import { fetchPipingGroups } from "~/utils/piping";
 import { fetchRoleOptions, fetchScheduleOptions, fetchRoleRates } from "~/utils/roles";
@@ -89,6 +88,7 @@ function PipingPage() {
   return (
     <PipingDisciplinePage
       title="Piping"
+      icon={disciplineById.piping.icon}
       cbsOptions={cbsOptions}
       pipingGroups={pipingGroups}
       supportLaborInitialRows={supportLaborRows}

@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import React from "react";
 import {
   Accordion,
   AccordionItem,
   AccordionTrigger,
   AccordionContent,
 } from "~/components/ui/accordion";
+import { DISCIPLINE_LABELS } from "~/config/disciplines";
 
 export const Route = createFileRoute("/summary")({
   component: SummaryPage,
@@ -24,29 +24,6 @@ type SummaryRow = {
   equip: string;
   other: string;
 };
-
-const DISCIPLINES = [
-  "Project Development",
-  "Administration & Home Office",
-  "Engineering",
-  "Procurement",
-  "Indirects",
-  "Demolition",
-  "Civil",
-  "Concrete",
-  "Structural Steel",
-  "Buildings",
-  "Equipment",
-  "Piping",
-  "Electric",
-  "Instruments & Controls",
-  "Coatings",
-  "Commissioning",
-  "Operations",
-  "Contingency",
-  "Materials",
-  "Subcontracts",
-];
 
 const INDIRECTS = [
   "Haskell Field Staff",
@@ -116,17 +93,7 @@ const columns: {
   { key: "totalCost", header: "Total Cost $", width: "w-28" },
 ];
 
-function SummaryTable({
-  rows,
-  onUpdate,
-}: {
-  rows: SummaryRow[];
-  onUpdate: (
-    rowIndex: number,
-    field: keyof Omit<SummaryRow, "description">,
-    value: string,
-  ) => void;
-}) {
+function SummaryTable({ rows }: { rows: SummaryRow[] }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-sm">
@@ -143,11 +110,8 @@ function SummaryTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, rowIndex) => (
-            <tr
-              key={row.description}
-              className="border-b border-gray-200 hover:bg-gray-50"
-            >
+          {rows.map((row) => (
+            <tr key={row.description} className="border-b border-gray-200">
               {columns.map((col) => {
                 if (col.key === "description") {
                   return (
@@ -159,25 +123,16 @@ function SummaryTable({
                     </td>
                   );
                 }
-                if (col.key === "totalCost") {
-                  return (
-                    <td
-                      key={col.key}
-                      className="px-3 py-1.5 border border-gray-200 text-right font-medium text-gray-800 bg-gray-50"
-                    >
-                      {totalCost(row)}
-                    </td>
-                  );
-                }
-                const field = col.key as keyof Omit<SummaryRow, "description">;
+                const value =
+                  col.key === "totalCost"
+                    ? totalCost(row)
+                    : row[col.key as keyof Omit<SummaryRow, "description">];
                 return (
-                  <td key={col.key} className="p-0 border border-gray-200">
-                    <input
-                      type="text"
-                      value={row[field]}
-                      onChange={(e) => onUpdate(rowIndex, field, e.target.value)}
-                      className="w-full px-3 py-1.5 bg-transparent text-right focus:outline-none focus:bg-blue-50"
-                    />
+                  <td
+                    key={col.key}
+                    className="px-3 py-1.5 border border-gray-200 text-right text-slate-500 bg-slate-100"
+                  >
+                    {value}
                   </td>
                 );
               })}
@@ -189,34 +144,10 @@ function SummaryTable({
   );
 }
 
+const disciplineRows = makeRows(DISCIPLINE_LABELS);
+const indirectRows = makeRows(INDIRECTS);
+
 function SummaryPage() {
-  const [disciplineRows, setDisciplineRows] = React.useState<SummaryRow[]>(
-    () => makeRows(DISCIPLINES),
-  );
-  const [indirectRows, setIndirectRows] = React.useState<SummaryRow[]>(
-    () => makeRows(INDIRECTS),
-  );
-
-  const updateDiscipline = (
-    rowIndex: number,
-    field: keyof Omit<SummaryRow, "description">,
-    value: string,
-  ) => {
-    setDisciplineRows((prev) =>
-      prev.map((row, i) => (i === rowIndex ? { ...row, [field]: value } : row)),
-    );
-  };
-
-  const updateIndirect = (
-    rowIndex: number,
-    field: keyof Omit<SummaryRow, "description">,
-    value: string,
-  ) => {
-    setIndirectRows((prev) =>
-      prev.map((row, i) => (i === rowIndex ? { ...row, [field]: value } : row)),
-    );
-  };
-
   return (
     <main className="p-4">
       <h1 className="text-2xl font-bold mb-4">Summary</h1>
@@ -224,13 +155,13 @@ function SummaryPage() {
         <AccordionItem value="disciplines">
           <AccordionTrigger>Disciplines</AccordionTrigger>
           <AccordionContent>
-            <SummaryTable rows={disciplineRows} onUpdate={updateDiscipline} />
+            <SummaryTable rows={disciplineRows} />
           </AccordionContent>
         </AccordionItem>
         <AccordionItem value="indirects">
           <AccordionTrigger>Indirects</AccordionTrigger>
           <AccordionContent>
-            <SummaryTable rows={indirectRows} onUpdate={updateIndirect} />
+            <SummaryTable rows={indirectRows} />
           </AccordionContent>
         </AccordionItem>
       </Accordion>

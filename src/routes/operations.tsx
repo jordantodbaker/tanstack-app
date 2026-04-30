@@ -1,47 +1,9 @@
-﻿import { createFileRoute } from "@tanstack/react-router";
-import { DisciplinePage, type CbsOption, type FefRow } from "~/components/FefTable";
+import { createFileRoute } from "@tanstack/react-router";
+import { DisciplineRoute } from "~/components/DisciplineRoute";
+import { disciplineById } from "~/config/disciplines";
 import { fetchCbsItemsByL1 } from "~/utils/cbs";
 
 export const Route = createFileRoute("/operations")({
-  loader: () =>
-    fetchCbsItemsByL1({ data: ["960", "961", "962"] }),
-  component: OperationsPage,
+  loader: () => fetchCbsItemsByL1({ data: disciplineById.operations.l1Codes! }),
+  component: () => <DisciplineRoute title="Operations" cbsItems={Route.useLoaderData()} />,
 });
-
-function OperationsPage() {
-  const cbsItems = Route.useLoaderData();
-
-  const cbsOptions: CbsOption[] = cbsItems.map((item) => ({
-    displayCode: item.displayCode,
-    name: item.name,
-    uom: item.uom,
-    displayDescription: item.displayDescription ?? null,
-  }));
-
-  const rows: FefRow[] = cbsItems.map((item) => ({
-    id: item.displayCode,
-    description: item.name ?? "",
-    shopField: "",
-    weldGroupDescription: "",
-    quantity: "",
-    size: "",
-    unit: item.uom,
-    metallurgyCode: "",
-    boreSize: "",
-    role: "",
-    schedule: "",
-    laborHours: "",
-    laborRate: "",
-    materialCost: "",
-    equipment: "",
-    notes: "",
-  }));
-
-  return (
-    <DisciplinePage
-      title="Operations"
-      initialRows={rows}
-      cbsOptions={cbsOptions}
-    />
-  );
-}

@@ -5,361 +5,72 @@ import {
   getPaginationRowModel,
   useReactTable,
   createColumnHelper,
+  type ColumnDef,
   type ColumnFiltersState,
   type PaginationState,
 } from "@tanstack/react-table";
 import React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-
-export type FefRow = {
-  id: string;
-  description: string;
-  shopField: string;
-  weldGroupDescription: string;
-  quantity: string;
-  size: string;
-  unit: string;
-  metallurgyCode: string;
-  boreSize: string;
-  role: string;
-  schedule: string;
-  laborHours: string;
-  laborRate: string;
-  materialCost: string;
-  equipment: string;
-  notes: string;
-};
-
-export type CbsOption = {
-  displayCode: string;
-  name: string;
-  uom: string;
-  displayDescription: string | null;
-};
+import type { FefRow, CbsOption, BaseTableState } from "~/lib/types";
+import {
+  EditableCell,
+  CbsSelectCell,
+  ColumnFilter,
+  ReadOnlyCell,
+  TakeOffIdReadOnlyCell,
+  TablePagination,
+  useTakeOffSync,
+  readOnlyCellClass,
+  TAKE_OFF_INITIAL_ROWS,
+  FIELD_ESTIMATE_INITIAL_ROWS,
+} from "~/lib/table-utils";
 
 const columnHelper = createColumnHelper<FefRow>();
 
-function EditableCell({
-  getValue,
-  row,
-  column,
-  table,
-}: {
-  getValue: () => unknown;
-  row: { index: number };
-  column: { id: string };
-  table: ReturnType<typeof useReactTable<FefRow>>;
-}) {
-  const initialValue = getValue() as string;
-  const [value, setValue] = React.useState(initialValue);
-
-  React.useEffect(() => {
-    setValue(initialValue);
-  }, [initialValue]);
-
-  const onBlur = () => {
-    table.options.meta?.updateData(row.index, column.id, value);
-  };
-
-  return (
-    <input
-      className="w-full border border-transparent px-2 py-1 text-sm focus:border-blue-400 focus:outline-none rounded"
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={onBlur}
-    />
-  );
+function MaterialsTotalCostCell({ row }: { row: { original: FefRow }; getValue: () => unknown }) {
+  const qty = parseFloat(row.original.quantity);
+  const cost = parseFloat(row.original.materialCost);
+  const total =
+    !isNaN(qty) && !isNaN(cost) && row.original.quantity !== "" && row.original.materialCost !== ""
+      ? (qty * cost).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : "";
+  return <span className={readOnlyCellClass}>{total}</span>;
 }
 
-function CbsSelectCell({
-  row,
-  table,
-}: {
-  getValue: () => unknown;
-  row: { index: number; original: FefRow };
-  column: { id: string };
-  table: ReturnType<typeof useReactTable<FefRow>>;
-}) {
-  const cbsOptions = table.options.meta?.cbsOptions ?? [];
-  const currentDisplayCode = row.original.id;
-
-  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selected = cbsOptions.find((o) => o.displayCode === e.target.value);
-    if (selected) {
-      table.options.meta?.updateRow?.(row.index, {
-        id: selected.displayCode,
-        description: selected.name,
-        unit: selected.uom,
-      });
-    }
-  };
-
-  return (
-    <select
-      className="w-full border border-transparent px-2 py-1 text-sm focus:border-blue-400 focus:outline-none rounded bg-white"
-      value={currentDisplayCode}
-      onChange={handleChange}
-    >
-      <option value="">-- Select --</option>
-      {cbsOptions.map((opt) => (
-        <option key={opt.displayCode} value={opt.displayCode}>
-          {opt.displayDescription ?? `${opt.displayCode}: ${opt.name}`}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-function ColumnFilter({
-  column,
-  data,
-}: {
-  column: {
-    id: string;
-    getFilterValue: () => unknown;
-    setFilterValue: (v: unknown) => void;
-  };
-  data: FefRow[];
-}) {
-  const value = (column.getFilterValue() ?? "") as string;
-  const options = Array.from(
-    new Set(data.map((row) => row[column.id as keyof FefRow])),
-  ).sort();
-
-  return (
-    <select
-      className="mt-1 w-full border border-gray-300 px-1 py-0.5 text-xs font-normal rounded focus:border-blue-400 focus:outline-none bg-white"
-      value={value}
-      onChange={(e) => column.setFilterValue(e.target.value || undefined)}
-    >
-      <option value="">All</option>
-      {options.map((opt) => (
-        <option key={opt} value={opt}>
-          {opt}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-const columns = [
-  columnHelper.accessor("id", { header: "ID", cell: EditableCell, size: 150 }),
-  columnHelper.accessor("description", {
-    header: "Description",
-    cell: CbsSelectCell,
-    size: 300,
-  }),
+const fieldEstimateColumns: ColumnDef<FefRow, string>[] = [
+  columnHelper.accessor("id", { header: "ID", cell: ReadOnlyCell, size: 150 }),
+  columnHelper.accessor("description", { header: "Description", cell: CbsSelectCell, size: 300 }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: EditableCell }),
   columnHelper.accessor("size", { header: "Size", cell: EditableCell }),
-  columnHelper.accessor("unit", { header: "Unit", cell: EditableCell }),
-  columnHelper.accessor("laborHours", {
-    header: "Labor Hours",
-    cell: EditableCell,
-  }),
-  columnHelper.accessor("laborRate", {
-    header: "Labor Rate ($)",
-    cell: EditableCell,
-  }),
-  columnHelper.accessor("materialCost", {
-    header: "Material Cost ($)",
-    cell: EditableCell,
-  }),
-  columnHelper.accessor("equipment", {
-    header: "Equipment",
-    cell: EditableCell,
-  }),
+  columnHelper.accessor("unit", { header: "Unit", cell: ReadOnlyCell }),
+  columnHelper.accessor("laborHours", { header: "Labor Hours", cell: EditableCell }),
+  columnHelper.accessor("laborRate", { header: "Labor Rate ($)", cell: EditableCell }),
   columnHelper.accessor("notes", { header: "Notes", cell: EditableCell }),
 ];
 
-const defaultRows: FefRow[] = [
-  {
-    id: "FEF-001",
-    description: "Excavation - Site A",
-    shopField: "",
-    weldGroupDescription: "",
-    quantity: "150",
-    size: "4",
-    unit: "CY",
-    metallurgyCode: "",
-    boreSize: "MB",
-    role: "",
-    schedule: "",
-    laborHours: "12",
-    laborRate: "75",
-    materialCost: "0",
-    equipment: "Excavator",
-    notes: "Soft soil",
-  },
-  {
-    id: "FEF-002",
-    description: "Concrete Footing",
-    shopField: "",
-    weldGroupDescription: "",
-    quantity: "20",
-    size: "6",
-    unit: "CY",
-    metallurgyCode: "",
-    boreSize: "MB",
-    role: "",
-    schedule: "",
-    laborHours: "8",
-    laborRate: "75",
-    materialCost: "2400",
-    equipment: "Mixer",
-    notes: "3000 PSI mix",
-  },
-  {
-    id: "FEF-003",
-    description: "Steel Reinforcement",
-    shopField: "",
-    weldGroupDescription: "",
-    quantity: "500",
-    size: "6",
-    unit: "LF",
-    metallurgyCode: "",
-    boreSize: "MB",
-    role: "",
-    schedule: "",
-    laborHours: "6",
-    laborRate: "80",
-    materialCost: "1800",
-    equipment: "None",
-    notes: "#4 rebar",
-  },
-  {
-    id: "FEF-004",
-    description: "Block Wall - 8in CMU",
-    shopField: "",
-    weldGroupDescription: "",
-    quantity: "120",
-    size: "6",
-    unit: "SF",
-    metallurgyCode: "",
-    boreSize: "MB",
-    role: "",
-    schedule: "",
-    laborHours: "10",
-    laborRate: "75",
-    materialCost: "960",
-    equipment: "None",
-    notes: "Grouted cells",
-  },
-  {
-    id: "FEF-005",
-    description: "Waterproofing Membrane",
-    shopField: "",
-    weldGroupDescription: "",
-    quantity: "200",
-    size: "6",
-    unit: "SF",
-    metallurgyCode: "",
-    boreSize: "MB",
-    role: "",
-    schedule: "",
-    laborHours: "4",
-    laborRate: "70",
-    materialCost: "600",
-    equipment: "None",
-    notes: "Below grade",
-  },
-  {
-    id: "FEF-006",
-    description: "Backfill & Compact",
-    shopField: "",
-    weldGroupDescription: "",
-    quantity: "80",
-    size: "6",
-    unit: "CY",
-    metallurgyCode: "",
-    boreSize: "MB",
-    role: "",
-    schedule: "",
-    laborHours: "5",
-    laborRate: "65",
-    materialCost: "0",
-    equipment: "Compactor",
-    notes: "95% compaction",
-  },
-  {
-    id: "FEF-007",
-    description: "Electrical Conduit",
-    shopField: "",
-    weldGroupDescription: "",
-    quantity: "300",
-    size: "6",
-    unit: "LF",
-    metallurgyCode: "",
-    boreSize: "MB",
-    role: "",
-    schedule: "",
-    laborHours: "9",
-    laborRate: "90",
-    materialCost: "1200",
-    equipment: "None",
-    notes: "2in PVC",
-  },
-  {
-    id: "FEF-008",
-    description: "Plumbing - Rough In",
-    shopField: "",
-    weldGroupDescription: "",
-    quantity: "5",
-    size: "6",
-    unit: "EA",
-    metallurgyCode: "",
-    boreSize: "MB",
-    role: "",
-    schedule: "",
-    laborHours: "16",
-    laborRate: "95",
-    materialCost: "850",
-    equipment: "None",
-    notes: "PEX supply lines",
-  },
-  {
-    id: "FEF-009",
-    description: "Framing - Exterior Wall",
-    shopField: "",
-    weldGroupDescription: "",
-    quantity: "400",
-    size: "6",
-    unit: "SF",
-    metallurgyCode: "",
-    boreSize: "MB",
-    role: "",
-    schedule: "",
-    laborHours: "14",
-    laborRate: "75",
-    materialCost: "3200",
-    equipment: "None",
-    notes: "2x6 @ 16 OC",
-  },
-  {
-    id: "FEF-010",
-    description: "Roofing - Underlayment",
-    shopField: "",
-    weldGroupDescription: "",
-    quantity: "25",
-    size: "6",
-    unit: "SQ",
-    metallurgyCode: "",
-    boreSize: "MB",
-    role: "",
-    schedule: "",
-    laborHours: "8",
-    laborRate: "80",
-    materialCost: "1500",
-    equipment: "None",
-    notes: "30lb felt paper",
-  },
+const takeOffColumns: ColumnDef<FefRow, string>[] = [
+  columnHelper.accessor("id", { header: "ID", cell: TakeOffIdReadOnlyCell, size: 150 }),
+  columnHelper.accessor("description", { header: "Description", cell: CbsSelectCell, size: 300 }),
+  columnHelper.accessor("quantity", { header: "Quantity", cell: EditableCell }),
+  columnHelper.accessor("size", { header: "Size", cell: EditableCell }),
+  columnHelper.accessor("unit", { header: "Unit", cell: ReadOnlyCell }),
+  columnHelper.accessor("laborHours", { header: "Labor Hours", cell: EditableCell }),
+  columnHelper.accessor("laborRate", { header: "Labor Rate ($)", cell: EditableCell }),
+  columnHelper.accessor("notes", { header: "Notes", cell: EditableCell }),
 ];
 
-type TableState = {
-  data: FefRow[];
-  setData: React.Dispatch<React.SetStateAction<FefRow[]>>;
-  columnFilters: ColumnFiltersState;
-  setColumnFilters: React.Dispatch<React.SetStateAction<ColumnFiltersState>>;
-  cbsOptions?: CbsOption[];
+const materialsColumns: ColumnDef<FefRow, string>[] = [
+  columnHelper.accessor("id", { header: "ID", cell: ReadOnlyCell, size: 150 }),
+  columnHelper.accessor("description", { header: "Description", cell: ReadOnlyCell, size: 300 }),
+  columnHelper.accessor("quantity", { header: "Quantity", cell: EditableCell }),
+  columnHelper.accessor("unit", { header: "Unit", cell: ReadOnlyCell }),
+  columnHelper.accessor("materialCost", { header: "Material Cost ($)", cell: EditableCell }),
+  columnHelper.display({ id: "totalCost", header: "Total Cost ($)", cell: MaterialsTotalCostCell }),
+  columnHelper.accessor("notes", { header: "Notes", cell: EditableCell }),
+];
+
+type TableState = BaseTableState & {
+  variant?: "materials";
 };
 
 function TableContent({
@@ -368,15 +79,19 @@ function TableContent({
   columnFilters,
   setColumnFilters,
   cbsOptions,
-}: TableState) {
+  variant,
+  columns: columnsProp,
+}: TableState & { columns?: ColumnDef<FefRow, string>[] }) {
   const [pagination, setPagination] = React.useState<PaginationState>({
     pageIndex: 0,
     pageSize: 25,
   });
 
+  const resolvedColumns = columnsProp ?? (variant === "materials" ? materialsColumns : fieldEstimateColumns);
+
   const table = useReactTable({
     data,
-    columns,
+    columns: resolvedColumns,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -447,56 +162,20 @@ function TableContent({
           ))}
         </tbody>
       </table>
-      <div className="flex items-center justify-between mt-3 text-sm text-gray-600">
-        <div className="flex items-center gap-2">
-          <button
-            className="px-2 py-1 border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-100"
-            onClick={() => table.firstPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            {"<<"}
-          </button>
-          <button
-            className="px-2 py-1 border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-100"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            {"<"}
-          </button>
-          <button
-            className="px-2 py-1 border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-100"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            {">"}
-          </button>
-          <button
-            className="px-2 py-1 border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-100"
-            onClick={() => table.lastPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            {">>"}
-          </button>
-        </div>
-        <span>
-          Page {table.getState().pagination.pageIndex + 1} of{" "}
-          {table.getPageCount()} &mdash;{" "}
-          {table.getFilteredRowModel().rows.length} rows
-        </span>
-      </div>
+      <TablePagination table={table} />
     </div>
   );
 }
 
-function useTableState(initialRows?: FefRow[], cbsOptions?: CbsOption[]) {
-  const [data, setData] = React.useState<FefRow[]>(initialRows ?? defaultRows);
+function useTableState(initialRows?: FefRow[], cbsOptions?: CbsOption[], variant?: "materials") {
+  const [data, setData] = React.useState<FefRow[]>(initialRows ?? TAKE_OFF_INITIAL_ROWS);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     [],
   );
   React.useEffect(() => {
     if (initialRows !== undefined) setData(initialRows);
   }, [initialRows]);
-  return { data, setData, columnFilters, setColumnFilters, cbsOptions };
+  return { data, setData, columnFilters, setColumnFilters, cbsOptions, variant };
 }
 
 export function FefTable({ title }: { title: string }) {
@@ -510,35 +189,53 @@ export function FefTable({ title }: { title: string }) {
 }
 
 const tabTriggerClass =
-  "rounded-none border-b-2 border-transparent bg-transparent px-5 py-2.5 text-sm font-medium text-slate-500 shadow-none transition-colors hover:text-slate-800 data-active:border-red-700 data-active:text-red-800 data-active:bg-transparent";
+  "rounded-md border border-slate-300 bg-white px-6 py-4 text-lg font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 hover:text-slate-900 data-active:border-red-700 data-active:bg-red-700 data-active:text-white data-active:shadow";
 
 export function DisciplinePage({
   title,
+  icon: Icon,
   initialRows,
   cbsOptions,
+  variant,
 }: {
   title?: string;
+  icon?: React.ElementType;
   initialRows?: FefRow[];
   cbsOptions?: CbsOption[];
+  variant?: "materials";
 }) {
-  const estimateState = useTableState(initialRows, cbsOptions);
-  const takeoffState = useTableState(undefined, cbsOptions);
+  const takeOffState = useTableState(
+    variant === "materials" ? initialRows : TAKE_OFF_INITIAL_ROWS,
+    cbsOptions,
+    variant,
+  );
+  const fieldEstimateState = useTableState(FIELD_ESTIMATE_INITIAL_ROWS, cbsOptions, variant);
+
+  const syncToFieldEstimate = useTakeOffSync(takeOffState, fieldEstimateState);
+
+  if (variant === "materials") {
+    return <TableContent {...takeOffState} />;
+  }
 
   const tabs = (
-    <Tabs defaultValue="estimate" className="w-full">
-      <TabsList className="w-full justify-start rounded-none border-b border-slate-200 bg-transparent p-0 h-auto gap-0">
-        <TabsTrigger value="estimate" className={tabTriggerClass}>
-          Field Estimate
-        </TabsTrigger>
+    <Tabs
+      defaultValue="takeoff"
+      className="w-full"
+      onValueChange={(v) => { if (v === "estimate") syncToFieldEstimate(); }}
+    >
+      <TabsList className="w-full justify-start rounded-none border-b border-slate-200 bg-transparent p-0 pb-2 h-auto gap-2">
         <TabsTrigger value="takeoff" className={tabTriggerClass}>
           Take Off
         </TabsTrigger>
+        <TabsTrigger value="estimate" className={tabTriggerClass}>
+          Field Estimate
+        </TabsTrigger>
       </TabsList>
-      <TabsContent value="estimate" className="mt-4">
-        <TableContent {...estimateState} />
-      </TabsContent>
       <TabsContent value="takeoff" className="mt-4">
-        <TableContent {...takeoffState} />
+        <TableContent {...takeOffState} columns={takeOffColumns} />
+      </TabsContent>
+      <TabsContent value="estimate" className="mt-4">
+        <TableContent {...fieldEstimateState} />
       </TabsContent>
     </Tabs>
   );
@@ -547,7 +244,10 @@ export function DisciplinePage({
 
   return (
     <main className="p-4">
-      <h1 className="text-2xl font-bold mb-4">{title}</h1>
+      <h1 className="text-2xl font-bold mb-4 flex items-center gap-2">
+        {Icon && <Icon className="size-7" />}
+        {title}
+      </h1>
       {tabs}
     </main>
   );

@@ -69,6 +69,26 @@ model PipingGroupValue {
   value         Float
 }
 
+model PipingFactor {
+  id             Int                 @id @default(autoincrement())
+  discipline     String
+  description    String
+  code           String
+  taskDefinition String
+  unit           String
+  values         PipingFactorValue[]
+
+  @@unique([discipline, description, code, taskDefinition, unit])
+}
+
+model PipingFactorValue {
+  id             Int          @id @default(autoincrement())
+  pipingFactor   PipingFactor @relation(fields: [pipingFactorId], references: [id])
+  pipingFactorId Int
+  size           Float
+  value          Float?
+}
+
 model Role {
   id    Int        @id @default(autoincrement())
   name  String     @unique

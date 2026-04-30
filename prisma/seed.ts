@@ -195,6 +195,59 @@ function loadPipingGroups() {
   return groups;
 }
 
+function loadPipingFactors() {
+  const csvPath = join(__dirname, "data", "piping_factors.csv");
+  const lines = readFileSync(csvPath, "utf-8").split(/\r?\n/);
+
+  const factors = new Map<
+    string,
+    {
+      discipline: string;
+      description: string;
+      code: string;
+      taskDefinition: string;
+      unit: string;
+      values: { size: number; value: number | null }[];
+    }
+  >();
+
+  lines
+    .slice(1)
+    .filter((line) => line.trim() !== "")
+    .forEach((line) => {
+      const cols = parseCSVLine(line);
+      const discipline = cols[0]?.trim() ?? "";
+      const description = cols[1]?.trim() ?? "";
+      const code = cols[2]?.trim() ?? "";
+      const taskDefinition = cols[3]?.trim() ?? "";
+      const unit = cols[4]?.trim() ?? "";
+      const sizeStr = cols[5]?.trim() ?? "";
+      const valueStr = cols[6]?.trim() ?? "";
+
+      const size = parseFloat(sizeStr);
+      if (isNaN(size)) return;
+
+      const value =
+        valueStr === "" || valueStr === "FALSE" ? null : parseFloat(valueStr);
+      if (value !== null && isNaN(value)) return;
+
+      const key = `${discipline}|${description}|${code}|${taskDefinition}|${unit}`;
+      if (!factors.has(key)) {
+        factors.set(key, {
+          discipline,
+          description,
+          code,
+          taskDefinition,
+          unit,
+          values: [],
+        });
+      }
+      factors.get(key)!.values.push({ size, value });
+    });
+
+  return factors;
+}
+
 function loadCompositeRates() {
   const csvPath = join(__dirname, "data", "composite_rates.csv");
   const lines = readFileSync(csvPath, "utf-8").split(/\r?\n/);
@@ -264,6 +317,8 @@ async function main() {
   await prisma.cbsItem.deleteMany();
   await prisma.pipingGroupValue.deleteMany();
   await prisma.pipingGroup.deleteMany();
+  await prisma.pipingFactorValue.deleteMany();
+  await prisma.pipingFactor.deleteMany();
   await prisma.roleRate.deleteMany();
   await prisma.role.deleteMany();
 
@@ -291,6 +346,18 @@ async function main() {
     });
   }
   console.log(`Inserted ${pipingGroupsMap.size} piping groups`);
+
+  const pipingFactorsMap = loadPipingFactors();
+  for (const [, factorData] of pipingFactorsMap) {
+    const { values, ...factorFields } = factorData;
+    await prisma.pipingFactor.create({
+      data: {
+        ...factorFields,
+        values: { createMany: { data: values } },
+      },
+    });
+  }
+  console.log(`Inserted ${pipingFactorsMap.size} piping factors`);
 
   const compositeRates = loadCompositeRates();
   for (const [name, rates] of compositeRates) {

@@ -9,6 +9,8 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ValidationRouteImport } from './routes/validation'
+import { Route as SummaryRouteImport } from './routes/summary'
 import { Route as SteelRouteImport } from './routes/steel'
 import { Route as ProjectDevelopmentRouteImport } from './routes/project-development'
 import { Route as ProcurementRouteImport } from './routes/procurement'
@@ -28,6 +30,7 @@ import { Route as CommissioningRouteImport } from './routes/commissioning'
 import { Route as CoatingsRouteImport } from './routes/coatings'
 import { Route as CivilRouteImport } from './routes/civil'
 import { Route as BuildingsRouteImport } from './routes/buildings'
+import { Route as BasisRouteImport } from './routes/basis'
 import { Route as AdministrationRouteImport } from './routes/administration'
 import { Route as PathlessLayoutRouteImport } from './routes/_pathlessLayout'
 import { Route as IndexRouteImport } from './routes/index'
@@ -38,6 +41,16 @@ import { Route as ApiUsersIdRouteImport } from './routes/api/users.$id'
 import { Route as PathlessLayoutNestedLayoutRouteBRouteImport } from './routes/_pathlessLayout/_nested-layout/route-b'
 import { Route as PathlessLayoutNestedLayoutRouteARouteImport } from './routes/_pathlessLayout/_nested-layout/route-a'
 
+const ValidationRoute = ValidationRouteImport.update({
+  id: '/validation',
+  path: '/validation',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SummaryRoute = SummaryRouteImport.update({
+  id: '/summary',
+  path: '/summary',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SteelRoute = SteelRouteImport.update({
   id: '/steel',
   path: '/steel',
@@ -133,6 +146,11 @@ const BuildingsRoute = BuildingsRouteImport.update({
   path: '/buildings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BasisRoute = BasisRouteImport.update({
+  id: '/basis',
+  path: '/basis',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdministrationRoute = AdministrationRouteImport.update({
   id: '/administration',
   path: '/administration',
@@ -183,6 +201,7 @@ const PathlessLayoutNestedLayoutRouteARoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/administration': typeof AdministrationRoute
+  '/basis': typeof BasisRoute
   '/buildings': typeof BuildingsRoute
   '/civil': typeof CivilRoute
   '/coatings': typeof CoatingsRoute
@@ -202,6 +221,8 @@ export interface FileRoutesByFullPath {
   '/procurement': typeof ProcurementRoute
   '/project-development': typeof ProjectDevelopmentRoute
   '/steel': typeof SteelRoute
+  '/summary': typeof SummaryRoute
+  '/validation': typeof ValidationRoute
   '/api/posts': typeof ApiPostsRoute
   '/api/users': typeof ApiUsersRouteWithChildren
   '/route-a': typeof PathlessLayoutNestedLayoutRouteARoute
@@ -211,6 +232,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/administration': typeof AdministrationRoute
+  '/basis': typeof BasisRoute
   '/buildings': typeof BuildingsRoute
   '/civil': typeof CivilRoute
   '/coatings': typeof CoatingsRoute
@@ -230,6 +252,8 @@ export interface FileRoutesByTo {
   '/procurement': typeof ProcurementRoute
   '/project-development': typeof ProjectDevelopmentRoute
   '/steel': typeof SteelRoute
+  '/summary': typeof SummaryRoute
+  '/validation': typeof ValidationRoute
   '/api/posts': typeof ApiPostsRoute
   '/api/users': typeof ApiUsersRouteWithChildren
   '/route-a': typeof PathlessLayoutNestedLayoutRouteARoute
@@ -241,6 +265,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_pathlessLayout': typeof PathlessLayoutRouteWithChildren
   '/administration': typeof AdministrationRoute
+  '/basis': typeof BasisRoute
   '/buildings': typeof BuildingsRoute
   '/civil': typeof CivilRoute
   '/coatings': typeof CoatingsRoute
@@ -260,6 +285,8 @@ export interface FileRoutesById {
   '/procurement': typeof ProcurementRoute
   '/project-development': typeof ProjectDevelopmentRoute
   '/steel': typeof SteelRoute
+  '/summary': typeof SummaryRoute
+  '/validation': typeof ValidationRoute
   '/_pathlessLayout/_nested-layout': typeof PathlessLayoutNestedLayoutRouteWithChildren
   '/api/posts': typeof ApiPostsRoute
   '/api/users': typeof ApiUsersRouteWithChildren
@@ -272,6 +299,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/administration'
+    | '/basis'
     | '/buildings'
     | '/civil'
     | '/coatings'
@@ -291,6 +319,8 @@ export interface FileRouteTypes {
     | '/procurement'
     | '/project-development'
     | '/steel'
+    | '/summary'
+    | '/validation'
     | '/api/posts'
     | '/api/users'
     | '/route-a'
@@ -300,6 +330,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/administration'
+    | '/basis'
     | '/buildings'
     | '/civil'
     | '/coatings'
@@ -319,6 +350,8 @@ export interface FileRouteTypes {
     | '/procurement'
     | '/project-development'
     | '/steel'
+    | '/summary'
+    | '/validation'
     | '/api/posts'
     | '/api/users'
     | '/route-a'
@@ -329,6 +362,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_pathlessLayout'
     | '/administration'
+    | '/basis'
     | '/buildings'
     | '/civil'
     | '/coatings'
@@ -348,6 +382,8 @@ export interface FileRouteTypes {
     | '/procurement'
     | '/project-development'
     | '/steel'
+    | '/summary'
+    | '/validation'
     | '/_pathlessLayout/_nested-layout'
     | '/api/posts'
     | '/api/users'
@@ -360,6 +396,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   PathlessLayoutRoute: typeof PathlessLayoutRouteWithChildren
   AdministrationRoute: typeof AdministrationRoute
+  BasisRoute: typeof BasisRoute
   BuildingsRoute: typeof BuildingsRoute
   CivilRoute: typeof CivilRoute
   CoatingsRoute: typeof CoatingsRoute
@@ -379,12 +416,28 @@ export interface RootRouteChildren {
   ProcurementRoute: typeof ProcurementRoute
   ProjectDevelopmentRoute: typeof ProjectDevelopmentRoute
   SteelRoute: typeof SteelRoute
+  SummaryRoute: typeof SummaryRoute
+  ValidationRoute: typeof ValidationRoute
   ApiPostsRoute: typeof ApiPostsRoute
   ApiUsersRoute: typeof ApiUsersRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/validation': {
+      id: '/validation'
+      path: '/validation'
+      fullPath: '/validation'
+      preLoaderRoute: typeof ValidationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/summary': {
+      id: '/summary'
+      path: '/summary'
+      fullPath: '/summary'
+      preLoaderRoute: typeof SummaryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/steel': {
       id: '/steel'
       path: '/steel'
@@ -518,6 +571,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BuildingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/basis': {
+      id: '/basis'
+      path: '/basis'
+      fullPath: '/basis'
+      preLoaderRoute: typeof BasisRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/administration': {
       id: '/administration'
       path: '/administration'
@@ -630,6 +690,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   PathlessLayoutRoute: PathlessLayoutRouteWithChildren,
   AdministrationRoute: AdministrationRoute,
+  BasisRoute: BasisRoute,
   BuildingsRoute: BuildingsRoute,
   CivilRoute: CivilRoute,
   CoatingsRoute: CoatingsRoute,
@@ -649,6 +710,8 @@ const rootRouteChildren: RootRouteChildren = {
   ProcurementRoute: ProcurementRoute,
   ProjectDevelopmentRoute: ProjectDevelopmentRoute,
   SteelRoute: SteelRoute,
+  SummaryRoute: SummaryRoute,
+  ValidationRoute: ValidationRoute,
   ApiPostsRoute: ApiPostsRoute,
   ApiUsersRoute: ApiUsersRouteWithChildren,
 }

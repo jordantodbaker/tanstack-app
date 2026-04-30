@@ -51,6 +51,8 @@ export const fetchCbsItemsByL1EndsWith = createServerFn({ method: "GET" })
         name: true,
         uom: true,
         displayDescription: true,
+        l1: true,
+        accountDescription: true,
       },
     });
   });

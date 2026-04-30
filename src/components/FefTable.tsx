@@ -517,32 +517,38 @@ export function DisciplinePage({
   initialRows,
   cbsOptions,
 }: {
-  title: string;
+  title?: string;
   initialRows?: FefRow[];
   cbsOptions?: CbsOption[];
 }) {
   const estimateState = useTableState(initialRows, cbsOptions);
   const takeoffState = useTableState(undefined, cbsOptions);
 
+  const tabs = (
+    <Tabs defaultValue="estimate" className="w-full">
+      <TabsList className="w-full justify-start rounded-none border-b border-slate-200 bg-transparent p-0 h-auto gap-0">
+        <TabsTrigger value="estimate" className={tabTriggerClass}>
+          Field Estimate
+        </TabsTrigger>
+        <TabsTrigger value="takeoff" className={tabTriggerClass}>
+          Take Off
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="estimate" className="mt-4">
+        <TableContent {...estimateState} />
+      </TabsContent>
+      <TabsContent value="takeoff" className="mt-4">
+        <TableContent {...takeoffState} />
+      </TabsContent>
+    </Tabs>
+  );
+
+  if (!title) return tabs;
+
   return (
     <main className="p-4">
       <h1 className="text-2xl font-bold mb-4">{title}</h1>
-      <Tabs defaultValue="estimate" className="w-full">
-        <TabsList className="w-full justify-start rounded-none border-b border-slate-200 bg-transparent p-0 h-auto gap-0">
-          <TabsTrigger value="estimate" className={tabTriggerClass}>
-            Field Estimate
-          </TabsTrigger>
-          <TabsTrigger value="takeoff" className={tabTriggerClass}>
-            Take Off
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="estimate" className="mt-4">
-          <TableContent {...estimateState} />
-        </TabsContent>
-        <TabsContent value="takeoff" className="mt-4">
-          <TableContent {...takeoffState} />
-        </TabsContent>
-      </Tabs>
+      {tabs}
     </main>
   );
 }

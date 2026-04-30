@@ -46,9 +46,9 @@ const disciplines: Discipline[] = [
     label: "Summary",
     icon: FileText,
     items: [
-      { label: "Summary", to: "/" },
-      { label: "Basis", to: "/fef" },
-      { label: "Validation", to: "/fef" },
+      { label: "Summary", to: "/summary" },
+      { label: "Basis", to: "/basis" },
+      { label: "Validation", to: "/validation" },
     ],
   },
   {

@@ -728,76 +728,6 @@ function useTableState(
   };
 }
 
-function PipingGroupsTable({ groups }: { groups: PipingGroup[] }) {
-  const rows = groups.flatMap((g) =>
-    g.values.map((v) => ({ ...g, size: v.size, value: v.value })),
-  );
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="bg-gray-100">
-            {[
-              "Group No",
-              "Material Classification",
-              "Material",
-              "Install Code",
-              "Shop Code",
-              "Parent Code",
-              "Weight Code",
-              "Sched",
-              "% Adder",
-              "Size",
-              "Value",
-            ].map((h) => (
-              <th
-                key={h}
-                className="border border-gray-300 px-3 py-2 text-left font-semibold whitespace-nowrap"
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-              <td className="border border-gray-300 px-3 py-1">
-                {row.groupNo}
-              </td>
-              <td className="border border-gray-300 px-3 py-1">
-                {row.materialClassification}
-              </td>
-              <td className="border border-gray-300 px-3 py-1">
-                {row.material}
-              </td>
-              <td className="border border-gray-300 px-3 py-1">
-                {row.installCode}
-              </td>
-              <td className="border border-gray-300 px-3 py-1">
-                {row.shopCode}
-              </td>
-              <td className="border border-gray-300 px-3 py-1">
-                {row.parentCode}
-              </td>
-              <td className="border border-gray-300 px-3 py-1">
-                {row.weightCode}
-              </td>
-              <td className="border border-gray-300 px-3 py-1">{row.sched}</td>
-              <td className="border border-gray-300 px-3 py-1">
-                {row.percentAdder}
-              </td>
-              <td className="border border-gray-300 px-3 py-1">{row.size}</td>
-              <td className="border border-gray-300 px-3 py-1">{row.value}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="mt-2 text-sm text-gray-500">{rows.length} rows</div>
-    </div>
-  );
-}
 
 const tabTriggerClass =
   "rounded-none border-b-2 border-transparent bg-transparent px-5 py-2.5 text-sm font-medium text-slate-500 shadow-none transition-colors hover:text-slate-800 data-active:border-red-700 data-active:text-red-800 data-active:bg-transparent";
@@ -896,9 +826,6 @@ export function PipingDisciplinePage({
           <TabsTrigger value="takeoff" className={tabTriggerClass}>
             Field Estimate
           </TabsTrigger>
-          <TabsTrigger value="groups" className={tabTriggerClass}>
-            Piping Groups
-          </TabsTrigger>
         </TabsList>
         <TabsContent value="estimate" className="mt-4">
           <TableContent
@@ -925,9 +852,6 @@ export function PipingDisciplinePage({
               </AccordionContent>
             </AccordionItem>
           </Accordion>
-        </TabsContent>
-        <TabsContent value="groups" className="mt-4">
-          <PipingGroupsTable groups={pipingGroups} />
         </TabsContent>
       </Tabs>
     </main>

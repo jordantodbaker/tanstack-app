@@ -199,6 +199,4 @@ export const disciplineById = Object.fromEntries(
 );
 
 // Ordered list of top-level discipline labels for the summary page
-export const DISCIPLINE_LABELS: string[] = disciplines
-  .filter((d) => d.id !== "summary")
-  .map((d) => d.label);
+export const DISCIPLINE_LABELS: string[] = ["Procurement", "Civil", "Concrete", "Structural Steel", "Buildings", "Equipment", "Piping", "Electrical", "Instrumentation", "Coatings"]

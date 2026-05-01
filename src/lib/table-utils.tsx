@@ -22,6 +22,7 @@ export function makeBlankRow(i: number): FefRow {
     boreSize: "",
     role: "",
     schedule: "",
+    taskCode: "",
     laborHours: "",
     laborRate: "",
     materialCost: "",

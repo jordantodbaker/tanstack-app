@@ -7,6 +7,9 @@ import {
   TotalCostCell,
   RoleSelectCell,
   ScheduleSelectCell,
+  TaskCodeSelectCell,
+  LaborFactorCell,
+  LaborHoursCell,
 } from "~/components/Piping/cells";
 
 const columnHelper = createColumnHelper<FefRow>();
@@ -18,6 +21,16 @@ export const takeOffColumns: ColumnDef<FefRow, string>[] = [
     cell: CbsSelectCell,
     size: 300,
   }),
+  columnHelper.accessor("role", {
+    header: "Role",
+    cell: RoleSelectCell,
+    size: 180,
+  }),
+  columnHelper.accessor("schedule", {
+    header: "Schedule",
+    cell: ScheduleSelectCell,
+    size: 150,
+  }),
   columnHelper.accessor("shopField", {
     header: "Shop / Field",
     cell: ShopFieldSelectCell,
@@ -27,6 +40,11 @@ export const takeOffColumns: ColumnDef<FefRow, string>[] = [
     header: "Weld Group Description",
     cell: WeldGroupSelectCell,
     size: 220,
+  }),
+  columnHelper.accessor("taskCode", {
+    header: "Task Code",
+    cell: TaskCodeSelectCell,
+    size: 160,
   }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: EditableCell }),
   columnHelper.accessor("size", { header: "Size", cell: SizeCell }),
@@ -41,13 +59,25 @@ export const takeOffColumns: ColumnDef<FefRow, string>[] = [
     cell: ReadOnlyCell,
     size: 110,
   }),
+  columnHelper.display({
+    id: "laborFactor",
+    header: "Labor Factor",
+    cell: LaborFactorCell,
+    size: 130,
+  }),
   columnHelper.accessor("laborHours", {
     header: "Labor Hours",
-    cell: EditableCell,
+    cell: LaborHoursCell,
   }),
   columnHelper.accessor("laborRate", {
     header: "Labor Rate ($)",
-    cell: EditableCell,
+    cell: ReadOnlyCell,
+  }),
+  columnHelper.display({
+    id: "totalCost",
+    header: "Total Cost ($)",
+    cell: TotalCostCell,
+    size: 130,
   }),
   columnHelper.accessor("notes", { header: "Notes", cell: EditableCell }),
 ];

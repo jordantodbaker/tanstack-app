@@ -37,6 +37,7 @@ export type FefRow = {
   boreSize: string;
   role: string;
   schedule: string;
+  taskCode: string;
   laborHours: string;
   laborRate: string;
   materialCost: string;

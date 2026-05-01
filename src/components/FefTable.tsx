@@ -24,6 +24,11 @@ import {
   TAKE_OFF_INITIAL_ROWS,
   FIELD_ESTIMATE_INITIAL_ROWS,
 } from "~/lib/table-utils";
+import {
+  setMaterialsSectionTotal,
+  getMaterialsSectionRows,
+  setMaterialsSectionRows,
+} from "~/lib/materialsStore";
 
 const columnHelper = createColumnHelper<FefRow>();
 
@@ -34,7 +39,7 @@ function MaterialsTotalCostCell({ row }: { row: { original: FefRow }; getValue: 
     !isNaN(qty) && !isNaN(cost) && row.original.quantity !== "" && row.original.materialCost !== ""
       ? (qty * cost).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
       : "";
-  return <span className={readOnlyCellClass}>{total}</span>;
+  return <span className={readOnlyCellClass}>{total ? `$${total}` : ""}</span>;
 }
 
 const fieldEstimateColumns: ColumnDef<FefRow, string>[] = [
@@ -167,14 +172,42 @@ function TableContent({
   );
 }
 
-function useTableState(initialRows?: FefRow[], cbsOptions?: CbsOption[], variant?: "materials") {
-  const [data, setData] = React.useState<FefRow[]>(initialRows ?? TAKE_OFF_INITIAL_ROWS);
+function useTableState(
+  initialRows?: FefRow[],
+  cbsOptions?: CbsOption[],
+  variant?: "materials",
+  sectionKey?: string,
+) {
+  const [data, setDataState] = React.useState<FefRow[]>(() => {
+    if (sectionKey) {
+      const cached = getMaterialsSectionRows(sectionKey);
+      if (cached) return cached;
+    }
+    return initialRows ?? TAKE_OFF_INITIAL_ROWS;
+  });
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     [],
   );
+
+  const setData = React.useCallback<React.Dispatch<React.SetStateAction<FefRow[]>>>(
+    (updater) => {
+      setDataState((old) => {
+        const next =
+          typeof updater === "function"
+            ? (updater as (p: FefRow[]) => FefRow[])(old)
+            : updater;
+        if (sectionKey) setMaterialsSectionRows(sectionKey, next);
+        return next;
+      });
+    },
+    [sectionKey],
+  );
+
   React.useEffect(() => {
-    if (initialRows !== undefined) setData(initialRows);
-  }, [initialRows]);
+    if (sectionKey) return;
+    if (initialRows !== undefined) setDataState(initialRows);
+  }, [initialRows, sectionKey]);
+
   return { data, setData, columnFilters, setColumnFilters, cbsOptions, variant };
 }
 
@@ -189,7 +222,7 @@ export function FefTable({ title }: { title: string }) {
 }
 
 const tabTriggerClass =
-  "rounded-md border border-slate-300 bg-white px-6 py-4 text-lg font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 hover:text-slate-900 data-active:border-red-700 data-active:bg-red-700 data-active:text-white data-active:shadow";
+  "rounded-md border border-slate-300 bg-white px-6 py-4 text-lg font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 hover:text-slate-900 data-active:border-[#a63434] data-active:bg-[#a63434] data-active:text-white data-active:shadow";
 
 export function DisciplinePage({
   title,
@@ -197,21 +230,35 @@ export function DisciplinePage({
   initialRows,
   cbsOptions,
   variant,
+  sectionKey,
 }: {
   title?: string;
   icon?: React.ElementType;
   initialRows?: FefRow[];
   cbsOptions?: CbsOption[];
   variant?: "materials";
+  sectionKey?: string;
 }) {
   const takeOffState = useTableState(
     variant === "materials" ? initialRows : TAKE_OFF_INITIAL_ROWS,
     cbsOptions,
     variant,
+    variant === "materials" ? sectionKey : undefined,
   );
   const fieldEstimateState = useTableState(FIELD_ESTIMATE_INITIAL_ROWS, cbsOptions, variant);
 
   const syncToFieldEstimate = useTakeOffSync(takeOffState, fieldEstimateState);
+
+  React.useEffect(() => {
+    if (variant !== "materials" || !sectionKey) return;
+    const total = takeOffState.data.reduce((acc, row) => {
+      const q = parseFloat(row.quantity);
+      const c = parseFloat(row.materialCost);
+      if (isNaN(q) || isNaN(c)) return acc;
+      return acc + q * c;
+    }, 0);
+    setMaterialsSectionTotal(sectionKey, total);
+  }, [variant, sectionKey, takeOffState.data]);
 
   if (variant === "materials") {
     return <TableContent {...takeOffState} />;

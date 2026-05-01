@@ -66,39 +66,29 @@ type TableState = BaseTableState & {
   roleOptions?: string[];
   scheduleOptions?: string[];
   roleRates?: { roleName: string; schedule: string; rate: number }[];
+  taskCodeOptions?: string[];
+  pipingFactorLookup?: Map<string, { unit: string; values: Map<number, number> }>;
 };
 
-function useTableState(
-  initialRows?: FefRow[],
-  cbsOptions?: CbsOption[],
-  weldGroupOptions?: string[],
-  weldGroupMaterialMap?: Record<
-    string,
-    { shopCode: string; installCode: string }
-  >,
-  roleOptions?: string[],
-  scheduleOptions?: string[],
-  roleRates?: { roleName: string; schedule: string; rate: number }[],
-) {
-  const [data, setData] = React.useState<FefRow[]>(initialRows ?? TAKE_OFF_INITIAL_ROWS);
+type UseTableStateOptions = Omit<
+  TableState,
+  "data" | "setData" | "columnFilters" | "setColumnFilters"
+> & { initialRows?: FefRow[] };
+
+function useTableState({
+  initialRows,
+  ...rest
+}: UseTableStateOptions = {}) {
+  const [data, setData] = React.useState<FefRow[]>(
+    initialRows ?? TAKE_OFF_INITIAL_ROWS,
+  );
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     [],
   );
   React.useEffect(() => {
     if (initialRows !== undefined) setData(initialRows);
   }, [initialRows]);
-  return {
-    data,
-    setData,
-    columnFilters,
-    setColumnFilters,
-    cbsOptions,
-    weldGroupOptions,
-    weldGroupMaterialMap,
-    roleOptions,
-    scheduleOptions,
-    roleRates,
-  };
+  return { data, setData, columnFilters, setColumnFilters, ...rest };
 }
 
 function TableContent({
@@ -112,6 +102,8 @@ function TableContent({
   roleOptions,
   scheduleOptions,
   roleRates,
+  taskCodeOptions,
+  pipingFactorLookup,
   serverPagination,
   columns,
 }: TableState & {
@@ -155,6 +147,8 @@ function TableContent({
       roleOptions: roleOptions ?? [],
       scheduleOptions: scheduleOptions ?? [],
       roleRates: roleRates ?? [],
+      taskCodeOptions: taskCodeOptions ?? [],
+      pipingFactorLookup,
       updateData: (rowIndex: number, columnId: string, value: string) => {
         setData((old) =>
           old.map((row, index) =>
@@ -223,7 +217,7 @@ function TableContent({
 }
 
 const tabTriggerClass =
-  "rounded-md border border-slate-300 bg-white px-6 py-4 text-lg font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 hover:text-slate-900 data-active:border-red-700 data-active:bg-red-700 data-active:text-white data-active:shadow";
+  "rounded-md border border-slate-300 bg-white px-6 py-4 text-lg font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 hover:text-slate-900 data-active:border-[#a63434] data-active:bg-[#a63434] data-active:text-white data-active:shadow";
 
 export function PipingDisciplinePage({
   title,
@@ -235,6 +229,8 @@ export function PipingDisciplinePage({
   roleOptions,
   scheduleOptions,
   roleRates,
+  taskCodeOptions,
+  pipingFactors,
 }: {
   title: string;
   icon?: React.ElementType;
@@ -245,6 +241,8 @@ export function PipingDisciplinePage({
   roleOptions?: string[];
   scheduleOptions?: string[];
   roleRates?: { roleName: string; schedule: string; rate: number }[];
+  taskCodeOptions?: string[];
+  pipingFactors?: { code: string; unit: string; values: { size: number; value: number | null }[] }[];
 }) {
   const weldGroupOptions = React.useMemo(
     () =>
@@ -265,27 +263,49 @@ export function PipingDisciplinePage({
     [pipingGroups],
   );
 
-  const takeOffState = useTableState(
-    TAKE_OFF_INITIAL_ROWS,
-    cbsOptions,
-    weldGroupOptions,
-    weldGroupMaterialMap,
-  );
-  const fieldEstimateState = useTableState(
-    FIELD_ESTIMATE_INITIAL_ROWS,
-    cbsOptions,
-    weldGroupOptions,
-    weldGroupMaterialMap,
-  );
-  const supportLaborState = useTableState(
-    supportLaborInitialRows,
+  const pipingFactorLookup = React.useMemo(() => {
+    const m = new Map<string, { unit: string; values: Map<number, number> }>();
+    for (const factor of pipingFactors ?? []) {
+      let entry = m.get(factor.code);
+      if (!entry) {
+        entry = { unit: factor.unit, values: new Map<number, number>() };
+        m.set(factor.code, entry);
+      }
+      for (const v of factor.values) {
+        if (v.value !== null && !entry.values.has(v.size)) {
+          entry.values.set(v.size, v.value);
+        }
+      }
+    }
+    return m;
+  }, [pipingFactors]);
+
+  const takeOffState = useTableState({
+    initialRows: TAKE_OFF_INITIAL_ROWS,
     cbsOptions,
     weldGroupOptions,
     weldGroupMaterialMap,
     roleOptions,
     scheduleOptions,
     roleRates,
-  );
+    taskCodeOptions,
+    pipingFactorLookup,
+  });
+  const fieldEstimateState = useTableState({
+    initialRows: FIELD_ESTIMATE_INITIAL_ROWS,
+    cbsOptions,
+    weldGroupOptions,
+    weldGroupMaterialMap,
+  });
+  const supportLaborState = useTableState({
+    initialRows: supportLaborInitialRows,
+    cbsOptions,
+    weldGroupOptions,
+    weldGroupMaterialMap,
+    roleOptions,
+    scheduleOptions,
+    roleRates,
+  });
 
   const syncToFieldEstimate = useTakeOffSync(takeOffState, fieldEstimateState);
 

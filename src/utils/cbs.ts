@@ -41,10 +41,10 @@ export const fetchCbsItemsByL1Paged = createServerFn({ method: "GET" })
   });
 
 export const fetchCbsItemsByL1EndsWith = createServerFn({ method: "GET" })
-  .inputValidator((suffix: string) => suffix)
+  .inputValidator((suffixes: string[]) => suffixes)
   .handler(({ data }) => {
     return prisma.cbsItem.findMany({
-      where: { l1: { endsWith: data } },
+      where: { OR: data.map((suffix) => ({ l1: { endsWith: suffix } })) },
       orderBy: { id: "asc" },
       select: {
         displayCode: true,

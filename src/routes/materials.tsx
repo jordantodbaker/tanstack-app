@@ -12,7 +12,7 @@ import {
 } from "~/components/ui/accordion";
 
 export const Route = createFileRoute("/materials")({
-  loader: () => fetchCbsItemsByL1EndsWith({ data: "01" }),
+  loader: () => fetchCbsItemsByL1EndsWith({ data: ["01", "31"] }),
   component: MaterialsPage,
 });
 
@@ -31,9 +31,8 @@ function MaterialsPage() {
   const sections = useMemo<MaterialSection[]>(() => {
     const groups = new Map<string, typeof cbsItems>();
     for (const item of cbsItems) {
-      const key = item.l1[0];
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(item);
+      if (!groups.has(item.l1)) groups.set(item.l1, []);
+      groups.get(item.l1)!.push(item);
     }
     return [...groups.keys()].sort().map((key) => {
       const items = groups.get(key)!;
@@ -58,6 +57,7 @@ function MaterialsPage() {
           boreSize: "",
           role: "",
           schedule: "",
+          taskCode: "",
           laborHours: "",
           laborRate: "",
           materialCost: "",
@@ -83,6 +83,7 @@ function MaterialsPage() {
                 initialRows={section.rows}
                 cbsOptions={section.cbsOptions}
                 variant="materials"
+                sectionKey={section.key}
               />
             </AccordionContent>
           </AccordionItem>

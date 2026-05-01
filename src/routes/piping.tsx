@@ -3,7 +3,11 @@ import { PipingDisciplinePage } from "~/components/PipingTable";
 import type { CbsOption } from "~/lib/types";
 import { disciplineById } from "~/config/disciplines";
 import { fetchCbsItemsByL1, fetchCbsItemsByL1Paged } from "~/utils/cbs";
-import { fetchPipingGroups } from "~/utils/piping";
+import {
+  fetchPipingGroups,
+  fetchPipingFactorCodes,
+  fetchPipingFactors,
+} from "~/utils/piping";
 import { fetchRoleOptions, fetchScheduleOptions, fetchRoleRates } from "~/utils/roles";
 
 const PIPING_L1 = [
@@ -42,19 +46,23 @@ export const Route = createFileRoute("/piping")({
       fetchRoleOptions(),
       fetchScheduleOptions(),
       fetchRoleRates(),
-    ]).then(([cbsData, pipingGroups, supportLaborItems, roleOptions, scheduleOptions, roleRates]) => ({
+      fetchPipingFactorCodes(),
+      fetchPipingFactors(),
+    ]).then(([cbsData, pipingGroups, supportLaborItems, roleOptions, scheduleOptions, roleRates, taskCodeOptions, pipingFactors]) => ({
       ...cbsData,
       pipingGroups,
       supportLaborItems,
       roleOptions,
       scheduleOptions,
       roleRates,
+      taskCodeOptions,
+      pipingFactors,
     })),
   component: PipingPage,
 });
 
 function PipingPage() {
-  const { items, total, pipingGroups, supportLaborItems, roleOptions, scheduleOptions, roleRates } =
+  const { items, total, pipingGroups, supportLaborItems, roleOptions, scheduleOptions, roleRates, taskCodeOptions, pipingFactors } =
     Route.useLoaderData();
   const { page } = Route.useSearch();
   const navigate = Route.useNavigate();
@@ -78,6 +86,7 @@ function PipingPage() {
     boreSize: "",
     role: "",
     schedule: "",
+    taskCode: "",
     laborHours: "",
     laborRate: "",
     materialCost: "",
@@ -95,6 +104,8 @@ function PipingPage() {
       roleOptions={roleOptions}
       scheduleOptions={scheduleOptions}
       roleRates={roleRates}
+      taskCodeOptions={taskCodeOptions}
+      pipingFactors={pipingFactors}
       serverPagination={{
         totalCount: total,
         pageIndex: page,

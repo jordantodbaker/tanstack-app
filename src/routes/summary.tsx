@@ -6,6 +6,7 @@ import {
   AccordionContent,
 } from "~/components/ui/accordion";
 import { DISCIPLINE_LABELS } from "~/config/disciplines";
+import { useMaterialsTotalsByFirstDigit } from "~/lib/materialsStore";
 
 export const Route = createFileRoute("/summary")({
   component: SummaryPage,
@@ -58,14 +59,18 @@ function makeRows(descriptions: string[]): SummaryRow[] {
   return descriptions.map((d) => ({ description: d, ...emptyRow() }));
 }
 
-function totalCost(row: SummaryRow): string {
-  const labor = parseFloat(row.totalLabor);
-  const material = parseFloat(row.material);
-  const sub = parseFloat(row.sub);
-  const equip = parseFloat(row.equip);
-  const other = parseFloat(row.other);
+function parseMoney(s: string): number {
+  return parseFloat(s.replace(/,/g, ""));
+}
 
-  const values = [labor, material, sub, equip, other];
+function totalCost(row: SummaryRow): string {
+  const values = [
+    parseMoney(row.totalLabor),
+    parseMoney(row.material),
+    parseMoney(row.sub),
+    parseMoney(row.equip),
+    parseMoney(row.other),
+  ];
   if (values.every(isNaN)) return "";
   const sum = values.reduce((acc, v) => acc + (isNaN(v) ? 0 : v), 0);
   return sum.toLocaleString("en-US", {
@@ -78,19 +83,20 @@ const columns: {
   key: keyof SummaryRow | "totalCost";
   header: string;
   width?: string;
+  currency?: boolean;
 }[] = [
   { key: "description", header: "Description", width: "w-48" },
   { key: "qty", header: "QTY", width: "w-20" },
   { key: "uom", header: "UOM", width: "w-20" },
-  { key: "unitRate", header: "Unit Rate", width: "w-24" },
+  { key: "unitRate", header: "Unit Rate", width: "w-24", currency: true },
   { key: "hrs", header: "HRS", width: "w-20" },
-  { key: "rate", header: "Rate", width: "w-20" },
-  { key: "totalLabor", header: "Total Labor $", width: "w-28" },
-  { key: "material", header: "Material $", width: "w-24" },
-  { key: "sub", header: "Sub $", width: "w-20" },
-  { key: "equip", header: "Equip $", width: "w-20" },
-  { key: "other", header: "Other $", width: "w-20" },
-  { key: "totalCost", header: "Total Cost $", width: "w-28" },
+  { key: "rate", header: "Rate", width: "w-20", currency: true },
+  { key: "totalLabor", header: "Total Labor $", width: "w-28", currency: true },
+  { key: "material", header: "Material $", width: "w-24", currency: true },
+  { key: "sub", header: "Sub $", width: "w-20", currency: true },
+  { key: "equip", header: "Equip $", width: "w-20", currency: true },
+  { key: "other", header: "Other $", width: "w-20", currency: true },
+  { key: "totalCost", header: "Total Cost $", width: "w-28", currency: true },
 ];
 
 function SummaryTable({ rows }: { rows: SummaryRow[] }) {
@@ -127,12 +133,13 @@ function SummaryTable({ rows }: { rows: SummaryRow[] }) {
                   col.key === "totalCost"
                     ? totalCost(row)
                     : row[col.key as keyof Omit<SummaryRow, "description">];
+                const display = col.currency && value ? `$${value}` : value;
                 return (
                   <td
                     key={col.key}
                     className="px-3 py-1.5 border border-gray-200 text-right text-slate-500 bg-slate-100"
                   >
-                    {value}
+                    {display}
                   </td>
                 );
               })}
@@ -144,10 +151,27 @@ function SummaryTable({ rows }: { rows: SummaryRow[] }) {
   );
 }
 
-const disciplineRows = makeRows(DISCIPLINE_LABELS);
 const indirectRows = makeRows(INDIRECTS);
 
+function formatMoney(n: number): string {
+  return n.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 function SummaryPage() {
+  const materialsByDigit = useMaterialsTotalsByFirstDigit();
+
+  const disciplineRows: SummaryRow[] = DISCIPLINE_LABELS.map((label, i) => {
+    const total = materialsByDigit.get(String(i)) ?? 0;
+    return {
+      description: label,
+      ...emptyRow(),
+      material: total > 0 ? formatMoney(total) : "",
+    };
+  });
+
   return (
     <main className="p-4">
       <h1 className="text-2xl font-bold mb-4">Summary</h1>

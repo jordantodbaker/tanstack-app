@@ -148,6 +148,102 @@ export function RoleSelectCell({
   );
 }
 
+function laborFactorFor(
+  row: FefRow,
+  lookup: Map<string, { unit: string; values: Map<number, number> }> | undefined,
+): number | undefined {
+  if (!lookup || !row.taskCode || row.size === "") return undefined;
+  const size = parseFloat(row.size);
+  if (isNaN(size)) return undefined;
+  return lookup.get(row.taskCode)?.values.get(size);
+}
+
+export function LaborFactorCell({
+  row,
+  table,
+}: {
+  row: { original: FefRow };
+  getValue: () => unknown;
+  column: { id: string };
+  table: ReturnType<typeof useReactTable<FefRow>>;
+}) {
+  const factor = laborFactorFor(
+    row.original,
+    table.options.meta?.pipingFactorLookup,
+  );
+  return (
+    <span className={readOnlyCellClass}>
+      {factor !== undefined ? String(factor) : ""}
+    </span>
+  );
+}
+
+export function LaborHoursCell({
+  row,
+  table,
+}: {
+  row: { index: number; original: FefRow };
+  getValue: () => unknown;
+  column: { id: string };
+  table: ReturnType<typeof useReactTable<FefRow>>;
+}) {
+  const factor = laborFactorFor(
+    row.original,
+    table.options.meta?.pipingFactorLookup,
+  );
+  const qty = parseFloat(row.original.quantity);
+  const computed =
+    factor !== undefined && !isNaN(qty) && row.original.quantity !== ""
+      ? String(factor * qty)
+      : "";
+
+  const stored = row.original.laborHours;
+  const rowIndex = row.index;
+  const updateData = table.options.meta?.updateData;
+  React.useEffect(() => {
+    if (stored !== computed) {
+      updateData?.(rowIndex, "laborHours", computed);
+    }
+  }, [stored, computed, rowIndex, updateData]);
+
+  return <span className={readOnlyCellClass}>{computed}</span>;
+}
+
+export function TaskCodeSelectCell({
+  getValue,
+  row,
+  table,
+}: {
+  getValue: () => unknown;
+  row: { index: number };
+  column: { id: string };
+  table: ReturnType<typeof useReactTable<FefRow>>;
+}) {
+  const value = getValue() as string;
+  const { taskCodeOptions = [], pipingFactorLookup } = table.options.meta ?? {};
+  return (
+    <select
+      className={editableCellClass}
+      value={value}
+      onChange={(e) => {
+        const newCode = e.target.value;
+        const unit = newCode ? pipingFactorLookup?.get(newCode)?.unit ?? "" : "";
+        table.options.meta?.updateRow?.(row.index, {
+          taskCode: newCode,
+          unit,
+        });
+      }}
+    >
+      <option value="">-- Select --</option>
+      {taskCodeOptions.map((opt) => (
+        <option key={opt} value={opt}>
+          {opt}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 export function ScheduleSelectCell({
   getValue,
   row,

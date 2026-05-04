@@ -69,9 +69,9 @@ function MaterialsPage() {
   }, [cbsItems]);
 
   return (
-    <main className="p-4">
-      <h1 className="text-2xl font-bold mb-4 flex items-center gap-2">
-        <MaterialsIcon className="size-7" />
+    <main className="p-3 md:p-4">
+      <h1 className="text-xl md:text-2xl font-bold mb-3 md:mb-4 flex items-center gap-2">
+        <MaterialsIcon className="size-6 md:size-7" />
         Materials
       </h1>
       <Accordion type="multiple" defaultValue={[]}>

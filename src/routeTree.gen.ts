@@ -19,7 +19,6 @@ import { Route as OperationsRouteImport } from './routes/operations'
 import { Route as MaterialsRouteImport } from './routes/materials'
 import { Route as InstrumentsRouteImport } from './routes/instruments'
 import { Route as IndirectsRouteImport } from './routes/indirects'
-import { Route as FefRouteImport } from './routes/fef'
 import { Route as EquipmentRouteImport } from './routes/equipment'
 import { Route as EngineeringRouteImport } from './routes/engineering'
 import { Route as ElectricRouteImport } from './routes/electric'
@@ -89,11 +88,6 @@ const InstrumentsRoute = InstrumentsRouteImport.update({
 const IndirectsRoute = IndirectsRouteImport.update({
   id: '/indirects',
   path: '/indirects',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FefRoute = FefRouteImport.update({
-  id: '/fef',
-  path: '/fef',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EquipmentRoute = EquipmentRouteImport.update({
@@ -212,7 +206,6 @@ export interface FileRoutesByFullPath {
   '/electric': typeof ElectricRoute
   '/engineering': typeof EngineeringRoute
   '/equipment': typeof EquipmentRoute
-  '/fef': typeof FefRoute
   '/indirects': typeof IndirectsRoute
   '/instruments': typeof InstrumentsRoute
   '/materials': typeof MaterialsRoute
@@ -243,7 +236,6 @@ export interface FileRoutesByTo {
   '/electric': typeof ElectricRoute
   '/engineering': typeof EngineeringRoute
   '/equipment': typeof EquipmentRoute
-  '/fef': typeof FefRoute
   '/indirects': typeof IndirectsRoute
   '/instruments': typeof InstrumentsRoute
   '/materials': typeof MaterialsRoute
@@ -276,7 +268,6 @@ export interface FileRoutesById {
   '/electric': typeof ElectricRoute
   '/engineering': typeof EngineeringRoute
   '/equipment': typeof EquipmentRoute
-  '/fef': typeof FefRoute
   '/indirects': typeof IndirectsRoute
   '/instruments': typeof InstrumentsRoute
   '/materials': typeof MaterialsRoute
@@ -310,7 +301,6 @@ export interface FileRouteTypes {
     | '/electric'
     | '/engineering'
     | '/equipment'
-    | '/fef'
     | '/indirects'
     | '/instruments'
     | '/materials'
@@ -341,7 +331,6 @@ export interface FileRouteTypes {
     | '/electric'
     | '/engineering'
     | '/equipment'
-    | '/fef'
     | '/indirects'
     | '/instruments'
     | '/materials'
@@ -373,7 +362,6 @@ export interface FileRouteTypes {
     | '/electric'
     | '/engineering'
     | '/equipment'
-    | '/fef'
     | '/indirects'
     | '/instruments'
     | '/materials'
@@ -407,7 +395,6 @@ export interface RootRouteChildren {
   ElectricRoute: typeof ElectricRoute
   EngineeringRoute: typeof EngineeringRoute
   EquipmentRoute: typeof EquipmentRoute
-  FefRoute: typeof FefRoute
   IndirectsRoute: typeof IndirectsRoute
   InstrumentsRoute: typeof InstrumentsRoute
   MaterialsRoute: typeof MaterialsRoute
@@ -492,13 +479,6 @@ declare module '@tanstack/react-router' {
       path: '/indirects'
       fullPath: '/indirects'
       preLoaderRoute: typeof IndirectsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/fef': {
-      id: '/fef'
-      path: '/fef'
-      fullPath: '/fef'
-      preLoaderRoute: typeof FefRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/equipment': {
@@ -701,7 +681,6 @@ const rootRouteChildren: RootRouteChildren = {
   ElectricRoute: ElectricRoute,
   EngineeringRoute: EngineeringRoute,
   EquipmentRoute: EquipmentRoute,
-  FefRoute: FefRoute,
   IndirectsRoute: IndirectsRoute,
   InstrumentsRoute: InstrumentsRoute,
   MaterialsRoute: MaterialsRoute,

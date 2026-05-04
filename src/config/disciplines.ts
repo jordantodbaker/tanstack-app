@@ -188,8 +188,8 @@ export const disciplines: DisciplineConfig[] = [
     icon: HardHat,
     items: [
       { label: "Civil Subcontracts", to: "/" },
-      { label: "Concrete Subcontracts", to: "/fef" },
-      { label: "Steel Subcontracts", to: "/fef" },
+      { label: "Concrete Subcontracts" },
+      { label: "Steel Subcontracts" },
     ],
   },
 ];

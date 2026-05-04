@@ -214,15 +214,15 @@ function useTableState(
 export function FefTable({ title }: { title: string }) {
   const state = useTableState();
   return (
-    <main className="p-4">
-      <h1 className="text-2xl font-bold mb-4">{title}</h1>
+    <main className="p-3 md:p-4">
+      <h1 className="text-xl md:text-2xl font-bold mb-3 md:mb-4">{title}</h1>
       <TableContent {...state} />
     </main>
   );
 }
 
 const tabTriggerClass =
-  "rounded-md border border-slate-300 bg-white px-6 py-4 text-lg font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 hover:text-slate-900 data-active:border-[#a63434] data-active:bg-[#a63434] data-active:text-white data-active:shadow";
+  "rounded-md border border-slate-300 bg-white px-3 md:px-6 py-2.5 md:py-4 text-sm md:text-lg font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 hover:text-slate-900 data-active:border-[#a63434] data-active:bg-[#a63434] data-active:text-white data-active:shadow";
 
 export function DisciplinePage({
   title,
@@ -290,9 +290,9 @@ export function DisciplinePage({
   if (!title) return tabs;
 
   return (
-    <main className="p-4">
-      <h1 className="text-2xl font-bold mb-4 flex items-center gap-2">
-        {Icon && <Icon className="size-7" />}
+    <main className="p-3 md:p-4">
+      <h1 className="text-xl md:text-2xl font-bold mb-3 md:mb-4 flex items-center gap-2">
+        {Icon && <Icon className="size-6 md:size-7" />}
         {title}
       </h1>
       {tabs}

@@ -19,6 +19,7 @@ import {
   Activity,
   AlertTriangle,
   HardHat,
+  Settings,
 } from "lucide-react";
 import type React from "react";
 
@@ -37,6 +38,12 @@ export type DisciplineConfig = {
 };
 
 export const disciplines: DisciplineConfig[] = [
+  {
+    id: "setup",
+    label: "Setup",
+    icon: Settings,
+    to: "/setup",
+  },
   {
     id: "summary",
     label: "Summary",

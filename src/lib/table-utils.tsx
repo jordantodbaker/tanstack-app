@@ -294,9 +294,17 @@ export function ColumnFilter({
   const value = (column.getFilterValue() ?? "") as string;
   const options = React.useMemo(
     () =>
-      Array.from(new Set(data.map((row) => row[column.id as keyof FefRow]))).sort(),
+      Array.from(
+        new Set(
+          data
+            .map((row) => row[column.id as keyof FefRow])
+            .filter((v): v is string => v !== undefined),
+        ),
+      ).sort(),
     [data, column.id],
   );
+
+  if (options.length === 0) return null;
 
   return (
     <select

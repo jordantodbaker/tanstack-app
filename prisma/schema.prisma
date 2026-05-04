@@ -20,13 +20,14 @@ model Post {
 }
 
 model Project {
-  id          Int         @id @default(autoincrement())
-  displayId   String
-  name        String
-  description String
-  changeLogs  ChangeLog[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @default(now())
+  id                 Int         @id @default(autoincrement())
+  displayId          String
+  name               String
+  description        String
+  changeLogs         ChangeLog[]
+  allowedFefCbsItems CbsItem[]   @relation("ProjectAllowedFefCbsItems")
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @default(now())
 }
 
 model ChangeLog {
@@ -126,7 +127,8 @@ model CbsItem {
   costCategory       String?
   discipline         String?
   subReporting       String?
-  costCode           String  @unique
+  costCode           String    @unique
   description        String?
   displayDescription String?
+  allowedInProjects  Project[] @relation("ProjectAllowedFefCbsItems")
 }

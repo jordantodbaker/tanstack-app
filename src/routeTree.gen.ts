@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as ValidationRouteImport } from './routes/validation'
 import { Route as SummaryRouteImport } from './routes/summary'
 import { Route as SteelRouteImport } from './routes/steel'
+import { Route as SetupRouteImport } from './routes/setup'
 import { Route as ProjectDevelopmentRouteImport } from './routes/project-development'
 import { Route as ProcurementRouteImport } from './routes/procurement'
 import { Route as PipingRouteImport } from './routes/piping'
@@ -53,6 +54,11 @@ const SummaryRoute = SummaryRouteImport.update({
 const SteelRoute = SteelRouteImport.update({
   id: '/steel',
   path: '/steel',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectDevelopmentRoute = ProjectDevelopmentRouteImport.update({
@@ -213,6 +219,7 @@ export interface FileRoutesByFullPath {
   '/piping': typeof PipingRoute
   '/procurement': typeof ProcurementRoute
   '/project-development': typeof ProjectDevelopmentRoute
+  '/setup': typeof SetupRoute
   '/steel': typeof SteelRoute
   '/summary': typeof SummaryRoute
   '/validation': typeof ValidationRoute
@@ -243,6 +250,7 @@ export interface FileRoutesByTo {
   '/piping': typeof PipingRoute
   '/procurement': typeof ProcurementRoute
   '/project-development': typeof ProjectDevelopmentRoute
+  '/setup': typeof SetupRoute
   '/steel': typeof SteelRoute
   '/summary': typeof SummaryRoute
   '/validation': typeof ValidationRoute
@@ -275,6 +283,7 @@ export interface FileRoutesById {
   '/piping': typeof PipingRoute
   '/procurement': typeof ProcurementRoute
   '/project-development': typeof ProjectDevelopmentRoute
+  '/setup': typeof SetupRoute
   '/steel': typeof SteelRoute
   '/summary': typeof SummaryRoute
   '/validation': typeof ValidationRoute
@@ -308,6 +317,7 @@ export interface FileRouteTypes {
     | '/piping'
     | '/procurement'
     | '/project-development'
+    | '/setup'
     | '/steel'
     | '/summary'
     | '/validation'
@@ -338,6 +348,7 @@ export interface FileRouteTypes {
     | '/piping'
     | '/procurement'
     | '/project-development'
+    | '/setup'
     | '/steel'
     | '/summary'
     | '/validation'
@@ -369,6 +380,7 @@ export interface FileRouteTypes {
     | '/piping'
     | '/procurement'
     | '/project-development'
+    | '/setup'
     | '/steel'
     | '/summary'
     | '/validation'
@@ -402,6 +414,7 @@ export interface RootRouteChildren {
   PipingRoute: typeof PipingRoute
   ProcurementRoute: typeof ProcurementRoute
   ProjectDevelopmentRoute: typeof ProjectDevelopmentRoute
+  SetupRoute: typeof SetupRoute
   SteelRoute: typeof SteelRoute
   SummaryRoute: typeof SummaryRoute
   ValidationRoute: typeof ValidationRoute
@@ -430,6 +443,13 @@ declare module '@tanstack/react-router' {
       path: '/steel'
       fullPath: '/steel'
       preLoaderRoute: typeof SteelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/project-development': {
@@ -688,6 +708,7 @@ const rootRouteChildren: RootRouteChildren = {
   PipingRoute: PipingRoute,
   ProcurementRoute: ProcurementRoute,
   ProjectDevelopmentRoute: ProjectDevelopmentRoute,
+  SetupRoute: SetupRoute,
   SteelRoute: SteelRoute,
   SummaryRoute: SummaryRoute,
   ValidationRoute: ValidationRoute,

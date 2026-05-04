@@ -17,11 +17,22 @@ export const fetchCbsItemsByL1 = createServerFn({ method: "GET" })
 
 export const fetchCbsItemsByL1Paged = createServerFn({ method: "GET" })
   .inputValidator(
-    (input: { l1Values: string[]; page: number; pageSize: number }) => input,
+    (input: {
+      l1Values: string[];
+      page: number;
+      pageSize: number;
+      projectId?: number | null;
+    }) => input,
   )
   .handler(async ({ data }) => {
-    const { l1Values, page, pageSize } = data;
-    const where = { l1: { in: l1Values } };
+    const { l1Values, page, pageSize, projectId } = data;
+    const where =
+      projectId != null
+        ? {
+            l1: { in: l1Values },
+            allowedInProjects: { some: { id: projectId } },
+          }
+        : { l1: { in: l1Values } };
     const [items, total] = await Promise.all([
       prisma.cbsItem.findMany({
         where,
@@ -29,6 +40,7 @@ export const fetchCbsItemsByL1Paged = createServerFn({ method: "GET" })
         skip: page * pageSize,
         take: pageSize,
         select: {
+          id: true,
           displayCode: true,
           name: true,
           uom: true,
@@ -38,6 +50,23 @@ export const fetchCbsItemsByL1Paged = createServerFn({ method: "GET" })
       prisma.cbsItem.count({ where }),
     ]);
     return { items, total };
+  });
+
+export const cbsItemsByL1PagedQueryOptions = (input: {
+  l1Values: string[];
+  page: number;
+  pageSize: number;
+  projectId: number | null;
+}) =>
+  queryOptions({
+    queryKey: [
+      "cbsItemsByL1Paged",
+      input.l1Values,
+      input.page,
+      input.pageSize,
+      input.projectId,
+    ],
+    queryFn: () => fetchCbsItemsByL1Paged({ data: input }),
   });
 
 export const fetchCbsItemsByL1EndsWith = createServerFn({ method: "GET" })

@@ -1,3 +1,4 @@
+import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 
@@ -35,3 +36,21 @@ export const fetchRoleRates = createServerFn({ method: "GET" }).handler(
     }));
   },
 );
+
+export const roleOptionsQueryOptions = () =>
+  queryOptions({
+    queryKey: ["roleOptions"],
+    queryFn: () => fetchRoleOptions(),
+  });
+
+export const scheduleOptionsQueryOptions = () =>
+  queryOptions({
+    queryKey: ["scheduleOptions"],
+    queryFn: () => fetchScheduleOptions(),
+  });
+
+export const roleRatesQueryOptions = () =>
+  queryOptions({
+    queryKey: ["roleRates"],
+    queryFn: () => fetchRoleRates(),
+  });

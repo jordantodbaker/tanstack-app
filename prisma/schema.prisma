@@ -105,7 +105,7 @@ model RoleRate {
 }
 
 model CbsItem {
-  id                 Int     @id @default(autoincrement())
+  id                 Int       @id @default(autoincrement())
   l1                 String
   l2                 String
   l3                 String

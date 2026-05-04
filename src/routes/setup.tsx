@@ -1,11 +1,10 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Settings } from "lucide-react";
 import {
-  fetchSetupProjects,
   fetchSetupCbsItems,
-  fetchAllowedFefCbsItemIds,
+  allowedFefCbsItemIdsQueryOptions,
   updateAllowedFefCbsItems,
 } from "~/utils/setup";
 import {
@@ -17,28 +16,17 @@ import {
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
+import { ProjectSelect } from "~/components/ProjectSelect";
+import { useSelectedProject } from "~/lib/selected-project";
 
 export const Route = createFileRoute("/setup")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    project: search.project ? Number(search.project) : undefined,
-  }),
-  loaderDeps: ({ search }) => ({ project: search.project }),
-  loader: async ({ deps }) => {
-    const [projects, items, allowedIds] = await Promise.all([
-      fetchSetupProjects(),
-      fetchSetupCbsItems(),
-      deps.project
-        ? fetchAllowedFefCbsItemIds({ data: deps.project })
-        : Promise.resolve([] as number[]),
-    ]);
-    return { projects, items, allowedIds, projectId: deps.project };
-  },
+  loader: () => fetchSetupCbsItems(),
   component: SetupPage,
 });
 
 function SetupPage() {
-  const { projects, items, allowedIds, projectId } = Route.useLoaderData();
-  const navigate = useNavigate();
+  const items = Route.useLoaderData();
+  const { projectId } = useSelectedProject();
   const tree = React.useMemo(() => buildCbsTree(items), [items]);
 
   return (
@@ -49,44 +37,52 @@ function SetupPage() {
       </h1>
 
       <div className="mb-4 flex items-center gap-2">
-        <label htmlFor="project" className="text-sm font-medium">
+        <label htmlFor="setup-project" className="text-sm font-medium">
           Project:
         </label>
-        <select
-          id="project"
-          className="h-8 rounded-md border border-input bg-white px-2 text-sm"
-          value={projectId ?? ""}
-          onChange={(e) => {
-            const v = e.target.value;
-            navigate({
-              to: "/setup",
-              search: { project: v ? Number(v) : undefined },
-            });
-          }}
-        >
-          <option value="">Select a project…</option>
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.displayId} — {p.name}
-            </option>
-          ))}
-        </select>
+        <ProjectSelect id="setup-project" />
       </div>
 
-      {projectId === undefined ? (
+      {projectId === null ? (
         <p className="text-sm text-slate-500">
           Choose a project to configure which CBS items are allowed in the
           Field Estimate Form.
         </p>
       ) : (
-        <CbsTreeEditor
+        <CbsTreeEditorLoader
           key={projectId}
           projectId={projectId}
           tree={tree}
-          initialAllowedIds={allowedIds}
         />
       )}
     </main>
+  );
+}
+
+function CbsTreeEditorLoader({
+  projectId,
+  tree,
+}: {
+  projectId: number;
+  tree: CbsTreeNode[];
+}) {
+  const allowedQuery = useQuery(allowedFefCbsItemIdsQueryOptions(projectId));
+  if (allowedQuery.isPending) {
+    return <div className="text-sm text-slate-500">Loading…</div>;
+  }
+  if (allowedQuery.isError) {
+    return (
+      <div className="text-sm text-red-600">
+        Failed to load allowed items.
+      </div>
+    );
+  }
+  return (
+    <CbsTreeEditor
+      projectId={projectId}
+      tree={tree}
+      initialAllowedIds={allowedQuery.data ?? []}
+    />
   );
 }
 

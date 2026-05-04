@@ -25,6 +25,10 @@ import {
   FIELD_ESTIMATE_INITIAL_ROWS,
 } from "~/lib/table-utils";
 import {
+  RoleSelectCell,
+  ScheduleSelectCell,
+} from "~/components/Piping/cells";
+import {
   setMaterialsSectionTotal,
   getMaterialsSectionRows,
   setMaterialsSectionRows,
@@ -45,22 +49,26 @@ function MaterialsTotalCostCell({ row }: { row: { original: FefRow }; getValue: 
 const fieldEstimateColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("id", { header: "ID", cell: ReadOnlyCell, size: 150 }),
   columnHelper.accessor("description", { header: "Description", cell: CbsSelectCell, size: 300 }),
+  columnHelper.accessor("role", { header: "Role", cell: RoleSelectCell, size: 180 }),
+  columnHelper.accessor("schedule", { header: "Schedule", cell: ScheduleSelectCell, size: 150 }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: EditableCell }),
   columnHelper.accessor("size", { header: "Size", cell: EditableCell }),
   columnHelper.accessor("unit", { header: "Unit", cell: ReadOnlyCell }),
   columnHelper.accessor("laborHours", { header: "Labor Hours", cell: EditableCell }),
-  columnHelper.accessor("laborRate", { header: "Labor Rate ($)", cell: EditableCell }),
+  columnHelper.accessor("laborRate", { header: "Labor Rate ($)", cell: ReadOnlyCell }),
   columnHelper.accessor("notes", { header: "Notes", cell: EditableCell }),
 ];
 
 const takeOffColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("id", { header: "ID", cell: TakeOffIdReadOnlyCell, size: 150 }),
   columnHelper.accessor("description", { header: "Description", cell: CbsSelectCell, size: 300 }),
+  columnHelper.accessor("role", { header: "Role", cell: RoleSelectCell, size: 180 }),
+  columnHelper.accessor("schedule", { header: "Schedule", cell: ScheduleSelectCell, size: 150 }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: EditableCell }),
   columnHelper.accessor("size", { header: "Size", cell: EditableCell }),
   columnHelper.accessor("unit", { header: "Unit", cell: ReadOnlyCell }),
   columnHelper.accessor("laborHours", { header: "Labor Hours", cell: EditableCell }),
-  columnHelper.accessor("laborRate", { header: "Labor Rate ($)", cell: EditableCell }),
+  columnHelper.accessor("laborRate", { header: "Labor Rate ($)", cell: ReadOnlyCell }),
   columnHelper.accessor("notes", { header: "Notes", cell: EditableCell }),
 ];
 
@@ -74,8 +82,13 @@ const materialsColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("notes", { header: "Notes", cell: EditableCell }),
 ];
 
+type RoleRate = { roleName: string; schedule: string; rate: number };
+
 type TableState = BaseTableState & {
   variant?: "materials";
+  roleOptions?: string[];
+  scheduleOptions?: string[];
+  roleRates?: RoleRate[];
 };
 
 function TableContent({
@@ -85,6 +98,9 @@ function TableContent({
   setColumnFilters,
   cbsOptions,
   variant,
+  roleOptions,
+  scheduleOptions,
+  roleRates,
   columns: columnsProp,
 }: TableState & { columns?: ColumnDef<FefRow, string>[] }) {
   const [pagination, setPagination] = React.useState<PaginationState>({
@@ -105,6 +121,9 @@ function TableContent({
     state: { columnFilters, pagination },
     meta: {
       cbsOptions: cbsOptions ?? [],
+      roleOptions: roleOptions ?? [],
+      scheduleOptions: scheduleOptions ?? [],
+      roleRates: roleRates ?? [],
       updateData: (rowIndex: number, columnId: string, value: string) => {
         setData((old) =>
           old.map((row, index) =>
@@ -231,6 +250,9 @@ export function DisciplinePage({
   cbsOptions,
   variant,
   sectionKey,
+  roleOptions,
+  scheduleOptions,
+  roleRates,
 }: {
   title?: string;
   icon?: React.ElementType;
@@ -238,6 +260,9 @@ export function DisciplinePage({
   cbsOptions?: CbsOption[];
   variant?: "materials";
   sectionKey?: string;
+  roleOptions?: string[];
+  scheduleOptions?: string[];
+  roleRates?: RoleRate[];
 }) {
   const takeOffState = useTableState(
     variant === "materials" ? initialRows : TAKE_OFF_INITIAL_ROWS,
@@ -279,10 +304,21 @@ export function DisciplinePage({
         </TabsTrigger>
       </TabsList>
       <TabsContent value="takeoff" className="mt-4">
-        <TableContent {...takeOffState} columns={takeOffColumns} />
+        <TableContent
+          {...takeOffState}
+          columns={takeOffColumns}
+          roleOptions={roleOptions}
+          scheduleOptions={scheduleOptions}
+          roleRates={roleRates}
+        />
       </TabsContent>
       <TabsContent value="estimate" className="mt-4">
-        <TableContent {...fieldEstimateState} />
+        <TableContent
+          {...fieldEstimateState}
+          roleOptions={roleOptions}
+          scheduleOptions={scheduleOptions}
+          roleRates={roleRates}
+        />
       </TabsContent>
     </Tabs>
   );

@@ -15,7 +15,7 @@ export type CbsTreeItem = {
 
 export type CbsTreeNode = {
   pathKey: string;
-  level: 1 | 2 | 3 | 4 | 5;
+  depth: number;
   segment: string;
   item: CbsTreeItem | null;
   children: CbsTreeNode[];
@@ -24,22 +24,37 @@ export type CbsTreeNode = {
 
 const LEVEL_DEFAULT = "00";
 
-function getDepth(item: CbsTreeItem): 1 | 2 | 3 | 4 | 5 {
-  if (item.l5 !== LEVEL_DEFAULT) return 5;
-  if (item.l4 !== LEVEL_DEFAULT) return 4;
-  if (item.l3 !== LEVEL_DEFAULT) return 3;
-  if (item.l2 !== LEVEL_DEFAULT) return 2;
-  return 1;
+export function getGroupL1(l1: string): string {
+  if (l1.length < 3) return l1;
+  const firstTwo = Number.parseInt(l1.substring(0, 2), 10);
+  if (Number.isNaN(firstTwo)) return l1;
+  if (firstTwo < 10) return `0${l1[1]}0`;
+  return `${l1[0]}00`;
 }
 
-function getSegment(item: CbsTreeItem, level: 1 | 2 | 3 | 4 | 5): string {
-  return item[`l${level}` as const];
+function getPath(item: CbsTreeItem): string[] {
+  const group = getGroupL1(item.l1);
+  const path: string[] = [group];
+  if (item.l1 !== group) path.push(item.l1);
+  if (item.l2 !== LEVEL_DEFAULT) {
+    path.push(item.l2);
+    if (item.l3 !== LEVEL_DEFAULT) {
+      path.push(item.l3);
+      if (item.l4 !== LEVEL_DEFAULT) {
+        path.push(item.l4);
+        if (item.l5 !== LEVEL_DEFAULT) {
+          path.push(item.l5);
+        }
+      }
+    }
+  }
+  return path;
 }
 
 export function buildCbsTree(items: CbsTreeItem[]): CbsTreeNode[] {
   type BuildNode = {
     pathKey: string;
-    level: 1 | 2 | 3 | 4 | 5;
+    depth: number;
     segment: string;
     item: CbsTreeItem | null;
     children: Map<string, BuildNode>;
@@ -47,13 +62,14 @@ export function buildCbsTree(items: CbsTreeItem[]): CbsTreeNode[] {
 
   const root: { children: Map<string, BuildNode> } = { children: new Map() };
 
-  function ensureNode(item: CbsTreeItem, depth: 1 | 2 | 3 | 4 | 5): BuildNode {
+  function ensureNode(item: CbsTreeItem): BuildNode {
+    const path = getPath(item);
     let parent: { children: Map<string, BuildNode> } = root;
     let pathKey = "";
     let node!: BuildNode;
-    for (let d = 1; d <= depth; d++) {
-      const level = d as 1 | 2 | 3 | 4 | 5;
-      const segment = getSegment(item, level);
+    let depth = 0;
+    for (const segment of path) {
+      depth++;
       pathKey = pathKey ? `${pathKey}|${segment}` : segment;
       const existing = parent.children.get(segment);
       if (existing) {
@@ -61,7 +77,7 @@ export function buildCbsTree(items: CbsTreeItem[]): CbsTreeNode[] {
       } else {
         node = {
           pathKey,
-          level,
+          depth,
           segment,
           item: null,
           children: new Map(),
@@ -74,8 +90,7 @@ export function buildCbsTree(items: CbsTreeItem[]): CbsTreeNode[] {
   }
 
   for (const item of items) {
-    const depth = getDepth(item);
-    const node = ensureNode(item, depth);
+    const node = ensureNode(item);
     if (!node.item) node.item = item;
   }
 
@@ -88,7 +103,7 @@ export function buildCbsTree(items: CbsTreeItem[]): CbsTreeNode[] {
     for (const c of children) descendantItemIds.push(...c.descendantItemIds);
     return {
       pathKey: node.pathKey,
-      level: node.level,
+      depth: node.depth,
       segment: node.segment,
       item: node.item,
       children,

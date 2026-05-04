@@ -19,6 +19,8 @@ import { seo } from "~/utils/seo";
 import { ClerkProvider, SignOutButton } from "@clerk/tanstack-react-start";
 import { UserButton, Show, SignIn } from "@clerk/tanstack-react-start";
 import { Sidebar } from "~/components/Sidebar";
+import { SelectedProjectProvider } from "~/lib/selected-project";
+import { ProjectSelect } from "~/components/ProjectSelect";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -109,7 +111,9 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             </div>
           </Show>
           <Show when="signed-in">
-            <SignedInLayout>{children}</SignedInLayout>
+            <SelectedProjectProvider>
+              <SignedInLayout>{children}</SignedInLayout>
+            </SelectedProjectProvider>
           </Show>
           <Scripts />
         </ClerkProvider>
@@ -155,6 +159,12 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
                 </span>
               </div>
             </div>
+            <div className="hidden sm:block shrink-0">
+              <ProjectSelect
+                placeholder="Select project…"
+                className="h-9 min-w-50"
+              />
+            </div>
             <nav className="hidden sm:flex items-center gap-1 flex-1">
               <Link
                 to="/"
@@ -169,7 +179,7 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
                 Change Log
               </Link>
               <Link
-                to="/summary"
+                to="/setup"
                 className="px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
                 activeProps={{ className: "text-red-800 bg-red-50" }}
                 inactiveProps={{

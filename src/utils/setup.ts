@@ -1,13 +1,6 @@
+import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
-
-export const fetchSetupProjects = createServerFn({ method: "GET" }).handler(
-  () =>
-    prisma.project.findMany({
-      orderBy: { id: "asc" },
-      select: { id: true, displayId: true, name: true },
-    }),
-);
 
 export const fetchSetupCbsItems = createServerFn({ method: "GET" }).handler(
   () =>
@@ -38,6 +31,31 @@ export const fetchAllowedFefCbsItemIds = createServerFn({ method: "GET" })
       select: { allowedFefCbsItems: { select: { id: true } } },
     });
     return project?.allowedFefCbsItems.map((i) => i.id) ?? [];
+  });
+
+export const allowedFefCbsItemIdsQueryOptions = (projectId: number) =>
+  queryOptions({
+    queryKey: ["allowedFefCbsItemIds", projectId],
+    queryFn: () => fetchAllowedFefCbsItemIds({ data: projectId }),
+  });
+
+export const fetchAllowedCbsL1Codes = createServerFn({ method: "GET" })
+  .inputValidator((projectId: number) => projectId)
+  .handler(async ({ data: projectId }) => {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { allowedFefCbsItems: { select: { l1: true } } },
+    });
+    if (!project) return [];
+    const set = new Set<string>();
+    for (const item of project.allowedFefCbsItems) set.add(item.l1);
+    return Array.from(set);
+  });
+
+export const allowedCbsL1CodesQueryOptions = (projectId: number) =>
+  queryOptions({
+    queryKey: ["allowedCbsL1Codes", projectId],
+    queryFn: () => fetchAllowedCbsL1Codes({ data: projectId }),
   });
 
 export const updateAllowedFefCbsItems = createServerFn({ method: "POST" })

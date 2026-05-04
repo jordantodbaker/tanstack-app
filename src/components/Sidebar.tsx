@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import {
   ChevronDown,
   ChevronRight,
@@ -8,6 +9,8 @@ import {
 } from "lucide-react";
 import React from "react";
 import { disciplines } from "~/config/disciplines";
+import { useSelectedProject } from "~/lib/selected-project";
+import { allowedCbsL1CodesQueryOptions } from "~/utils/setup";
 
 export function Sidebar({
   mobileOpen = false,
@@ -29,6 +32,23 @@ export function Sidebar({
       return next;
     });
   };
+
+  const { projectId } = useSelectedProject();
+  const { data: allowedL1Codes } = useQuery({
+    ...allowedCbsL1CodesQueryOptions(projectId ?? 0),
+    enabled: projectId !== null,
+  });
+
+  const visibleDisciplines = React.useMemo(() => {
+    if (projectId === null) {
+      return disciplines.filter((d) => d.id === "setup");
+    }
+    const allowed = new Set(allowedL1Codes ?? []);
+    return disciplines.filter((d) => {
+      if (!d.l1Codes) return true;
+      return d.l1Codes.some((code) => allowed.has(code));
+    });
+  }, [projectId, allowedL1Codes]);
 
   return (
     <>
@@ -60,7 +80,7 @@ export function Sidebar({
         </button>
 
         <nav className="flex-1 overflow-y-auto py-3">
-          {disciplines.map((discipline) => {
+          {visibleDisciplines.map((discipline) => {
             const Icon = discipline.icon;
             const isOpen = openSections.has(discipline.id);
 

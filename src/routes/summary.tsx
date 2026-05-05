@@ -152,8 +152,6 @@ function SummaryTable({ rows }: { rows: SummaryRow[] }) {
   );
 }
 
-const indirectRows = makeRows(INDIRECTS);
-
 function formatMoney(n: number): string {
   return n.toLocaleString("en-US", {
     minimumFractionDigits: 2,
@@ -174,6 +172,14 @@ function SummaryPage() {
       material: materialTotal > 0 ? formatMoney(materialTotal) : "",
       totalLabor: laborTotal > 0 ? formatMoney(laborTotal) : "",
     };
+  });
+
+  const craftSupportTotal = laborTotals.get("craftSupportLabor") ?? 0;
+  const indirectRows: SummaryRow[] = makeRows(INDIRECTS).map((row) => {
+    if (row.description === "Craft Support Labor" && craftSupportTotal > 0) {
+      return { ...row, totalLabor: formatMoney(craftSupportTotal) };
+    }
+    return row;
   });
 
   return (

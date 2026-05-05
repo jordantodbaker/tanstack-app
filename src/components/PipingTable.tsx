@@ -313,14 +313,14 @@ export function PipingDisciplinePage({
   const syncToFieldEstimate = useTakeOffSync(takeOffState, fieldEstimateState);
 
   React.useEffect(() => {
-    if (!laborKey) return;
     const sumRows = (rows: typeof supportLaborState.data) =>
       rows.reduce((acc, row) => {
         const h = parseFloat(row.laborHours);
         const r = parseFloat(row.laborRate);
         return acc + (isNaN(h) || isNaN(r) ? 0 : h * r);
       }, 0);
-    setLaborTotal(laborKey, sumRows(supportLaborState.data) + sumRows(fieldEstimateState.data));
+    if (laborKey) setLaborTotal(laborKey, sumRows(fieldEstimateState.data));
+    setLaborTotal("craftSupportLabor", sumRows(supportLaborState.data));
   }, [laborKey, supportLaborState.data, fieldEstimateState.data]);
 
   return (

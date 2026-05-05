@@ -54,7 +54,6 @@ const fieldEstimateColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("role", { header: "Role", cell: RoleSelectCell, size: 180 }),
   columnHelper.accessor("schedule", { header: "Schedule", cell: ScheduleSelectCell, size: 150 }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: EditableCell }),
-  columnHelper.accessor("size", { header: "Size", cell: EditableCell }),
   columnHelper.accessor("unit", { header: "Unit", cell: ReadOnlyCell }),
   columnHelper.accessor("laborHours", { header: "Labor Hours", cell: EditableCell }),
   columnHelper.accessor("laborRate", { header: "Labor Rate ($)", cell: ReadOnlyCell }),
@@ -68,10 +67,10 @@ const takeOffColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("role", { header: "Role", cell: RoleSelectCell, size: 180 }),
   columnHelper.accessor("schedule", { header: "Schedule", cell: ScheduleSelectCell, size: 150 }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: EditableCell }),
-  columnHelper.accessor("size", { header: "Size", cell: EditableCell }),
   columnHelper.accessor("unit", { header: "Unit", cell: ReadOnlyCell }),
   columnHelper.accessor("laborHours", { header: "Labor Hours", cell: EditableCell }),
   columnHelper.accessor("laborRate", { header: "Labor Rate ($)", cell: ReadOnlyCell }),
+  columnHelper.display({ id: "totalCost", header: "Total Cost ($)", cell: TotalCostCell, size: 130 }),
   columnHelper.accessor("notes", { header: "Notes", cell: EditableCell }),
 ];
 

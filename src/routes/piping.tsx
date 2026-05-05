@@ -70,6 +70,7 @@ function PipingPage() {
 
   const cbsOptions: CbsOption[] = items.map((item) => ({
     displayCode: item.displayCode,
+    costCode: item.costCode,
     name: item.name,
     uom: item.uom,
     displayDescription: item.displayDescription ?? null,

@@ -1,7 +1,18 @@
 import React from "react";
 import { useReactTable } from "@tanstack/react-table";
-import type { FefRow } from "~/lib/types";
+import type { CbsOption, FefRow } from "~/lib/types";
 import { editableCellClass, readOnlyCellClass } from "~/lib/table-utils";
+import { computeBoreSize } from "~/lib/utils";
+
+function lookupCbsItem(
+  metallurgyCode: string,
+  boreSize: string,
+  cbsOptions: CbsOption[],
+): CbsOption | undefined {
+  if (!metallurgyCode || !boreSize) return undefined;
+  const code = `${metallurgyCode}${boreSize}ST0000C`;
+  return cbsOptions.find((o) => o.costCode === code);
+}
 
 export { ReadOnlyCell, TakeOffIdCell } from "~/lib/table-utils";
 
@@ -33,9 +44,21 @@ export function ShopFieldSelectCell({
               ? entry.shopCode
               : entry.installCode
             : "";
+        const cbsMatch = lookupCbsItem(
+          metallurgyCode,
+          rowData.boreSize,
+          table.options.meta?.cbsOptions ?? [],
+        );
         table.options.meta?.updateRow?.(row.index, {
           shopField: newShopField,
           metallurgyCode,
+          ...(cbsMatch
+            ? {
+                id: cbsMatch.displayCode,
+                description: cbsMatch.name,
+                unit: cbsMatch.uom,
+              }
+            : {}),
         });
       }}
     >
@@ -66,20 +89,31 @@ export function WeldGroupSelectCell({
       value={value}
       onChange={(e) => {
         const classification = e.target.value;
-        const shopField =
-          table.getRowModel().rows[row.index].original.shopField;
+        const rowData = table.getRowModel().rows[row.index].original;
         const entry = classification
           ? weldGroupMaterialMap[classification]
           : undefined;
         const metallurgyCode =
-          entry && shopField
-            ? shopField === "Shop"
+          entry && rowData.shopField
+            ? rowData.shopField === "Shop"
               ? entry.shopCode
               : entry.installCode
             : "";
+        const cbsMatch = lookupCbsItem(
+          metallurgyCode,
+          rowData.boreSize,
+          table.options.meta?.cbsOptions ?? [],
+        );
         table.options.meta?.updateRow?.(row.index, {
           weldGroupDescription: classification,
           metallurgyCode,
+          ...(cbsMatch
+            ? {
+                id: cbsMatch.displayCode,
+                description: cbsMatch.name,
+                unit: cbsMatch.uom,
+              }
+            : {}),
         });
       }}
     >
@@ -105,9 +139,7 @@ export function TotalCostCell({
     !isNaN(hours) && !isNaN(rate) && row.original.laborRate !== ""
       ? (hours * rate).toFixed(2)
       : "";
-  return (
-    <span className={readOnlyCellClass}>{total}</span>
-  );
+  return <span className={readOnlyCellClass}>{total}</span>;
 }
 
 export function RoleSelectCell({
@@ -150,7 +182,9 @@ export function RoleSelectCell({
 
 function laborFactorFor(
   row: FefRow,
-  lookup: Map<string, { unit: string; values: Map<number, number> }> | undefined,
+  lookup:
+    | Map<string, { unit: string; values: Map<number, number> }>
+    | undefined,
 ): number | undefined {
   if (!lookup || !row.taskCode || row.size === "") return undefined;
   const size = parseFloat(row.size);
@@ -227,7 +261,9 @@ export function TaskCodeSelectCell({
       value={value}
       onChange={(e) => {
         const newCode = e.target.value;
-        const unit = newCode ? pipingFactorLookup?.get(newCode)?.unit ?? "" : "";
+        const unit = newCode
+          ? (pipingFactorLookup?.get(newCode)?.unit ?? "")
+          : "";
         table.options.meta?.updateRow?.(row.index, {
           taskCode: newCode,
           unit,
@@ -241,6 +277,54 @@ export function TaskCodeSelectCell({
         </option>
       ))}
     </select>
+  );
+}
+
+export function PipingSizeCell({
+  getValue,
+  row,
+  table,
+}: {
+  getValue: () => unknown;
+  row: { index: number };
+  column: { id: string };
+  table: ReturnType<typeof useReactTable<FefRow>>;
+}) {
+  const initialValue = getValue() as string;
+  const [value, setValue] = React.useState(initialValue);
+
+  React.useEffect(() => {
+    setValue(initialValue);
+  }, [initialValue]);
+
+  const onBlur = () => {
+    const boreSize = computeBoreSize(value);
+    const rowData = table.getRowModel().rows[row.index].original;
+    const cbsMatch = lookupCbsItem(
+      rowData.metallurgyCode,
+      boreSize,
+      table.options.meta?.cbsOptions ?? [],
+    );
+    table.options.meta?.updateRow?.(row.index, {
+      size: value,
+      boreSize,
+      ...(cbsMatch
+        ? {
+            id: cbsMatch.displayCode,
+            description: cbsMatch.name,
+            unit: cbsMatch.uom,
+          }
+        : {}),
+    });
+  };
+
+  return (
+    <input
+      className={editableCellClass}
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={onBlur}
+    />
   );
 }
 

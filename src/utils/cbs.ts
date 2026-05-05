@@ -88,6 +88,7 @@ export const fetchCbsItemsByL1Filtered = createServerFn({ method: "GET" })
       select: {
         id: true,
         displayCode: true,
+        costCode: true,
         name: true,
         uom: true,
         displayDescription: true,

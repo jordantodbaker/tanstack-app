@@ -47,6 +47,7 @@ export type FefRow = {
 
 export type CbsOption = {
   displayCode: string;
+  costCode?: string;
   name: string;
   uom: string;
   displayDescription: string | null;

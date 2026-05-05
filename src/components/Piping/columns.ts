@@ -10,6 +10,7 @@ import {
   TaskCodeSelectCell,
   LaborFactorCell,
   LaborHoursCell,
+  PipingSizeCell,
 } from "~/components/Piping/cells";
 
 const columnHelper = createColumnHelper<FefRow>();
@@ -47,18 +48,8 @@ export const takeOffColumns: ColumnDef<FefRow, string>[] = [
     size: 160,
   }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: EditableCell }),
-  columnHelper.accessor("size", { header: "Size", cell: SizeCell }),
+  columnHelper.accessor("size", { header: "Size", cell: PipingSizeCell }),
   columnHelper.accessor("unit", { header: "Unit", cell: ReadOnlyCell }),
-  columnHelper.accessor("metallurgyCode", {
-    header: "Metallurgy Code",
-    cell: ReadOnlyCell,
-    size: 140,
-  }),
-  columnHelper.accessor("boreSize", {
-    header: "Bore Size",
-    cell: ReadOnlyCell,
-    size: 110,
-  }),
   columnHelper.display({
     id: "laborFactor",
     header: "Labor Factor",

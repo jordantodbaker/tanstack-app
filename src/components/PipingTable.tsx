@@ -70,7 +70,7 @@ export function PipingDisciplinePage({
   roleOptions?: string[];
   scheduleOptions?: string[];
   roleRates?: RoleRate[];
-  taskCodeOptions?: string[];
+  taskCodeOptions?: { code: string; taskDefinition: string }[];
   pipingFactors?: { code: string; unit: string; values: { size: number; value: number | null }[] }[];
   laborKey?: string;
 }) {

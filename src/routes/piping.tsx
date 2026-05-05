@@ -73,7 +73,8 @@ function PipingPage() {
 
   const supportLaborRows = filteredSupportLaborItems.map((item) => ({
     id: item.displayCode,
-    description: item.name ?? "",
+    name: item.name ?? "",
+    description: "",
     shopField: "",
     weldGroupDescription: "",
     quantity: "",

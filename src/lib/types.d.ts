@@ -24,6 +24,7 @@ export interface StatusLookup {
 
 export type FefRow = {
   id: string;
+  name: string;
   description: string;
   shopField: string;
   weldGroupDescription: string;

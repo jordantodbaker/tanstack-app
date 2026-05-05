@@ -11,11 +11,11 @@ export const fetchPipingGroups = createServerFn({ method: "GET" }).handler(() =>
 export const fetchPipingFactorCodes = createServerFn({ method: "GET" }).handler(
   async () => {
     const rows = await prisma.pipingFactor.findMany({
-      select: { code: true },
+      select: { code: true, taskDefinition: true },
       distinct: ["code"],
       orderBy: { code: "asc" },
     });
-    return rows.map((r) => r.code);
+    return rows.map((r) => ({ code: r.code, taskDefinition: r.taskDefinition }));
   },
 );
 

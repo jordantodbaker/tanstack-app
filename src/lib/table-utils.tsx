@@ -28,6 +28,7 @@ export const readOnlyCellClass =
 export function makeBlankRow(i: number): FefRow {
   return {
     id: `__fe-blank-${i}`,
+    name: "",
     description: "",
     shopField: "",
     weldGroupDescription: "",
@@ -166,7 +167,7 @@ export function CbsSelectCell({
     if (selected) {
       table.options.meta?.updateRow?.(row.index, {
         id: selected.displayCode,
-        description: selected.name,
+        name: selected.name,
         unit: selected.uom,
       });
     }
@@ -342,6 +343,8 @@ export function ColumnFilter({
 
 type RoleRate = { roleName: string; schedule: string; rate: number };
 
+export type TaskCodeOption = { code: string; taskDefinition: string };
+
 export type FefTableMeta = {
   cbsOptions?: CbsOption[];
   weldGroupOptions?: string[];
@@ -352,7 +355,7 @@ export type FefTableMeta = {
   roleOptions?: string[];
   scheduleOptions?: string[];
   roleRates?: RoleRate[];
-  taskCodeOptions?: string[];
+  taskCodeOptions?: TaskCodeOption[];
   pipingFactorLookup?: Map<
     string,
     { unit: string; values: Map<number, number> }

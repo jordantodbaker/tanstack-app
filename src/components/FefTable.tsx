@@ -45,7 +45,7 @@ function MaterialsTotalCostCell({ row }: { row: { original: FefRow }; getValue: 
 
 const fieldEstimateColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("id", { header: "ID", cell: ReadOnlyCell, size: 150 }),
-  columnHelper.accessor("description", { header: "Description", cell: CbsSelectCell, size: 300 }),
+  columnHelper.accessor("name", { header: "Name", cell: CbsSelectCell, size: 300 }),
   columnHelper.accessor("role", { header: "Role", cell: RoleSelectCell, size: 180 }),
   columnHelper.accessor("schedule", { header: "Schedule", cell: ScheduleSelectCell, size: 150 }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: EditableCell }),
@@ -58,7 +58,8 @@ const fieldEstimateColumns: ColumnDef<FefRow, string>[] = [
 
 const takeOffColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("id", { header: "ID", cell: TakeOffIdReadOnlyCell, size: 150 }),
-  columnHelper.accessor("description", { header: "Description", cell: CbsSelectCell, size: 300 }),
+  columnHelper.accessor("name", { header: "Name", cell: CbsSelectCell, size: 300 }),
+  columnHelper.accessor("description", { header: "Description", cell: EditableCell, size: 250 }),
   columnHelper.accessor("role", { header: "Role", cell: RoleSelectCell, size: 180 }),
   columnHelper.accessor("schedule", { header: "Schedule", cell: ScheduleSelectCell, size: 150 }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: EditableCell }),
@@ -71,7 +72,7 @@ const takeOffColumns: ColumnDef<FefRow, string>[] = [
 
 const materialsColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("id", { header: "ID", cell: ReadOnlyCell, size: 150 }),
-  columnHelper.accessor("description", { header: "Description", cell: ReadOnlyCell, size: 300 }),
+  columnHelper.accessor("name", { header: "Name", cell: ReadOnlyCell, size: 300 }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: EditableCell }),
   columnHelper.accessor("unit", { header: "Unit", cell: ReadOnlyCell }),
   columnHelper.accessor("materialCost", { header: "Material Cost ($)", cell: EditableCell }),

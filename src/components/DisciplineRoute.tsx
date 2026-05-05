@@ -29,7 +29,8 @@ const isSupportLaborCode = (item: CbsItem) =>
 function toSupportLaborRow(item: CbsItem): FefRow {
   return {
     id: item.displayCode,
-    description: item.name ?? "",
+    name: item.name ?? "",
+    description: "",
     shopField: "",
     weldGroupDescription: "",
     quantity: "",

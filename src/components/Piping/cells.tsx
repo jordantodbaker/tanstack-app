@@ -55,7 +55,7 @@ export function ShopFieldSelectCell({
           ...(cbsMatch
             ? {
                 id: cbsMatch.displayCode,
-                description: cbsMatch.name,
+                name: cbsMatch.name,
                 unit: cbsMatch.uom,
               }
             : {}),
@@ -110,7 +110,7 @@ export function WeldGroupSelectCell({
           ...(cbsMatch
             ? {
                 id: cbsMatch.displayCode,
-                description: cbsMatch.name,
+                name: cbsMatch.name,
                 unit: cbsMatch.uom,
               }
             : {}),
@@ -272,8 +272,8 @@ export function TaskCodeSelectCell({
     >
       <option value="">-- Select --</option>
       {taskCodeOptions.map((opt) => (
-        <option key={opt} value={opt}>
-          {opt}
+        <option key={opt.code} value={opt.code}>
+          {opt.taskDefinition} - {opt.code}
         </option>
       ))}
     </select>

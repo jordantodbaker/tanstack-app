@@ -58,7 +58,8 @@ function MaterialsPage() {
         cbsOptions: items.map(toCbsOption),
         rows: items.map((item) => ({
           id: item.displayCode,
-          description: item.name ?? "",
+          name: item.name ?? "",
+          description: "",
           shopField: "",
           weldGroupDescription: "",
           quantity: "",

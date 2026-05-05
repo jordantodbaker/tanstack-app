@@ -17,10 +17,15 @@ const columnHelper = createColumnHelper<FefRow>();
 
 export const takeOffColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("id", { header: "ID", cell: TakeOffIdReadOnlyCell, size: 150 }),
-  columnHelper.accessor("description", {
-    header: "Description",
+  columnHelper.accessor("name", {
+    header: "Name",
     cell: CbsSelectCell,
     size: 300,
+  }),
+  columnHelper.accessor("description", {
+    header: "Description",
+    cell: EditableCell,
+    size: 250,
   }),
   columnHelper.accessor("role", {
     header: "Role",
@@ -75,8 +80,8 @@ export const takeOffColumns: ColumnDef<FefRow, string>[] = [
 
 export const fieldEstimateColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("id", { header: "ID", cell: ReadOnlyCell, size: 150 }),
-  columnHelper.accessor("description", {
-    header: "Description",
+  columnHelper.accessor("name", {
+    header: "Name",
     cell: CbsSelectCell,
     size: 300,
   }),
@@ -122,8 +127,8 @@ export const fieldEstimateColumns: ColumnDef<FefRow, string>[] = [
 
 export const supportLaborColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("id", { header: "ID", cell: EditableCell, size: 150 }),
-  columnHelper.accessor("description", {
-    header: "Description",
+  columnHelper.accessor("name", {
+    header: "Name",
     cell: ReadOnlyCell,
     size: 300,
   }),

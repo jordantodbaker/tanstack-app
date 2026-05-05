@@ -1,4 +1,5 @@
 import React from "react";
+import { type ColumnVisibilityState } from "@tanstack/react-table";
 import { setLaborTotal } from "~/lib/laborTotalsStore";
 import { sumLaborCost, tabTriggerClass } from "~/lib/fef-helpers";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
@@ -109,6 +110,21 @@ export function PipingDisciplinePage({
     return m;
   }, [pipingFactors]);
 
+  const LABOR_DETAIL_COLS = ["unit", "laborFactor", "laborHours", "laborRate"] as const;
+  const [laborDetailsVisible, setLaborDetailsVisible] = React.useState(true);
+  const [takeOffColumnVisibility, setTakeOffColumnVisibility] =
+    React.useState<ColumnVisibilityState>(() =>
+      Object.fromEntries(LABOR_DETAIL_COLS.map((c) => [c, true])),
+    );
+
+  const toggleLaborDetails = () => {
+    const next = !laborDetailsVisible;
+    setLaborDetailsVisible(next);
+    setTakeOffColumnVisibility(
+      Object.fromEntries(LABOR_DETAIL_COLS.map((c) => [c, next])),
+    );
+  };
+
   const takeOffState = useFefTableState({ initialRows: TAKE_OFF_INITIAL_ROWS });
   const fieldEstimateState = useFefTableState({ initialRows: FIELD_ESTIMATE_INITIAL_ROWS });
   const supportLaborState = useFefTableState({ initialRows: supportLaborInitialRows });
@@ -164,11 +180,21 @@ export function PipingDisciplinePage({
           </TabsTrigger>
         </TabsList>
         <TabsContent value="takeoff" className="mt-4">
+          <div className="flex justify-end mb-2">
+            <button
+              onClick={toggleLaborDetails}
+              className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100"
+            >
+              {laborDetailsVisible ? "Hide Labor Details" : "Show Labor Details"}
+            </button>
+          </div>
           <FefTableContent
             state={takeOffState}
             meta={takeOffMeta}
             columns={takeOffColumns}
             serverPagination={serverPagination}
+            columnVisibility={takeOffColumnVisibility}
+            onColumnVisibilityChange={setTakeOffColumnVisibility}
           />
         </TabsContent>
         <TabsContent value="estimate" className="mt-4">

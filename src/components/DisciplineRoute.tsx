@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { CbsOption } from "~/lib/types";
+import type { CbsOption, FefRow } from "~/lib/types";
 import { DisciplinePage } from "~/components/FefTable";
 import { disciplines } from "~/config/disciplines";
 import {
@@ -20,6 +20,33 @@ type CbsItem = {
   displayDescription: string | null;
   l1: string;
 };
+
+const isMaterialCode = (item: CbsItem) =>
+  item.l1.endsWith("01") || item.l1.endsWith("31");
+const isSupportLaborCode = (item: CbsItem) =>
+  item.l1.endsWith("02") || item.l1.endsWith("32");
+
+function toSupportLaborRow(item: CbsItem): FefRow {
+  return {
+    id: item.displayCode,
+    description: item.name ?? "",
+    shopField: "",
+    weldGroupDescription: "",
+    quantity: "",
+    size: "",
+    unit: item.uom,
+    metallurgyCode: "",
+    boreSize: "",
+    role: "",
+    schedule: "",
+    taskCode: "",
+    laborHours: "",
+    laborRate: "",
+    materialCost: "",
+    equipment: "",
+    notes: "",
+  };
+}
 
 export function DisciplineRoute({
   title,
@@ -43,16 +70,32 @@ export function DisciplineRoute({
     () => new Set(allowedIds ?? []),
     [allowedIds],
   );
-  const isMaterialCode = (item: CbsItem) =>
-    item.l1.endsWith("01") || item.l1.endsWith("31");
 
-  const filteredItems = cbsItems.filter(
-    (item) =>
-      !isMaterialCode(item) &&
-      (projectId === null || allowedIdSet.has(item.id)),
+  const isAllowed = (item: CbsItem) =>
+    projectId === null || allowedIdSet.has(item.id);
+
+  const supportLaborInitialRows: FefRow[] = React.useMemo(
+    () =>
+      cbsItems
+        .filter((item) => isSupportLaborCode(item) && isAllowed(item))
+        .map(toSupportLaborRow),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cbsItems, allowedIdSet, projectId],
   );
 
-  const cbsOptions: CbsOption[] = filteredItems.map(toCbsOption);
+  const cbsOptions: CbsOption[] = React.useMemo(
+    () =>
+      cbsItems
+        .filter(
+          (item) =>
+            !isMaterialCode(item) &&
+            !isSupportLaborCode(item) &&
+            isAllowed(item),
+        )
+        .map(toCbsOption),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cbsItems, allowedIdSet, projectId],
+  );
 
   const laborKey = discipline?.l1Codes?.[0]?.[0];
 
@@ -61,6 +104,7 @@ export function DisciplineRoute({
       title={title}
       icon={icon}
       cbsOptions={cbsOptions}
+      supportLaborInitialRows={supportLaborInitialRows}
       laborKey={laborKey}
       roleOptions={roleOptions}
       scheduleOptions={scheduleOptions}

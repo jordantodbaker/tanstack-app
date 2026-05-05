@@ -1,6 +1,12 @@
 import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
 import React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "~/components/ui/accordion";
 import type { FefRow, CbsOption } from "~/lib/types";
 import {
   EditableCell,
@@ -20,6 +26,7 @@ import {
   ScheduleSelectCell,
   TotalCostCell,
 } from "~/components/Piping/cells";
+import { supportLaborColumns } from "~/components/Piping/columns";
 import { setMaterialsSectionTotal } from "~/lib/materialsStore";
 import { setLaborTotal } from "~/lib/laborTotalsStore";
 import { sumLaborCost, sumMaterialCost, tabTriggerClass } from "~/lib/fef-helpers";
@@ -90,6 +97,7 @@ export function DisciplinePage({
   variant,
   sectionKey,
   laborKey,
+  supportLaborInitialRows,
   roleOptions,
   scheduleOptions,
   roleRates,
@@ -101,6 +109,7 @@ export function DisciplinePage({
   variant?: "materials";
   sectionKey?: string;
   laborKey?: string;
+  supportLaborInitialRows?: FefRow[];
   roleOptions?: string[];
   scheduleOptions?: string[];
   roleRates?: { roleName: string; schedule: string; rate: number }[];
@@ -112,6 +121,9 @@ export function DisciplinePage({
   const fieldEstimateState = useFefTableState({
     initialRows: FIELD_ESTIMATE_INITIAL_ROWS,
   });
+  const supportLaborState = useFefTableState({
+    initialRows: supportLaborInitialRows,
+  });
 
   const syncToFieldEstimate = useTakeOffSync(takeOffState, fieldEstimateState);
 
@@ -121,12 +133,17 @@ export function DisciplinePage({
   }, [laborKey, fieldEstimateState.data]);
 
   React.useEffect(() => {
+    setLaborTotal("craftSupportLabor", sumLaborCost(supportLaborState.data));
+  }, [supportLaborState.data]);
+
+  React.useEffect(() => {
     if (variant !== "materials" || !sectionKey) return;
     setMaterialsSectionTotal(sectionKey, sumMaterialCost(takeOffState.data));
   }, [variant, sectionKey, takeOffState.data]);
 
   const baseMeta: FefTableMeta = { cbsOptions };
   const laborMeta: FefTableMeta = { ...baseMeta, roleOptions, scheduleOptions, roleRates };
+  const supportMeta: FefTableMeta = { roleOptions, scheduleOptions, roleRates };
 
   if (variant === "materials") {
     return (
@@ -160,11 +177,28 @@ export function DisciplinePage({
         />
       </TabsContent>
       <TabsContent value="estimate" className="mt-4">
-        <FefTableContent
-          state={fieldEstimateState}
-          meta={laborMeta}
-          columns={fieldEstimateColumns}
-        />
+        <Accordion type="multiple" defaultValue={["support", "craft"]}>
+          <AccordionItem value="support">
+            <AccordionTrigger>Support Labor</AccordionTrigger>
+            <AccordionContent>
+              <FefTableContent
+                state={supportLaborState}
+                meta={supportMeta}
+                columns={supportLaborColumns}
+              />
+            </AccordionContent>
+          </AccordionItem>
+          <AccordionItem value="craft">
+            <AccordionTrigger>Craft Labor</AccordionTrigger>
+            <AccordionContent>
+              <FefTableContent
+                state={fieldEstimateState}
+                meta={laborMeta}
+                columns={fieldEstimateColumns}
+              />
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </TabsContent>
     </Tabs>
   );

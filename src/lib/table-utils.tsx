@@ -7,6 +7,7 @@ import {
   useReactTable,
   type ColumnDef,
   type ColumnFiltersState,
+  type ColumnVisibilityState,
   type PaginationState,
   type RowData,
   type TableMeta,
@@ -418,11 +419,15 @@ export function FefTableContent({
   meta,
   columns,
   serverPagination,
+  columnVisibility,
+  onColumnVisibilityChange,
 }: {
   state: FefTableState;
   meta?: FefTableMeta;
   columns: ColumnDef<FefRow, string>[];
   serverPagination?: ServerPagination;
+  columnVisibility?: ColumnVisibilityState;
+  onColumnVisibilityChange?: React.Dispatch<React.SetStateAction<ColumnVisibilityState>>;
 }) {
   const { data, setData, columnFilters, setColumnFilters } = state;
   const [localPageIndex, setLocalPageIndex] = React.useState(0);
@@ -454,7 +459,8 @@ export function FefTableContent({
         setLocalPageIndex(next.pageIndex);
       }
     },
-    state: { columnFilters, pagination },
+    onColumnVisibilityChange,
+    state: { columnFilters, pagination, ...(columnVisibility !== undefined && { columnVisibility }) },
     meta: {
       cbsOptions: meta?.cbsOptions ?? [],
       weldGroupOptions: meta?.weldGroupOptions ?? [],

@@ -31,6 +31,7 @@ type NavItem = {
 export type DisciplineConfig = {
   id: string;
   label: string;
+  summaryLabel?: string;
   icon: React.ElementType;
   to?: string;
   l1Codes?: string[];
@@ -151,6 +152,7 @@ export const disciplines: DisciplineConfig[] = [
   {
     id: "electric",
     label: "Electric",
+    summaryLabel: "Electrical",
     icon: Zap,
     to: "/electric",
     l1Codes: ["700", "701", "702", "703", "790"],
@@ -158,6 +160,7 @@ export const disciplines: DisciplineConfig[] = [
   {
     id: "instruments",
     label: "Instruments & Controls",
+    summaryLabel: "Instrumentation",
     icon: Gauge,
     to: "/instruments",
     l1Codes: ["800", "801", "802", "803", "890"],
@@ -212,5 +215,27 @@ export const disciplineById = Object.fromEntries(
   disciplines.map((d) => [d.id, d]),
 );
 
-// Ordered list of top-level discipline labels for the summary page
-export const DISCIPLINE_LABELS: string[] = ["Procurement", "Civil", "Concrete", "Structural Steel", "Buildings", "Equipment", "Piping", "Electrical", "Instrumentation", "Coatings"]
+// The Summary page aggregates all CBS items by the first digit of their L1
+// code. This map names the canonical discipline for each digit-bucket so the
+// summary table shows a consistent label per row.
+const SUMMARY_DIGIT_TO_DISCIPLINE_ID: Record<string, string> = {
+  "0": "procurement",
+  "1": "civil",
+  "2": "concrete",
+  "3": "steel",
+  "4": "buildings",
+  "5": "equipment",
+  "6": "piping",
+  "7": "electric",
+  "8": "instruments",
+  "9": "coatings",
+};
+
+export const DISCIPLINE_LABELS: string[] = Object.keys(
+  SUMMARY_DIGIT_TO_DISCIPLINE_ID,
+)
+  .sort()
+  .map((digit) => {
+    const d = disciplineById[SUMMARY_DIGIT_TO_DISCIPLINE_ID[digit]];
+    return d?.summaryLabel ?? d?.label ?? "";
+  });

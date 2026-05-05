@@ -13,6 +13,7 @@ import {
 } from "~/components/ui/accordion";
 import { useSelectedProject } from "~/lib/selected-project";
 import { allowedFefCbsItemIdsQueryOptions } from "~/utils/setup";
+import { toCbsOption } from "~/lib/fef-helpers";
 
 export const Route = createFileRoute("/materials")({
   loader: () => fetchCbsItemsByL1EndsWith({ data: ["01", "31"] }),
@@ -54,12 +55,7 @@ function MaterialsPage() {
       return {
         key,
         title: items[0].accountDescription ?? key,
-        cbsOptions: items.map((item) => ({
-          displayCode: item.displayCode,
-          name: item.name,
-          uom: item.uom,
-          displayDescription: item.displayDescription ?? null,
-        })),
+        cbsOptions: items.map(toCbsOption),
         rows: items.map((item) => ({
           id: item.displayCode,
           description: item.name ?? "",

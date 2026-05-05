@@ -16,6 +16,7 @@ import {
 import { fetchRoleOptions, fetchScheduleOptions, fetchRoleRates } from "~/utils/roles";
 import { useSelectedProject } from "~/lib/selected-project";
 import { allowedFefCbsItemIdsQueryOptions } from "~/utils/setup";
+import { toCbsOption } from "~/lib/fef-helpers";
 
 const PIPING_L1 = disciplineById.piping.l1Codes!;
 const PIPING_CRAFT_L1 = PIPING_L1.filter(
@@ -68,13 +69,7 @@ function PipingPage() {
       ? supportLaborItems
       : supportLaborItems.filter((item) => allowedIdSet.has(item.id));
 
-  const cbsOptions: CbsOption[] = items.map((item) => ({
-    displayCode: item.displayCode,
-    costCode: item.costCode,
-    name: item.name,
-    uom: item.uom,
-    displayDescription: item.displayDescription ?? null,
-  }));
+  const cbsOptions: CbsOption[] = items.map(toCbsOption);
 
   const supportLaborRows = filteredSupportLaborItems.map((item) => ({
     id: item.displayCode,

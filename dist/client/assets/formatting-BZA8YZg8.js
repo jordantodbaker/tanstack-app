@@ -1,0 +1,1 @@
+function e(e){return e.toLocaleString(`en-US`,{minimumFractionDigits:2,maximumFractionDigits:2})}function t(t){return t===0?`$0`:t>=1e6?`$${(t/1e6).toFixed(2)}M`:t>=1e3?`$${(t/1e3).toFixed(1)}K`:`$${e(t)}`}export{e as n,t};

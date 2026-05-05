@@ -1,7 +1,22 @@
 import React from "react";
-import { useReactTable } from "@tanstack/react-table";
-import type { FefRow } from "~/lib/types";
+import {
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  useReactTable,
+  type ColumnDef,
+  type ColumnFiltersState,
+  type PaginationState,
+  type RowData,
+  type TableMeta,
+} from "@tanstack/react-table";
+import type { CbsOption, FefRow } from "~/lib/types";
 import { computeBoreSize } from "./utils";
+import {
+  getMaterialsSectionRows,
+  setMaterialsSectionRows,
+} from "./materialsStore";
 
 export const editableCellClass =
   "w-full bg-white border border-slate-200 px-2 py-1 text-sm hover:border-blue-300 focus:border-blue-400 focus:outline-none rounded";
@@ -319,5 +334,202 @@ export function ColumnFilter({
         </option>
       ))}
     </select>
+  );
+}
+
+// ── Shared FEF table state + content ────────────────────────────────────────
+
+type RoleRate = { roleName: string; schedule: string; rate: number };
+
+export type FefTableMeta = {
+  cbsOptions?: CbsOption[];
+  weldGroupOptions?: string[];
+  weldGroupMaterialMap?: Record<
+    string,
+    { shopCode: string; installCode: string }
+  >;
+  roleOptions?: string[];
+  scheduleOptions?: string[];
+  roleRates?: RoleRate[];
+  taskCodeOptions?: string[];
+  pipingFactorLookup?: Map<
+    string,
+    { unit: string; values: Map<number, number> }
+  >;
+};
+
+export type FefTableState = {
+  data: FefRow[];
+  setData: React.Dispatch<React.SetStateAction<FefRow[]>>;
+  columnFilters: ColumnFiltersState;
+  setColumnFilters: React.Dispatch<React.SetStateAction<ColumnFiltersState>>;
+};
+
+export type ServerPagination = {
+  totalCount: number;
+  pageIndex: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+};
+
+export function useFefTableState(opts: {
+  initialRows?: FefRow[];
+  /** Persists row data in the materials store under this key when set. */
+  sectionKey?: string;
+} = {}): FefTableState {
+  const { initialRows, sectionKey } = opts;
+
+  const [data, setDataState] = React.useState<FefRow[]>(() => {
+    if (sectionKey) {
+      const cached = getMaterialsSectionRows(sectionKey);
+      if (cached) return cached;
+    }
+    return initialRows ?? TAKE_OFF_INITIAL_ROWS;
+  });
+  const [columnFilters, setColumnFilters] =
+    React.useState<ColumnFiltersState>([]);
+
+  const setData = React.useCallback<
+    React.Dispatch<React.SetStateAction<FefRow[]>>
+  >(
+    (updater) => {
+      setDataState((old) => {
+        const next =
+          typeof updater === "function"
+            ? (updater as (p: FefRow[]) => FefRow[])(old)
+            : updater;
+        if (sectionKey) setMaterialsSectionRows(sectionKey, next);
+        return next;
+      });
+    },
+    [sectionKey],
+  );
+
+  React.useEffect(() => {
+    if (sectionKey) return;
+    if (initialRows !== undefined) setDataState(initialRows);
+  }, [initialRows, sectionKey]);
+
+  return { data, setData, columnFilters, setColumnFilters };
+}
+
+export function FefTableContent({
+  state,
+  meta,
+  columns,
+  serverPagination,
+}: {
+  state: FefTableState;
+  meta?: FefTableMeta;
+  columns: ColumnDef<FefRow, string>[];
+  serverPagination?: ServerPagination;
+}) {
+  const { data, setData, columnFilters, setColumnFilters } = state;
+  const [localPageIndex, setLocalPageIndex] = React.useState(0);
+
+  const pagination: PaginationState = serverPagination
+    ? {
+        pageIndex: serverPagination.pageIndex,
+        pageSize: serverPagination.pageSize,
+      }
+    : { pageIndex: localPageIndex, pageSize: 25 };
+
+  const table = useReactTable({
+    data,
+    columns,
+    manualPagination: !!serverPagination,
+    pageCount: serverPagination
+      ? Math.ceil(serverPagination.totalCount / serverPagination.pageSize)
+      : undefined,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onColumnFiltersChange: setColumnFilters,
+    onPaginationChange: (updater) => {
+      const next =
+        typeof updater === "function" ? updater(pagination) : updater;
+      if (serverPagination) {
+        serverPagination.onPageChange(next.pageIndex);
+      } else {
+        setLocalPageIndex(next.pageIndex);
+      }
+    },
+    state: { columnFilters, pagination },
+    meta: {
+      cbsOptions: meta?.cbsOptions ?? [],
+      weldGroupOptions: meta?.weldGroupOptions ?? [],
+      weldGroupMaterialMap: meta?.weldGroupMaterialMap ?? {},
+      roleOptions: meta?.roleOptions ?? [],
+      scheduleOptions: meta?.scheduleOptions ?? [],
+      roleRates: meta?.roleRates ?? [],
+      taskCodeOptions: meta?.taskCodeOptions ?? [],
+      pipingFactorLookup: meta?.pipingFactorLookup,
+      updateData: (rowIndex: number, columnId: string, value: string) => {
+        setData((old) =>
+          old.map((row, index) =>
+            index === rowIndex ? { ...row, [columnId]: value } : row,
+          ),
+        );
+      },
+      updateRow: (rowIndex: number, updates: Record<string, string>) => {
+        setData((old) =>
+          old.map((row, index) =>
+            index === rowIndex ? { ...row, ...updates } : row,
+          ),
+        );
+      },
+    } satisfies TableMeta<RowData>,
+  });
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <tr key={headerGroup.id} className="bg-gray-100">
+              {headerGroup.headers.map((header) => (
+                <th
+                  key={header.id}
+                  style={{ minWidth: header.column.getSize() }}
+                  className="border border-gray-300 px-3 py-2 text-left font-semibold"
+                >
+                  <div className="flex flex-col gap-1">
+                    <span className="whitespace-nowrap">
+                      {flexRender(
+                        header.column.columnDef.header,
+                        header.getContext(),
+                      )}
+                    </span>
+                    <ColumnFilter column={header.column} data={data} />
+                  </div>
+                </th>
+              ))}
+            </tr>
+          ))}
+        </thead>
+        <tbody>
+          {table.getRowModel().rows.map((row, i) => (
+            <tr
+              key={row.id}
+              className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}
+            >
+              {row.getVisibleCells().map((cell) => (
+                <td
+                  key={cell.id}
+                  style={{ minWidth: cell.column.getSize() }}
+                  className="border border-gray-300"
+                >
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <TablePagination
+        table={table}
+        totalCount={serverPagination?.totalCount}
+      />
+    </div>
   );
 }

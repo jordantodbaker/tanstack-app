@@ -3,24 +3,11 @@ import * as React from "react";
 import { useMaterialsTotalsByFirstDigit } from "~/lib/materialsStore";
 import { useLaborTotals } from "~/lib/laborTotalsStore";
 import { DISCIPLINE_LABELS } from "~/config/disciplines";
+import { formatMoney, formatCompact } from "~/lib/formatting";
 
 export const Route = createFileRoute("/validation")({
   component: ValidationPage,
 });
-
-function formatMoney(n: number): string {
-  return n.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
-function formatCompact(n: number): string {
-  if (n === 0) return "$0";
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
-  return `$${formatMoney(n)}`;
-}
 
 // ── SVG donut chart ─────────────────────────────────────────────────────────
 

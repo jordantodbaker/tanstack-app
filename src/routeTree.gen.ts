@@ -11,35 +11,15 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ValidationRouteImport } from './routes/validation'
 import { Route as SummaryRouteImport } from './routes/summary'
-import { Route as SteelRouteImport } from './routes/steel'
 import { Route as SetupRouteImport } from './routes/setup'
-import { Route as ProjectDevelopmentRouteImport } from './routes/project-development'
-import { Route as ProcurementRouteImport } from './routes/procurement'
 import { Route as PipingRouteImport } from './routes/piping'
-import { Route as OperationsRouteImport } from './routes/operations'
 import { Route as MaterialsRouteImport } from './routes/materials'
-import { Route as InstrumentsRouteImport } from './routes/instruments'
-import { Route as IndirectsRouteImport } from './routes/indirects'
-import { Route as EquipmentRouteImport } from './routes/equipment'
-import { Route as EngineeringRouteImport } from './routes/engineering'
-import { Route as ElectricRouteImport } from './routes/electric'
-import { Route as DemolitionRouteImport } from './routes/demolition'
-import { Route as ContingencyRouteImport } from './routes/contingency'
-import { Route as ConcreteRouteImport } from './routes/concrete'
-import { Route as CommissioningRouteImport } from './routes/commissioning'
-import { Route as CoatingsRouteImport } from './routes/coatings'
-import { Route as CivilRouteImport } from './routes/civil'
-import { Route as BuildingsRouteImport } from './routes/buildings'
 import { Route as BasisRouteImport } from './routes/basis'
-import { Route as AdministrationRouteImport } from './routes/administration'
-import { Route as PathlessLayoutRouteImport } from './routes/_pathlessLayout'
+import { Route as DisciplineRouteImport } from './routes/$discipline'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiUsersRouteImport } from './routes/api/users'
 import { Route as ApiPostsRouteImport } from './routes/api/posts'
-import { Route as PathlessLayoutNestedLayoutRouteImport } from './routes/_pathlessLayout/_nested-layout'
 import { Route as ApiUsersIdRouteImport } from './routes/api/users.$id'
-import { Route as PathlessLayoutNestedLayoutRouteBRouteImport } from './routes/_pathlessLayout/_nested-layout/route-b'
-import { Route as PathlessLayoutNestedLayoutRouteARouteImport } from './routes/_pathlessLayout/_nested-layout/route-a'
 
 const ValidationRoute = ValidationRouteImport.update({
   id: '/validation',
@@ -51,24 +31,9 @@ const SummaryRoute = SummaryRouteImport.update({
   path: '/summary',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SteelRoute = SteelRouteImport.update({
-  id: '/steel',
-  path: '/steel',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const SetupRoute = SetupRouteImport.update({
   id: '/setup',
   path: '/setup',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProjectDevelopmentRoute = ProjectDevelopmentRouteImport.update({
-  id: '/project-development',
-  path: '/project-development',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProcurementRoute = ProcurementRouteImport.update({
-  id: '/procurement',
-  path: '/procurement',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PipingRoute = PipingRouteImport.update({
@@ -76,74 +41,9 @@ const PipingRoute = PipingRouteImport.update({
   path: '/piping',
   getParentRoute: () => rootRouteImport,
 } as any)
-const OperationsRoute = OperationsRouteImport.update({
-  id: '/operations',
-  path: '/operations',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const MaterialsRoute = MaterialsRouteImport.update({
   id: '/materials',
   path: '/materials',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InstrumentsRoute = InstrumentsRouteImport.update({
-  id: '/instruments',
-  path: '/instruments',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const IndirectsRoute = IndirectsRouteImport.update({
-  id: '/indirects',
-  path: '/indirects',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const EquipmentRoute = EquipmentRouteImport.update({
-  id: '/equipment',
-  path: '/equipment',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const EngineeringRoute = EngineeringRouteImport.update({
-  id: '/engineering',
-  path: '/engineering',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ElectricRoute = ElectricRouteImport.update({
-  id: '/electric',
-  path: '/electric',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DemolitionRoute = DemolitionRouteImport.update({
-  id: '/demolition',
-  path: '/demolition',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ContingencyRoute = ContingencyRouteImport.update({
-  id: '/contingency',
-  path: '/contingency',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ConcreteRoute = ConcreteRouteImport.update({
-  id: '/concrete',
-  path: '/concrete',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CommissioningRoute = CommissioningRouteImport.update({
-  id: '/commissioning',
-  path: '/commissioning',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CoatingsRoute = CoatingsRouteImport.update({
-  id: '/coatings',
-  path: '/coatings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CivilRoute = CivilRouteImport.update({
-  id: '/civil',
-  path: '/civil',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BuildingsRoute = BuildingsRouteImport.update({
-  id: '/buildings',
-  path: '/buildings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BasisRoute = BasisRouteImport.update({
@@ -151,13 +51,9 @@ const BasisRoute = BasisRouteImport.update({
   path: '/basis',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdministrationRoute = AdministrationRouteImport.update({
-  id: '/administration',
-  path: '/administration',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PathlessLayoutRoute = PathlessLayoutRouteImport.update({
-  id: '/_pathlessLayout',
+const DisciplineRoute = DisciplineRouteImport.update({
+  id: '/$discipline',
+  path: '/$discipline',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -175,247 +71,101 @@ const ApiPostsRoute = ApiPostsRouteImport.update({
   path: '/api/posts',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PathlessLayoutNestedLayoutRoute =
-  PathlessLayoutNestedLayoutRouteImport.update({
-    id: '/_nested-layout',
-    getParentRoute: () => PathlessLayoutRoute,
-  } as any)
 const ApiUsersIdRoute = ApiUsersIdRouteImport.update({
   id: '/$id',
   path: '/$id',
   getParentRoute: () => ApiUsersRoute,
 } as any)
-const PathlessLayoutNestedLayoutRouteBRoute =
-  PathlessLayoutNestedLayoutRouteBRouteImport.update({
-    id: '/route-b',
-    path: '/route-b',
-    getParentRoute: () => PathlessLayoutNestedLayoutRoute,
-  } as any)
-const PathlessLayoutNestedLayoutRouteARoute =
-  PathlessLayoutNestedLayoutRouteARouteImport.update({
-    id: '/route-a',
-    path: '/route-a',
-    getParentRoute: () => PathlessLayoutNestedLayoutRoute,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/administration': typeof AdministrationRoute
+  '/$discipline': typeof DisciplineRoute
   '/basis': typeof BasisRoute
-  '/buildings': typeof BuildingsRoute
-  '/civil': typeof CivilRoute
-  '/coatings': typeof CoatingsRoute
-  '/commissioning': typeof CommissioningRoute
-  '/concrete': typeof ConcreteRoute
-  '/contingency': typeof ContingencyRoute
-  '/demolition': typeof DemolitionRoute
-  '/electric': typeof ElectricRoute
-  '/engineering': typeof EngineeringRoute
-  '/equipment': typeof EquipmentRoute
-  '/indirects': typeof IndirectsRoute
-  '/instruments': typeof InstrumentsRoute
   '/materials': typeof MaterialsRoute
-  '/operations': typeof OperationsRoute
   '/piping': typeof PipingRoute
-  '/procurement': typeof ProcurementRoute
-  '/project-development': typeof ProjectDevelopmentRoute
   '/setup': typeof SetupRoute
-  '/steel': typeof SteelRoute
   '/summary': typeof SummaryRoute
   '/validation': typeof ValidationRoute
   '/api/posts': typeof ApiPostsRoute
   '/api/users': typeof ApiUsersRouteWithChildren
-  '/route-a': typeof PathlessLayoutNestedLayoutRouteARoute
-  '/route-b': typeof PathlessLayoutNestedLayoutRouteBRoute
   '/api/users/$id': typeof ApiUsersIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/administration': typeof AdministrationRoute
+  '/$discipline': typeof DisciplineRoute
   '/basis': typeof BasisRoute
-  '/buildings': typeof BuildingsRoute
-  '/civil': typeof CivilRoute
-  '/coatings': typeof CoatingsRoute
-  '/commissioning': typeof CommissioningRoute
-  '/concrete': typeof ConcreteRoute
-  '/contingency': typeof ContingencyRoute
-  '/demolition': typeof DemolitionRoute
-  '/electric': typeof ElectricRoute
-  '/engineering': typeof EngineeringRoute
-  '/equipment': typeof EquipmentRoute
-  '/indirects': typeof IndirectsRoute
-  '/instruments': typeof InstrumentsRoute
   '/materials': typeof MaterialsRoute
-  '/operations': typeof OperationsRoute
   '/piping': typeof PipingRoute
-  '/procurement': typeof ProcurementRoute
-  '/project-development': typeof ProjectDevelopmentRoute
   '/setup': typeof SetupRoute
-  '/steel': typeof SteelRoute
   '/summary': typeof SummaryRoute
   '/validation': typeof ValidationRoute
   '/api/posts': typeof ApiPostsRoute
   '/api/users': typeof ApiUsersRouteWithChildren
-  '/route-a': typeof PathlessLayoutNestedLayoutRouteARoute
-  '/route-b': typeof PathlessLayoutNestedLayoutRouteBRoute
   '/api/users/$id': typeof ApiUsersIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/_pathlessLayout': typeof PathlessLayoutRouteWithChildren
-  '/administration': typeof AdministrationRoute
+  '/$discipline': typeof DisciplineRoute
   '/basis': typeof BasisRoute
-  '/buildings': typeof BuildingsRoute
-  '/civil': typeof CivilRoute
-  '/coatings': typeof CoatingsRoute
-  '/commissioning': typeof CommissioningRoute
-  '/concrete': typeof ConcreteRoute
-  '/contingency': typeof ContingencyRoute
-  '/demolition': typeof DemolitionRoute
-  '/electric': typeof ElectricRoute
-  '/engineering': typeof EngineeringRoute
-  '/equipment': typeof EquipmentRoute
-  '/indirects': typeof IndirectsRoute
-  '/instruments': typeof InstrumentsRoute
   '/materials': typeof MaterialsRoute
-  '/operations': typeof OperationsRoute
   '/piping': typeof PipingRoute
-  '/procurement': typeof ProcurementRoute
-  '/project-development': typeof ProjectDevelopmentRoute
   '/setup': typeof SetupRoute
-  '/steel': typeof SteelRoute
   '/summary': typeof SummaryRoute
   '/validation': typeof ValidationRoute
-  '/_pathlessLayout/_nested-layout': typeof PathlessLayoutNestedLayoutRouteWithChildren
   '/api/posts': typeof ApiPostsRoute
   '/api/users': typeof ApiUsersRouteWithChildren
-  '/_pathlessLayout/_nested-layout/route-a': typeof PathlessLayoutNestedLayoutRouteARoute
-  '/_pathlessLayout/_nested-layout/route-b': typeof PathlessLayoutNestedLayoutRouteBRoute
   '/api/users/$id': typeof ApiUsersIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/administration'
+    | '/$discipline'
     | '/basis'
-    | '/buildings'
-    | '/civil'
-    | '/coatings'
-    | '/commissioning'
-    | '/concrete'
-    | '/contingency'
-    | '/demolition'
-    | '/electric'
-    | '/engineering'
-    | '/equipment'
-    | '/indirects'
-    | '/instruments'
     | '/materials'
-    | '/operations'
     | '/piping'
-    | '/procurement'
-    | '/project-development'
     | '/setup'
-    | '/steel'
     | '/summary'
     | '/validation'
     | '/api/posts'
     | '/api/users'
-    | '/route-a'
-    | '/route-b'
     | '/api/users/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/administration'
+    | '/$discipline'
     | '/basis'
-    | '/buildings'
-    | '/civil'
-    | '/coatings'
-    | '/commissioning'
-    | '/concrete'
-    | '/contingency'
-    | '/demolition'
-    | '/electric'
-    | '/engineering'
-    | '/equipment'
-    | '/indirects'
-    | '/instruments'
     | '/materials'
-    | '/operations'
     | '/piping'
-    | '/procurement'
-    | '/project-development'
     | '/setup'
-    | '/steel'
     | '/summary'
     | '/validation'
     | '/api/posts'
     | '/api/users'
-    | '/route-a'
-    | '/route-b'
     | '/api/users/$id'
   id:
     | '__root__'
     | '/'
-    | '/_pathlessLayout'
-    | '/administration'
+    | '/$discipline'
     | '/basis'
-    | '/buildings'
-    | '/civil'
-    | '/coatings'
-    | '/commissioning'
-    | '/concrete'
-    | '/contingency'
-    | '/demolition'
-    | '/electric'
-    | '/engineering'
-    | '/equipment'
-    | '/indirects'
-    | '/instruments'
     | '/materials'
-    | '/operations'
     | '/piping'
-    | '/procurement'
-    | '/project-development'
     | '/setup'
-    | '/steel'
     | '/summary'
     | '/validation'
-    | '/_pathlessLayout/_nested-layout'
     | '/api/posts'
     | '/api/users'
-    | '/_pathlessLayout/_nested-layout/route-a'
-    | '/_pathlessLayout/_nested-layout/route-b'
     | '/api/users/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  PathlessLayoutRoute: typeof PathlessLayoutRouteWithChildren
-  AdministrationRoute: typeof AdministrationRoute
+  DisciplineRoute: typeof DisciplineRoute
   BasisRoute: typeof BasisRoute
-  BuildingsRoute: typeof BuildingsRoute
-  CivilRoute: typeof CivilRoute
-  CoatingsRoute: typeof CoatingsRoute
-  CommissioningRoute: typeof CommissioningRoute
-  ConcreteRoute: typeof ConcreteRoute
-  ContingencyRoute: typeof ContingencyRoute
-  DemolitionRoute: typeof DemolitionRoute
-  ElectricRoute: typeof ElectricRoute
-  EngineeringRoute: typeof EngineeringRoute
-  EquipmentRoute: typeof EquipmentRoute
-  IndirectsRoute: typeof IndirectsRoute
-  InstrumentsRoute: typeof InstrumentsRoute
   MaterialsRoute: typeof MaterialsRoute
-  OperationsRoute: typeof OperationsRoute
   PipingRoute: typeof PipingRoute
-  ProcurementRoute: typeof ProcurementRoute
-  ProjectDevelopmentRoute: typeof ProjectDevelopmentRoute
   SetupRoute: typeof SetupRoute
-  SteelRoute: typeof SteelRoute
   SummaryRoute: typeof SummaryRoute
   ValidationRoute: typeof ValidationRoute
   ApiPostsRoute: typeof ApiPostsRoute
@@ -438,32 +188,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SummaryRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/steel': {
-      id: '/steel'
-      path: '/steel'
-      fullPath: '/steel'
-      preLoaderRoute: typeof SteelRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/setup': {
       id: '/setup'
       path: '/setup'
       fullPath: '/setup'
       preLoaderRoute: typeof SetupRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/project-development': {
-      id: '/project-development'
-      path: '/project-development'
-      fullPath: '/project-development'
-      preLoaderRoute: typeof ProjectDevelopmentRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/procurement': {
-      id: '/procurement'
-      path: '/procurement'
-      fullPath: '/procurement'
-      preLoaderRoute: typeof ProcurementRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/piping': {
@@ -473,102 +202,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PipingRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/operations': {
-      id: '/operations'
-      path: '/operations'
-      fullPath: '/operations'
-      preLoaderRoute: typeof OperationsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/materials': {
       id: '/materials'
       path: '/materials'
       fullPath: '/materials'
       preLoaderRoute: typeof MaterialsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/instruments': {
-      id: '/instruments'
-      path: '/instruments'
-      fullPath: '/instruments'
-      preLoaderRoute: typeof InstrumentsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/indirects': {
-      id: '/indirects'
-      path: '/indirects'
-      fullPath: '/indirects'
-      preLoaderRoute: typeof IndirectsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/equipment': {
-      id: '/equipment'
-      path: '/equipment'
-      fullPath: '/equipment'
-      preLoaderRoute: typeof EquipmentRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/engineering': {
-      id: '/engineering'
-      path: '/engineering'
-      fullPath: '/engineering'
-      preLoaderRoute: typeof EngineeringRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/electric': {
-      id: '/electric'
-      path: '/electric'
-      fullPath: '/electric'
-      preLoaderRoute: typeof ElectricRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/demolition': {
-      id: '/demolition'
-      path: '/demolition'
-      fullPath: '/demolition'
-      preLoaderRoute: typeof DemolitionRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/contingency': {
-      id: '/contingency'
-      path: '/contingency'
-      fullPath: '/contingency'
-      preLoaderRoute: typeof ContingencyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/concrete': {
-      id: '/concrete'
-      path: '/concrete'
-      fullPath: '/concrete'
-      preLoaderRoute: typeof ConcreteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/commissioning': {
-      id: '/commissioning'
-      path: '/commissioning'
-      fullPath: '/commissioning'
-      preLoaderRoute: typeof CommissioningRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/coatings': {
-      id: '/coatings'
-      path: '/coatings'
-      fullPath: '/coatings'
-      preLoaderRoute: typeof CoatingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/civil': {
-      id: '/civil'
-      path: '/civil'
-      fullPath: '/civil'
-      preLoaderRoute: typeof CivilRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/buildings': {
-      id: '/buildings'
-      path: '/buildings'
-      fullPath: '/buildings'
-      preLoaderRoute: typeof BuildingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/basis': {
@@ -578,18 +216,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BasisRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/administration': {
-      id: '/administration'
-      path: '/administration'
-      fullPath: '/administration'
-      preLoaderRoute: typeof AdministrationRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_pathlessLayout': {
-      id: '/_pathlessLayout'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof PathlessLayoutRouteImport
+    '/$discipline': {
+      id: '/$discipline'
+      path: '/$discipline'
+      fullPath: '/$discipline'
+      preLoaderRoute: typeof DisciplineRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -613,13 +244,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPostsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_pathlessLayout/_nested-layout': {
-      id: '/_pathlessLayout/_nested-layout'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof PathlessLayoutNestedLayoutRouteImport
-      parentRoute: typeof PathlessLayoutRoute
-    }
     '/api/users/$id': {
       id: '/api/users/$id'
       path: '/$id'
@@ -627,52 +251,8 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiUsersIdRouteImport
       parentRoute: typeof ApiUsersRoute
     }
-    '/_pathlessLayout/_nested-layout/route-b': {
-      id: '/_pathlessLayout/_nested-layout/route-b'
-      path: '/route-b'
-      fullPath: '/route-b'
-      preLoaderRoute: typeof PathlessLayoutNestedLayoutRouteBRouteImport
-      parentRoute: typeof PathlessLayoutNestedLayoutRoute
-    }
-    '/_pathlessLayout/_nested-layout/route-a': {
-      id: '/_pathlessLayout/_nested-layout/route-a'
-      path: '/route-a'
-      fullPath: '/route-a'
-      preLoaderRoute: typeof PathlessLayoutNestedLayoutRouteARouteImport
-      parentRoute: typeof PathlessLayoutNestedLayoutRoute
-    }
   }
 }
-
-interface PathlessLayoutNestedLayoutRouteChildren {
-  PathlessLayoutNestedLayoutRouteARoute: typeof PathlessLayoutNestedLayoutRouteARoute
-  PathlessLayoutNestedLayoutRouteBRoute: typeof PathlessLayoutNestedLayoutRouteBRoute
-}
-
-const PathlessLayoutNestedLayoutRouteChildren: PathlessLayoutNestedLayoutRouteChildren =
-  {
-    PathlessLayoutNestedLayoutRouteARoute:
-      PathlessLayoutNestedLayoutRouteARoute,
-    PathlessLayoutNestedLayoutRouteBRoute:
-      PathlessLayoutNestedLayoutRouteBRoute,
-  }
-
-const PathlessLayoutNestedLayoutRouteWithChildren =
-  PathlessLayoutNestedLayoutRoute._addFileChildren(
-    PathlessLayoutNestedLayoutRouteChildren,
-  )
-
-interface PathlessLayoutRouteChildren {
-  PathlessLayoutNestedLayoutRoute: typeof PathlessLayoutNestedLayoutRouteWithChildren
-}
-
-const PathlessLayoutRouteChildren: PathlessLayoutRouteChildren = {
-  PathlessLayoutNestedLayoutRoute: PathlessLayoutNestedLayoutRouteWithChildren,
-}
-
-const PathlessLayoutRouteWithChildren = PathlessLayoutRoute._addFileChildren(
-  PathlessLayoutRouteChildren,
-)
 
 interface ApiUsersRouteChildren {
   ApiUsersIdRoute: typeof ApiUsersIdRoute
@@ -688,28 +268,11 @@ const ApiUsersRouteWithChildren = ApiUsersRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  PathlessLayoutRoute: PathlessLayoutRouteWithChildren,
-  AdministrationRoute: AdministrationRoute,
+  DisciplineRoute: DisciplineRoute,
   BasisRoute: BasisRoute,
-  BuildingsRoute: BuildingsRoute,
-  CivilRoute: CivilRoute,
-  CoatingsRoute: CoatingsRoute,
-  CommissioningRoute: CommissioningRoute,
-  ConcreteRoute: ConcreteRoute,
-  ContingencyRoute: ContingencyRoute,
-  DemolitionRoute: DemolitionRoute,
-  ElectricRoute: ElectricRoute,
-  EngineeringRoute: EngineeringRoute,
-  EquipmentRoute: EquipmentRoute,
-  IndirectsRoute: IndirectsRoute,
-  InstrumentsRoute: InstrumentsRoute,
   MaterialsRoute: MaterialsRoute,
-  OperationsRoute: OperationsRoute,
   PipingRoute: PipingRoute,
-  ProcurementRoute: ProcurementRoute,
-  ProjectDevelopmentRoute: ProjectDevelopmentRoute,
   SetupRoute: SetupRoute,
-  SteelRoute: SteelRoute,
   SummaryRoute: SummaryRoute,
   ValidationRoute: ValidationRoute,
   ApiPostsRoute: ApiPostsRoute,

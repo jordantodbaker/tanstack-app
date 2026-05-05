@@ -10,6 +10,7 @@ import {
 } from "~/utils/roles";
 import { useSelectedProject } from "~/lib/selected-project";
 import { allowedFefCbsItemIdsQueryOptions } from "~/utils/setup";
+import { toCbsOption } from "~/lib/fef-helpers";
 
 type CbsItem = {
   id: number;
@@ -51,12 +52,7 @@ export function DisciplineRoute({
       (projectId === null || allowedIdSet.has(item.id)),
   );
 
-  const cbsOptions: CbsOption[] = filteredItems.map((item) => ({
-    displayCode: item.displayCode,
-    name: item.name ?? "",
-    uom: item.uom,
-    displayDescription: item.displayDescription ?? null,
-  }));
+  const cbsOptions: CbsOption[] = filteredItems.map(toCbsOption);
 
   const laborKey = discipline?.l1Codes?.[0]?.[0];
 

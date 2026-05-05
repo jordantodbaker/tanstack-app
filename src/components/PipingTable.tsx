@@ -1,15 +1,6 @@
-import {
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  useReactTable,
-  type ColumnDef,
-  type ColumnFiltersState,
-  type PaginationState,
-} from "@tanstack/react-table";
 import React from "react";
 import { setLaborTotal } from "~/lib/laborTotalsStore";
+import { sumLaborCost, tabTriggerClass } from "~/lib/fef-helpers";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import {
   Accordion,
@@ -17,13 +8,15 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from "~/components/ui/accordion";
-import type { CbsOption, FefRow, BaseTableState } from "~/lib/types";
+import type { CbsOption, FefRow } from "~/lib/types";
 import {
-  ColumnFilter,
-  TablePagination,
   useTakeOffSync,
   TAKE_OFF_INITIAL_ROWS,
   FIELD_ESTIMATE_INITIAL_ROWS,
+  useFefTableState,
+  FefTableContent,
+  type FefTableMeta,
+  type ServerPagination,
 } from "~/lib/table-utils";
 import {
   takeOffColumns,
@@ -51,174 +44,7 @@ type PipingGroup = {
   values: PipingGroupValue[];
 };
 
-type ServerPagination = {
-  totalCount: number;
-  pageIndex: number;
-  pageSize: number;
-  onPageChange: (page: number) => void;
-};
-
-type TableState = BaseTableState & {
-  weldGroupOptions?: string[];
-  weldGroupMaterialMap?: Record<
-    string,
-    { shopCode: string; installCode: string }
-  >;
-  roleOptions?: string[];
-  scheduleOptions?: string[];
-  roleRates?: { roleName: string; schedule: string; rate: number }[];
-  taskCodeOptions?: string[];
-  pipingFactorLookup?: Map<string, { unit: string; values: Map<number, number> }>;
-};
-
-type UseTableStateOptions = Omit<
-  TableState,
-  "data" | "setData" | "columnFilters" | "setColumnFilters"
-> & { initialRows?: FefRow[] };
-
-function useTableState({
-  initialRows,
-  ...rest
-}: UseTableStateOptions = {}) {
-  const [data, setData] = React.useState<FefRow[]>(
-    initialRows ?? TAKE_OFF_INITIAL_ROWS,
-  );
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
-    [],
-  );
-  React.useEffect(() => {
-    if (initialRows !== undefined) setData(initialRows);
-  }, [initialRows]);
-  return { data, setData, columnFilters, setColumnFilters, ...rest };
-}
-
-function TableContent({
-  data,
-  setData,
-  columnFilters,
-  setColumnFilters,
-  cbsOptions,
-  weldGroupOptions,
-  weldGroupMaterialMap,
-  roleOptions,
-  scheduleOptions,
-  roleRates,
-  taskCodeOptions,
-  pipingFactorLookup,
-  serverPagination,
-  columns,
-}: TableState & {
-  serverPagination?: ServerPagination;
-  columns: ColumnDef<FefRow, string>[];
-}) {
-  const [localPageIndex, setLocalPageIndex] = React.useState(0);
-
-  const pagination: PaginationState = serverPagination
-    ? {
-        pageIndex: serverPagination.pageIndex,
-        pageSize: serverPagination.pageSize,
-      }
-    : { pageIndex: localPageIndex, pageSize: 25 };
-
-  const table = useReactTable({
-    data,
-    columns,
-    manualPagination: !!serverPagination,
-    pageCount: serverPagination
-      ? Math.ceil(serverPagination.totalCount / serverPagination.pageSize)
-      : undefined,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    onColumnFiltersChange: setColumnFilters,
-    onPaginationChange: (updater) => {
-      const next =
-        typeof updater === "function" ? updater(pagination) : updater;
-      if (serverPagination) {
-        serverPagination.onPageChange(next.pageIndex);
-      } else {
-        setLocalPageIndex(next.pageIndex);
-      }
-    },
-    state: { columnFilters, pagination },
-    meta: {
-      cbsOptions: cbsOptions ?? [],
-      weldGroupOptions: weldGroupOptions ?? [],
-      weldGroupMaterialMap: weldGroupMaterialMap ?? {},
-      roleOptions: roleOptions ?? [],
-      scheduleOptions: scheduleOptions ?? [],
-      roleRates: roleRates ?? [],
-      taskCodeOptions: taskCodeOptions ?? [],
-      pipingFactorLookup,
-      updateData: (rowIndex: number, columnId: string, value: string) => {
-        setData((old) =>
-          old.map((row, index) =>
-            index === rowIndex ? { ...row, [columnId]: value } : row,
-          ),
-        );
-      },
-      updateRow: (rowIndex: number, updates: Record<string, string>) => {
-        setData((old) =>
-          old.map((row, index) =>
-            index === rowIndex ? { ...row, ...updates } : row,
-          ),
-        );
-      },
-    },
-  });
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          {table.getHeaderGroups().map((headerGroup) => (
-            <tr key={headerGroup.id} className="bg-gray-100">
-              {headerGroup.headers.map((header) => (
-                <th
-                  key={header.id}
-                  style={{ minWidth: header.column.getSize() }}
-                  className="border border-gray-300 px-3 py-2 text-left font-semibold"
-                >
-                  <div className="flex flex-col gap-1">
-                    <span className="whitespace-nowrap">
-                      {flexRender(
-                        header.column.columnDef.header,
-                        header.getContext(),
-                      )}
-                    </span>
-                    <ColumnFilter column={header.column} data={data} />
-                  </div>
-                </th>
-              ))}
-            </tr>
-          ))}
-        </thead>
-        <tbody>
-          {table.getRowModel().rows.map((row, i) => (
-            <tr
-              key={row.id}
-              className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}
-            >
-              {row.getVisibleCells().map((cell) => (
-                <td
-                  key={cell.id}
-                  style={{ minWidth: cell.column.getSize() }}
-                  className="border border-gray-300"
-                >
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <TablePagination table={table} totalCount={serverPagination?.totalCount} />
-    </div>
-  );
-}
-
-const tabTriggerClass =
-  "rounded-md border border-slate-300 bg-white px-6 py-4 text-lg font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 hover:text-slate-900 data-active:border-[#a63434] data-active:bg-[#a63434] data-active:text-white data-active:shadow";
+type RoleRate = { roleName: string; schedule: string; rate: number };
 
 export function PipingDisciplinePage({
   title,
@@ -242,7 +68,7 @@ export function PipingDisciplinePage({
   supportLaborInitialRows?: FefRow[];
   roleOptions?: string[];
   scheduleOptions?: string[];
-  roleRates?: { roleName: string; schedule: string; rate: number }[];
+  roleRates?: RoleRate[];
   taskCodeOptions?: string[];
   pipingFactors?: { code: string; unit: string; values: { size: number; value: number | null }[] }[];
   laborKey?: string;
@@ -283,8 +109,18 @@ export function PipingDisciplinePage({
     return m;
   }, [pipingFactors]);
 
-  const takeOffState = useTableState({
-    initialRows: TAKE_OFF_INITIAL_ROWS,
+  const takeOffState = useFefTableState({ initialRows: TAKE_OFF_INITIAL_ROWS });
+  const fieldEstimateState = useFefTableState({ initialRows: FIELD_ESTIMATE_INITIAL_ROWS });
+  const supportLaborState = useFefTableState({ initialRows: supportLaborInitialRows });
+
+  const syncToFieldEstimate = useTakeOffSync(takeOffState, fieldEstimateState);
+
+  React.useEffect(() => {
+    if (laborKey) setLaborTotal(laborKey, sumLaborCost(fieldEstimateState.data));
+    setLaborTotal("craftSupportLabor", sumLaborCost(supportLaborState.data));
+  }, [laborKey, supportLaborState.data, fieldEstimateState.data]);
+
+  const takeOffMeta: FefTableMeta = {
     cbsOptions,
     weldGroupOptions,
     weldGroupMaterialMap,
@@ -293,35 +129,20 @@ export function PipingDisciplinePage({
     roleRates,
     taskCodeOptions,
     pipingFactorLookup,
-  });
-  const fieldEstimateState = useTableState({
-    initialRows: FIELD_ESTIMATE_INITIAL_ROWS,
+  };
+  const craftMeta: FefTableMeta = {
     cbsOptions,
     weldGroupOptions,
     weldGroupMaterialMap,
-  });
-  const supportLaborState = useTableState({
-    initialRows: supportLaborInitialRows,
+  };
+  const supportMeta: FefTableMeta = {
     cbsOptions,
     weldGroupOptions,
     weldGroupMaterialMap,
     roleOptions,
     scheduleOptions,
     roleRates,
-  });
-
-  const syncToFieldEstimate = useTakeOffSync(takeOffState, fieldEstimateState);
-
-  React.useEffect(() => {
-    const sumRows = (rows: typeof supportLaborState.data) =>
-      rows.reduce((acc, row) => {
-        const h = parseFloat(row.laborHours);
-        const r = parseFloat(row.laborRate);
-        return acc + (isNaN(h) || isNaN(r) ? 0 : h * r);
-      }, 0);
-    if (laborKey) setLaborTotal(laborKey, sumRows(fieldEstimateState.data));
-    setLaborTotal("craftSupportLabor", sumRows(supportLaborState.data));
-  }, [laborKey, supportLaborState.data, fieldEstimateState.data]);
+  };
 
   return (
     <main className="p-4">
@@ -343,8 +164,9 @@ export function PipingDisciplinePage({
           </TabsTrigger>
         </TabsList>
         <TabsContent value="takeoff" className="mt-4">
-          <TableContent
-            {...takeOffState}
+          <FefTableContent
+            state={takeOffState}
+            meta={takeOffMeta}
             columns={takeOffColumns}
             serverPagination={serverPagination}
           />
@@ -354,8 +176,9 @@ export function PipingDisciplinePage({
             <AccordionItem value="support">
               <AccordionTrigger>Support Labor</AccordionTrigger>
               <AccordionContent>
-                <TableContent
-                  {...supportLaborState}
+                <FefTableContent
+                  state={supportLaborState}
+                  meta={supportMeta}
                   columns={supportLaborColumns}
                 />
               </AccordionContent>
@@ -363,8 +186,9 @@ export function PipingDisciplinePage({
             <AccordionItem value="craft">
               <AccordionTrigger>Craft Labor</AccordionTrigger>
               <AccordionContent>
-                <TableContent
-                  {...fieldEstimateState}
+                <FefTableContent
+                  state={fieldEstimateState}
+                  meta={craftMeta}
                   columns={fieldEstimateColumns}
                 />
               </AccordionContent>

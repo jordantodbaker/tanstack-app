@@ -1,6 +1,3 @@
-import type { Dispatch, SetStateAction } from "react";
-import type { ColumnFiltersState } from "@tanstack/react-table";
-
 export interface ChangeLog {
   id: number;
   projectId: number;
@@ -53,10 +50,3 @@ export type CbsOption = {
   displayDescription: string | null;
 };
 
-export type BaseTableState = {
-  data: FefRow[];
-  setData: Dispatch<SetStateAction<FefRow[]>>;
-  columnFilters: ColumnFiltersState;
-  setColumnFilters: Dispatch<SetStateAction<ColumnFiltersState>>;
-  cbsOptions?: CbsOption[];
-};

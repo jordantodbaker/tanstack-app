@@ -8,6 +8,7 @@ import {
 import { DISCIPLINE_LABELS } from "~/config/disciplines";
 import { useMaterialsTotalsByFirstDigit } from "~/lib/materialsStore";
 import { useLaborTotals } from "~/lib/laborTotalsStore";
+import { formatMoney } from "~/lib/formatting";
 
 export const Route = createFileRoute("/summary")({
   component: SummaryPage,
@@ -150,13 +151,6 @@ function SummaryTable({ rows }: { rows: SummaryRow[] }) {
       </table>
     </div>
   );
-}
-
-function formatMoney(n: number): string {
-  return n.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
 }
 
 function SummaryPage() {

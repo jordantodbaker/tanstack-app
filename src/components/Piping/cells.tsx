@@ -228,7 +228,7 @@ export function LaborHoursCell({
   const qty = parseFloat(row.original.quantity);
   const computed =
     factor !== undefined && !isNaN(qty) && row.original.quantity !== ""
-      ? String(factor * qty)
+      ? (factor * qty).toFixed(1)
       : "";
 
   const stored = row.original.laborHours;

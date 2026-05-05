@@ -59,28 +59,38 @@ export function useTakeOffSync(
   source: { data: FefRow[] },
   target: { setData: React.Dispatch<React.SetStateAction<FefRow[]>> },
 ) {
-  const syncedIds = React.useRef(new Set<string>());
-
   return () => {
     const qualifiedRows = source.data.filter(
       (r) => Number(r.quantity) > 0 && !r.id.startsWith("__fe-blank-"),
     );
-    const qualifiedIds = new Set(qualifiedRows.map((r) => r.id));
-    const qualifiedMap = new Map(qualifiedRows.map((r) => [r.id, r]));
-    const prevSyncedIds = syncedIds.current;
 
-    target.setData((prev) => {
-      const prevIds = new Set(prev.map((r) => r.id));
-      const retained = prev
-        .filter((r) => !prevSyncedIds.has(r.id) || qualifiedIds.has(r.id))
-        .map((r) => (qualifiedMap.has(r.id) ? { ...qualifiedMap.get(r.id)! } : r));
-      const added = qualifiedRows
-        .filter((r) => !prevIds.has(r.id))
-        .map((r) => ({ ...r }));
-      return [...retained, ...added];
-    });
+    type Agg = { baseRow: FefRow; qty: number; hours: number; cost: number };
+    const groups = new Map<string, Agg>();
 
-    syncedIds.current = qualifiedIds;
+    for (const row of qualifiedRows) {
+      const qty = parseFloat(row.quantity) || 0;
+      const hours = parseFloat(row.laborHours) || 0;
+      const rate = parseFloat(row.laborRate) || 0;
+      const existing = groups.get(row.id);
+      if (!existing) {
+        groups.set(row.id, { baseRow: row, qty, hours, cost: hours * rate });
+      } else {
+        existing.qty += qty;
+        existing.hours += hours;
+        existing.cost += hours * rate;
+      }
+    }
+
+    const aggregated: FefRow[] = Array.from(groups.values()).map(
+      ({ baseRow, qty, hours, cost }) => ({
+        ...baseRow,
+        quantity: String(qty),
+        laborHours: String(hours),
+        laborRate: hours > 0 ? String(cost / hours) : "",
+      }),
+    );
+
+    target.setData(aggregated);
   };
 }
 
@@ -235,6 +245,38 @@ export function ReadOnlyCell({ getValue }: { getValue: () => unknown }) {
     <span className={readOnlyCellClass}>
       {getValue() as string}
     </span>
+  );
+}
+
+export function CbsNameCell({
+  row,
+  table,
+}: {
+  getValue: () => unknown;
+  row: { original: FefRow };
+  column: { id: string };
+  table: ReturnType<typeof useReactTable<FefRow>>;
+}) {
+  const cbsOptions = table.options.meta?.cbsOptions ?? [];
+  const match = cbsOptions.find((o) => o.displayCode === row.original.id);
+  return (
+    <span className={readOnlyCellClass}>{match?.name ?? row.original.name}</span>
+  );
+}
+
+export function CbsUomCell({
+  row,
+  table,
+}: {
+  getValue: () => unknown;
+  row: { original: FefRow };
+  column: { id: string };
+  table: ReturnType<typeof useReactTable<FefRow>>;
+}) {
+  const cbsOptions = table.options.meta?.cbsOptions ?? [];
+  const match = cbsOptions.find((o) => o.displayCode === row.original.id);
+  return (
+    <span className={readOnlyCellClass}>{match?.uom ?? row.original.unit}</span>
   );
 }
 

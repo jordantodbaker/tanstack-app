@@ -1,6 +1,6 @@
 import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
 import type { FefRow } from "~/lib/types";
-import { EditableCell, SizeCell, CbsSelectCell, ReadOnlyCell, TakeOffIdReadOnlyCell } from "~/lib/table-utils";
+import { EditableCell, SizeCell, CbsSelectCell, ReadOnlyCell, TakeOffIdReadOnlyCell, CbsNameCell, CbsUomCell } from "~/lib/table-utils";
 import {
   ShopFieldSelectCell,
   WeldGroupSelectCell,
@@ -80,49 +80,20 @@ export const takeOffColumns: ColumnDef<FefRow, string>[] = [
 
 export const fieldEstimateColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("id", { header: "ID", cell: ReadOnlyCell, size: 150 }),
-  columnHelper.accessor("name", {
-    header: "Name",
-    cell: CbsSelectCell,
-    size: 300,
-  }),
-  columnHelper.accessor("shopField", {
-    header: "Shop / Field",
-    cell: ShopFieldSelectCell,
-    size: 130,
-  }),
-  columnHelper.accessor("weldGroupDescription", {
-    header: "Weld Group Description",
-    cell: WeldGroupSelectCell,
-    size: 220,
-  }),
-  columnHelper.accessor("quantity", { header: "Quantity", cell: EditableCell }),
-  columnHelper.accessor("size", { header: "Size", cell: SizeCell }),
-  columnHelper.accessor("unit", { header: "Unit", cell: ReadOnlyCell }),
-  columnHelper.accessor("metallurgyCode", {
-    header: "Metallurgy Code",
-    cell: ReadOnlyCell,
-    size: 140,
-  }),
-  columnHelper.accessor("boreSize", {
-    header: "Bore Size",
-    cell: ReadOnlyCell,
-    size: 110,
-  }),
-  columnHelper.accessor("laborHours", {
-    header: "Labor Hours",
-    cell: EditableCell,
-  }),
-  columnHelper.accessor("laborRate", {
-    header: "Labor Rate ($)",
-    cell: EditableCell,
-  }),
+  columnHelper.accessor("name", { header: "Name", cell: CbsNameCell, size: 300 }),
+  columnHelper.accessor("shopField", { header: "Shop / Field", cell: ReadOnlyCell, size: 130 }),
+  columnHelper.accessor("weldGroupDescription", { header: "Weld Group Description", cell: ReadOnlyCell, size: 220 }),
+  columnHelper.accessor("quantity", { header: "Quantity", cell: ReadOnlyCell }),
+  columnHelper.accessor("size", { header: "Size", cell: ReadOnlyCell }),
+  columnHelper.accessor("unit", { header: "Unit", cell: CbsUomCell }),
+  columnHelper.accessor("laborHours", { header: "Labor Hours", cell: ReadOnlyCell }),
+  columnHelper.accessor("laborRate", { header: "Labor Rate ($)", cell: ReadOnlyCell }),
   columnHelper.display({
     id: "totalCost",
     header: "Total Cost ($)",
     cell: TotalCostCell,
     size: 130,
   }),
-  columnHelper.accessor("notes", { header: "Notes", cell: EditableCell }),
 ];
 
 export const supportLaborColumns: ColumnDef<FefRow, string>[] = [

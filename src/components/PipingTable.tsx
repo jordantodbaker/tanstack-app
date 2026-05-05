@@ -12,13 +12,19 @@ import {
 import type { CbsOption, FefRow } from "~/lib/types";
 import {
   useTakeOffSync,
-  TAKE_OFF_INITIAL_ROWS,
+  makeBlankRow,
   FIELD_ESTIMATE_INITIAL_ROWS,
   useFefTableState,
   FefTableContent,
   type FefTableMeta,
   type ServerPagination,
 } from "~/lib/table-utils";
+
+function canComputeTotalCost(row: FefRow): boolean {
+  const hours = parseFloat(row.laborHours);
+  const rate = parseFloat(row.laborRate);
+  return !isNaN(hours) && hours > 0 && !isNaN(rate) && row.laborRate !== "";
+}
 import {
   takeOffColumns,
   fieldEstimateColumns,
@@ -125,11 +131,38 @@ export function PipingDisciplinePage({
     );
   };
 
-  const takeOffState = useFefTableState({ initialRows: TAKE_OFF_INITIAL_ROWS });
+  const [duplicateTimes, setDuplicateTimes] = React.useState("");
+  const handleDuplicateTopRow = () => {
+    const topRow = takeOffState.data[0];
+    if (!topRow || topRow.id.startsWith("__fe-blank-")) return;
+    const times = Math.max(1, parseInt(duplicateTimes) || 1);
+    takeOffState.setData((prev) => {
+      let end = prev.length;
+      while (end > 0 && prev[end - 1].id.startsWith("__fe-blank-")) end--;
+      return [
+        ...prev.slice(0, end),
+        ...Array.from({ length: times }, () => ({ ...topRow })),
+      ];
+    });
+  };
+
+  const nextBlankId = React.useRef(1);
+  const initialTakeOffRows = React.useMemo(() => [makeBlankRow(0)], []);
+  const takeOffState = useFefTableState({ initialRows: initialTakeOffRows });
   const fieldEstimateState = useFefTableState({ initialRows: FIELD_ESTIMATE_INITIAL_ROWS });
   const supportLaborState = useFefTableState({ initialRows: supportLaborInitialRows });
 
   const syncToFieldEstimate = useTakeOffSync(takeOffState, fieldEstimateState);
+
+  React.useEffect(() => {
+    const data = takeOffState.data;
+    if (data.length === 0) return;
+    const lastRow = data[data.length - 1];
+    if (canComputeTotalCost(lastRow)) {
+      const id = nextBlankId.current++;
+      takeOffState.setData((prev) => [...prev, makeBlankRow(id)]);
+    }
+  }, [takeOffState.data, takeOffState.setData]);
 
   React.useEffect(() => {
     if (laborKey) setLaborTotal(laborKey, sumLaborCost(fieldEstimateState.data));
@@ -180,7 +213,23 @@ export function PipingDisciplinePage({
           </TabsTrigger>
         </TabsList>
         <TabsContent value="takeoff" className="mt-4">
-          <div className="flex justify-end mb-2">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleDuplicateTopRow}
+                className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100"
+              >
+                Duplicate Top Row
+              </button>
+              <input
+                type="number"
+                min={1}
+                value={duplicateTimes}
+                onChange={(e) => setDuplicateTimes(e.target.value)}
+                placeholder="times"
+                className="w-20 px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-400"
+              />
+            </div>
             <button
               onClick={toggleLaborDetails}
               className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100"

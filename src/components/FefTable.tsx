@@ -11,6 +11,8 @@ import type { FefRow, CbsOption } from "~/lib/types";
 import {
   EditableCell,
   CbsSelectCell,
+  CbsNameCell,
+  CbsUomCell,
   ReadOnlyCell,
   TakeOffIdReadOnlyCell,
   useTakeOffSync,
@@ -45,15 +47,15 @@ function MaterialsTotalCostCell({ row }: { row: { original: FefRow }; getValue: 
 
 const fieldEstimateColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("id", { header: "ID", cell: ReadOnlyCell, size: 150 }),
-  columnHelper.accessor("name", { header: "Name", cell: CbsSelectCell, size: 300 }),
-  columnHelper.accessor("role", { header: "Role", cell: RoleSelectCell, size: 180 }),
-  columnHelper.accessor("schedule", { header: "Schedule", cell: ScheduleSelectCell, size: 150 }),
-  columnHelper.accessor("quantity", { header: "Quantity", cell: EditableCell }),
-  columnHelper.accessor("unit", { header: "Unit", cell: ReadOnlyCell }),
-  columnHelper.accessor("laborHours", { header: "Labor Hours", cell: EditableCell }),
+  columnHelper.accessor("name", { header: "Name", cell: CbsNameCell, size: 300 }),
+  columnHelper.accessor("role", { header: "Role", cell: ReadOnlyCell, size: 180 }),
+  columnHelper.accessor("schedule", { header: "Schedule", cell: ReadOnlyCell, size: 150 }),
+  columnHelper.accessor("quantity", { header: "Quantity", cell: ReadOnlyCell }),
+  columnHelper.accessor("unit", { header: "Unit", cell: CbsUomCell }),
+  columnHelper.accessor("laborHours", { header: "Labor Hours", cell: ReadOnlyCell }),
   columnHelper.accessor("laborRate", { header: "Labor Rate ($)", cell: ReadOnlyCell }),
   columnHelper.display({ id: "totalCost", header: "Total Cost ($)", cell: TotalCostCell, size: 130 }),
-  columnHelper.accessor("notes", { header: "Notes", cell: EditableCell }),
+  columnHelper.accessor("notes", { header: "Notes", cell: ReadOnlyCell }),
 ];
 
 const takeOffColumns: ColumnDef<FefRow, string>[] = [

@@ -69,6 +69,41 @@ export const cbsItemsByL1PagedQueryOptions = (input: {
     queryFn: () => fetchCbsItemsByL1Paged({ data: input }),
   });
 
+export const fetchCbsItemsByL1Filtered = createServerFn({ method: "GET" })
+  .inputValidator(
+    (input: { l1Values: string[]; projectId: number | null }) => input,
+  )
+  .handler(({ data }) => {
+    const { l1Values, projectId } = data;
+    const where =
+      projectId != null
+        ? {
+            l1: { in: l1Values },
+            allowedInProjects: { some: { id: projectId } },
+          }
+        : { l1: { in: l1Values } };
+    return prisma.cbsItem.findMany({
+      where,
+      orderBy: { id: "asc" },
+      select: {
+        id: true,
+        displayCode: true,
+        name: true,
+        uom: true,
+        displayDescription: true,
+      },
+    });
+  });
+
+export const cbsItemsByL1FilteredQueryOptions = (input: {
+  l1Values: string[];
+  projectId: number | null;
+}) =>
+  queryOptions({
+    queryKey: ["cbsItemsByL1Filtered", input.l1Values, input.projectId],
+    queryFn: () => fetchCbsItemsByL1Filtered({ data: input }),
+  });
+
 export const fetchCbsItemsByL1EndsWith = createServerFn({ method: "GET" })
   .inputValidator((suffixes: string[]) => suffixes)
   .handler(({ data }) => {
@@ -76,6 +111,7 @@ export const fetchCbsItemsByL1EndsWith = createServerFn({ method: "GET" })
       where: { OR: data.map((suffix) => ({ l1: { endsWith: suffix } })) },
       orderBy: { id: "asc" },
       select: {
+        id: true,
         displayCode: true,
         name: true,
         uom: true,

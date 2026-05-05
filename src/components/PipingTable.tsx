@@ -9,6 +9,7 @@ import {
   type PaginationState,
 } from "@tanstack/react-table";
 import React from "react";
+import { setLaborTotal } from "~/lib/laborTotalsStore";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import {
   Accordion,
@@ -231,18 +232,20 @@ export function PipingDisciplinePage({
   roleRates,
   taskCodeOptions,
   pipingFactors,
+  laborKey,
 }: {
   title: string;
   icon?: React.ElementType;
   cbsOptions: CbsOption[];
   pipingGroups: PipingGroup[];
-  serverPagination: ServerPagination;
+  serverPagination?: ServerPagination;
   supportLaborInitialRows?: FefRow[];
   roleOptions?: string[];
   scheduleOptions?: string[];
   roleRates?: { roleName: string; schedule: string; rate: number }[];
   taskCodeOptions?: string[];
   pipingFactors?: { code: string; unit: string; values: { size: number; value: number | null }[] }[];
+  laborKey?: string;
 }) {
   const weldGroupOptions = React.useMemo(
     () =>
@@ -308,6 +311,17 @@ export function PipingDisciplinePage({
   });
 
   const syncToFieldEstimate = useTakeOffSync(takeOffState, fieldEstimateState);
+
+  React.useEffect(() => {
+    if (!laborKey) return;
+    const sumRows = (rows: typeof supportLaborState.data) =>
+      rows.reduce((acc, row) => {
+        const h = parseFloat(row.laborHours);
+        const r = parseFloat(row.laborRate);
+        return acc + (isNaN(h) || isNaN(r) ? 0 : h * r);
+      }, 0);
+    setLaborTotal(laborKey, sumRows(supportLaborState.data) + sumRows(fieldEstimateState.data));
+  }, [laborKey, supportLaborState.data, fieldEstimateState.data]);
 
   return (
     <main className="p-4">

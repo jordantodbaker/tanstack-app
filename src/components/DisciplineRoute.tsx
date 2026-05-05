@@ -17,6 +17,7 @@ type CbsItem = {
   name: string | null;
   uom: string;
   displayDescription: string | null;
+  l1: string;
 };
 
 export function DisciplineRoute({
@@ -26,7 +27,8 @@ export function DisciplineRoute({
   title: string;
   cbsItems: CbsItem[];
 }) {
-  const icon = disciplines.find((d) => d.label === title)?.icon;
+  const discipline = disciplines.find((d) => d.label === title);
+  const icon = discipline?.icon;
   const { data: roleOptions } = useQuery(roleOptionsQueryOptions());
   const { data: scheduleOptions } = useQuery(scheduleOptionsQueryOptions());
   const { data: roleRates } = useQuery(roleRatesQueryOptions());
@@ -40,10 +42,14 @@ export function DisciplineRoute({
     () => new Set(allowedIds ?? []),
     [allowedIds],
   );
-  const filteredItems =
-    projectId === null
-      ? cbsItems
-      : cbsItems.filter((item) => allowedIdSet.has(item.id));
+  const isMaterialCode = (item: CbsItem) =>
+    item.l1.endsWith("01") || item.l1.endsWith("31");
+
+  const filteredItems = cbsItems.filter(
+    (item) =>
+      !isMaterialCode(item) &&
+      (projectId === null || allowedIdSet.has(item.id)),
+  );
 
   const cbsOptions: CbsOption[] = filteredItems.map((item) => ({
     displayCode: item.displayCode,
@@ -52,11 +58,14 @@ export function DisciplineRoute({
     displayDescription: item.displayDescription ?? null,
   }));
 
+  const laborKey = discipline?.l1Codes?.[0]?.[0];
+
   return (
     <DisciplinePage
       title={title}
       icon={icon}
       cbsOptions={cbsOptions}
+      laborKey={laborKey}
       roleOptions={roleOptions}
       scheduleOptions={scheduleOptions}
       roleRates={roleRates}

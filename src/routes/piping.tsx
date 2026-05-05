@@ -6,7 +6,7 @@ import type { CbsOption } from "~/lib/types";
 import { disciplineById } from "~/config/disciplines";
 import {
   fetchCbsItemsByL1,
-  cbsItemsByL1PagedQueryOptions,
+  cbsItemsByL1FilteredQueryOptions,
 } from "~/utils/cbs";
 import {
   fetchPipingGroups,
@@ -17,31 +17,12 @@ import { fetchRoleOptions, fetchScheduleOptions, fetchRoleRates } from "~/utils/
 import { useSelectedProject } from "~/lib/selected-project";
 import { allowedFefCbsItemIdsQueryOptions } from "~/utils/setup";
 
-const PIPING_L1 = [
-  "600",
-  "631",
-  "632",
-  "633",
-  "634",
-  "635",
-  "636",
-  "637",
-  "638",
-  "639",
-  "640",
-  "641",
-  "642",
-  "643",
-  "680",
-  "690",
-];
-
-const PAGE_SIZE = 25;
+const PIPING_L1 = disciplineById.piping.l1Codes!;
+const PIPING_CRAFT_L1 = PIPING_L1.filter(
+  (code) => !code.endsWith("01") && !code.endsWith("31"),
+);
 
 export const Route = createFileRoute("/piping")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    page: Math.max(0, Number(search.page ?? 0)),
-  }),
   loader: () =>
     Promise.all([
       fetchPipingGroups(),
@@ -66,19 +47,13 @@ export const Route = createFileRoute("/piping")({
 function PipingPage() {
   const { pipingGroups, supportLaborItems, roleOptions, scheduleOptions, roleRates, taskCodeOptions, pipingFactors } =
     Route.useLoaderData();
-  const { page } = Route.useSearch();
-  const navigate = Route.useNavigate();
   const { projectId } = useSelectedProject();
-  const { data: cbsData } = useQuery(
-    cbsItemsByL1PagedQueryOptions({
-      l1Values: PIPING_L1,
-      page,
-      pageSize: PAGE_SIZE,
+  const { data: items = [] } = useQuery(
+    cbsItemsByL1FilteredQueryOptions({
+      l1Values: PIPING_CRAFT_L1,
       projectId,
     }),
   );
-  const items = cbsData?.items ?? [];
-  const total = cbsData?.total ?? 0;
   const { data: allowedIds } = useQuery({
     ...allowedFefCbsItemIdsQueryOptions(projectId ?? 0),
     enabled: projectId !== null,
@@ -132,13 +107,7 @@ function PipingPage() {
       roleRates={roleRates}
       taskCodeOptions={taskCodeOptions}
       pipingFactors={pipingFactors}
-      serverPagination={{
-        totalCount: total,
-        pageIndex: page,
-        pageSize: PAGE_SIZE,
-        onPageChange: (newPage: number) =>
-          navigate({ search: (prev) => ({ ...prev, page: newPage }) }),
-      }}
+      laborKey={PIPING_L1[0]?.[0]}
     />
   );
 }

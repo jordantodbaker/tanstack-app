@@ -7,6 +7,7 @@ import {
 } from "~/components/ui/accordion";
 import { DISCIPLINE_LABELS } from "~/config/disciplines";
 import { useMaterialsTotalsByFirstDigit } from "~/lib/materialsStore";
+import { useLaborTotals } from "~/lib/laborTotalsStore";
 
 export const Route = createFileRoute("/summary")({
   component: SummaryPage,
@@ -162,13 +163,16 @@ function formatMoney(n: number): string {
 
 function SummaryPage() {
   const materialsByDigit = useMaterialsTotalsByFirstDigit();
+  const laborTotals = useLaborTotals();
 
   const disciplineRows: SummaryRow[] = DISCIPLINE_LABELS.map((label, i) => {
-    const total = materialsByDigit.get(String(i)) ?? 0;
+    const materialTotal = materialsByDigit.get(String(i)) ?? 0;
+    const laborTotal = laborTotals.get(String(i)) ?? 0;
     return {
       description: label,
       ...emptyRow(),
-      material: total > 0 ? formatMoney(total) : "",
+      material: materialTotal > 0 ? formatMoney(materialTotal) : "",
+      totalLabor: laborTotal > 0 ? formatMoney(laborTotal) : "",
     };
   });
 

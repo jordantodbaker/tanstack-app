@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Settings } from "lucide-react";
 import {
   fetchSetupCbsItems,
@@ -103,11 +103,22 @@ function CbsTreeEditor({
   );
   const [search, setSearch] = React.useState("");
 
+  const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: (vars: { addIds: number[]; removeIds: number[] }) =>
       updateAllowedFefCbsItems({
         data: { projectId, addIds: vars.addIds, removeIds: vars.removeIds },
       }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cbsItemsByL1Paged"] });
+      queryClient.invalidateQueries({ queryKey: ["cbsItemsByL1Filtered"] });
+      queryClient.invalidateQueries({
+        queryKey: ["allowedFefCbsItemIds", projectId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["allowedCbsL1Codes", projectId],
+      });
+    },
   });
 
   const filteredTree = React.useMemo(() => {

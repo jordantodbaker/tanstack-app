@@ -120,6 +120,12 @@ export const fieldEstimateColumns: ColumnDef<FefRow, string>[] = [
     header: "Labor Rate ($)",
     cell: EditableCell,
   }),
+  columnHelper.display({
+    id: "totalCost",
+    header: "Total Cost ($)",
+    cell: TotalCostCell,
+    size: 130,
+  }),
   columnHelper.accessor("notes", { header: "Notes", cell: EditableCell }),
 ];
 

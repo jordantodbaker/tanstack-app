@@ -27,12 +27,14 @@ import {
 import {
   RoleSelectCell,
   ScheduleSelectCell,
+  TotalCostCell,
 } from "~/components/Piping/cells";
 import {
   setMaterialsSectionTotal,
   getMaterialsSectionRows,
   setMaterialsSectionRows,
 } from "~/lib/materialsStore";
+import { setLaborTotal } from "~/lib/laborTotalsStore";
 
 const columnHelper = createColumnHelper<FefRow>();
 
@@ -56,6 +58,7 @@ const fieldEstimateColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("unit", { header: "Unit", cell: ReadOnlyCell }),
   columnHelper.accessor("laborHours", { header: "Labor Hours", cell: EditableCell }),
   columnHelper.accessor("laborRate", { header: "Labor Rate ($)", cell: ReadOnlyCell }),
+  columnHelper.display({ id: "totalCost", header: "Total Cost ($)", cell: TotalCostCell, size: 130 }),
   columnHelper.accessor("notes", { header: "Notes", cell: EditableCell }),
 ];
 
@@ -250,6 +253,7 @@ export function DisciplinePage({
   cbsOptions,
   variant,
   sectionKey,
+  laborKey,
   roleOptions,
   scheduleOptions,
   roleRates,
@@ -260,6 +264,7 @@ export function DisciplinePage({
   cbsOptions?: CbsOption[];
   variant?: "materials";
   sectionKey?: string;
+  laborKey?: string;
   roleOptions?: string[];
   scheduleOptions?: string[];
   roleRates?: RoleRate[];
@@ -273,6 +278,16 @@ export function DisciplinePage({
   const fieldEstimateState = useTableState(FIELD_ESTIMATE_INITIAL_ROWS, cbsOptions, variant);
 
   const syncToFieldEstimate = useTakeOffSync(takeOffState, fieldEstimateState);
+
+  React.useEffect(() => {
+    if (!laborKey) return;
+    const total = fieldEstimateState.data.reduce((acc, row) => {
+      const h = parseFloat(row.laborHours);
+      const r = parseFloat(row.laborRate);
+      return acc + (isNaN(h) || isNaN(r) ? 0 : h * r);
+    }, 0);
+    setLaborTotal(laborKey, total);
+  }, [laborKey, fieldEstimateState.data]);
 
   React.useEffect(() => {
     if (variant !== "materials" || !sectionKey) return;

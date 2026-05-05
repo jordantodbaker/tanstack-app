@@ -51,9 +51,11 @@ function toSupportLaborRow(item: CbsItem): FefRow {
 
 export function DisciplineRoute({
   title,
+  disciplineId,
   cbsItems,
 }: {
   title: string;
+  disciplineId: string;
   cbsItems: CbsItem[];
 }) {
   const discipline = disciplines.find((d) => d.label === title);
@@ -103,6 +105,7 @@ export function DisciplineRoute({
   return (
     <DisciplinePage
       title={title}
+      disciplineId={disciplineId}
       icon={icon}
       cbsOptions={cbsOptions}
       supportLaborInitialRows={supportLaborInitialRows}

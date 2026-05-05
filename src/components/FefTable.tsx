@@ -32,6 +32,8 @@ import { supportLaborColumns } from "~/components/Piping/columns";
 import { setMaterialsSectionTotal } from "~/lib/materialsStore";
 import { setLaborTotal } from "~/lib/laborTotalsStore";
 import { sumLaborCost, sumMaterialCost, tabTriggerClass } from "~/lib/fef-helpers";
+import { useSelectedProject } from "~/lib/selected-project";
+import { useFefRowPersistence } from "~/lib/use-fef-row-persistence";
 
 const columnHelper = createColumnHelper<FefRow>();
 
@@ -94,6 +96,7 @@ export function FefTable({ title }: { title: string }) {
 
 export function DisciplinePage({
   title,
+  disciplineId,
   icon: Icon,
   initialRows,
   cbsOptions,
@@ -106,6 +109,7 @@ export function DisciplinePage({
   roleRates,
 }: {
   title?: string;
+  disciplineId?: string;
   icon?: React.ElementType;
   initialRows?: FefRow[];
   cbsOptions?: CbsOption[];
@@ -117,6 +121,7 @@ export function DisciplinePage({
   scheduleOptions?: string[];
   roleRates?: { roleName: string; schedule: string; rate: number }[];
 }) {
+  const { projectId } = useSelectedProject();
   const takeOffState = useFefTableState({
     initialRows: variant === "materials" ? initialRows : TAKE_OFF_INITIAL_ROWS,
     sectionKey: variant === "materials" ? sectionKey : undefined,
@@ -129,6 +134,28 @@ export function DisciplinePage({
   });
 
   const syncToFieldEstimate = useTakeOffSync(takeOffState, fieldEstimateState);
+
+  const persistEnabled = variant !== "materials" && !!disciplineId;
+  useFefRowPersistence({
+    projectId: persistEnabled ? projectId : null,
+    discipline: disciplineId ?? "",
+    section: "TAKE_OFF",
+    state: takeOffState,
+  });
+  useFefRowPersistence({
+    projectId: persistEnabled ? projectId : null,
+    discipline: disciplineId ?? "",
+    section: "SUPPORT_LABOR",
+    state: supportLaborState,
+    fallbackRows: supportLaborInitialRows,
+  });
+  useFefRowPersistence({
+    projectId: variant === "materials" && sectionKey ? projectId : null,
+    discipline: sectionKey ?? "",
+    section: "MATERIALS",
+    state: takeOffState,
+    fallbackRows: variant === "materials" ? initialRows : undefined,
+  });
 
   React.useEffect(() => {
     if (!laborKey) return;

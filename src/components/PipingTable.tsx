@@ -1,5 +1,5 @@
 import React from "react";
-import { type ColumnVisibilityState } from "@tanstack/react-table";
+import { type VisibilityState } from "@tanstack/react-table";
 import { setLaborTotal } from "~/lib/laborTotalsStore";
 import { sumLaborCost, tabTriggerClass } from "~/lib/fef-helpers";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
@@ -19,6 +19,8 @@ import {
   type FefTableMeta,
   type ServerPagination,
 } from "~/lib/table-utils";
+import { useSelectedProject } from "~/lib/selected-project";
+import { useFefRowPersistence } from "~/lib/use-fef-row-persistence";
 
 function canComputeTotalCost(row: FefRow): boolean {
   const hours = parseFloat(row.laborHours);
@@ -119,7 +121,7 @@ export function PipingDisciplinePage({
   const LABOR_DETAIL_COLS = ["unit", "laborFactor", "laborHours", "laborRate"] as const;
   const [laborDetailsVisible, setLaborDetailsVisible] = React.useState(true);
   const [takeOffColumnVisibility, setTakeOffColumnVisibility] =
-    React.useState<ColumnVisibilityState>(() =>
+    React.useState<VisibilityState>(() =>
       Object.fromEntries(LABOR_DETAIL_COLS.map((c) => [c, true])),
     );
 
@@ -153,6 +155,21 @@ export function PipingDisciplinePage({
   const supportLaborState = useFefTableState({ initialRows: supportLaborInitialRows });
 
   const syncToFieldEstimate = useTakeOffSync(takeOffState, fieldEstimateState);
+
+  const { projectId } = useSelectedProject();
+  useFefRowPersistence({
+    projectId,
+    discipline: "piping",
+    section: "TAKE_OFF",
+    state: takeOffState,
+  });
+  useFefRowPersistence({
+    projectId,
+    discipline: "piping",
+    section: "SUPPORT_LABOR",
+    state: supportLaborState,
+    fallbackRows: supportLaborInitialRows,
+  });
 
   React.useEffect(() => {
     const data = takeOffState.data;

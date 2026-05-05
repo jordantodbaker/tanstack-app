@@ -20,14 +20,63 @@ model Post {
 }
 
 model Project {
-  id                 Int         @id @default(autoincrement())
+  id                 Int          @id @default(autoincrement())
   displayId          String
   name               String
   description        String
   changeLogs         ChangeLog[]
-  allowedFefCbsItems CbsItem[]   @relation("ProjectAllowedFefCbsItems")
-  createdAt          DateTime    @default(now())
-  updatedAt          DateTime    @default(now())
+  allowedFefCbsItems CbsItem[]    @relation("ProjectAllowedFefCbsItems")
+  fefRows            FefRow[]
+  basisInputs        BasisInputs?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @default(now())
+}
+
+enum FefSection {
+  TAKE_OFF
+  SUPPORT_LABOR
+  MATERIALS
+}
+
+model FefRow {
+  id                   Int        @id @default(autoincrement())
+  project              Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId            Int
+  discipline           String
+  section              FefSection
+  position             Int
+  cbsCode              String     @default("")
+  name                 String     @default("")
+  description          String     @default("")
+  shopField            String     @default("")
+  weldGroupDescription String     @default("")
+  quantity             String     @default("")
+  size                 String     @default("")
+  unit                 String     @default("")
+  metallurgyCode       String     @default("")
+  boreSize             String     @default("")
+  role                 String     @default("")
+  schedule             String     @default("")
+  taskCode             String     @default("")
+  laborHours           String     @default("")
+  laborRate            String     @default("")
+  materialCost         String     @default("")
+  equipment            String     @default("")
+  notes                String     @default("")
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+
+  @@index([projectId, discipline, section])
+}
+
+model BasisInputs {
+  id                 Int      @id @default(autoincrement())
+  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId          Int      @unique
+  estimateFactor     String   @default("")
+  compositeLaborRate String   @default("")
+  milestones         Json     @default("[]")
+  updatedAt          DateTime @updatedAt
 }
 
 model ChangeLog {

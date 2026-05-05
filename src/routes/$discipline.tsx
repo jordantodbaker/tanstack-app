@@ -8,12 +8,18 @@ export const Route = createFileRoute("/$discipline")({
     const config = disciplineById[params.discipline];
     if (!config?.l1Codes) throw notFound();
     const cbsItems = await fetchCbsItemsByL1({ data: config.l1Codes });
-    return { title: config.label, cbsItems };
+    return { title: config.label, disciplineId: config.id, cbsItems };
   },
   component: DynamicDiscipline,
 });
 
 function DynamicDiscipline() {
-  const { title, cbsItems } = Route.useLoaderData();
-  return <DisciplineRoute title={title} cbsItems={cbsItems} />;
+  const { title, disciplineId, cbsItems } = Route.useLoaderData();
+  return (
+    <DisciplineRoute
+      title={title}
+      disciplineId={disciplineId}
+      cbsItems={cbsItems}
+    />
+  );
 }

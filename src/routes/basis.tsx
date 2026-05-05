@@ -1,7 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { useSelectedProject } from "~/lib/selected-project";
+import {
+  basisInputsQueryOptions,
+  saveBasisInputs,
+  type BasisMilestone,
+} from "~/utils/basisInputs";
 
 export const Route = createFileRoute("/basis")({
   component: BasisPage,
@@ -17,11 +24,7 @@ const MILESTONE_EVENTS = [
   "Closeout",
 ];
 
-type MilestoneRow = {
-  event: string;
-  startDate: string;
-  endDate: string;
-};
+const SAVE_DEBOUNCE_MS = 500;
 
 function diffDays(start: string, end: string): number | null {
   if (!start || !end) return null;
@@ -31,11 +34,21 @@ function diffDays(start: string, end: string): number | null {
   return Math.round(ms / 86400000);
 }
 
-function MilestoneTable() {
-  const [rows, setRows] = React.useState<MilestoneRow[]>(
-    MILESTONE_EVENTS.map((event) => ({ event, startDate: "", endDate: "" })),
-  );
+function blankMilestones(): BasisMilestone[] {
+  return MILESTONE_EVENTS.map((event) => ({
+    event,
+    startDate: "",
+    endDate: "",
+  }));
+}
 
+function MilestoneTable({
+  rows,
+  setRows,
+}: {
+  rows: BasisMilestone[];
+  setRows: React.Dispatch<React.SetStateAction<BasisMilestone[]>>;
+}) {
   function updateRow(index: number, field: "startDate" | "endDate", value: string) {
     setRows((prev) =>
       prev.map((row, i) => {
@@ -112,8 +125,64 @@ function MilestoneTable() {
 }
 
 function BasisPage() {
+  const { projectId } = useSelectedProject();
+  const queryClient = useQueryClient();
+  const queryOpts = basisInputsQueryOptions(projectId);
+  const { data: loaded } = useQuery(queryOpts);
+
   const [estimateFactor, setEstimateFactor] = React.useState("");
   const [compositeLaborRate, setCompositeLaborRate] = React.useState("");
+  const [milestones, setMilestones] = React.useState<BasisMilestone[]>(
+    blankMilestones,
+  );
+
+  const hydratedKeyRef = React.useRef<number | null>(null);
+  const skipNextSaveRef = React.useRef(false);
+  const saveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    if (projectId === null) return;
+    if (loaded === undefined) return;
+    if (hydratedKeyRef.current === projectId) return;
+
+    skipNextSaveRef.current = true;
+    setEstimateFactor(loaded.estimateFactor);
+    setCompositeLaborRate(loaded.compositeLaborRate);
+    setMilestones(
+      loaded.milestones.length > 0 ? loaded.milestones : blankMilestones(),
+    );
+    hydratedKeyRef.current = projectId;
+  }, [projectId, loaded]);
+
+  React.useEffect(() => {
+    if (projectId === null) return;
+    if (hydratedKeyRef.current !== projectId) return;
+    if (skipNextSaveRef.current) {
+      skipNextSaveRef.current = false;
+      return;
+    }
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    const payload = { estimateFactor, compositeLaborRate, milestones };
+    saveTimerRef.current = setTimeout(() => {
+      saveBasisInputs({ data: { projectId, payload } })
+        .then(() => {
+          queryClient.setQueryData(queryOpts.queryKey, payload);
+        })
+        .catch((err) => console.error("Failed to save basis inputs", err));
+    }, SAVE_DEBOUNCE_MS);
+
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [
+    projectId,
+    estimateFactor,
+    compositeLaborRate,
+    milestones,
+    queryClient,
+    queryOpts.queryKey,
+  ]);
 
   return (
     <main className="p-4 max-w-5xl space-y-8">
@@ -153,7 +222,7 @@ function BasisPage() {
         <h2 className="text-lg font-semibold text-slate-800 border-b border-slate-200 pb-2">
           Schedule Information / Milestones
         </h2>
-        <MilestoneTable />
+        <MilestoneTable rows={milestones} setRows={setMilestones} />
       </section>
     </main>
   );

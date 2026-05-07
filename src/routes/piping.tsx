@@ -64,33 +64,43 @@ function PipingPage() {
     [allowedIds],
   );
 
-  const filteredSupportLaborItems =
-    projectId === null
-      ? supportLaborItems
-      : supportLaborItems.filter((item) => allowedIdSet.has(item.id));
+  const filteredSupportLaborItems = React.useMemo(
+    () =>
+      projectId === null
+        ? supportLaborItems
+        : supportLaborItems.filter((item) => allowedIdSet.has(item.id)),
+    [projectId, supportLaborItems, allowedIdSet],
+  );
 
-  const cbsOptions: CbsOption[] = items.map(toCbsOption);
+  const cbsOptions: CbsOption[] = React.useMemo(
+    () => items.map(toCbsOption),
+    [items],
+  );
 
-  const supportLaborRows = filteredSupportLaborItems.map((item) => ({
-    id: item.displayCode,
-    name: item.name ?? "",
-    description: "",
-    shopField: "",
-    weldGroupDescription: "",
-    quantity: "",
-    size: "",
-    unit: item.uom,
-    metallurgyCode: "",
-    boreSize: "",
-    role: "",
-    schedule: "",
-    taskCode: "",
-    laborHours: "",
-    laborRate: "",
-    materialCost: "",
-    equipment: "",
-    notes: "",
-  }));
+  const supportLaborRows = React.useMemo(
+    () =>
+      filteredSupportLaborItems.map((item) => ({
+        id: item.displayCode,
+        name: item.name ?? "",
+        description: "",
+        shopField: "",
+        weldGroupDescription: "",
+        quantity: "",
+        size: "",
+        unit: item.uom,
+        metallurgyCode: "",
+        boreSize: "",
+        role: "",
+        schedule: "",
+        taskCode: "",
+        laborHours: "",
+        laborRate: "",
+        materialCost: "",
+        equipment: "",
+        notes: "",
+      })),
+    [filteredSupportLaborItems],
+  );
 
   return (
     <PipingDisciplinePage

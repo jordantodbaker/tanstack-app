@@ -6,6 +6,7 @@ import type { FefRow } from "~/lib/types";
 export type FefSectionKey = "TAKE_OFF" | "SUPPORT_LABOR" | "MATERIALS";
 
 type FefRowDb = {
+  id: number;
   cbsCode: string;
   name: string;
   description: string;
@@ -28,7 +29,7 @@ type FefRowDb = {
 };
 
 const toFefRow = (r: FefRowDb): FefRow => ({
-  id: r.cbsCode,
+  id: r.cbsCode === "" ? `__fe-blank-loaded-${r.id}` : r.cbsCode,
   name: r.name,
   description: r.description,
   shopField: r.shopField,
@@ -47,6 +48,25 @@ const toFefRow = (r: FefRowDb): FefRow => ({
   equipment: r.equipment,
   notes: r.notes,
 });
+
+const hasUserData = (r: FefRow): boolean =>
+  r.name !== "" ||
+  r.description !== "" ||
+  r.shopField !== "" ||
+  r.weldGroupDescription !== "" ||
+  r.quantity !== "" ||
+  r.size !== "" ||
+  r.unit !== "" ||
+  r.metallurgyCode !== "" ||
+  r.boreSize !== "" ||
+  r.role !== "" ||
+  r.schedule !== "" ||
+  r.taskCode !== "" ||
+  r.laborHours !== "" ||
+  r.laborRate !== "" ||
+  r.materialCost !== "" ||
+  r.equipment !== "" ||
+  r.notes !== "";
 
 export const fetchFefRows = createServerFn({ method: "GET" })
   .inputValidator(
@@ -100,13 +120,13 @@ export const saveFefRows = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { projectId, discipline, section, rows } = data;
     const persistable = rows
-      .filter((r) => !r.id.startsWith("__fe-blank-"))
+      .filter((r) => !r.id.startsWith("__fe-blank-") || hasUserData(r))
       .map((r, i) => ({
         projectId,
         discipline,
         section,
         position: i,
-        cbsCode: r.id,
+        cbsCode: r.id.startsWith("__fe-blank-") ? "" : r.id,
         name: r.name,
         description: r.description,
         shopField: r.shopField,
@@ -126,14 +146,24 @@ export const saveFefRows = createServerFn({ method: "POST" })
         notes: r.notes,
       }));
 
-    await prisma.$transaction([
-      prisma.fefRow.deleteMany({
+    if (persistable.length === 0) {
+      const current = await prisma.fefRow.findMany({
         where: { projectId, discipline, section },
-      }),
-      ...(persistable.length > 0
-        ? [prisma.fefRow.createMany({ data: persistable })]
-        : []),
-    ]);
+        orderBy: { position: "asc" },
+      });
+      return current.map(toFefRow);
+    }
 
-    return { saved: persistable.length };
+    const saved = await prisma.$transaction(async (tx) => {
+      await tx.fefRow.deleteMany({
+        where: { projectId, discipline, section },
+      });
+      await tx.fefRow.createMany({ data: persistable });
+      return tx.fefRow.findMany({
+        where: { projectId, discipline, section },
+        orderBy: { position: "asc" },
+      });
+    });
+
+    return saved.map(toFefRow);
   });

@@ -107,7 +107,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
                   Project Controls Platform
                 </p>
               </div>
-              <SignIn />
+              <SignIn forceRedirectUrl="/setup" />
             </div>
           </Show>
           <Show when="signed-in">

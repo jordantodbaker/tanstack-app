@@ -61,7 +61,7 @@ export function useTakeOffSync(
 ) {
   return () => {
     const qualifiedRows = source.data.filter(
-      (r) => Number(r.quantity) > 0 && !r.id.startsWith("__fe-blank-"),
+      (r) => Number(r.quantity) > 0,
     );
 
     type Agg = { baseRow: FefRow; qty: number; hours: number; cost: number };
@@ -516,6 +516,7 @@ export function FefTableContent({
       taskCodeOptions: meta?.taskCodeOptions ?? [],
       pipingFactorLookup: meta?.pipingFactorLookup,
       updateData: (rowIndex: number, columnId: string, value: string) => {
+        console.log("[fef-debug] updateData", { rowIndex, columnId, value });
         setData((old) =>
           old.map((row, index) =>
             index === rowIndex ? { ...row, [columnId]: value } : row,
@@ -523,6 +524,7 @@ export function FefTableContent({
         );
       },
       updateRow: (rowIndex: number, updates: Record<string, string>) => {
+        console.log("[fef-debug] updateRow", { rowIndex, updates });
         setData((old) =>
           old.map((row, index) =>
             index === rowIndex ? { ...row, ...updates } : row,

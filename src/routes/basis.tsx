@@ -167,7 +167,7 @@ function BasisPage() {
     saveTimerRef.current = setTimeout(() => {
       saveBasisInputs({ data: { projectId, payload } })
         .then(() => {
-          queryClient.setQueryData(queryOpts.queryKey, payload);
+          queryClient.setQueryData(["basisInputs", projectId], payload);
         })
         .catch((err) => console.error("Failed to save basis inputs", err));
     }, SAVE_DEBOUNCE_MS);
@@ -181,7 +181,6 @@ function BasisPage() {
     compositeLaborRate,
     milestones,
     queryClient,
-    queryOpts.queryKey,
   ]);
 
   return (

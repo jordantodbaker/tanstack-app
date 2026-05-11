@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import {
   Accordion,
   AccordionItem,
@@ -6,11 +7,32 @@ import {
   AccordionContent,
 } from "~/components/ui/accordion";
 import { DISCIPLINE_LABELS } from "~/config/disciplines";
-import { useMaterialsTotalsByFirstDigit } from "~/lib/materialsStore";
-import { useLaborTotals } from "~/lib/laborTotalsStore";
 import { formatMoney } from "~/lib/formatting";
+import { useSelectedProject } from "~/lib/selected-project";
+import { projectFefRowTotalsQueryOptions } from "~/utils/projectTotals";
+import { getProjectIdFromCookie } from "~/utils/projectCookie";
+
+const PROJECT_STORAGE_KEY = "selectedProjectId";
+
+async function readProjectIdForLoader(): Promise<number | null> {
+  if (typeof window === "undefined") {
+    return await getProjectIdFromCookie();
+  }
+  const raw = window.localStorage.getItem(PROJECT_STORAGE_KEY);
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
 
 export const Route = createFileRoute("/summary")({
+  loader: async ({ context }) => {
+    const projectId = await readProjectIdForLoader();
+    if (projectId !== null) {
+      await context.queryClient.ensureQueryData(
+        projectFefRowTotalsQueryOptions(projectId),
+      );
+    }
+  },
   component: SummaryPage,
 });
 
@@ -154,12 +176,15 @@ function SummaryTable({ rows }: { rows: SummaryRow[] }) {
 }
 
 function SummaryPage() {
-  const materialsByDigit = useMaterialsTotalsByFirstDigit();
-  const laborTotals = useLaborTotals();
+  const { projectId } = useSelectedProject();
+  const { data: dbTotals } = useQuery(
+    projectFefRowTotalsQueryOptions(projectId),
+  );
 
   const disciplineRows: SummaryRow[] = DISCIPLINE_LABELS.map((label, i) => {
-    const materialTotal = materialsByDigit.get(String(i)) ?? 0;
-    const laborTotal = laborTotals.get(String(i)) ?? 0;
+    const digit = String(i);
+    const materialTotal = dbTotals?.materialsByDigit[digit] ?? 0;
+    const laborTotal = dbTotals?.laborByDigit[digit] ?? 0;
     return {
       description: label,
       ...emptyRow(),
@@ -168,7 +193,7 @@ function SummaryPage() {
     };
   });
 
-  const craftSupportTotal = laborTotals.get("craftSupportLabor") ?? 0;
+  const craftSupportTotal = dbTotals?.craftSupportLabor ?? 0;
   const indirectRows: SummaryRow[] = makeRows(INDIRECTS).map((row) => {
     if (row.description === "Craft Support Labor" && craftSupportTotal > 0) {
       return { ...row, totalLabor: formatMoney(craftSupportTotal) };

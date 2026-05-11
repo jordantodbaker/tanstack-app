@@ -75,6 +75,7 @@ function MaterialsPage() {
           materialCost: "",
           equipment: "",
           notes: "",
+          sub: "",
         })),
       };
     });

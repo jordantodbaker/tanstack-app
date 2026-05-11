@@ -19,6 +19,7 @@ export const fetchCbsItemsByL1 = createServerFn({ method: "GET" })
         uom: true,
         displayDescription: true,
         l1: true,
+        subReporting: true,
       },
     });
   });
@@ -107,6 +108,7 @@ export const fetchCbsItemsByL1Filtered = createServerFn({ method: "GET" })
         name: true,
         uom: true,
         displayDescription: true,
+        subReporting: true,
       },
     });
   });

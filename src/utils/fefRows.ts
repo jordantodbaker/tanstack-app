@@ -25,6 +25,7 @@ type FefRowDb = {
   materialCost: string;
   equipment: string;
   notes: string;
+  sub: string;
   position: number;
 };
 
@@ -47,6 +48,7 @@ const toFefRow = (r: FefRowDb): FefRow => ({
   materialCost: r.materialCost,
   equipment: r.equipment,
   notes: r.notes,
+  sub: r.sub,
 });
 
 const hasUserData = (r: FefRow): boolean =>
@@ -66,7 +68,8 @@ const hasUserData = (r: FefRow): boolean =>
   r.laborRate !== "" ||
   r.materialCost !== "" ||
   r.equipment !== "" ||
-  r.notes !== "";
+  r.notes !== "" ||
+  r.sub !== "";
 
 export const fetchFefRows = createServerFn({ method: "GET" })
   .inputValidator(
@@ -144,6 +147,7 @@ export const saveFefRows = createServerFn({ method: "POST" })
         materialCost: r.materialCost,
         equipment: r.equipment,
         notes: r.notes,
+        sub: r.sub,
       }));
 
     if (persistable.length === 0) {

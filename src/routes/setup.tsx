@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Settings } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2, Settings } from "lucide-react";
 import {
   fetchSetupCbsItems,
   allowedFefCbsItemIdsQueryOptions,
@@ -9,8 +9,8 @@ import {
 } from "~/utils/setup";
 import {
   buildCbsTree,
+  filterCbsTree,
   getNodeSelectionState,
-  nodeMatchesSearch,
   type CbsTreeNode,
 } from "~/lib/cbs-tree";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -102,6 +102,8 @@ function CbsTreeEditor({
     () => new Set(),
   );
   const [search, setSearch] = React.useState("");
+  const deferredSearch = React.useDeferredValue(search);
+  const isFiltering = search !== deferredSearch;
 
   const queryClient = useQueryClient();
   const mutation = useMutation({
@@ -119,22 +121,15 @@ function CbsTreeEditor({
         queryKey: ["allowedCbsL1Codes", projectId],
       });
     },
+    onError: (err, vars) => {
+      console.error("[setup] updateAllowedFefCbsItems failed", { err, vars });
+    },
   });
 
-  const filteredTree = React.useMemo(() => {
-    if (!search.trim()) return tree;
-    const q = search.trim();
-    function filter(nodes: CbsTreeNode[]): CbsTreeNode[] {
-      const out: CbsTreeNode[] = [];
-      for (const n of nodes) {
-        if (nodeMatchesSearch(n, q)) {
-          out.push({ ...n, children: filter(n.children) });
-        }
-      }
-      return out;
-    }
-    return filter(tree);
-  }, [tree, search]);
+  const filteredTree = React.useMemo(
+    () => filterCbsTree(tree, deferredSearch.trim().toLowerCase()),
+    [tree, deferredSearch],
+  );
 
   const allPathKeys = React.useMemo(() => {
     const keys: string[] = [];
@@ -150,55 +145,48 @@ function CbsTreeEditor({
     return keys;
   }, [tree]);
 
-  // When searching, auto-expand all matched paths so results are visible.
-  const effectiveExpanded = React.useMemo(() => {
-    if (!search.trim()) return expanded;
-    const out = new Set(expanded);
-    function walk(nodes: CbsTreeNode[]) {
-      for (const n of nodes) {
-        if (n.children.length > 0) {
-          out.add(n.pathKey);
-          walk(n.children);
-        }
-      }
-    }
-    walk(filteredTree);
-    return out;
-  }, [search, expanded, filteredTree]);
-
+  const isSearching = deferredSearch.trim().length > 0;
   const totalSelected = selectedIds.size;
 
-  function toggleExpand(pathKey: string) {
+  const toggleExpand = React.useCallback((pathKey: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(pathKey)) next.delete(pathKey);
       else next.add(pathKey);
       return next;
     });
-  }
+  }, []);
 
-  function toggleNode(node: CbsTreeNode) {
-    const state = getNodeSelectionState(node, selectedIds);
-    const ids = node.descendantItemIds;
-    if (state === "checked") {
-      const removeIds = ids.filter((id) => selectedIds.has(id));
+  // Compute the delta inside the setSelectedIds updater so we always read
+  // the latest *queued* selection, not a render-stale ref. With a ref,
+  // rapid back-to-back clicks would diff against the previous render's
+  // selection and send mutations that don't match the UI.
+  const { mutate } = mutation;
+  const toggleNode = React.useCallback(
+    (node: CbsTreeNode) => {
+      let addIds: number[] = [];
+      let removeIds: number[] = [];
       setSelectedIds((prev) => {
-        const next = new Set(prev);
-        for (const id of removeIds) next.delete(id);
-        return next;
-      });
-      if (removeIds.length > 0)
-        mutation.mutate({ addIds: [], removeIds });
-    } else {
-      const addIds = ids.filter((id) => !selectedIds.has(id));
-      setSelectedIds((prev) => {
+        const state = getNodeSelectionState(node, prev);
+        const ids = node.descendantItemIds;
+        if (state === "checked") {
+          removeIds = ids.filter((id) => prev.has(id));
+          if (removeIds.length === 0) return prev;
+          const next = new Set(prev);
+          for (const id of removeIds) next.delete(id);
+          return next;
+        }
+        addIds = ids.filter((id) => !prev.has(id));
+        if (addIds.length === 0) return prev;
         const next = new Set(prev);
         for (const id of addIds) next.add(id);
         return next;
       });
-      if (addIds.length > 0) mutation.mutate({ addIds, removeIds: [] });
-    }
-  }
+      if (addIds.length === 0 && removeIds.length === 0) return;
+      mutate({ addIds, removeIds });
+    },
+    [mutate],
+  );
 
   return (
     <div className="space-y-3">
@@ -234,7 +222,15 @@ function CbsTreeEditor({
         </span>
       </div>
 
-      <div className="border border-slate-200 rounded-md bg-white">
+      <div className="relative border border-slate-200 rounded-md bg-white">
+        {isFiltering && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 backdrop-blur-sm rounded-md">
+            <div className="flex flex-col items-center gap-3 text-slate-500">
+              <Loader2 className="size-6 animate-spin" />
+              <span className="text-sm">Filtering…</span>
+            </div>
+          </div>
+        )}
         {filteredTree.length === 0 ? (
           <div className="p-4 text-sm text-slate-500">No matches.</div>
         ) : (
@@ -245,7 +241,8 @@ function CbsTreeEditor({
                 node={node}
                 depth={0}
                 selectedIds={selectedIds}
-                expanded={effectiveExpanded}
+                expanded={expanded}
+                isSearching={isSearching}
                 onToggleExpand={toggleExpand}
                 onToggleSelect={toggleNode}
               />
@@ -257,23 +254,30 @@ function CbsTreeEditor({
   );
 }
 
-function TreeRow({
-  node,
-  depth,
-  selectedIds,
-  expanded,
-  onToggleExpand,
-  onToggleSelect,
-}: {
+type TreeRowProps = {
   node: CbsTreeNode;
   depth: number;
   selectedIds: Set<number>;
   expanded: Set<string>;
+  /** When true, every node with children is treated as open without
+   *  needing to live in `expanded`. */
+  isSearching: boolean;
   onToggleExpand: (pathKey: string) => void;
   onToggleSelect: (node: CbsTreeNode) => void;
-}) {
+};
+
+const TreeRow = React.memo(function TreeRow({
+  node,
+  depth,
+  selectedIds,
+  expanded,
+  isSearching,
+  onToggleExpand,
+  onToggleSelect,
+}: TreeRowProps) {
   const hasChildren = node.children.length > 0;
-  const isOpen = expanded.has(node.pathKey);
+  const isOpen =
+    (isSearching && hasChildren) || expanded.has(node.pathKey);
   const state = getNodeSelectionState(node, selectedIds);
   const item = node.item;
   const label = item?.name || item?.accountDescription || node.segment;
@@ -324,6 +328,7 @@ function TreeRow({
               depth={depth + 1}
               selectedIds={selectedIds}
               expanded={expanded}
+              isSearching={isSearching}
               onToggleExpand={onToggleExpand}
               onToggleSelect={onToggleSelect}
             />
@@ -332,4 +337,4 @@ function TreeRow({
       )}
     </li>
   );
-}
+});

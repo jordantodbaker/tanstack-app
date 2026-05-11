@@ -161,6 +161,7 @@ function PipingPage() {
         materialCost: "",
         equipment: "",
         notes: "",
+        sub: "",
       })),
     [filteredSupportLaborItems],
   );
@@ -177,7 +178,6 @@ function PipingPage() {
       roleRates={roleData?.roleRates ?? []}
       taskCodeOptions={pipingFactorData?.taskCodeOptions ?? []}
       pipingFactors={pipingFactorData?.pipingFactors ?? []}
-      laborKey={PIPING_L1[0]?.[0]}
     />
   );
 }

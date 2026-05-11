@@ -3,6 +3,10 @@ import { useReactTable } from "@tanstack/react-table";
 import type { CbsOption, FefRow } from "~/lib/types";
 import { editableCellClass, readOnlyCellClass } from "~/lib/table-utils";
 import { computeBoreSize } from "~/lib/utils";
+import {
+  SearchableSelect,
+  type SearchableSelectOption,
+} from "~/components/SearchableSelect";
 
 function lookupCbsItem(
   metallurgyCode: string,
@@ -83,12 +87,16 @@ export function WeldGroupSelectCell({
   const { weldGroupOptions = [], weldGroupMaterialMap = {} } =
     table.options.meta ?? {};
 
+  const options: SearchableSelectOption[] = React.useMemo(
+    () => weldGroupOptions.map((opt) => ({ value: opt, label: opt })),
+    [weldGroupOptions],
+  );
+
   return (
-    <select
-      className={editableCellClass}
+    <SearchableSelect
       value={value}
-      onChange={(e) => {
-        const classification = e.target.value;
+      options={options}
+      onSelect={(classification) => {
         const rowData = table.getRowModel().rows[row.index].original;
         const entry = classification
           ? weldGroupMaterialMap[classification]
@@ -116,14 +124,45 @@ export function WeldGroupSelectCell({
             : {}),
         });
       }}
-    >
-      <option value="">-- Select --</option>
-      {weldGroupOptions.map((opt) => (
-        <option key={opt} value={opt}>
-          {opt}
-        </option>
-      ))}
-    </select>
+    />
+  );
+}
+
+export function SubCheckboxCell({
+  row,
+  table,
+}: {
+  row: { index: number; original: FefRow };
+  getValue: () => unknown;
+  column: { id: string };
+  table: ReturnType<typeof useReactTable<FefRow>>;
+}) {
+  const cbsOptions = table.options.meta?.cbsOptions ?? [];
+  const match = cbsOptions.find((o) => o.displayCode === row.original.id);
+  const enabled = !!match && match.subReporting === true;
+  const checked = row.original.sub === "true";
+
+  return (
+    <div className="flex items-center justify-center">
+      <input
+        type="checkbox"
+        aria-label="Sub reporting"
+        checked={checked}
+        disabled={!enabled}
+        onChange={(e) => {
+          table.options.meta?.updateData?.(
+            row.index,
+            "sub",
+            e.target.checked ? "true" : "",
+          );
+        }}
+        className={
+          enabled
+            ? "h-4 w-4 cursor-pointer accent-[#a63434]"
+            : "h-4 w-4 cursor-not-allowed accent-slate-400 opacity-50"
+        }
+      />
+    </div>
   );
 }
 
@@ -255,12 +294,22 @@ export function TaskCodeSelectCell({
 }) {
   const value = getValue() as string;
   const { taskCodeOptions = [], pipingFactorLookup } = table.options.meta ?? {};
+
+  const options: SearchableSelectOption[] = React.useMemo(
+    () =>
+      taskCodeOptions.map((opt) => ({
+        value: opt.code,
+        label: `${opt.taskDefinition} - ${opt.code}`,
+        searchText: `${opt.taskDefinition} ${opt.code}`.toLowerCase(),
+      })),
+    [taskCodeOptions],
+  );
+
   return (
-    <select
-      className={editableCellClass}
+    <SearchableSelect
       value={value}
-      onChange={(e) => {
-        const newCode = e.target.value;
+      options={options}
+      onSelect={(newCode) => {
         const unit = newCode
           ? (pipingFactorLookup?.get(newCode)?.unit ?? "")
           : "";
@@ -269,14 +318,7 @@ export function TaskCodeSelectCell({
           unit,
         });
       }}
-    >
-      <option value="">-- Select --</option>
-      {taskCodeOptions.map((opt) => (
-        <option key={opt.code} value={opt.code}>
-          {opt.taskDefinition} - {opt.code}
-        </option>
-      ))}
-    </select>
+    />
   );
 }
 

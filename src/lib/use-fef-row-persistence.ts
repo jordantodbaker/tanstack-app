@@ -43,6 +43,7 @@ export function useFefRowPersistence({
   const currentKey = `${projectId}|${discipline}|${section}`;
 
   const [appliedKey, setAppliedKey] = React.useState<string | null>(null);
+  const [isPending, startTransition] = React.useTransition();
 
   React.useEffect(() => {
     if (!isProjectHydrated) return;
@@ -58,16 +59,24 @@ export function useFefRowPersistence({
 
     if (loadedRows.length > 0) {
       skipNextSaveRef.current = true;
-      setData(loadedRows);
       hydratedKeyRef.current = currentKey;
+      startTransition(() => {
+        setData(loadedRows);
+        setAppliedKey(currentKey);
+      });
+      return;
     } else if (fallbackRows && fallbackRows.length > 0) {
       skipNextSaveRef.current = true;
-      setData(fallbackRows);
       hydratedKeyRef.current = currentKey;
+      startTransition(() => {
+        setData(fallbackRows);
+        setAppliedKey(currentKey);
+      });
+      return;
     }
-    // Mark "checked" so the mask hides and saves can fire, but leave
-    // hydratedKeyRef unset when nothing was applied so that a later-arriving
-    // fallbackRows (e.g. deferred query) can still hydrate.
+    // Nothing to apply. Mark "checked" so the mask hides and saves can fire,
+    // but leave hydratedKeyRef unset so a later-arriving fallbackRows (e.g.
+    // deferred query) can still hydrate.
     setAppliedKey(currentKey);
   }, [
     isProjectHydrated,
@@ -97,6 +106,9 @@ export function useFefRowPersistence({
             ["fefRows", projectId, discipline, section],
             saved,
           );
+          queryClient.invalidateQueries({
+            queryKey: ["projectFefRowTotals", projectId],
+          });
         })
         .catch((err) => {
           console.error("[fef-persist] save failed", currentKey, err);
@@ -107,5 +119,5 @@ export function useFefRowPersistence({
     // Browser refresh will still drop pending saves — that's a separate concern.
   }, [projectId, discipline, section, currentKey, data, queryClient, appliedKey]);
 
-  return { isLoading: appliedKey !== currentKey };
+  return { isLoading: isPending || appliedKey !== currentKey };
 }

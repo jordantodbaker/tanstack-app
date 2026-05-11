@@ -1,12 +1,5 @@
 import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
 import React from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import {
-  Accordion,
-  AccordionItem,
-  AccordionTrigger,
-  AccordionContent,
-} from "~/components/ui/accordion";
 import type { FefRow, CbsOption } from "~/lib/types";
 import {
   EditableCell,
@@ -15,34 +8,42 @@ import {
   CbsUomCell,
   ReadOnlyCell,
   TakeOffIdReadOnlyCell,
-  useTakeOffSync,
-  TAKE_OFF_INITIAL_ROWS,
-  FIELD_ESTIMATE_INITIAL_ROWS,
-  readOnlyCellClass,
+  DeleteRowCell,
   useFefTableState,
   FefTableContent,
+  readOnlyCellClass,
   type FefTableMeta,
 } from "~/lib/table-utils";
 import {
   RoleSelectCell,
   ScheduleSelectCell,
+  SubCheckboxCell,
   TotalCostCell,
 } from "~/components/Piping/cells";
 import { supportLaborColumns } from "~/components/Piping/columns";
-import { setMaterialsSectionTotal } from "~/lib/materialsStore";
-import { setLaborTotal } from "~/lib/laborTotalsStore";
-import { sumLaborCost, sumMaterialCost, tabTriggerClass } from "~/lib/fef-helpers";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useFefRowPersistence } from "~/lib/use-fef-row-persistence";
+import { DisciplineTabs } from "~/components/DisciplineTabs";
 
 const columnHelper = createColumnHelper<FefRow>();
 
-function MaterialsTotalCostCell({ row }: { row: { original: FefRow }; getValue: () => unknown }) {
+function MaterialsTotalCostCell({
+  row,
+}: {
+  row: { original: FefRow };
+  getValue: () => unknown;
+}) {
   const qty = parseFloat(row.original.quantity);
   const cost = parseFloat(row.original.materialCost);
   const total =
-    !isNaN(qty) && !isNaN(cost) && row.original.quantity !== "" && row.original.materialCost !== ""
-      ? (qty * cost).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    !isNaN(qty) &&
+    !isNaN(cost) &&
+    row.original.quantity !== "" &&
+    row.original.materialCost !== ""
+      ? (qty * cost).toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })
       : "";
   return <span className={readOnlyCellClass}>{total ? `$${total}` : ""}</span>;
 }
@@ -53,10 +54,16 @@ const fieldEstimateColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("role", { header: "Role", cell: ReadOnlyCell, size: 180 }),
   columnHelper.accessor("schedule", { header: "Schedule", cell: ReadOnlyCell, size: 150 }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: ReadOnlyCell }),
+  columnHelper.accessor("sub", { header: "Sub", cell: SubCheckboxCell, size: 60 }),
   columnHelper.accessor("unit", { header: "Unit", cell: CbsUomCell }),
   columnHelper.accessor("laborHours", { header: "Labor Hours", cell: ReadOnlyCell }),
   columnHelper.accessor("laborRate", { header: "Labor Rate ($)", cell: ReadOnlyCell }),
-  columnHelper.display({ id: "totalCost", header: "Total Cost ($)", cell: TotalCostCell, size: 130 }),
+  columnHelper.display({
+    id: "totalCost",
+    header: "Total Cost ($)",
+    cell: TotalCostCell,
+    size: 130,
+  }),
   columnHelper.accessor("notes", { header: "Notes", cell: ReadOnlyCell }),
 ];
 
@@ -67,11 +74,23 @@ const takeOffColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("role", { header: "Role", cell: RoleSelectCell, size: 180 }),
   columnHelper.accessor("schedule", { header: "Schedule", cell: ScheduleSelectCell, size: 150 }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: EditableCell }),
+  columnHelper.accessor("sub", { header: "Sub", cell: SubCheckboxCell, size: 60 }),
   columnHelper.accessor("unit", { header: "Unit", cell: ReadOnlyCell }),
   columnHelper.accessor("laborHours", { header: "Labor Hours", cell: EditableCell }),
   columnHelper.accessor("laborRate", { header: "Labor Rate ($)", cell: ReadOnlyCell }),
-  columnHelper.display({ id: "totalCost", header: "Total Cost ($)", cell: TotalCostCell, size: 130 }),
+  columnHelper.display({
+    id: "totalCost",
+    header: "Total Cost ($)",
+    cell: TotalCostCell,
+    size: 130,
+  }),
   columnHelper.accessor("notes", { header: "Notes", cell: EditableCell }),
+  columnHelper.display({
+    id: "delete",
+    header: "",
+    cell: DeleteRowCell,
+    size: 40,
+  }),
 ];
 
 const materialsColumns: ColumnDef<FefRow, string>[] = [
@@ -79,9 +98,22 @@ const materialsColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("name", { header: "Name", cell: ReadOnlyCell, size: 300 }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: EditableCell }),
   columnHelper.accessor("unit", { header: "Unit", cell: ReadOnlyCell }),
-  columnHelper.accessor("materialCost", { header: "Material Cost ($)", cell: EditableCell }),
-  columnHelper.display({ id: "totalCost", header: "Total Cost ($)", cell: MaterialsTotalCostCell }),
+  columnHelper.accessor("materialCost", {
+    header: "Material Cost ($)",
+    cell: EditableCell,
+  }),
+  columnHelper.display({
+    id: "totalCost",
+    header: "Total Cost ($)",
+    cell: MaterialsTotalCostCell,
+  }),
   columnHelper.accessor("notes", { header: "Notes", cell: EditableCell }),
+  columnHelper.display({
+    id: "delete",
+    header: "",
+    cell: DeleteRowCell,
+    size: 40,
+  }),
 ];
 
 export function FefTable({ title }: { title: string }) {
@@ -97,12 +129,11 @@ export function FefTable({ title }: { title: string }) {
 export function DisciplinePage({
   title,
   disciplineId,
-  icon: Icon,
+  icon,
   initialRows,
   cbsOptions,
   variant,
   sectionKey,
-  laborKey,
   supportLaborInitialRows,
   roleOptions,
   scheduleOptions,
@@ -115,133 +146,74 @@ export function DisciplinePage({
   cbsOptions?: CbsOption[];
   variant?: "materials";
   sectionKey?: string;
-  laborKey?: string;
   supportLaborInitialRows?: FefRow[];
   roleOptions?: string[];
   scheduleOptions?: string[];
   roleRates?: { roleName: string; schedule: string; rate: number }[];
 }) {
-  const { projectId } = useSelectedProject();
-  const takeOffState = useFefTableState({
-    initialRows: variant === "materials" ? initialRows : TAKE_OFF_INITIAL_ROWS,
-    sectionKey: variant === "materials" ? sectionKey : undefined,
-  });
-  const fieldEstimateState = useFefTableState({
-    initialRows: FIELD_ESTIMATE_INITIAL_ROWS,
-  });
-  const supportLaborState = useFefTableState({
-    initialRows: supportLaborInitialRows,
-  });
-
-  const syncToFieldEstimate = useTakeOffSync(takeOffState, fieldEstimateState);
-
-  const persistEnabled = variant !== "materials" && !!disciplineId;
-  useFefRowPersistence({
-    projectId: persistEnabled ? projectId : null,
-    discipline: disciplineId ?? "",
-    section: "TAKE_OFF",
-    state: takeOffState,
-  });
-  useFefRowPersistence({
-    projectId: persistEnabled ? projectId : null,
-    discipline: disciplineId ?? "",
-    section: "SUPPORT_LABOR",
-    state: supportLaborState,
-    fallbackRows: supportLaborInitialRows,
-  });
-  useFefRowPersistence({
-    projectId: variant === "materials" && sectionKey ? projectId : null,
-    discipline: sectionKey ?? "",
-    section: "MATERIALS",
-    state: takeOffState,
-    fallbackRows: variant === "materials" ? initialRows : undefined,
-  });
-
-  React.useEffect(() => {
-    if (!laborKey) return;
-    setLaborTotal(laborKey, sumLaborCost(fieldEstimateState.data));
-  }, [laborKey, fieldEstimateState.data]);
-
-  React.useEffect(() => {
-    setLaborTotal("craftSupportLabor", sumLaborCost(supportLaborState.data));
-  }, [supportLaborState.data]);
-
-  React.useEffect(() => {
-    if (variant !== "materials" || !sectionKey) return;
-    setMaterialsSectionTotal(sectionKey, sumMaterialCost(takeOffState.data));
-  }, [variant, sectionKey, takeOffState.data]);
-
-  const baseMeta: FefTableMeta = { cbsOptions };
-  const laborMeta: FefTableMeta = { ...baseMeta, roleOptions, scheduleOptions, roleRates };
-  const supportMeta: FefTableMeta = { roleOptions, scheduleOptions, roleRates };
-
   if (variant === "materials") {
     return (
-      <FefTableContent
-        state={takeOffState}
-        meta={baseMeta}
-        columns={materialsColumns}
+      <MaterialsSection
+        initialRows={initialRows}
+        cbsOptions={cbsOptions}
+        sectionKey={sectionKey}
       />
     );
   }
 
-  const tabs = (
-    <Tabs
-      defaultValue="takeoff"
-      className="w-full"
-      onValueChange={(v) => { if (v === "estimate") syncToFieldEstimate(); }}
-    >
-      <TabsList className="w-full justify-start rounded-none border-b border-slate-200 bg-transparent p-0 pb-2 h-auto gap-2">
-        <TabsTrigger value="takeoff" className={tabTriggerClass}>
-          Take Off
-        </TabsTrigger>
-        <TabsTrigger value="estimate" className={tabTriggerClass}>
-          Field Estimate
-        </TabsTrigger>
-      </TabsList>
-      <TabsContent value="takeoff" className="mt-4">
-        <FefTableContent
-          state={takeOffState}
-          meta={laborMeta}
-          columns={takeOffColumns}
-        />
-      </TabsContent>
-      <TabsContent value="estimate" className="mt-4">
-        <Accordion type="multiple" defaultValue={["support", "craft"]}>
-          <AccordionItem value="support">
-            <AccordionTrigger>Support Labor</AccordionTrigger>
-            <AccordionContent>
-              <FefTableContent
-                state={supportLaborState}
-                meta={supportMeta}
-                columns={supportLaborColumns}
-              />
-            </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="craft">
-            <AccordionTrigger>Craft Labor</AccordionTrigger>
-            <AccordionContent>
-              <FefTableContent
-                state={fieldEstimateState}
-                meta={laborMeta}
-                columns={fieldEstimateColumns}
-              />
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-      </TabsContent>
-    </Tabs>
-  );
-
-  if (!title) return tabs;
+  const baseMeta: FefTableMeta = { cbsOptions };
+  const laborMeta: FefTableMeta = {
+    ...baseMeta,
+    roleOptions,
+    scheduleOptions,
+    roleRates,
+  };
+  const supportMeta: FefTableMeta = { roleOptions, scheduleOptions, roleRates };
 
   return (
-    <main className="p-3 md:p-4">
-      <h1 className="text-xl md:text-2xl font-bold mb-3 md:mb-4 flex items-center gap-2">
-        {Icon && <Icon className="size-6 md:size-7" />}
-        {title}
-      </h1>
-      {tabs}
-    </main>
+    <DisciplineTabs
+      title={title}
+      icon={icon}
+      discipline={disciplineId ?? ""}
+      takeOffColumns={takeOffColumns}
+      craftColumns={fieldEstimateColumns}
+      supportLaborColumns={supportLaborColumns}
+      takeOffMeta={laborMeta}
+      craftMeta={laborMeta}
+      supportLaborMeta={supportMeta}
+      supportLaborInitialRows={supportLaborInitialRows}
+    />
+  );
+}
+
+function MaterialsSection({
+  initialRows,
+  cbsOptions,
+  sectionKey,
+}: {
+  initialRows?: FefRow[];
+  cbsOptions?: CbsOption[];
+  sectionKey?: string;
+}) {
+  const { projectId } = useSelectedProject();
+  const takeOffState = useFefTableState({
+    initialRows,
+    sectionKey,
+  });
+
+  useFefRowPersistence({
+    projectId: sectionKey ? projectId : null,
+    discipline: sectionKey ?? "",
+    section: "MATERIALS",
+    state: takeOffState,
+    fallbackRows: initialRows,
+  });
+
+  return (
+    <FefTableContent
+      state={takeOffState}
+      meta={{ cbsOptions }}
+      columns={materialsColumns}
+    />
   );
 }

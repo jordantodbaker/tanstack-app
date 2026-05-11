@@ -20,6 +20,10 @@ export type CbsTreeNode = {
   item: CbsTreeItem | null;
   children: CbsTreeNode[];
   descendantItemIds: number[];
+  /** Pre-lowercased searchable text for this node (own item only). */
+  searchHaystack: string;
+  /** Pre-lowercased searchable text covering this node and all descendants. */
+  subtreeHaystack: string;
 };
 
 const LEVEL_DEFAULT = "00";
@@ -101,6 +105,11 @@ export function buildCbsTree(items: CbsTreeItem[]): CbsTreeNode[] {
     const descendantItemIds: number[] = [];
     if (node.item) descendantItemIds.push(node.item.id);
     for (const c of children) descendantItemIds.push(...c.descendantItemIds);
+    const own = node.item
+      ? `${node.item.displayCode} ${node.item.name} ${node.item.accountDescription}`.toLowerCase()
+      : "";
+    let subtree = own;
+    for (const c of children) subtree += "\n" + c.subtreeHaystack;
     return {
       pathKey: node.pathKey,
       depth: node.depth,
@@ -108,6 +117,8 @@ export function buildCbsTree(items: CbsTreeItem[]): CbsTreeNode[] {
       item: node.item,
       children,
       descendantItemIds,
+      searchHaystack: own,
+      subtreeHaystack: subtree,
     };
   }
 
@@ -131,17 +142,38 @@ export function getNodeSelectionState(
   return "indeterminate";
 }
 
+/**
+ * Returns true if this node or any of its descendants matches `lowerQuery`.
+ * `lowerQuery` must already be lowercased; pass "" to match everything.
+ */
 export function nodeMatchesSearch(
   node: CbsTreeNode,
-  query: string,
+  lowerQuery: string,
 ): boolean {
-  if (!query) return true;
-  const q = query.toLowerCase();
-  const item = node.item;
-  if (item) {
-    if (item.displayCode.toLowerCase().includes(q)) return true;
-    if (item.name.toLowerCase().includes(q)) return true;
-    if (item.accountDescription.toLowerCase().includes(q)) return true;
+  if (!lowerQuery) return true;
+  return node.subtreeHaystack.includes(lowerQuery);
+}
+
+/**
+ * Single-pass filter that prunes nodes whose subtrees don't contain
+ * `lowerQuery`. Returns the original `nodes` array when the query is empty so
+ * callers can fast-path on reference identity.
+ */
+export function filterCbsTree(
+  nodes: CbsTreeNode[],
+  lowerQuery: string,
+): CbsTreeNode[] {
+  if (!lowerQuery) return nodes;
+  const out: CbsTreeNode[] = [];
+  for (const n of nodes) {
+    if (!n.subtreeHaystack.includes(lowerQuery)) continue;
+    if (n.searchHaystack.includes(lowerQuery)) {
+      // Self matches — keep entire subtree intact.
+      out.push(n);
+    } else {
+      // Only descendants match — recurse.
+      out.push({ ...n, children: filterCbsTree(n.children, lowerQuery) });
+    }
   }
-  return node.children.some((c) => nodeMatchesSearch(c, q));
+  return out;
 }

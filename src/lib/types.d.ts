@@ -41,6 +41,8 @@ export type FefRow = {
   materialCost: string;
   equipment: string;
   notes: string;
+  /** "true" when the user has ticked the Sub checkbox, otherwise "". */
+  sub: string;
 };
 
 export type CbsOption = {
@@ -49,5 +51,7 @@ export type CbsOption = {
   name: string;
   uom: string;
   displayDescription: string | null;
+  /** Whether this CBS item is flagged for sub-reporting on the source list. */
+  subReporting?: boolean | null;
 };
 

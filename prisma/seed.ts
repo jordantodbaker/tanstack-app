@@ -281,6 +281,12 @@ function loadCbsItems() {
     .map((line) => {
       const cols = parseCSVLine(line);
       const or = (v: string) => v.trim() || null;
+      const toBool = (v: string): boolean | null => {
+        const t = v.trim().toUpperCase();
+        if (t === "YES") return true;
+        if (t === "NO") return false;
+        return null;
+      };
       return {
         l1: cols[0]?.trim() ?? "",
         l2: cols[1]?.trim() ?? "",
@@ -291,19 +297,19 @@ function loadCbsItems() {
         name: cols[6]?.trim() ?? "",
         displayCode: cols[7]?.trim() ?? "",
         uom: cols[8]?.trim() ?? "",
-        accountDescription: cols[9]?.trim() ?? "",
-        l2Description: or(cols[10] ?? ""),
-        core: or(cols[11] ?? ""),
-        coreExtension: or(cols[12] ?? ""),
-        wbs: or(cols[13] ?? ""),
-        p6CostAccount: or(cols[14] ?? ""),
-        gl: or(cols[15] ?? ""),
-        costTypePC: or(cols[16] ?? ""),
-        costTypeSpectrum: or(cols[17] ?? ""),
-        costCategory: or(cols[18] ?? ""),
-        discipline: or(cols[19] ?? ""),
-        subReporting: or(cols[20] ?? ""),
-        costCode: or(cols[21] ?? ""),
+        subReporting: toBool(cols[9] ?? ""),
+        accountDescription: cols[10]?.trim() ?? "",
+        l2Description: or(cols[11] ?? ""),
+        core: or(cols[12] ?? ""),
+        coreExtension: or(cols[13] ?? ""),
+        wbs: or(cols[14] ?? ""),
+        p6CostAccount: or(cols[15] ?? ""),
+        gl: or(cols[16] ?? ""),
+        costTypePC: or(cols[17] ?? ""),
+        costTypeSpectrum: or(cols[18] ?? ""),
+        costCategory: or(cols[19] ?? ""),
+        discipline: or(cols[20] ?? ""),
+        costCode: cols[21]?.trim() ?? "",
         description: or(cols[22] ?? ""),
         displayDescription: `${or(cols[7] ?? "")}:  ${or(cols[6] ?? "")}`,
       };

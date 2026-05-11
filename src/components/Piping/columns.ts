@@ -1,6 +1,6 @@
 import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
 import type { FefRow } from "~/lib/types";
-import { EditableCell, SizeCell, CbsSelectCell, ReadOnlyCell, TakeOffIdReadOnlyCell, CbsNameCell, CbsUomCell } from "~/lib/table-utils";
+import { EditableCell, SizeCell, CbsSelectCell, ReadOnlyCell, TakeOffIdReadOnlyCell, CbsNameCell, CbsUomCell, DeleteRowCell } from "~/lib/table-utils";
 import {
   ShopFieldSelectCell,
   WeldGroupSelectCell,
@@ -11,6 +11,7 @@ import {
   LaborFactorCell,
   LaborHoursCell,
   PipingSizeCell,
+  SubCheckboxCell,
 } from "~/components/Piping/cells";
 
 const columnHelper = createColumnHelper<FefRow>();
@@ -54,6 +55,7 @@ export const takeOffColumns: ColumnDef<FefRow, string>[] = [
   }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: EditableCell }),
   columnHelper.accessor("size", { header: "Size", cell: PipingSizeCell }),
+  columnHelper.accessor("sub", { header: "Sub", cell: SubCheckboxCell, size: 60 }),
   columnHelper.accessor("unit", { header: "Unit", cell: ReadOnlyCell }),
   columnHelper.display({
     id: "laborFactor",
@@ -76,6 +78,12 @@ export const takeOffColumns: ColumnDef<FefRow, string>[] = [
     size: 130,
   }),
   columnHelper.accessor("notes", { header: "Notes", cell: EditableCell }),
+  columnHelper.display({
+    id: "delete",
+    header: "",
+    cell: DeleteRowCell,
+    size: 40,
+  }),
 ];
 
 export const fieldEstimateColumns: ColumnDef<FefRow, string>[] = [
@@ -85,6 +93,7 @@ export const fieldEstimateColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("weldGroupDescription", { header: "Weld Group Description", cell: ReadOnlyCell, size: 220 }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: ReadOnlyCell }),
   columnHelper.accessor("size", { header: "Size", cell: ReadOnlyCell }),
+  columnHelper.accessor("sub", { header: "Sub", cell: SubCheckboxCell, size: 60 }),
   columnHelper.accessor("unit", { header: "Unit", cell: CbsUomCell }),
   columnHelper.accessor("laborHours", { header: "Labor Hours", cell: ReadOnlyCell }),
   columnHelper.accessor("laborRate", { header: "Labor Rate ($)", cell: ReadOnlyCell }),
@@ -130,4 +139,10 @@ export const supportLaborColumns: ColumnDef<FefRow, string>[] = [
     size: 130,
   }),
   columnHelper.accessor("notes", { header: "Notes", cell: EditableCell }),
+  columnHelper.display({
+    id: "delete",
+    header: "",
+    cell: DeleteRowCell,
+    size: 40,
+  }),
 ];

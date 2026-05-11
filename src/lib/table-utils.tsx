@@ -45,6 +45,7 @@ export function makeBlankRow(i: number): FefRow {
     materialCost: "",
     equipment: "",
     notes: "",
+    sub: "",
   };
 }
 
@@ -245,6 +246,56 @@ export function ReadOnlyCell({ getValue }: { getValue: () => unknown }) {
     <span className={readOnlyCellClass}>
       {getValue() as string}
     </span>
+  );
+}
+
+export function DeleteRowCell({
+  row,
+  table,
+}: {
+  row: { index: number; original: FefRow };
+  getValue: () => unknown;
+  column: { id: string };
+  table: ReturnType<typeof useReactTable<FefRow>>;
+}) {
+  const onDelete = table.options.meta?.deleteRow;
+  // Don't allow deleting the trailing auto-appended blank row — the table
+  // always wants one undeletable blank slot at the bottom for new entries.
+  const data = table.options.data as FefRow[];
+  const isTrailingBlank =
+    row.index === data.length - 1 &&
+    row.original.id.startsWith("__fe-blank-");
+  if (isTrailingBlank) {
+    return <div className="flex h-7 items-center justify-center" />;
+  }
+  return (
+    <div className="flex items-center justify-center">
+      <button
+        type="button"
+        aria-label="Delete row"
+        title="Delete row"
+        onClick={() => onDelete?.(row.index)}
+        className="flex h-7 w-7 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600 cursor-pointer transition-colors"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M3 6h18" />
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+          <path d="M10 11v6" />
+          <path d="M14 11v6" />
+        </svg>
+      </button>
+    </div>
   );
 }
 
@@ -461,6 +512,7 @@ export function FefTableContent({
   serverPagination,
   columnVisibility,
   onColumnVisibilityChange,
+  minRows,
 }: {
   state: FefTableState;
   meta?: FefTableMeta;
@@ -468,6 +520,10 @@ export function FefTableContent({
   serverPagination?: ServerPagination;
   columnVisibility?: VisibilityState;
   onColumnVisibilityChange?: React.Dispatch<React.SetStateAction<VisibilityState>>;
+  /** Pads the table with blank visual rows so it always appears at least
+   *  this many rows tall. Useful for keeping the Take Off table close to
+   *  viewport height even when only a few real rows exist. */
+  minRows?: number;
 }) {
   const { data, setData, columnFilters, setColumnFilters } = state;
   const [localPageIndex, setLocalPageIndex] = React.useState(0);
@@ -526,6 +582,9 @@ export function FefTableContent({
           ),
         );
       },
+      deleteRow: (rowIndex: number) => {
+        setData((old) => old.filter((_, index) => index !== rowIndex));
+      },
     } satisfies TableMeta<RowData>,
   });
 
@@ -572,6 +631,38 @@ export function FefTableContent({
               ))}
             </tr>
           ))}
+          {minRows !== undefined &&
+            Array.from(
+              {
+                length: Math.max(
+                  0,
+                  minRows - table.getRowModel().rows.length,
+                ),
+              },
+              (_, i) => {
+                const overallIdx = table.getRowModel().rows.length + i;
+                const visibleColumns = table.getVisibleLeafColumns();
+                return (
+                  <tr
+                    key={`__filler-${i}`}
+                    aria-hidden="true"
+                    className={
+                      overallIdx % 2 === 0 ? "bg-white" : "bg-gray-50"
+                    }
+                  >
+                    {visibleColumns.map((col) => (
+                      <td
+                        key={col.id}
+                        style={{ minWidth: col.getSize() }}
+                        className="border border-gray-300 px-3 py-2"
+                      >
+                        &nbsp;
+                      </td>
+                    ))}
+                  </tr>
+                );
+              },
+            )}
         </tbody>
       </table>
       <TablePagination

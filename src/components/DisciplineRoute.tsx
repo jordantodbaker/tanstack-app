@@ -42,6 +42,7 @@ function toSupportLaborRow(item: CbsItem): FefRow {
     materialCost: "",
     equipment: "",
     notes: "",
+    sub: "",
   };
 }
 
@@ -97,8 +98,6 @@ export function DisciplineRoute({
     [cbsItems, allowedIdSet, projectId],
   );
 
-  const laborKey = discipline?.l1Codes?.[0]?.[0];
-
   return (
     <DisciplinePage
       title={title}
@@ -106,7 +105,6 @@ export function DisciplineRoute({
       icon={icon}
       cbsOptions={cbsOptions}
       supportLaborInitialRows={supportLaborInitialRows}
-      laborKey={laborKey}
       roleOptions={roleOptions}
       scheduleOptions={scheduleOptions}
       roleRates={roleRates}

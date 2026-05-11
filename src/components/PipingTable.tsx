@@ -1,33 +1,11 @@
 import React from "react";
 import { type VisibilityState } from "@tanstack/react-table";
-import { Loader2 } from "lucide-react";
-import { setLaborTotal } from "~/lib/laborTotalsStore";
-import { sumLaborCost, tabTriggerClass } from "~/lib/fef-helpers";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import {
-  Accordion,
-  AccordionItem,
-  AccordionTrigger,
-  AccordionContent,
-} from "~/components/ui/accordion";
 import type { CbsOption, FefRow } from "~/lib/types";
 import {
-  useTakeOffSync,
-  makeBlankRow,
-  FIELD_ESTIMATE_INITIAL_ROWS,
-  useFefTableState,
-  FefTableContent,
   type FefTableMeta,
   type ServerPagination,
 } from "~/lib/table-utils";
-import { useSelectedProject } from "~/lib/selected-project";
-import { useFefRowPersistence } from "~/lib/use-fef-row-persistence";
-
-function canComputeTotalCost(row: FefRow): boolean {
-  const hours = parseFloat(row.laborHours);
-  const rate = parseFloat(row.laborRate);
-  return !isNaN(hours) && hours > 0 && !isNaN(rate) && row.laborRate !== "";
-}
+import { DisciplineTabs } from "~/components/DisciplineTabs";
 import {
   takeOffColumns,
   fieldEstimateColumns,
@@ -58,7 +36,7 @@ type RoleRate = { roleName: string; schedule: string; rate: number };
 
 export function PipingDisciplinePage({
   title,
-  icon: Icon,
+  icon,
   cbsOptions,
   pipingGroups,
   serverPagination,
@@ -68,7 +46,6 @@ export function PipingDisciplinePage({
   roleRates,
   taskCodeOptions,
   pipingFactors,
-  laborKey,
 }: {
   title: string;
   icon?: React.ElementType;
@@ -80,8 +57,11 @@ export function PipingDisciplinePage({
   scheduleOptions?: string[];
   roleRates?: RoleRate[];
   taskCodeOptions?: { code: string; taskDefinition: string }[];
-  pipingFactors?: { code: string; unit: string; values: { size: number; value: number | null }[] }[];
-  laborKey?: string;
+  pipingFactors?: {
+    code: string;
+    unit: string;
+    values: { size: number; value: number | null }[];
+  }[];
 }) {
   const weldGroupOptions = React.useMemo(
     () =>
@@ -119,7 +99,12 @@ export function PipingDisciplinePage({
     return m;
   }, [pipingFactors]);
 
-  const LABOR_DETAIL_COLS = ["unit", "laborFactor", "laborHours", "laborRate"] as const;
+  const LABOR_DETAIL_COLS = [
+    "unit",
+    "laborFactor",
+    "laborHours",
+    "laborRate",
+  ] as const;
   const [laborDetailsVisible, setLaborDetailsVisible] = React.useState(true);
   const [takeOffColumnVisibility, setTakeOffColumnVisibility] =
     React.useState<VisibilityState>(() =>
@@ -133,62 +118,6 @@ export function PipingDisciplinePage({
       Object.fromEntries(LABOR_DETAIL_COLS.map((c) => [c, next])),
     );
   };
-
-  const [duplicateTimes, setDuplicateTimes] = React.useState("");
-  const handleDuplicateTopRow = () => {
-    const topRow = takeOffState.data[0];
-    if (!topRow || topRow.id.startsWith("__fe-blank-")) return;
-    const times = Math.max(1, parseInt(duplicateTimes) || 1);
-    takeOffState.setData((prev) => {
-      let end = prev.length;
-      while (end > 0 && prev[end - 1].id.startsWith("__fe-blank-")) end--;
-      return [
-        ...prev.slice(0, end),
-        ...Array.from({ length: times }, () => ({ ...topRow })),
-      ];
-    });
-  };
-
-  const nextBlankId = React.useRef(1);
-  const initialTakeOffRows = React.useMemo(() => [makeBlankRow(0)], []);
-  const takeOffState = useFefTableState({ initialRows: initialTakeOffRows });
-  const fieldEstimateState = useFefTableState({ initialRows: FIELD_ESTIMATE_INITIAL_ROWS });
-  const supportLaborState = useFefTableState({ initialRows: supportLaborInitialRows });
-
-  const syncToFieldEstimate = useTakeOffSync(takeOffState, fieldEstimateState);
-
-  const { projectId } = useSelectedProject();
-  const { isLoading: isTakeOffLoading } = useFefRowPersistence({
-    projectId,
-    discipline: "piping",
-    section: "TAKE_OFF",
-    state: takeOffState,
-  });
-  useFefRowPersistence({
-    projectId,
-    discipline: "piping",
-    section: "SUPPORT_LABOR",
-    state: supportLaborState,
-    fallbackRows: supportLaborInitialRows,
-  });
-  // Only Take Off blocks the page-level mask. Support Labor is behind the
-  // Field Estimate tab; it hydrates in the background as deferred data lands.
-  const isHydrating = isTakeOffLoading;
-
-  React.useEffect(() => {
-    const data = takeOffState.data;
-    if (data.length === 0) return;
-    const lastRow = data[data.length - 1];
-    if (canComputeTotalCost(lastRow)) {
-      const id = nextBlankId.current++;
-      takeOffState.setData((prev) => [...prev, makeBlankRow(id)]);
-    }
-  }, [takeOffState.data, takeOffState.setData]);
-
-  React.useEffect(() => {
-    if (laborKey) setLaborTotal(laborKey, sumLaborCost(fieldEstimateState.data));
-    setLaborTotal("craftSupportLabor", sumLaborCost(supportLaborState.data));
-  }, [laborKey, supportLaborState.data, fieldEstimateState.data]);
 
   const takeOffMeta: FefTableMeta = {
     cbsOptions,
@@ -215,91 +144,28 @@ export function PipingDisciplinePage({
   };
 
   return (
-    <main className="relative p-4">
-      {isHydrating && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-3 text-slate-500">
-            <Loader2 className="size-8 animate-spin" />
-            <span className="text-sm">Loading…</span>
-          </div>
-        </div>
-      )}
-      <h1 className="text-2xl font-bold mb-4 flex items-center gap-2">
-        {Icon && <Icon className="size-7" />}
-        {title}
-      </h1>
-      <Tabs
-        defaultValue="takeoff"
-        className="w-full"
-        onValueChange={(v) => { if (v === "estimate") syncToFieldEstimate(); }}
-      >
-        <TabsList className="w-full justify-start rounded-none border-b border-slate-200 bg-transparent p-0 pb-2 h-auto gap-2">
-          <TabsTrigger value="takeoff" className={tabTriggerClass}>
-            Take Off
-          </TabsTrigger>
-          <TabsTrigger value="estimate" className={tabTriggerClass}>
-            Field Estimate
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="takeoff" className="mt-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleDuplicateTopRow}
-                className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100"
-              >
-                Duplicate Top Row
-              </button>
-              <input
-                type="number"
-                min={1}
-                value={duplicateTimes}
-                onChange={(e) => setDuplicateTimes(e.target.value)}
-                placeholder="times"
-                className="w-20 px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-400"
-              />
-            </div>
-            <button
-              onClick={toggleLaborDetails}
-              className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100"
-            >
-              {laborDetailsVisible ? "Hide Labor Details" : "Show Labor Details"}
-            </button>
-          </div>
-          <FefTableContent
-            state={takeOffState}
-            meta={takeOffMeta}
-            columns={takeOffColumns}
-            serverPagination={serverPagination}
-            columnVisibility={takeOffColumnVisibility}
-            onColumnVisibilityChange={setTakeOffColumnVisibility}
-          />
-        </TabsContent>
-        <TabsContent value="estimate" className="mt-4">
-          <Accordion type="multiple" defaultValue={["support", "craft"]}>
-            <AccordionItem value="support">
-              <AccordionTrigger>Support Labor</AccordionTrigger>
-              <AccordionContent>
-                <FefTableContent
-                  state={supportLaborState}
-                  meta={supportMeta}
-                  columns={supportLaborColumns}
-                />
-              </AccordionContent>
-            </AccordionItem>
-            <AccordionItem value="craft">
-              <AccordionTrigger>Craft Labor</AccordionTrigger>
-              <AccordionContent>
-                <FefTableContent
-                  state={fieldEstimateState}
-                  meta={craftMeta}
-                  columns={fieldEstimateColumns}
-                />
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-        </TabsContent>
-      </Tabs>
-    </main>
+    <DisciplineTabs
+      title={title}
+      icon={icon}
+      discipline="piping"
+      takeOffColumns={takeOffColumns}
+      craftColumns={fieldEstimateColumns}
+      supportLaborColumns={supportLaborColumns}
+      takeOffMeta={takeOffMeta}
+      craftMeta={craftMeta}
+      supportLaborMeta={supportMeta}
+      supportLaborInitialRows={supportLaborInitialRows}
+      takeOffColumnVisibility={takeOffColumnVisibility}
+      onTakeOffColumnVisibilityChange={setTakeOffColumnVisibility}
+      serverPagination={serverPagination}
+      takeOffExtraControls={
+        <button
+          onClick={toggleLaborDetails}
+          className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer"
+        >
+          {laborDetailsVisible ? "Hide Labor Details" : "Show Labor Details"}
+        </button>
+      }
+    />
   );
 }

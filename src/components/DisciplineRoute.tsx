@@ -3,11 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { CbsOption, FefRow } from "~/lib/types";
 import { DisciplinePage } from "~/components/FefTable";
 import { disciplines } from "~/config/disciplines";
-import {
-  roleOptionsQueryOptions,
-  scheduleOptionsQueryOptions,
-  roleRatesQueryOptions,
-} from "~/utils/roles";
+import { roleDataQueryOptions } from "~/utils/roles";
 import { useSelectedProject } from "~/lib/selected-project";
 import { allowedFefCbsItemIdsQueryOptions } from "~/utils/setup";
 import { toCbsOption } from "~/lib/fef-helpers";
@@ -60,9 +56,10 @@ export function DisciplineRoute({
 }) {
   const discipline = disciplines.find((d) => d.label === title);
   const icon = discipline?.icon;
-  const { data: roleOptions } = useQuery(roleOptionsQueryOptions());
-  const { data: scheduleOptions } = useQuery(scheduleOptionsQueryOptions());
-  const { data: roleRates } = useQuery(roleRatesQueryOptions());
+  const { data: roleData } = useQuery(roleDataQueryOptions());
+  const roleOptions = roleData?.roleOptions;
+  const scheduleOptions = roleData?.scheduleOptions;
+  const roleRates = roleData?.roleRates;
   const { projectId } = useSelectedProject();
   const { data: allowedIds } = useQuery({
     ...allowedFefCbsItemIdsQueryOptions(projectId ?? 0),

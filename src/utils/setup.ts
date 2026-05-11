@@ -37,6 +37,7 @@ export const allowedFefCbsItemIdsQueryOptions = (projectId: number) =>
   queryOptions({
     queryKey: ["allowedFefCbsItemIds", projectId],
     queryFn: () => fetchAllowedFefCbsItemIds({ data: projectId }),
+    staleTime: Infinity,
   });
 
 export const fetchAllowedCbsL1Codes = createServerFn({ method: "GET" })

@@ -1,5 +1,6 @@
 import React from "react";
 import { type VisibilityState } from "@tanstack/react-table";
+import { Loader2 } from "lucide-react";
 import { setLaborTotal } from "~/lib/laborTotalsStore";
 import { sumLaborCost, tabTriggerClass } from "~/lib/fef-helpers";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
@@ -157,7 +158,7 @@ export function PipingDisciplinePage({
   const syncToFieldEstimate = useTakeOffSync(takeOffState, fieldEstimateState);
 
   const { projectId } = useSelectedProject();
-  useFefRowPersistence({
+  const { isLoading: isTakeOffLoading } = useFefRowPersistence({
     projectId,
     discipline: "piping",
     section: "TAKE_OFF",
@@ -170,6 +171,9 @@ export function PipingDisciplinePage({
     state: supportLaborState,
     fallbackRows: supportLaborInitialRows,
   });
+  // Only Take Off blocks the page-level mask. Support Labor is behind the
+  // Field Estimate tab; it hydrates in the background as deferred data lands.
+  const isHydrating = isTakeOffLoading;
 
   React.useEffect(() => {
     const data = takeOffState.data;
@@ -211,7 +215,15 @@ export function PipingDisciplinePage({
   };
 
   return (
-    <main className="p-4">
+    <main className="relative p-4">
+      {isHydrating && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3 text-slate-500">
+            <Loader2 className="size-8 animate-spin" />
+            <span className="text-sm">Loading…</span>
+          </div>
+        </div>
+      )}
       <h1 className="text-2xl font-bold mb-4 flex items-center gap-2">
         {Icon && <Icon className="size-7" />}
         {title}

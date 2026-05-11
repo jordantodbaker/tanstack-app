@@ -2,6 +2,7 @@ import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { FefRow } from "~/lib/types";
 import type { FefTableState } from "~/lib/table-utils";
+import { useSelectedProject } from "~/lib/selected-project";
 import {
   fefRowsQueryOptions,
   saveFefRows,
@@ -29,57 +30,69 @@ export function useFefRowPersistence({
   section: FefSectionKey;
   state: FefTableState;
   fallbackRows?: FefRow[];
-}) {
+}): { isLoading: boolean } {
   const queryClient = useQueryClient();
+  const { isHydrated: isProjectHydrated } = useSelectedProject();
   const queryOpts = fefRowsQueryOptions({ projectId, discipline, section });
   const { data: loadedRows } = useQuery(queryOpts);
   const { data, setData } = state;
 
-  const fetchedKeyRef = React.useRef<string | null>(null);
   const hydratedKeyRef = React.useRef<string | null>(null);
+  const skipNextSaveRef = React.useRef(false);
   const saveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentKey = `${projectId}|${discipline}|${section}`;
 
-  React.useEffect(() => {
-    console.log("[fef-persist] hydration tick", {
-      currentKey,
-      projectId,
-      loadedRows: loadedRows === undefined ? "undefined" : loadedRows.length,
-      fetched: fetchedKeyRef.current === currentKey,
-      hydrated: hydratedKeyRef.current === currentKey,
-    });
-    if (projectId === null) return;
-    if (loadedRows === undefined) return;
+  const [appliedKey, setAppliedKey] = React.useState<string | null>(null);
 
-    fetchedKeyRef.current = currentKey;
-    if (hydratedKeyRef.current === currentKey) return;
+  React.useEffect(() => {
+    if (!isProjectHydrated) return;
+    if (projectId === null) {
+      setAppliedKey(currentKey);
+      return;
+    }
+    if (loadedRows === undefined) return;
+    if (hydratedKeyRef.current === currentKey) {
+      setAppliedKey(currentKey);
+      return;
+    }
 
     if (loadedRows.length > 0) {
-      console.log("[fef-persist] applying DB rows", currentKey, loadedRows.length);
+      skipNextSaveRef.current = true;
       setData(loadedRows);
       hydratedKeyRef.current = currentKey;
     } else if (fallbackRows && fallbackRows.length > 0) {
-      console.log("[fef-persist] applying fallback", currentKey, fallbackRows.length);
+      skipNextSaveRef.current = true;
       setData(fallbackRows);
       hydratedKeyRef.current = currentKey;
-    } else {
-      console.log("[fef-persist] nothing to apply", currentKey);
     }
-  }, [projectId, currentKey, loadedRows, fallbackRows, setData]);
+    // Mark "checked" so the mask hides and saves can fire, but leave
+    // hydratedKeyRef unset when nothing was applied so that a later-arriving
+    // fallbackRows (e.g. deferred query) can still hydrate.
+    setAppliedKey(currentKey);
+  }, [
+    isProjectHydrated,
+    projectId,
+    currentKey,
+    loadedRows,
+    fallbackRows,
+    setData,
+  ]);
 
   React.useEffect(() => {
     if (projectId === null) return;
-    if (fetchedKeyRef.current !== currentKey) return;
+    if (appliedKey !== currentKey) return;
+    if (skipNextSaveRef.current) {
+      skipNextSaveRef.current = false;
+      return;
+    }
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     const snapshot = data;
     saveTimerRef.current = setTimeout(() => {
-      console.log("[fef-persist] firing save", currentKey, snapshot.length);
       saveFefRows({
         data: { projectId, discipline, section, rows: snapshot },
       })
         .then((saved) => {
-          console.log("[fef-persist] save success", currentKey, saved.length);
           queryClient.setQueryData(
             ["fefRows", projectId, discipline, section],
             saved,
@@ -92,5 +105,7 @@ export function useFefRowPersistence({
 
     // No cleanup: timer survives unmount so SPA nav doesn't lose pending saves.
     // Browser refresh will still drop pending saves — that's a separate concern.
-  }, [projectId, discipline, section, currentKey, data, queryClient]);
+  }, [projectId, discipline, section, currentKey, data, queryClient, appliedKey]);
+
+  return { isLoading: appliedKey !== currentKey };
 }

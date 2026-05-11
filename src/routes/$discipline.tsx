@@ -1,20 +1,76 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { DisciplineRoute } from "~/components/DisciplineRoute";
 import { disciplineById } from "~/config/disciplines";
-import { fetchCbsItemsByL1 } from "~/utils/cbs";
+import { cbsItemsByL1QueryOptions } from "~/utils/cbs";
+import { roleDataQueryOptions } from "~/utils/roles";
+import {
+  allowedFefCbsItemIdsQueryOptions,
+} from "~/utils/setup";
+import { fefRowsQueryOptions } from "~/utils/fefRows";
+import { getProjectIdFromCookie } from "~/utils/projectCookie";
+
+const PROJECT_STORAGE_KEY = "selectedProjectId";
+
+async function readProjectIdForLoader(): Promise<number | null> {
+  if (typeof window === "undefined") {
+    return await getProjectIdFromCookie();
+  }
+  const raw = window.localStorage.getItem(PROJECT_STORAGE_KEY);
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
 
 export const Route = createFileRoute("/$discipline")({
-  loader: async ({ params }) => {
+  loader: async ({ params, context }) => {
     const config = disciplineById[params.discipline];
     if (!config?.l1Codes) throw notFound();
-    const cbsItems = await fetchCbsItemsByL1({ data: config.l1Codes });
-    return { title: config.label, disciplineId: config.id, cbsItems };
+
+    const projectId = await readProjectIdForLoader();
+    const fefRowPrefetches =
+      projectId !== null
+        ? [
+            context.queryClient.ensureQueryData(
+              fefRowsQueryOptions({
+                projectId,
+                discipline: config.id,
+                section: "TAKE_OFF",
+              }),
+            ),
+            context.queryClient.ensureQueryData(
+              fefRowsQueryOptions({
+                projectId,
+                discipline: config.id,
+                section: "SUPPORT_LABOR",
+              }),
+            ),
+            context.queryClient.ensureQueryData(
+              allowedFefCbsItemIdsQueryOptions(projectId),
+            ),
+          ]
+        : [];
+
+    await Promise.all([
+      context.queryClient.ensureQueryData(
+        cbsItemsByL1QueryOptions(config.l1Codes),
+      ),
+      context.queryClient.ensureQueryData(roleDataQueryOptions()),
+      ...fefRowPrefetches,
+    ]);
+
+    return {
+      title: config.label,
+      disciplineId: config.id,
+      l1Codes: config.l1Codes,
+    };
   },
   component: DynamicDiscipline,
 });
 
 function DynamicDiscipline() {
-  const { title, disciplineId, cbsItems } = Route.useLoaderData();
+  const { title, disciplineId, l1Codes } = Route.useLoaderData();
+  const { data: cbsItems = [] } = useQuery(cbsItemsByL1QueryOptions(l1Codes));
   return (
     <DisciplineRoute
       title={title}

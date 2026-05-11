@@ -451,11 +451,6 @@ export function useFefTableState(opts: {
     [sectionKey],
   );
 
-  React.useEffect(() => {
-    if (sectionKey) return;
-    if (initialRows !== undefined) setDataState(initialRows);
-  }, [initialRows, sectionKey]);
-
   return { data, setData, columnFilters, setColumnFilters };
 }
 

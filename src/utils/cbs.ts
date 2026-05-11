@@ -12,7 +12,22 @@ export const fetchCbsItemsByL1 = createServerFn({ method: "GET" })
     return prisma.cbsItem.findMany({
       where: { l1: { in: data } },
       orderBy: { id: "asc" },
+      select: {
+        id: true,
+        displayCode: true,
+        name: true,
+        uom: true,
+        displayDescription: true,
+        l1: true,
+      },
     });
+  });
+
+export const cbsItemsByL1QueryOptions = (l1Values: string[]) =>
+  queryOptions({
+    queryKey: ["cbsItemsByL1", l1Values],
+    queryFn: () => fetchCbsItemsByL1({ data: l1Values }),
+    staleTime: Infinity,
   });
 
 export const fetchCbsItemsByL1Paged = createServerFn({ method: "GET" })
@@ -103,6 +118,7 @@ export const cbsItemsByL1FilteredQueryOptions = (input: {
   queryOptions({
     queryKey: ["cbsItemsByL1Filtered", input.l1Values, input.projectId],
     queryFn: () => fetchCbsItemsByL1Filtered({ data: input }),
+    staleTime: Infinity,
   });
 
 export const fetchCbsItemsByL1EndsWith = createServerFn({ method: "GET" })

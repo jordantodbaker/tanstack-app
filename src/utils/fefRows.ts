@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import type { FefRow } from "~/lib/types";
+import { logger } from "~/lib/logger";
 
 export type FefSectionKey = "TAKE_OFF" | "SUPPORT_LABOR" | "MATERIALS";
 
@@ -122,52 +123,63 @@ export const saveFefRows = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const { projectId, discipline, section, rows } = data;
-    const persistable = rows
-      .filter((r) => !r.id.startsWith("__fe-blank-") || hasUserData(r))
-      .map((r, i) => ({
+    try {
+      const persistable = rows
+        .filter((r) => !r.id.startsWith("__fe-blank-") || hasUserData(r))
+        .map((r, i) => ({
+          projectId,
+          discipline,
+          section,
+          position: i,
+          cbsCode: r.id.startsWith("__fe-blank-") ? "" : r.id,
+          name: r.name,
+          description: r.description,
+          shopField: r.shopField,
+          weldGroupDescription: r.weldGroupDescription,
+          quantity: r.quantity,
+          size: r.size,
+          unit: r.unit,
+          metallurgyCode: r.metallurgyCode,
+          boreSize: r.boreSize,
+          role: r.role,
+          schedule: r.schedule,
+          taskCode: r.taskCode,
+          laborHours: r.laborHours,
+          laborRate: r.laborRate,
+          materialCost: r.materialCost,
+          equipment: r.equipment,
+          notes: r.notes,
+          sub: r.sub,
+        }));
+
+      if (persistable.length === 0) {
+        const current = await prisma.fefRow.findMany({
+          where: { projectId, discipline, section },
+          orderBy: { position: "asc" },
+        });
+        return current.map(toFefRow);
+      }
+
+      const saved = await prisma.$transaction(async (tx) => {
+        await tx.fefRow.deleteMany({
+          where: { projectId, discipline, section },
+        });
+        await tx.fefRow.createMany({ data: persistable });
+        return tx.fefRow.findMany({
+          where: { projectId, discipline, section },
+          orderBy: { position: "asc" },
+        });
+      });
+
+      return saved.map(toFefRow);
+    } catch (err) {
+      logger.error("saveFefRows failed", {
         projectId,
         discipline,
         section,
-        position: i,
-        cbsCode: r.id.startsWith("__fe-blank-") ? "" : r.id,
-        name: r.name,
-        description: r.description,
-        shopField: r.shopField,
-        weldGroupDescription: r.weldGroupDescription,
-        quantity: r.quantity,
-        size: r.size,
-        unit: r.unit,
-        metallurgyCode: r.metallurgyCode,
-        boreSize: r.boreSize,
-        role: r.role,
-        schedule: r.schedule,
-        taskCode: r.taskCode,
-        laborHours: r.laborHours,
-        laborRate: r.laborRate,
-        materialCost: r.materialCost,
-        equipment: r.equipment,
-        notes: r.notes,
-        sub: r.sub,
-      }));
-
-    if (persistable.length === 0) {
-      const current = await prisma.fefRow.findMany({
-        where: { projectId, discipline, section },
-        orderBy: { position: "asc" },
+        rowCount: rows.length,
+        err,
       });
-      return current.map(toFefRow);
+      throw err;
     }
-
-    const saved = await prisma.$transaction(async (tx) => {
-      await tx.fefRow.deleteMany({
-        where: { projectId, discipline, section },
-      });
-      await tx.fefRow.createMany({ data: persistable });
-      return tx.fefRow.findMany({
-        where: { projectId, discipline, section },
-        orderBy: { position: "asc" },
-      });
-    });
-
-    return saved.map(toFefRow);
   });

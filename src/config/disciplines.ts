@@ -239,3 +239,28 @@ export const DISCIPLINE_LABELS: string[] = Object.keys(
     const d = disciplineById[SUMMARY_DIGIT_TO_DISCIPLINE_ID[digit]];
     return d?.summaryLabel ?? d?.label ?? "";
   });
+
+// Rows shown on the Summary page's "Disciplines" section. Each row pulls its
+// totals from the given `digit` bucket in projectFefRowTotals; rows with
+// `digit: null` have no underlying data source yet (e.g. Shop variants) and
+// only contribute their label/UOM.
+export type SummaryDiscipline = {
+  label: string;
+  uom: string;
+  digit: string | null;
+};
+
+export const SUMMARY_DISCIPLINES: SummaryDiscipline[] = [
+  { label: "Demolition", uom: "AL", digit: "0" },
+  { label: "Civil", uom: "CY", digit: "1" },
+  { label: "Concrete", uom: "CY", digit: "2" },
+  { label: "Structural Steel", uom: "TN", digit: "3" },
+  { label: "Structural Steel Shop", uom: "TN", digit: null },
+  { label: "Buildings", uom: "", digit: "4" },
+  { label: "Equipment", uom: "EA", digit: "5" },
+  { label: "Piping", uom: "LF", digit: "6" },
+  { label: "Piping Shop", uom: "DI", digit: null },
+  { label: "Electrical", uom: "LF", digit: "7" },
+  { label: "Instrumentation", uom: "EA", digit: "8" },
+  { label: "Coatings", uom: "SF", digit: "9" },
+];

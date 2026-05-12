@@ -8,6 +8,7 @@ import {
   saveFefRows,
   type FefSectionKey,
 } from "~/utils/fefRows";
+import { logger } from "~/lib/logger";
 
 const SAVE_DEBOUNCE_MS = 500;
 
@@ -111,7 +112,13 @@ export function useFefRowPersistence({
           });
         })
         .catch((err) => {
-          console.error("[fef-persist] save failed", currentKey, err);
+          logger.error("fef-persist save failed", {
+            currentKey,
+            projectId,
+            discipline,
+            section,
+            err,
+          });
         });
     }, SAVE_DEBOUNCE_MS);
 

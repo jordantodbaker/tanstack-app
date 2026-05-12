@@ -18,6 +18,10 @@ import {
   getMaterialsSectionRows,
   setMaterialsSectionRows,
 } from "./materialsStore";
+import { aggregateTakeOff } from "./take-off-sync";
+import { createDebug } from "./logger";
+
+const debug = createDebug("fef");
 
 export const editableCellClass =
   "w-full bg-white border border-slate-200 px-2 py-1 text-sm hover:border-blue-300 focus:border-blue-400 focus:outline-none rounded";
@@ -61,37 +65,7 @@ export function useTakeOffSync(
   target: { setData: React.Dispatch<React.SetStateAction<FefRow[]>> },
 ) {
   return () => {
-    const qualifiedRows = source.data.filter(
-      (r) => Number(r.quantity) > 0,
-    );
-
-    type Agg = { baseRow: FefRow; qty: number; hours: number; cost: number };
-    const groups = new Map<string, Agg>();
-
-    for (const row of qualifiedRows) {
-      const qty = parseFloat(row.quantity) || 0;
-      const hours = parseFloat(row.laborHours) || 0;
-      const rate = parseFloat(row.laborRate) || 0;
-      const existing = groups.get(row.id);
-      if (!existing) {
-        groups.set(row.id, { baseRow: row, qty, hours, cost: hours * rate });
-      } else {
-        existing.qty += qty;
-        existing.hours += hours;
-        existing.cost += hours * rate;
-      }
-    }
-
-    const aggregated: FefRow[] = Array.from(groups.values()).map(
-      ({ baseRow, qty, hours, cost }) => ({
-        ...baseRow,
-        quantity: String(qty),
-        laborHours: String(hours),
-        laborRate: hours > 0 ? String(cost / hours) : "",
-      }),
-    );
-
-    target.setData(aggregated);
+    target.setData(aggregateTakeOff(source.data));
   };
 }
 
@@ -567,7 +541,7 @@ export function FefTableContent({
       taskCodeOptions: meta?.taskCodeOptions ?? [],
       pipingFactorLookup: meta?.pipingFactorLookup,
       updateData: (rowIndex: number, columnId: string, value: string) => {
-        console.log("[fef-debug] updateData", { rowIndex, columnId, value });
+        debug("updateData", { rowIndex, columnId, value });
         setData((old) =>
           old.map((row, index) =>
             index === rowIndex ? { ...row, [columnId]: value } : row,
@@ -575,7 +549,7 @@ export function FefTableContent({
         );
       },
       updateRow: (rowIndex: number, updates: Record<string, string>) => {
-        console.log("[fef-debug] updateRow", { rowIndex, updates });
+        debug("updateRow", { rowIndex, updates });
         setData((old) =>
           old.map((row, index) =>
             index === rowIndex ? { ...row, ...updates } : row,

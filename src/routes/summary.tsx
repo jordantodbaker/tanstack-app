@@ -6,7 +6,7 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from "~/components/ui/accordion";
-import { DISCIPLINE_LABELS } from "~/config/disciplines";
+import { SUMMARY_DISCIPLINES } from "~/config/disciplines";
 import { formatMoney } from "~/lib/formatting";
 import { useSelectedProject } from "~/lib/selected-project";
 import { projectFefRowTotalsQueryOptions } from "~/utils/projectTotals";
@@ -100,7 +100,7 @@ const columns: {
   { key: "description", header: "Description", width: "w-48" },
   { key: "qty", header: "QTY", width: "w-20" },
   { key: "uom", header: "UOM", width: "w-20" },
-  { key: "unitRate", header: "Unit Rate", width: "w-24", currency: true },
+  { key: "unitRate", header: "Unit Rate", width: "w-24" },
   { key: "hrs", header: "HRS", width: "w-20" },
   { key: "rate", header: "Rate", width: "w-20", currency: true },
   { key: "totalLabor", header: "Total Labor $", width: "w-28", currency: true },
@@ -169,22 +169,51 @@ function SummaryPage() {
     projectFefRowTotalsQueryOptions(projectId),
   );
 
-  const disciplineRows: SummaryRow[] = DISCIPLINE_LABELS.map((label, i) => {
-    const digit = String(i);
-    const materialTotal = dbTotals?.materialsByDigit[digit] ?? 0;
-    const laborTotal = dbTotals?.laborByDigit[digit] ?? 0;
-    return {
-      description: label,
-      ...emptyRow(),
-      material: materialTotal > 0 ? formatMoney(materialTotal) : "",
-      totalLabor: laborTotal > 0 ? formatMoney(laborTotal) : "",
-    };
-  });
+  const disciplineRows: SummaryRow[] = SUMMARY_DISCIPLINES.map(
+    ({ label, uom, digit }) => {
+      const materialTotal =
+        digit !== null ? (dbTotals?.materialsByDigit[digit] ?? 0) : 0;
+      const laborTotal =
+        digit !== null ? (dbTotals?.laborByDigit[digit] ?? 0) : 0;
+      const laborHours =
+        digit !== null ? (dbTotals?.laborHoursByDigit[digit] ?? 0) : 0;
+      const quantity =
+        digit !== null ? (dbTotals?.quantityByDigit[digit] ?? 0) : 0;
+      const unitRate =
+        quantity > 0 && laborHours > 0 ? laborHours / quantity : 0;
+      const rate = laborHours > 0 && laborTotal > 0 ? laborTotal / laborHours : 0;
+      return {
+        description: label,
+        ...emptyRow(),
+        uom,
+        qty: quantity > 0 ? formatMoney(quantity) : "",
+        unitRate: unitRate > 0 ? formatMoney(unitRate) : "",
+        hrs: laborHours > 0 ? formatMoney(laborHours) : "",
+        rate: rate > 0 ? formatMoney(rate) : "",
+        material: materialTotal > 0 ? formatMoney(materialTotal) : "",
+        totalLabor: laborTotal > 0 ? formatMoney(laborTotal) : "",
+      };
+    },
+  );
 
   const craftSupportTotal = dbTotals?.craftSupportLabor ?? 0;
+  const craftSupportHours = dbTotals?.craftSupportLaborHours ?? 0;
+  const craftSupportRate =
+    craftSupportHours > 0 && craftSupportTotal > 0
+      ? craftSupportTotal / craftSupportHours
+      : 0;
   const indirectRows: SummaryRow[] = makeRows(INDIRECTS).map((row) => {
-    if (row.description === "Craft Support Labor" && craftSupportTotal > 0) {
-      return { ...row, totalLabor: formatMoney(craftSupportTotal) };
+    if (
+      row.description === "Craft Support Labor" &&
+      (craftSupportTotal > 0 || craftSupportHours > 0)
+    ) {
+      return {
+        ...row,
+        hrs: craftSupportHours > 0 ? formatMoney(craftSupportHours) : "",
+        rate: craftSupportRate > 0 ? formatMoney(craftSupportRate) : "",
+        totalLabor:
+          craftSupportTotal > 0 ? formatMoney(craftSupportTotal) : "",
+      };
     }
     return row;
   });

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { useSelectedProject } from "~/lib/selected-project";
+import { logger } from "~/lib/logger";
 import {
   basisInputsQueryOptions,
   saveBasisInputs,
@@ -169,7 +170,9 @@ function BasisPage() {
         .then(() => {
           queryClient.setQueryData(["basisInputs", projectId], payload);
         })
-        .catch((err) => console.error("Failed to save basis inputs", err));
+        .catch((err) =>
+          logger.error("basis save failed", { projectId, err }),
+        );
     }, SAVE_DEBOUNCE_MS);
 
     return () => {

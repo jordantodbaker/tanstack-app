@@ -19,6 +19,7 @@ import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
 import { ProjectSelect } from "~/components/ProjectSelect";
 import { useSelectedProject } from "~/lib/selected-project";
+import { logger } from "~/lib/logger";
 
 export const Route = createFileRoute("/setup")({
   loader: () => fetchSetupCbsItems(),
@@ -123,7 +124,7 @@ function CbsTreeEditor({
       });
     },
     onError: (err, vars) => {
-      console.error("[setup] updateAllowedFefCbsItems failed", { err, vars });
+      logger.error("setup updateAllowedFefCbsItems failed", { err, vars });
     },
   });
 

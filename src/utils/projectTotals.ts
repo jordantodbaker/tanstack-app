@@ -1,40 +1,20 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
+import {
+  accumulateProjectTotals,
+  type ProjectFefRowTotals,
+} from "../lib/project-totals";
 
-export type ProjectFefRowTotals = {
-  laborByDigit: Record<string, number>;
-  craftSupportLabor: number;
-  materialsByDigit: Record<string, number>;
-};
+export type { ProjectFefRowTotals } from "../lib/project-totals";
 
 const EMPTY_TOTALS: ProjectFefRowTotals = {
   laborByDigit: {},
+  laborHoursByDigit: {},
+  quantityByDigit: {},
   craftSupportLabor: 0,
+  craftSupportLaborHours: 0,
   materialsByDigit: {},
-};
-
-// Discipline ID → first-digit bucket used by Summary/Validation. Keep in sync
-// with SUMMARY_DIGIT_TO_DISCIPLINE_ID in src/config/disciplines.ts.
-const DISCIPLINE_TO_DIGIT: Record<string, string> = {
-  "project-development": "0",
-  administration: "0",
-  engineering: "0",
-  procurement: "0",
-  indirects: "0",
-  demolition: "0",
-  civil: "1",
-  concrete: "2",
-  steel: "3",
-  buildings: "4",
-  equipment: "5",
-  piping: "6",
-  electric: "7",
-  instruments: "8",
-  coatings: "9",
-  commissioning: "9",
-  operations: "9",
-  contingency: "9",
 };
 
 export const fetchProjectFefRowTotals = createServerFn({ method: "GET" })
@@ -52,43 +32,7 @@ export const fetchProjectFefRowTotals = createServerFn({ method: "GET" })
         materialCost: true,
       },
     });
-
-    const laborByDigit: Record<string, number> = {};
-    let craftSupportLabor = 0;
-    const materialsByDigit: Record<string, number> = {};
-
-    for (const r of rows) {
-      const qty = parseFloat(r.quantity);
-      const hours = parseFloat(r.laborHours);
-      const rate = parseFloat(r.laborRate);
-      const matCost = parseFloat(r.materialCost);
-      const labor =
-        Number.isFinite(hours) && Number.isFinite(rate) ? hours * rate : 0;
-      // Resolve the discipline-bucket digit. Prefer the CBS code's leading
-      // digit; fall back to the row's discipline field. For TAKE_OFF /
-      // SUPPORT_LABOR rows `discipline` is a discipline id (e.g. "piping")
-      // which we map; for MATERIALS rows it's the L1 code (e.g. "601") whose
-      // first character IS the digit.
-      const disciplineFallback =
-        DISCIPLINE_TO_DIGIT[r.discipline] ||
-        (r.discipline && /^\d/.test(r.discipline) ? r.discipline[0] : "");
-      const digit = (r.cbsCode && r.cbsCode[0]) || disciplineFallback || "";
-
-      if (r.section === "TAKE_OFF") {
-        if (digit && labor > 0) {
-          laborByDigit[digit] = (laborByDigit[digit] ?? 0) + labor;
-        }
-      } else if (r.section === "SUPPORT_LABOR") {
-        craftSupportLabor += labor;
-      } else if (r.section === "MATERIALS") {
-        if (Number.isFinite(qty) && Number.isFinite(matCost) && digit) {
-          materialsByDigit[digit] =
-            (materialsByDigit[digit] ?? 0) + qty * matCost;
-        }
-      }
-    }
-
-    return { laborByDigit, craftSupportLabor, materialsByDigit };
+    return accumulateProjectTotals(rows);
   });
 
 export const projectFefRowTotalsQueryOptions = (projectId: number | null) =>

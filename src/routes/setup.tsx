@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Loader2, Settings } from "lucide-react";
+import { ChevronDown, ChevronRight, Settings } from "lucide-react";
+import { LoadMask } from "~/components/LoadMask";
 import {
   fetchSetupCbsItems,
   allowedFefCbsItemIdsQueryOptions,
@@ -223,14 +224,7 @@ function CbsTreeEditor({
       </div>
 
       <div className="relative border border-slate-200 rounded-md bg-white">
-        {isFiltering && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 backdrop-blur-sm rounded-md">
-            <div className="flex flex-col items-center gap-3 text-slate-500">
-              <Loader2 className="size-6 animate-spin" />
-              <span className="text-sm">Filtering…</span>
-            </div>
-          </div>
-        )}
+        {isFiltering && <LoadMask label="Filtering…" size="sm" rounded />}
         {filteredTree.length === 0 ? (
           <div className="p-4 text-sm text-slate-500">No matches.</div>
         ) : (

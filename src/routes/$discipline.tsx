@@ -8,19 +8,7 @@ import {
   allowedFefCbsItemIdsQueryOptions,
 } from "~/utils/setup";
 import { fefRowsQueryOptions } from "~/utils/fefRows";
-import { getProjectIdFromCookie } from "~/utils/projectCookie";
-
-const PROJECT_STORAGE_KEY = "selectedProjectId";
-
-async function readProjectIdForLoader(): Promise<number | null> {
-  if (typeof window === "undefined") {
-    return await getProjectIdFromCookie();
-  }
-  const raw = window.localStorage.getItem(PROJECT_STORAGE_KEY);
-  if (!raw) return null;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : null;
-}
+import { readProjectIdForLoader } from "~/utils/projectCookie";
 
 export const Route = createFileRoute("/$discipline")({
   loader: async ({ params, context }) => {

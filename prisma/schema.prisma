@@ -20,16 +20,17 @@ model Post {
 }
 
 model Project {
-  id                 Int          @id @default(autoincrement())
+  id                 Int            @id @default(autoincrement())
   displayId          String
   name               String
   description        String
   changeLogs         ChangeLog[]
-  allowedFefCbsItems CbsItem[]    @relation("ProjectAllowedFefCbsItems")
+  changeLogV2s       ChangeLogV2[]
+  allowedFefCbsItems CbsItem[]      @relation("ProjectAllowedFefCbsItems")
   fefRows            FefRow[]
   basisInputs        BasisInputs?
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @default(now())
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @default(now())
 }
 
 enum FefSection {
@@ -152,6 +153,62 @@ model RoleRate {
   roleId   Int
   schedule String
   rate     Float
+}
+
+enum ChangeStatus {
+  REQUESTED
+  IN_REVIEW
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  EXECUTED
+  VOID
+}
+
+enum ChangeType {
+  SCOPE
+  COST
+  SCHEDULE
+  ENGINEERING
+  CONSTRUCTION
+  PROCUREMENT
+  REGULATORY
+  OTHER
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model ChangeLogV2 {
+  id                  Int          @id @default(autoincrement())
+  project             Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId           Int
+  cvrNumber           String       @default("")
+  title               String
+  description         String       @default("")
+  status              ChangeStatus @default(REQUESTED)
+  type                ChangeType   @default(SCOPE)
+  discipline          String       @default("")
+  cbsCodes            String[]     @default([])
+  originator          String       @default("")
+  costImpact          Float        @default(0)
+  scheduleDaysImpact  Int          @default(0)
+  laborHoursImpact    Float        @default(0)
+  riskLevel           RiskLevel    @default(MEDIUM)
+  reasonCode          String       @default("")
+  requestedAt         DateTime     @default(now())
+  dueDate             DateTime?
+  approvedAt          DateTime?
+  approver            String       @default("")
+  notes               String       @default("")
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  @@index([projectId, status])
 }
 
 model CbsItem {

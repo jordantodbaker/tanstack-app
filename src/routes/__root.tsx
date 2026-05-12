@@ -190,6 +190,18 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
               >
                 Field Estimate Form
               </Link>
+              <Link
+                to="/changelog-v2"
+                className="px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                activeProps={{ className: "text-red-800 bg-red-50" }}
+                inactiveProps={{
+                  className:
+                    "text-slate-600 hover:text-slate-900 hover:bg-slate-100",
+                }}
+                activeOptions={{ exact: true }}
+              >
+                Change Log V2
+              </Link>
             </nav>
             <div className="shrink-0 flex items-center gap-2 md:gap-3 ml-auto sm:ml-0">
               <UserButton />

@@ -3,7 +3,7 @@ import {
   type ColumnDef,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { Loader2 } from "lucide-react";
+import { LoadMask } from "~/components/LoadMask";
 import { canComputeTotalCost, tabTriggerClass } from "~/lib/fef-helpers";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import {
@@ -128,14 +128,7 @@ export function DisciplineTabs({
 
   const inner = (
     <>
-      {showMask && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-3 text-slate-500">
-            <Loader2 className="size-8 animate-spin" />
-            <span className="text-sm">Loading…</span>
-          </div>
-        </div>
-      )}
+      {showMask && <LoadMask />}
       {title && (
         <h1 className="text-xl md:text-2xl font-bold mb-3 md:mb-4 flex items-center gap-2">
           {Icon && <Icon className="size-6 md:size-7" />}

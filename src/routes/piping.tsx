@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
 import { PipingDisciplinePage } from "~/components/PipingTable";
+import { SpinnerBlock } from "~/components/LoadMask";
 import type { CbsOption } from "~/lib/types";
 import { disciplineById } from "~/config/disciplines";
 import {
@@ -19,7 +19,7 @@ import {
   allowedFefCbsItemIdsQueryOptions,
 } from "~/utils/setup";
 import { fefRowsQueryOptions } from "~/utils/fefRows";
-import { getProjectIdFromCookie } from "~/utils/projectCookie";
+import { readProjectIdForLoader } from "~/utils/projectCookie";
 import { toCbsOption } from "~/lib/fef-helpers";
 
 const PIPING_L1 = disciplineById.piping.l1Codes!;
@@ -27,17 +27,6 @@ const PIPING_CRAFT_L1 = PIPING_L1.filter(
   (code) => !code.endsWith("01") && !code.endsWith("31"),
 );
 const SUPPORT_LABOR_L1 = ["602", "632"];
-const PROJECT_STORAGE_KEY = "selectedProjectId";
-
-async function readProjectIdForLoader(): Promise<number | null> {
-  if (typeof window === "undefined") {
-    return await getProjectIdFromCookie();
-  }
-  const raw = window.localStorage.getItem(PROJECT_STORAGE_KEY);
-  if (!raw) return null;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : null;
-}
 
 export const Route = createFileRoute("/piping")({
   loader: async ({ context }) => {
@@ -94,10 +83,7 @@ export const Route = createFileRoute("/piping")({
 function PipingPending() {
   return (
     <main className="flex flex-1 items-center justify-center p-12">
-      <div className="flex flex-col items-center gap-3 text-slate-500">
-        <Loader2 className="size-8 animate-spin" />
-        <span className="text-sm">Loading Piping…</span>
-      </div>
+      <SpinnerBlock label="Loading Piping…" />
     </main>
   );
 }

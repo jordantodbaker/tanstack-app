@@ -14,6 +14,7 @@ import { Route as SummaryRouteImport } from './routes/summary'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as PipingRouteImport } from './routes/piping'
 import { Route as MaterialsRouteImport } from './routes/materials'
+import { Route as ChangelogV2RouteImport } from './routes/changelog-v2'
 import { Route as BasisRouteImport } from './routes/basis'
 import { Route as DisciplineRouteImport } from './routes/$discipline'
 import { Route as IndexRouteImport } from './routes/index'
@@ -44,6 +45,11 @@ const PipingRoute = PipingRouteImport.update({
 const MaterialsRoute = MaterialsRouteImport.update({
   id: '/materials',
   path: '/materials',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChangelogV2Route = ChangelogV2RouteImport.update({
+  id: '/changelog-v2',
+  path: '/changelog-v2',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BasisRoute = BasisRouteImport.update({
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$discipline': typeof DisciplineRoute
   '/basis': typeof BasisRoute
+  '/changelog-v2': typeof ChangelogV2Route
   '/materials': typeof MaterialsRoute
   '/piping': typeof PipingRoute
   '/setup': typeof SetupRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$discipline': typeof DisciplineRoute
   '/basis': typeof BasisRoute
+  '/changelog-v2': typeof ChangelogV2Route
   '/materials': typeof MaterialsRoute
   '/piping': typeof PipingRoute
   '/setup': typeof SetupRoute
@@ -108,6 +116,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/$discipline': typeof DisciplineRoute
   '/basis': typeof BasisRoute
+  '/changelog-v2': typeof ChangelogV2Route
   '/materials': typeof MaterialsRoute
   '/piping': typeof PipingRoute
   '/setup': typeof SetupRoute
@@ -123,6 +132,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$discipline'
     | '/basis'
+    | '/changelog-v2'
     | '/materials'
     | '/piping'
     | '/setup'
@@ -136,6 +146,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$discipline'
     | '/basis'
+    | '/changelog-v2'
     | '/materials'
     | '/piping'
     | '/setup'
@@ -149,6 +160,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$discipline'
     | '/basis'
+    | '/changelog-v2'
     | '/materials'
     | '/piping'
     | '/setup'
@@ -163,6 +175,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DisciplineRoute: typeof DisciplineRoute
   BasisRoute: typeof BasisRoute
+  ChangelogV2Route: typeof ChangelogV2Route
   MaterialsRoute: typeof MaterialsRoute
   PipingRoute: typeof PipingRoute
   SetupRoute: typeof SetupRoute
@@ -207,6 +220,13 @@ declare module '@tanstack/react-router' {
       path: '/materials'
       fullPath: '/materials'
       preLoaderRoute: typeof MaterialsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/changelog-v2': {
+      id: '/changelog-v2'
+      path: '/changelog-v2'
+      fullPath: '/changelog-v2'
+      preLoaderRoute: typeof ChangelogV2RouteImport
       parentRoute: typeof rootRouteImport
     }
     '/basis': {
@@ -270,6 +290,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DisciplineRoute: DisciplineRoute,
   BasisRoute: BasisRoute,
+  ChangelogV2Route: ChangelogV2Route,
   MaterialsRoute: MaterialsRoute,
   PipingRoute: PipingRoute,
   SetupRoute: SetupRoute,

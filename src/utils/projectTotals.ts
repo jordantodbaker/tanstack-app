@@ -43,5 +43,6 @@ export const projectFefRowTotalsQueryOptions = (projectId: number | null) =>
         ? Promise.resolve(EMPTY_TOTALS)
         : fetchProjectFefRowTotals({ data: projectId }),
     enabled: projectId !== null,
-    staleTime: 30 * 1000,
+    // Saves invalidate this query key, so refetching on a timer is wasted work.
+    staleTime: Infinity,
   });

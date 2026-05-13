@@ -7,9 +7,25 @@ import {
   createRootRouteWithContext,
   useRouterState,
 } from "@tanstack/react-router";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import * as React from "react";
+
+// Devtools load lazily and only render in dev — the `import.meta.env.DEV`
+// branch is statically replaced by Vite, so the dynamic `import(...)` is
+// dropped entirely from the prod bundle.
+const ReactQueryDevtools = import.meta.env.DEV
+  ? React.lazy(() =>
+      import("@tanstack/react-query-devtools").then((m) => ({
+        default: m.ReactQueryDevtools,
+      })),
+    )
+  : () => null;
+const TanStackRouterDevtools = import.meta.env.DEV
+  ? React.lazy(() =>
+      import("@tanstack/react-router-devtools").then((m) => ({
+        default: m.TanStackRouterDevtools,
+      })),
+    )
+  : () => null;
 import type { QueryClient } from "@tanstack/react-query";
 import { Menu } from "lucide-react";
 import { DefaultCatchBoundary } from "~/components/DefaultCatchBoundary";
@@ -167,7 +183,7 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
             </div>
             <nav className="hidden sm:flex items-center gap-1 flex-1">
               <Link
-                to="/"
+                to="/changelog"
                 className="px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
                 activeProps={{ className: "text-red-800 bg-red-50" }}
                 inactiveProps={{
@@ -177,6 +193,18 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
                 activeOptions={{ exact: true }}
               >
                 Change Log
+              </Link>
+              <Link
+                to="/fco-log"
+                className="px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                activeProps={{ className: "text-red-800 bg-red-50" }}
+                inactiveProps={{
+                  className:
+                    "text-slate-600 hover:text-slate-900 hover:bg-slate-100",
+                }}
+                activeOptions={{ exact: true }}
+              >
+                FCO Log
               </Link>
               <Link
                 to="/setup"
@@ -189,18 +217,6 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
                 activeOptions={{ exact: true }}
               >
                 Field Estimate Form
-              </Link>
-              <Link
-                to="/changelog-v2"
-                className="px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                activeProps={{ className: "text-red-800 bg-red-50" }}
-                inactiveProps={{
-                  className:
-                    "text-slate-600 hover:text-slate-900 hover:bg-slate-100",
-                }}
-                activeOptions={{ exact: true }}
-              >
-                Change Log V2
               </Link>
             </nav>
             <div className="shrink-0 flex items-center gap-2 md:gap-3 ml-auto sm:ml-0">
@@ -216,8 +232,10 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
           <main className="flex-1 overflow-auto bg-slate-50">{children}</main>
         </div>
       </div>
-      <TanStackRouterDevtools position="bottom-right" />
-      <ReactQueryDevtools buttonPosition="bottom-left" />
+      <React.Suspense fallback={null}>
+        <TanStackRouterDevtools position="bottom-right" />
+        <ReactQueryDevtools buttonPosition="bottom-left" />
+      </React.Suspense>
     </>
   );
 }

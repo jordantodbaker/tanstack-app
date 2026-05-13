@@ -9,7 +9,9 @@ const adapter = new PrismaPg({ connectionString });
 export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
-    log: ["query", "info", "warn", "error"],
+    // `query` and `info` add per-statement I/O on every SSR request — drop
+    // them. Re-add `"query"` in dev when you need to inspect SQL.
+    log: ["warn", "error"],
     adapter,
   });
 

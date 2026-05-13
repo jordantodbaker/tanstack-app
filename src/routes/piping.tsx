@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PipingDisciplinePage } from "~/components/PipingTable";
-import { SpinnerBlock } from "~/components/LoadMask";
+import { LoadMask } from "~/components/LoadMask";
 import type { CbsOption } from "~/lib/types";
 import { disciplineById } from "~/config/disciplines";
 import {
@@ -81,9 +81,12 @@ export const Route = createFileRoute("/piping")({
 });
 
 function PipingPending() {
+  // Match the DisciplineTabs wrapper shape and fill the visible area below the
+  // 4rem header so the spinner appears at the same vertical position as the
+  // post-load `<LoadMask />` that DisciplineTabs renders during hydration.
   return (
-    <main className="flex flex-1 items-center justify-center p-12">
-      <SpinnerBlock label="Loading Piping…" />
+    <main className="relative p-3 md:p-4 min-h-[calc(100vh-4rem)]">
+      <LoadMask label="Loading Piping…" />
     </main>
   );
 }

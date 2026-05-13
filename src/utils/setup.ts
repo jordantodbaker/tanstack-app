@@ -23,6 +23,15 @@ export const fetchSetupCbsItems = createServerFn({ method: "GET" }).handler(
     }),
 );
 
+export const setupCbsItemsQueryOptions = () =>
+  queryOptions({
+    queryKey: ["setupCbsItems"],
+    queryFn: () => fetchSetupCbsItems(),
+    // The CBS catalog rarely changes within a session, so cache forever.
+    // Avoids re-shipping the entire CbsItem table on every /setup visit.
+    staleTime: Infinity,
+  });
+
 export const fetchAllowedFefCbsItemIds = createServerFn({ method: "GET" })
   .inputValidator((projectId: number) => projectId)
   .handler(async ({ data: projectId }) => {

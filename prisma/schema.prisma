@@ -20,17 +20,17 @@ model Post {
 }
 
 model Project {
-  id                 Int            @id @default(autoincrement())
+  id                 Int                 @id @default(autoincrement())
   displayId          String
   name               String
   description        String
   changeLogs         ChangeLog[]
-  changeLogV2s       ChangeLogV2[]
-  allowedFefCbsItems CbsItem[]      @relation("ProjectAllowedFefCbsItems")
+  fieldChangeOrders  FieldChangeOrder[]
+  allowedFefCbsItems CbsItem[]           @relation("ProjectAllowedFefCbsItems")
   fefRows            FefRow[]
   basisInputs        BasisInputs?
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @default(now())
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @default(now())
 }
 
 enum FefSection {
@@ -79,24 +79,6 @@ model BasisInputs {
   compositeLaborRate String   @default("")
   milestones         Json     @default("[]")
   updatedAt          DateTime @updatedAt
-}
-
-model ChangeLog {
-  id          Int          @id @default(autoincrement())
-  project     Project      @relation(fields: [projectId], references: [id])
-  projectId   Int
-  cvrId       Int
-  description String
-  status      StatusLookup @relation(fields: [statusId], references: [id])
-  statusId    Int
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @default(now())
-}
-
-model StatusLookup {
-  id         Int         @id
-  status     String
-  changelogs ChangeLog[]
 }
 
 model PipingGroup {
@@ -183,32 +165,101 @@ enum RiskLevel {
   CRITICAL
 }
 
-model ChangeLogV2 {
-  id                  Int          @id @default(autoincrement())
-  project             Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+model ChangeLog {
+  id                  Int                 @id @default(autoincrement())
+  project             Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   projectId           Int
-  cvrNumber           String       @default("")
+  cvrNumber           String              @default("")
   title               String
-  description         String       @default("")
-  status              ChangeStatus @default(REQUESTED)
-  type                ChangeType   @default(SCOPE)
-  discipline          String       @default("")
-  cbsCodes            String[]     @default([])
-  originator          String       @default("")
-  costImpact          Float        @default(0)
-  scheduleDaysImpact  Int          @default(0)
-  laborHoursImpact    Float        @default(0)
-  riskLevel           RiskLevel    @default(MEDIUM)
-  reasonCode          String       @default("")
-  requestedAt         DateTime     @default(now())
+  description         String              @default("")
+  status              ChangeStatus        @default(REQUESTED)
+  type                ChangeType          @default(SCOPE)
+  discipline          String              @default("")
+  cbsCodes            String[]            @default([])
+  originator          String              @default("")
+  costImpact          Float               @default(0)
+  scheduleDaysImpact  Int                 @default(0)
+  laborHoursImpact    Float               @default(0)
+  riskLevel           RiskLevel           @default(MEDIUM)
+  reasonCode          String              @default("")
+  requestedAt         DateTime            @default(now())
   dueDate             DateTime?
   approvedAt          DateTime?
-  approver            String       @default("")
-  notes               String       @default("")
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
+  approver            String              @default("")
+  notes               String              @default("")
+  fieldChangeOrders   FieldChangeOrder[]
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
 
   @@index([projectId, status])
+}
+
+enum FcoStatus {
+  DRAFT
+  SUBMITTED
+  IN_REVIEW
+  LINKED_TO_CVR
+  APPROVED
+  REJECTED
+  IMPLEMENTED
+  CLOSED
+  VOID
+}
+
+enum FcoOriginType {
+  FIELD_CONDITION
+  RFI_RESPONSE
+  DESIGN_OMISSION
+  DESIGN_CONFLICT
+  OWNER_DIRECTIVE
+  SAFETY
+  REGULATORY
+  WEATHER
+  SUBCONTRACTOR
+  OTHER
+}
+
+enum FcoPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model FieldChangeOrder {
+  id                 Int           @id @default(autoincrement())
+  project            Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId          Int
+  fcoNumber          String        @default("")
+  title              String
+  description        String        @default("")
+  status             FcoStatus     @default(DRAFT)
+  originType         FcoOriginType @default(FIELD_CONDITION)
+  priority           FcoPriority   @default(NORMAL)
+  discipline         String        @default("")
+  cbsCodes           String[]      @default([])
+  locationArea       String        @default("")
+  drawingRefs        String[]      @default([])
+  rfiNumbers         String[]      @default([])
+  initiatedBy        String        @default("")
+  fieldContact       String        @default("")
+  estimatedCost      Float         @default(0)
+  estimatedHours     Float         @default(0)
+  workStopped        Boolean       @default(false)
+  photosUrl          String        @default("")
+  reasonNarrative    String        @default("")
+  resolution         String        @default("")
+  notes              String        @default("")
+  initiatedAt        DateTime      @default(now())
+  neededBy           DateTime?
+  closedAt           DateTime?
+  linkedCvr          ChangeLog?    @relation(fields: [linkedCvrId], references: [id], onDelete: SetNull)
+  linkedCvrId        Int?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@index([projectId, status])
+  @@index([linkedCvrId])
 }
 
 model CbsItem {
@@ -238,4 +289,7 @@ model CbsItem {
   description        String?
   displayDescription String?
   allowedInProjects  Project[] @relation("ProjectAllowedFefCbsItems")
+
+  // Hot path: discipline routes filter by `l1 IN (...)` on every load.
+  @@index([l1])
 }

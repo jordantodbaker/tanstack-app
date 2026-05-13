@@ -14,13 +14,11 @@ import { Route as SummaryRouteImport } from './routes/summary'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as PipingRouteImport } from './routes/piping'
 import { Route as MaterialsRouteImport } from './routes/materials'
-import { Route as ChangelogV2RouteImport } from './routes/changelog-v2'
+import { Route as FcoLogRouteImport } from './routes/fco-log'
+import { Route as ChangelogRouteImport } from './routes/changelog'
 import { Route as BasisRouteImport } from './routes/basis'
 import { Route as DisciplineRouteImport } from './routes/$discipline'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ApiUsersRouteImport } from './routes/api/users'
-import { Route as ApiPostsRouteImport } from './routes/api/posts'
-import { Route as ApiUsersIdRouteImport } from './routes/api/users.$id'
 
 const ValidationRoute = ValidationRouteImport.update({
   id: '/validation',
@@ -47,9 +45,14 @@ const MaterialsRoute = MaterialsRouteImport.update({
   path: '/materials',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ChangelogV2Route = ChangelogV2RouteImport.update({
-  id: '/changelog-v2',
-  path: '/changelog-v2',
+const FcoLogRoute = FcoLogRouteImport.update({
+  id: '/fco-log',
+  path: '/fco-log',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChangelogRoute = ChangelogRouteImport.update({
+  id: '/changelog',
+  path: '/changelog',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BasisRoute = BasisRouteImport.update({
@@ -67,64 +70,43 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiUsersRoute = ApiUsersRouteImport.update({
-  id: '/api/users',
-  path: '/api/users',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPostsRoute = ApiPostsRouteImport.update({
-  id: '/api/posts',
-  path: '/api/posts',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiUsersIdRoute = ApiUsersIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => ApiUsersRoute,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$discipline': typeof DisciplineRoute
   '/basis': typeof BasisRoute
-  '/changelog-v2': typeof ChangelogV2Route
+  '/changelog': typeof ChangelogRoute
+  '/fco-log': typeof FcoLogRoute
   '/materials': typeof MaterialsRoute
   '/piping': typeof PipingRoute
   '/setup': typeof SetupRoute
   '/summary': typeof SummaryRoute
   '/validation': typeof ValidationRoute
-  '/api/posts': typeof ApiPostsRoute
-  '/api/users': typeof ApiUsersRouteWithChildren
-  '/api/users/$id': typeof ApiUsersIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$discipline': typeof DisciplineRoute
   '/basis': typeof BasisRoute
-  '/changelog-v2': typeof ChangelogV2Route
+  '/changelog': typeof ChangelogRoute
+  '/fco-log': typeof FcoLogRoute
   '/materials': typeof MaterialsRoute
   '/piping': typeof PipingRoute
   '/setup': typeof SetupRoute
   '/summary': typeof SummaryRoute
   '/validation': typeof ValidationRoute
-  '/api/posts': typeof ApiPostsRoute
-  '/api/users': typeof ApiUsersRouteWithChildren
-  '/api/users/$id': typeof ApiUsersIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$discipline': typeof DisciplineRoute
   '/basis': typeof BasisRoute
-  '/changelog-v2': typeof ChangelogV2Route
+  '/changelog': typeof ChangelogRoute
+  '/fco-log': typeof FcoLogRoute
   '/materials': typeof MaterialsRoute
   '/piping': typeof PipingRoute
   '/setup': typeof SetupRoute
   '/summary': typeof SummaryRoute
   '/validation': typeof ValidationRoute
-  '/api/posts': typeof ApiPostsRoute
-  '/api/users': typeof ApiUsersRouteWithChildren
-  '/api/users/$id': typeof ApiUsersIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -132,57 +114,50 @@ export interface FileRouteTypes {
     | '/'
     | '/$discipline'
     | '/basis'
-    | '/changelog-v2'
+    | '/changelog'
+    | '/fco-log'
     | '/materials'
     | '/piping'
     | '/setup'
     | '/summary'
     | '/validation'
-    | '/api/posts'
-    | '/api/users'
-    | '/api/users/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/$discipline'
     | '/basis'
-    | '/changelog-v2'
+    | '/changelog'
+    | '/fco-log'
     | '/materials'
     | '/piping'
     | '/setup'
     | '/summary'
     | '/validation'
-    | '/api/posts'
-    | '/api/users'
-    | '/api/users/$id'
   id:
     | '__root__'
     | '/'
     | '/$discipline'
     | '/basis'
-    | '/changelog-v2'
+    | '/changelog'
+    | '/fco-log'
     | '/materials'
     | '/piping'
     | '/setup'
     | '/summary'
     | '/validation'
-    | '/api/posts'
-    | '/api/users'
-    | '/api/users/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DisciplineRoute: typeof DisciplineRoute
   BasisRoute: typeof BasisRoute
-  ChangelogV2Route: typeof ChangelogV2Route
+  ChangelogRoute: typeof ChangelogRoute
+  FcoLogRoute: typeof FcoLogRoute
   MaterialsRoute: typeof MaterialsRoute
   PipingRoute: typeof PipingRoute
   SetupRoute: typeof SetupRoute
   SummaryRoute: typeof SummaryRoute
   ValidationRoute: typeof ValidationRoute
-  ApiPostsRoute: typeof ApiPostsRoute
-  ApiUsersRoute: typeof ApiUsersRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -222,11 +197,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MaterialsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/changelog-v2': {
-      id: '/changelog-v2'
-      path: '/changelog-v2'
-      fullPath: '/changelog-v2'
-      preLoaderRoute: typeof ChangelogV2RouteImport
+    '/fco-log': {
+      id: '/fco-log'
+      path: '/fco-log'
+      fullPath: '/fco-log'
+      preLoaderRoute: typeof FcoLogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/changelog': {
+      id: '/changelog'
+      path: '/changelog'
+      fullPath: '/changelog'
+      preLoaderRoute: typeof ChangelogRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/basis': {
@@ -250,54 +232,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/users': {
-      id: '/api/users'
-      path: '/api/users'
-      fullPath: '/api/users'
-      preLoaderRoute: typeof ApiUsersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/posts': {
-      id: '/api/posts'
-      path: '/api/posts'
-      fullPath: '/api/posts'
-      preLoaderRoute: typeof ApiPostsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/users/$id': {
-      id: '/api/users/$id'
-      path: '/$id'
-      fullPath: '/api/users/$id'
-      preLoaderRoute: typeof ApiUsersIdRouteImport
-      parentRoute: typeof ApiUsersRoute
-    }
   }
 }
-
-interface ApiUsersRouteChildren {
-  ApiUsersIdRoute: typeof ApiUsersIdRoute
-}
-
-const ApiUsersRouteChildren: ApiUsersRouteChildren = {
-  ApiUsersIdRoute: ApiUsersIdRoute,
-}
-
-const ApiUsersRouteWithChildren = ApiUsersRoute._addFileChildren(
-  ApiUsersRouteChildren,
-)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DisciplineRoute: DisciplineRoute,
   BasisRoute: BasisRoute,
-  ChangelogV2Route: ChangelogV2Route,
+  ChangelogRoute: ChangelogRoute,
+  FcoLogRoute: FcoLogRoute,
   MaterialsRoute: MaterialsRoute,
   PipingRoute: PipingRoute,
   SetupRoute: SetupRoute,
   SummaryRoute: SummaryRoute,
   ValidationRoute: ValidationRoute,
-  ApiPostsRoute: ApiPostsRoute,
-  ApiUsersRoute: ApiUsersRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -18,7 +18,10 @@ export function SpinnerBlock({
     <div className="flex flex-col items-center gap-3 text-slate-500">
       <Loader2
         className={cn(
-          "animate-spin",
+          // `will-change-transform` promotes the spinner to its own compositor
+          // layer so the rotation keeps running on the GPU when the main
+          // thread is busy (e.g. during a heavy initial table mount).
+          "animate-spin will-change-transform",
           size === "sm" ? "size-6" : "size-8",
         )}
       />

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Settings } from "lucide-react";
 import { LoadMask } from "~/components/LoadMask";
 import {
-  fetchSetupCbsItems,
+  setupCbsItemsQueryOptions,
   allowedFefCbsItemIdsQueryOptions,
   updateAllowedFefCbsItems,
 } from "~/utils/setup";
@@ -22,12 +22,13 @@ import { useSelectedProject } from "~/lib/selected-project";
 import { logger } from "~/lib/logger";
 
 export const Route = createFileRoute("/setup")({
-  loader: () => fetchSetupCbsItems(),
+  loader: ({ context }) =>
+    context.queryClient.ensureQueryData(setupCbsItemsQueryOptions()),
   component: SetupPage,
 });
 
 function SetupPage() {
-  const items = Route.useLoaderData();
+  const { data: items = [] } = useQuery(setupCbsItemsQueryOptions());
   const { projectId } = useSelectedProject();
   const tree = React.useMemo(() => buildCbsTree(items), [items]);
 

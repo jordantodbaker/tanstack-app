@@ -75,70 +75,32 @@ export type FcoItem = {
 const serializeDate = (d: Date | null): string | null =>
   d === null ? null : d.toISOString();
 
-type Row = {
-  id: number;
-  projectId: number;
-  fcoNumber: string;
-  title: string;
-  description: string;
-  status: string;
-  originType: string;
-  priority: string;
-  discipline: string;
-  cbsCodes: string[];
-  locationArea: string;
-  drawingRefs: string[];
-  rfiNumbers: string[];
-  initiatedBy: string;
-  fieldContact: string;
-  estimatedCost: number;
-  estimatedHours: number;
-  workStopped: boolean;
-  photosUrl: string;
-  reasonNarrative: string;
-  resolution: string;
-  notes: string;
-  initiatedAt: Date;
-  neededBy: Date | null;
-  closedAt: Date | null;
-  linkedCvrId: number | null;
+/**
+ * Prisma scalar row, derived from the client so it tracks schema changes,
+ * plus the `linkedCvr` relation pulled in via `include`.
+ */
+type Row = Awaited<
+  ReturnType<typeof prisma.fieldChangeOrder.findMany>
+>[number] & {
   linkedCvr: { id: number; cvrNumber: string; title: string } | null;
-  createdAt: Date;
-  updatedAt: Date;
 };
 
-const toItem = (r: Row): FcoItem => ({
-  id: r.id,
-  projectId: r.projectId,
-  fcoNumber: r.fcoNumber,
-  title: r.title,
-  description: r.description,
-  status: r.status as FcoStatus,
-  originType: r.originType as FcoOriginType,
-  priority: r.priority as FcoPriority,
-  discipline: r.discipline,
-  cbsCodes: r.cbsCodes,
-  locationArea: r.locationArea,
-  drawingRefs: r.drawingRefs,
-  rfiNumbers: r.rfiNumbers,
-  initiatedBy: r.initiatedBy,
-  fieldContact: r.fieldContact,
-  estimatedCost: r.estimatedCost,
-  estimatedHours: r.estimatedHours,
-  workStopped: r.workStopped,
-  photosUrl: r.photosUrl,
-  reasonNarrative: r.reasonNarrative,
-  resolution: r.resolution,
-  notes: r.notes,
-  initiatedAt: r.initiatedAt.toISOString(),
-  neededBy: serializeDate(r.neededBy),
-  closedAt: serializeDate(r.closedAt),
-  linkedCvrId: r.linkedCvrId,
-  linkedCvrNumber: r.linkedCvr?.cvrNumber ?? null,
-  linkedCvrTitle: r.linkedCvr?.title ?? null,
-  createdAt: r.createdAt.toISOString(),
-  updatedAt: r.updatedAt.toISOString(),
-});
+const toItem = (r: Row): FcoItem => {
+  const { linkedCvr, ...rest } = r;
+  return {
+    ...rest,
+    status: rest.status as FcoStatus,
+    originType: rest.originType as FcoOriginType,
+    priority: rest.priority as FcoPriority,
+    initiatedAt: rest.initiatedAt.toISOString(),
+    neededBy: serializeDate(rest.neededBy),
+    closedAt: serializeDate(rest.closedAt),
+    createdAt: rest.createdAt.toISOString(),
+    updatedAt: rest.updatedAt.toISOString(),
+    linkedCvrNumber: linkedCvr?.cvrNumber ?? null,
+    linkedCvrTitle: linkedCvr?.title ?? null,
+  };
+};
 
 export const fetchFcoList = createServerFn({ method: "GET" })
   .inputValidator((projectId: number) => projectId)

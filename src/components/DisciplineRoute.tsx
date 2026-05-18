@@ -6,7 +6,7 @@ import { disciplines } from "~/config/disciplines";
 import { roleDataQueryOptions } from "~/utils/roles";
 import { useSelectedProject } from "~/lib/selected-project";
 import { allowedFefCbsItemIdsQueryOptions } from "~/utils/setup";
-import { toCbsOption } from "~/lib/fef-helpers";
+import { toCbsOption, makeFefRow } from "~/lib/fef-helpers";
 
 type CbsItem = {
   id: number;
@@ -23,27 +23,11 @@ const isSupportLaborCode = (item: CbsItem) =>
   item.l1.endsWith("02") || item.l1.endsWith("32");
 
 function toSupportLaborRow(item: CbsItem): FefRow {
-  return {
+  return makeFefRow({
     id: item.displayCode,
     name: item.name ?? "",
-    description: "",
-    shopField: "",
-    weldGroupDescription: "",
-    quantity: "",
-    size: "",
     unit: item.uom,
-    metallurgyCode: "",
-    boreSize: "",
-    role: "",
-    schedule: "",
-    taskCode: "",
-    laborHours: "",
-    laborRate: "",
-    materialCost: "",
-    equipment: "",
-    notes: "",
-    sub: "",
-  };
+  });
 }
 
 export function DisciplineRoute({

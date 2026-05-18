@@ -1,31 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { canComputeTotalCost, toCbsOption } from "./fef-helpers";
+import {
+  FEF_ROW_STRING_FIELDS,
+  canComputeTotalCost,
+  fefRowHasUserData,
+  makeFefRow,
+  toCbsOption,
+} from "./fef-helpers";
 import type { FefRow } from "./types";
 
-function row(overrides: Partial<FefRow>): FefRow {
-  return {
-    id: "0",
-    name: "",
-    description: "",
-    shopField: "",
-    weldGroupDescription: "",
-    quantity: "",
-    size: "",
-    unit: "",
-    metallurgyCode: "",
-    boreSize: "",
-    role: "",
-    schedule: "",
-    taskCode: "",
-    laborHours: "",
-    laborRate: "",
-    materialCost: "",
-    equipment: "",
-    notes: "",
-    sub: "",
-    ...overrides,
-  };
-}
+const row = (overrides: Partial<FefRow>): FefRow =>
+  makeFefRow({ id: "0", ...overrides });
 
 describe("canComputeTotalCost", () => {
   it("returns true when hours > 0 and rate is a parseable non-empty string", () => {
@@ -148,5 +132,87 @@ describe("toCbsOption", () => {
   it("omits costCode in the output when the input has none", () => {
     const opt = toCbsOption({ displayCode: "X", name: "n", uom: "EA" });
     expect(opt.costCode).toBeUndefined();
+  });
+});
+
+describe("makeFefRow", () => {
+  // Independent enumeration of every FefRow key. This is the second witness
+  // that FEF_ROW_STRING_FIELDS stays complete: if a field is added to the
+  // FefRow type, both this list and FEF_ROW_STRING_FIELDS must be updated,
+  // and the "key set" test below asserts the two agree.
+  const EXPECTED_KEYS = [
+    "id",
+    "name",
+    "description",
+    "shopField",
+    "weldGroupDescription",
+    "quantity",
+    "size",
+    "unit",
+    "metallurgyCode",
+    "boreSize",
+    "role",
+    "schedule",
+    "taskCode",
+    "laborHours",
+    "laborRate",
+    "materialCost",
+    "equipment",
+    "notes",
+    "sub",
+  ];
+
+  it("returns a row with id and every string field blank", () => {
+    const r = makeFefRow();
+    expect(r.id).toBe("");
+    for (const f of FEF_ROW_STRING_FIELDS) {
+      expect(r[f]).toBe("");
+    }
+  });
+
+  it("applies partial overrides over the blank base", () => {
+    const r = makeFefRow({ id: "601-01", name: "Pipe Fab", laborHours: "8" });
+    expect(r.id).toBe("601-01");
+    expect(r.name).toBe("Pipe Fab");
+    expect(r.laborHours).toBe("8");
+    // Untouched fields stay blank.
+    expect(r.description).toBe("");
+    expect(r.sub).toBe("");
+  });
+
+  it("produces exactly the FefRow key set — guards against field drift", () => {
+    expect(Object.keys(makeFefRow()).sort()).toEqual(
+      [...EXPECTED_KEYS].sort(),
+    );
+    // FEF_ROW_STRING_FIELDS is every key except `id`.
+    expect([...FEF_ROW_STRING_FIELDS].sort()).toEqual(
+      EXPECTED_KEYS.filter((k) => k !== "id").sort(),
+    );
+  });
+
+  it("does not share field references between calls", () => {
+    const a = makeFefRow();
+    const b = makeFefRow();
+    expect(a).not.toBe(b);
+    a.name = "mutated";
+    expect(b.name).toBe("");
+  });
+});
+
+describe("fefRowHasUserData", () => {
+  it("returns false for a fully blank row", () => {
+    expect(fefRowHasUserData(makeFefRow())).toBe(false);
+  });
+
+  it("returns false when only the id is set", () => {
+    // id is not a free-text field — a placeholder/blank row with just an id
+    // still counts as empty.
+    expect(fefRowHasUserData(makeFefRow({ id: "__fe-blank-3" }))).toBe(false);
+  });
+
+  it("returns true when any free-text field holds data", () => {
+    for (const f of FEF_ROW_STRING_FIELDS) {
+      expect(fefRowHasUserData(makeFefRow({ [f]: "x" }))).toBe(true);
+    }
   });
 });

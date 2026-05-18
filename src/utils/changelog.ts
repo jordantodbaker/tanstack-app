@@ -56,50 +56,19 @@ export type ChangeLogItem = {
 const serializeDate = (d: Date | null): string | null =>
   d === null ? null : d.toISOString();
 
-const toItem = (r: {
-  id: number;
-  projectId: number;
-  cvrNumber: string;
-  title: string;
-  description: string;
-  status: string;
-  type: string;
-  discipline: string;
-  cbsCodes: string[];
-  originator: string;
-  costImpact: number;
-  scheduleDaysImpact: number;
-  laborHoursImpact: number;
-  riskLevel: string;
-  reasonCode: string;
-  requestedAt: Date;
-  dueDate: Date | null;
-  approvedAt: Date | null;
-  approver: string;
-  notes: string;
-  createdAt: Date;
-  updatedAt: Date;
-}): ChangeLogItem => ({
-  id: r.id,
-  projectId: r.projectId,
-  cvrNumber: r.cvrNumber,
-  title: r.title,
-  description: r.description,
+/** Prisma row shape, derived from the client so it tracks schema changes. */
+type ChangeLogRow = Awaited<
+  ReturnType<typeof prisma.changeLog.findMany>
+>[number];
+
+const toItem = (r: ChangeLogRow): ChangeLogItem => ({
+  ...r,
   status: r.status as ChangeStatus,
   type: r.type as ChangeType,
-  discipline: r.discipline,
-  cbsCodes: r.cbsCodes,
-  originator: r.originator,
-  costImpact: r.costImpact,
-  scheduleDaysImpact: r.scheduleDaysImpact,
-  laborHoursImpact: r.laborHoursImpact,
   riskLevel: r.riskLevel as RiskLevel,
-  reasonCode: r.reasonCode,
   requestedAt: r.requestedAt.toISOString(),
   dueDate: serializeDate(r.dueDate),
   approvedAt: serializeDate(r.approvedAt),
-  approver: r.approver,
-  notes: r.notes,
   createdAt: r.createdAt.toISOString(),
   updatedAt: r.updatedAt.toISOString(),
 });

@@ -1,5 +1,45 @@
 import type { CbsOption, FefRow } from "./types";
 
+/**
+ * The 18 free-text fields of a FefRow — every key except `id`. All default to
+ * `""`. Keep this as the single source of truth: row factories, blank-row
+ * detection, and DB serialization all iterate it, so adding a field to FefRow
+ * only requires updating the type and this list.
+ */
+export const FEF_ROW_STRING_FIELDS = [
+  "name",
+  "description",
+  "shopField",
+  "weldGroupDescription",
+  "quantity",
+  "size",
+  "unit",
+  "metallurgyCode",
+  "boreSize",
+  "role",
+  "schedule",
+  "taskCode",
+  "laborHours",
+  "laborRate",
+  "materialCost",
+  "equipment",
+  "notes",
+  "sub",
+] as const satisfies readonly (keyof FefRow)[];
+
+/** Builds a FefRow with every field blank, then applies `partial` overrides. */
+export function makeFefRow(partial: Partial<FefRow> = {}): FefRow {
+  const base = Object.fromEntries(
+    FEF_ROW_STRING_FIELDS.map((f) => [f, ""]),
+  ) as Omit<FefRow, "id">;
+  return { id: "", ...base, ...partial };
+}
+
+/** True when any free-text field of the row holds user-entered data. */
+export function fefRowHasUserData(row: FefRow): boolean {
+  return FEF_ROW_STRING_FIELDS.some((f) => row[f] !== "");
+}
+
 type CbsItemFields = {
   displayCode: string;
   costCode?: string;

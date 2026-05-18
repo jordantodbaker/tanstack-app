@@ -1,7 +1,11 @@
 import React from "react";
-import { useReactTable } from "@tanstack/react-table";
 import type { CbsOption, FefRow } from "~/lib/types";
-import { editableCellClass, readOnlyCellClass } from "~/lib/table-utils";
+import {
+  editableCellClass,
+  readOnlyCellClass,
+  TextCell,
+  type CellProps,
+} from "~/lib/table-utils";
 import { computeBoreSize } from "~/lib/utils";
 import {
   SearchableSelect,
@@ -20,16 +24,7 @@ function lookupCbsItem(
 
 export { ReadOnlyCell, TakeOffIdCell } from "~/lib/table-utils";
 
-export function ShopFieldSelectCell({
-  getValue,
-  row,
-  table,
-}: {
-  getValue: () => unknown;
-  row: { index: number };
-  column: { id: string };
-  table: ReturnType<typeof useReactTable<FefRow>>;
-}) {
+export function ShopFieldSelectCell({ getValue, row, table }: CellProps) {
   const value = getValue() as string;
   return (
     <select
@@ -73,16 +68,7 @@ export function ShopFieldSelectCell({
   );
 }
 
-export function WeldGroupSelectCell({
-  getValue,
-  row,
-  table,
-}: {
-  getValue: () => unknown;
-  row: { index: number };
-  column: { id: string };
-  table: ReturnType<typeof useReactTable<FefRow>>;
-}) {
+export function WeldGroupSelectCell({ getValue, row, table }: CellProps) {
   const value = getValue() as string;
   const { weldGroupOptions = [], weldGroupMaterialMap = {} } =
     table.options.meta ?? {};
@@ -128,15 +114,7 @@ export function WeldGroupSelectCell({
   );
 }
 
-export function SubCheckboxCell({
-  row,
-  table,
-}: {
-  row: { index: number; original: FefRow };
-  getValue: () => unknown;
-  column: { id: string };
-  table: ReturnType<typeof useReactTable<FefRow>>;
-}) {
+export function SubCheckboxCell({ row, table }: CellProps) {
   const cbsOptions = table.options.meta?.cbsOptions ?? [];
   const match = cbsOptions.find((o) => o.displayCode === row.original.id);
   const enabled = !!match && match.subReporting === true;
@@ -166,12 +144,7 @@ export function SubCheckboxCell({
   );
 }
 
-export function TotalCostCell({
-  row,
-}: {
-  row: { original: FefRow };
-  getValue: () => unknown;
-}) {
+export function TotalCostCell({ row }: CellProps) {
   const hours = parseFloat(row.original.laborHours);
   const rate = parseFloat(row.original.laborRate);
   const total =
@@ -181,16 +154,7 @@ export function TotalCostCell({
   return <span className={readOnlyCellClass}>{total}</span>;
 }
 
-export function RoleSelectCell({
-  getValue,
-  row,
-  table,
-}: {
-  getValue: () => unknown;
-  row: { index: number };
-  column: { id: string };
-  table: ReturnType<typeof useReactTable<FefRow>>;
-}) {
+export function RoleSelectCell({ getValue, row, table }: CellProps) {
   const value = getValue() as string;
   const { roleOptions = [], roleRates = [] } = table.options.meta ?? {};
   return (
@@ -231,15 +195,7 @@ function laborFactorFor(
   return lookup.get(row.taskCode)?.values.get(size);
 }
 
-export function LaborFactorCell({
-  row,
-  table,
-}: {
-  row: { original: FefRow };
-  getValue: () => unknown;
-  column: { id: string };
-  table: ReturnType<typeof useReactTable<FefRow>>;
-}) {
+export function LaborFactorCell({ row, table }: CellProps) {
   const factor = laborFactorFor(
     row.original,
     table.options.meta?.pipingFactorLookup,
@@ -251,15 +207,7 @@ export function LaborFactorCell({
   );
 }
 
-export function LaborHoursCell({
-  row,
-  table,
-}: {
-  row: { index: number; original: FefRow };
-  getValue: () => unknown;
-  column: { id: string };
-  table: ReturnType<typeof useReactTable<FefRow>>;
-}) {
+export function LaborHoursCell({ row, table }: CellProps) {
   const factor = laborFactorFor(
     row.original,
     table.options.meta?.pipingFactorLookup,
@@ -282,16 +230,7 @@ export function LaborHoursCell({
   return <span className={readOnlyCellClass}>{computed}</span>;
 }
 
-export function TaskCodeSelectCell({
-  getValue,
-  row,
-  table,
-}: {
-  getValue: () => unknown;
-  row: { index: number };
-  column: { id: string };
-  table: ReturnType<typeof useReactTable<FefRow>>;
-}) {
+export function TaskCodeSelectCell({ getValue, row, table }: CellProps) {
   const value = getValue() as string;
   const { taskCodeOptions = [], pipingFactorLookup } = table.options.meta ?? {};
 
@@ -322,64 +261,35 @@ export function TaskCodeSelectCell({
   );
 }
 
-export function PipingSizeCell({
-  getValue,
-  row,
-  table,
-}: {
-  getValue: () => unknown;
-  row: { index: number };
-  column: { id: string };
-  table: ReturnType<typeof useReactTable<FefRow>>;
-}) {
-  const initialValue = getValue() as string;
-  const [value, setValue] = React.useState(initialValue);
-
-  React.useEffect(() => {
-    setValue(initialValue);
-  }, [initialValue]);
-
-  const onBlur = () => {
-    const boreSize = computeBoreSize(value);
-    const rowData = table.getRowModel().rows[row.index].original;
-    const cbsMatch = lookupCbsItem(
-      rowData.metallurgyCode,
-      boreSize,
-      table.options.meta?.cbsOptions ?? [],
-    );
-    table.options.meta?.updateRow?.(row.index, {
-      size: value,
-      boreSize,
-      ...(cbsMatch
-        ? {
-            id: cbsMatch.displayCode,
-            description: cbsMatch.name,
-            unit: cbsMatch.uom,
-          }
-        : {}),
-    });
-  };
-
+export function PipingSizeCell({ getValue, row, table }: CellProps) {
   return (
-    <input
-      className={editableCellClass}
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={onBlur}
+    <TextCell
+      value={getValue() as string}
+      onCommit={(value) => {
+        const boreSize = computeBoreSize(value);
+        const rowData = table.getRowModel().rows[row.index].original;
+        const cbsMatch = lookupCbsItem(
+          rowData.metallurgyCode,
+          boreSize,
+          table.options.meta?.cbsOptions ?? [],
+        );
+        table.options.meta?.updateRow?.(row.index, {
+          size: value,
+          boreSize,
+          ...(cbsMatch
+            ? {
+                id: cbsMatch.displayCode,
+                description: cbsMatch.name,
+                unit: cbsMatch.uom,
+              }
+            : {}),
+        });
+      }}
     />
   );
 }
 
-export function ScheduleSelectCell({
-  getValue,
-  row,
-  table,
-}: {
-  getValue: () => unknown;
-  row: { index: number };
-  column: { id: string };
-  table: ReturnType<typeof useReactTable<FefRow>>;
-}) {
+export function ScheduleSelectCell({ getValue, row, table }: CellProps) {
   const value = getValue() as string;
   const { scheduleOptions = [], roleRates = [] } = table.options.meta ?? {};
   return (

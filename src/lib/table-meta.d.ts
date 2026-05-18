@@ -2,7 +2,7 @@ import "@tanstack/react-table";
 
 declare module "@tanstack/react-table" {
   interface TableMeta<TData extends RowData> {
-    updateData?: (rowIndex: number, columnId: string, value: any) => void;
+    updateData?: (rowIndex: number, columnId: string, value: string) => void;
     updateRow?: (rowIndex: number, updates: Record<string, string>) => void;
     deleteRow?: (rowIndex: number) => void;
     cbsOptions?: {

@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import type { FefRow } from "~/lib/types";
+import { fefRowHasUserData } from "~/lib/fef-helpers";
 import { logger } from "~/lib/logger";
 
 export type FefSectionKey = "TAKE_OFF" | "SUPPORT_LABOR" | "MATERIALS";
@@ -30,47 +31,13 @@ type FefRowDb = {
   position: number;
 };
 
-const toFefRow = (r: FefRowDb): FefRow => ({
-  id: r.cbsCode === "" ? `__fe-blank-loaded-${r.id}` : r.cbsCode,
-  name: r.name,
-  description: r.description,
-  shopField: r.shopField,
-  weldGroupDescription: r.weldGroupDescription,
-  quantity: r.quantity,
-  size: r.size,
-  unit: r.unit,
-  metallurgyCode: r.metallurgyCode,
-  boreSize: r.boreSize,
-  role: r.role,
-  schedule: r.schedule,
-  taskCode: r.taskCode,
-  laborHours: r.laborHours,
-  laborRate: r.laborRate,
-  materialCost: r.materialCost,
-  equipment: r.equipment,
-  notes: r.notes,
-  sub: r.sub,
-});
-
-const hasUserData = (r: FefRow): boolean =>
-  r.name !== "" ||
-  r.description !== "" ||
-  r.shopField !== "" ||
-  r.weldGroupDescription !== "" ||
-  r.quantity !== "" ||
-  r.size !== "" ||
-  r.unit !== "" ||
-  r.metallurgyCode !== "" ||
-  r.boreSize !== "" ||
-  r.role !== "" ||
-  r.schedule !== "" ||
-  r.taskCode !== "" ||
-  r.laborHours !== "" ||
-  r.laborRate !== "" ||
-  r.materialCost !== "" ||
-  r.equipment !== "" ||
-  r.notes !== "" ||
-  r.sub !== "";
+const toFefRow = (r: FefRowDb): FefRow => {
+  const { id, cbsCode, position: _position, ...fields } = r;
+  return {
+    ...fields,
+    id: cbsCode === "" ? `__fe-blank-loaded-${id}` : cbsCode,
+  };
+};
 
 export const fetchFefRows = createServerFn({ method: "GET" })
   .inputValidator(
@@ -125,32 +92,18 @@ export const saveFefRows = createServerFn({ method: "POST" })
     const { projectId, discipline, section, rows } = data;
     try {
       const persistable = rows
-        .filter((r) => !r.id.startsWith("__fe-blank-") || hasUserData(r))
-        .map((r, i) => ({
-          projectId,
-          discipline,
-          section,
-          position: i,
-          cbsCode: r.id.startsWith("__fe-blank-") ? "" : r.id,
-          name: r.name,
-          description: r.description,
-          shopField: r.shopField,
-          weldGroupDescription: r.weldGroupDescription,
-          quantity: r.quantity,
-          size: r.size,
-          unit: r.unit,
-          metallurgyCode: r.metallurgyCode,
-          boreSize: r.boreSize,
-          role: r.role,
-          schedule: r.schedule,
-          taskCode: r.taskCode,
-          laborHours: r.laborHours,
-          laborRate: r.laborRate,
-          materialCost: r.materialCost,
-          equipment: r.equipment,
-          notes: r.notes,
-          sub: r.sub,
-        }));
+        .filter((r) => !r.id.startsWith("__fe-blank-") || fefRowHasUserData(r))
+        .map((r, i) => {
+          const { id, ...fields } = r;
+          return {
+            projectId,
+            discipline,
+            section,
+            position: i,
+            cbsCode: id.startsWith("__fe-blank-") ? "" : id,
+            ...fields,
+          };
+        });
 
       if (persistable.length === 0) {
         const current = await prisma.fefRow.findMany({

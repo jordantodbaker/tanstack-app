@@ -12,6 +12,7 @@ import {
   type RowData,
   type TableMeta,
 } from "@tanstack/react-table";
+import { Trash2 } from "lucide-react";
 import type { CbsOption, FefRow } from "~/lib/types";
 import { computeBoreSize } from "./utils";
 import {
@@ -20,6 +21,7 @@ import {
 } from "./materialsStore";
 import { aggregateTakeOff } from "./take-off-sync";
 import { createDebug } from "./logger";
+import { makeFefRow } from "./fef-helpers";
 
 const debug = createDebug("fef");
 
@@ -29,28 +31,53 @@ export const editableCellClass =
 export const readOnlyCellClass =
   "block px-2 py-1 text-sm text-slate-500 bg-slate-100";
 
+/**
+ * Props every FEF table cell renderer receives from TanStack Table. Cells
+ * destructure only what they need; this is the shared maximal shape.
+ */
+export type CellProps = {
+  getValue: () => unknown;
+  row: { index: number; original: FefRow };
+  column: { id: string };
+  table: ReturnType<typeof useReactTable<FefRow>>;
+};
+
+/**
+ * Editable text input whose value commits on blur. Holds a local draft so
+ * keystrokes don't churn table state; resyncs when the underlying value
+ * changes. `stripBlankPrefix` blanks the synthetic `__fe-blank-*` row ids.
+ */
+export function TextCell({
+  value: rawValue,
+  stripBlankPrefix = false,
+  onCommit,
+}: {
+  value: string;
+  stripBlankPrefix?: boolean;
+  onCommit: (value: string) => void;
+}) {
+  const normalize = (v: string) =>
+    stripBlankPrefix && v.startsWith("__fe-blank-") ? "" : v;
+  const [value, setValue] = React.useState(() => normalize(rawValue));
+
+  React.useEffect(() => {
+    setValue(
+      stripBlankPrefix && rawValue.startsWith("__fe-blank-") ? "" : rawValue,
+    );
+  }, [rawValue, stripBlankPrefix]);
+
+  return (
+    <input
+      className={editableCellClass}
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={() => onCommit(value)}
+    />
+  );
+}
+
 export function makeBlankRow(i: number): FefRow {
-  return {
-    id: `__fe-blank-${i}`,
-    name: "",
-    description: "",
-    shopField: "",
-    weldGroupDescription: "",
-    quantity: "",
-    size: "",
-    unit: "",
-    metallurgyCode: "",
-    boreSize: "",
-    role: "",
-    schedule: "",
-    taskCode: "",
-    laborHours: "",
-    laborRate: "",
-    materialCost: "",
-    equipment: "",
-    notes: "",
-    sub: "",
-  };
+  return makeFefRow({ id: `__fe-blank-${i}` });
 }
 
 export const TAKE_OFF_INITIAL_ROWS: FefRow[] = Array.from(
@@ -69,81 +96,32 @@ export function useTakeOffSync(
   };
 }
 
-export function EditableCell({
-  getValue,
-  row,
-  column,
-  table,
-}: {
-  getValue: () => unknown;
-  row: { index: number };
-  column: { id: string };
-  table: ReturnType<typeof useReactTable<FefRow>>;
-}) {
-  const initialValue = getValue() as string;
-  const [value, setValue] = React.useState(initialValue);
-
-  React.useEffect(() => {
-    setValue(initialValue);
-  }, [initialValue]);
-
-  const onBlur = () => {
-    table.options.meta?.updateData?.(row.index, column.id, value);
-  };
-
+export function EditableCell({ getValue, row, column, table }: CellProps) {
   return (
-    <input
-      className={editableCellClass}
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={onBlur}
+    <TextCell
+      value={getValue() as string}
+      onCommit={(v) =>
+        table.options.meta?.updateData?.(row.index, column.id, v)
+      }
     />
   );
 }
 
-export function SizeCell({
-  getValue,
-  row,
-  table,
-}: {
-  getValue: () => unknown;
-  row: { index: number };
-  column: { id: string };
-  table: ReturnType<typeof useReactTable<FefRow>>;
-}) {
-  const initialValue = getValue() as string;
-  const [value, setValue] = React.useState(initialValue);
-
-  React.useEffect(() => {
-    setValue(initialValue);
-  }, [initialValue]);
-
-  const onBlur = () => {
-    table.options.meta?.updateRow?.(row.index, {
-      size: value,
-      boreSize: computeBoreSize(value),
-    });
-  };
-
+export function SizeCell({ getValue, row, table }: CellProps) {
   return (
-    <input
-      className={editableCellClass}
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={onBlur}
+    <TextCell
+      value={getValue() as string}
+      onCommit={(v) =>
+        table.options.meta?.updateRow?.(row.index, {
+          size: v,
+          boreSize: computeBoreSize(v),
+        })
+      }
     />
   );
 }
 
-export function CbsSelectCell({
-  row,
-  table,
-}: {
-  getValue: () => unknown;
-  row: { index: number; original: FefRow };
-  column: { id: string };
-  table: ReturnType<typeof useReactTable<FefRow>>;
-}) {
+export function CbsSelectCell({ row, table }: CellProps) {
   const cbsOptions = table.options.meta?.cbsOptions ?? [];
   const currentDisplayCode = row.original.id;
 
@@ -174,35 +152,14 @@ export function CbsSelectCell({
   );
 }
 
-export function TakeOffIdCell({
-  getValue,
-  row,
-  column,
-  table,
-}: {
-  getValue: () => unknown;
-  row: { index: number };
-  column: { id: string };
-  table: ReturnType<typeof useReactTable<FefRow>>;
-}) {
-  const raw = getValue() as string;
-  const initialValue = raw.startsWith("__fe-blank-") ? "" : raw;
-  const [value, setValue] = React.useState(initialValue);
-
-  React.useEffect(() => {
-    setValue(raw.startsWith("__fe-blank-") ? "" : raw);
-  }, [raw]);
-
-  const onBlur = () => {
-    table.options.meta?.updateData?.(row.index, column.id, value);
-  };
-
+export function TakeOffIdCell({ getValue, row, column, table }: CellProps) {
   return (
-    <input
-      className={editableCellClass}
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={onBlur}
+    <TextCell
+      value={getValue() as string}
+      stripBlankPrefix
+      onCommit={(v) =>
+        table.options.meta?.updateData?.(row.index, column.id, v)
+      }
     />
   );
 }
@@ -223,15 +180,7 @@ export function ReadOnlyCell({ getValue }: { getValue: () => unknown }) {
   );
 }
 
-export function DeleteRowCell({
-  row,
-  table,
-}: {
-  row: { index: number; original: FefRow };
-  getValue: () => unknown;
-  column: { id: string };
-  table: ReturnType<typeof useReactTable<FefRow>>;
-}) {
+export function DeleteRowCell({ row, table }: CellProps) {
   const onDelete = table.options.meta?.deleteRow;
   // Don't allow deleting the trailing auto-appended blank row — the table
   // always wants one undeletable blank slot at the bottom for new entries.
@@ -251,58 +200,32 @@ export function DeleteRowCell({
         onClick={() => onDelete?.(row.index)}
         className="flex h-7 w-7 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600 cursor-pointer transition-colors"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M3 6h18" />
-          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-          <path d="M10 11v6" />
-          <path d="M14 11v6" />
-        </svg>
+        <Trash2 size={14} />
       </button>
     </div>
   );
 }
 
-export function CbsNameCell({
+/** Read-only cell that mirrors a field from the row's matched CBS option. */
+function CbsLookupCell({
   row,
   table,
-}: {
-  getValue: () => unknown;
-  row: { original: FefRow };
-  column: { id: string };
-  table: ReturnType<typeof useReactTable<FefRow>>;
-}) {
+  field,
+}: Pick<CellProps, "row" | "table"> & { field: "name" | "uom" }) {
   const cbsOptions = table.options.meta?.cbsOptions ?? [];
   const match = cbsOptions.find((o) => o.displayCode === row.original.id);
+  const fallback = field === "name" ? row.original.name : row.original.unit;
   return (
-    <span className={readOnlyCellClass}>{match?.name ?? row.original.name}</span>
+    <span className={readOnlyCellClass}>{match?.[field] ?? fallback}</span>
   );
 }
 
-export function CbsUomCell({
-  row,
-  table,
-}: {
-  getValue: () => unknown;
-  row: { original: FefRow };
-  column: { id: string };
-  table: ReturnType<typeof useReactTable<FefRow>>;
-}) {
-  const cbsOptions = table.options.meta?.cbsOptions ?? [];
-  const match = cbsOptions.find((o) => o.displayCode === row.original.id);
-  return (
-    <span className={readOnlyCellClass}>{match?.uom ?? row.original.unit}</span>
-  );
+export function CbsNameCell(props: CellProps) {
+  return <CbsLookupCell {...props} field="name" />;
+}
+
+export function CbsUomCell(props: CellProps) {
+  return <CbsLookupCell {...props} field="uom" />;
 }
 
 type PaginatableTable = {

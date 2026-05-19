@@ -32,12 +32,13 @@ import { DefaultCatchBoundary } from "~/components/DefaultCatchBoundary";
 import { NotFound } from "~/components/NotFound";
 import appCss from "~/styles/app.css?url";
 import { seo } from "~/utils/seo";
-import { ClerkProvider, SignOutButton } from "@clerk/tanstack-react-start";
+import { ClerkProvider, useClerk } from "@clerk/tanstack-react-start";
 import { UserButton, Show, SignIn } from "@clerk/tanstack-react-start";
 import { Sidebar } from "~/components/Sidebar";
 import { SelectedProjectProvider } from "~/lib/selected-project";
 import { ProjectSelect } from "~/components/ProjectSelect";
 import { useCurrentUser } from "~/lib/use-current-user";
+import { Button } from "~/components/ui/button";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -139,6 +140,27 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * Explicit sign-out control. Uses `useClerk().signOut` directly rather than
+ * Clerk's `<SignOutButton>` (which clones an unstyled default button) so the
+ * button is styled consistently and the post-sign-out destination is a real
+ * landable route — `/` is redirect-only.
+ */
+function SignOutControl() {
+  const clerk = useClerk();
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => {
+        void clerk.signOut({ redirectUrl: "/changelog" });
+      }}
+    >
+      Sign out
+    </Button>
+  );
+}
+
 function SignedInLayout({ children }: { children: React.ReactNode }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = React.useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -227,7 +249,7 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
             <div className="shrink-0 flex items-center gap-2 md:gap-3 ml-auto sm:ml-0">
               <UserButton />
               <div className="hidden sm:block">
-                <SignOutButton />
+                <SignOutControl />
               </div>
             </div>
           </div>

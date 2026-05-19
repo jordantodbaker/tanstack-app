@@ -19,6 +19,7 @@ import { Route as ChangelogRouteImport } from './routes/changelog'
 import { Route as BasisRouteImport } from './routes/basis'
 import { Route as DisciplineRouteImport } from './routes/$discipline'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminProjectsRouteImport } from './routes/admin.projects'
 
 const ValidationRoute = ValidationRouteImport.update({
   id: '/validation',
@@ -70,6 +71,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminProjectsRoute = AdminProjectsRouteImport.update({
+  id: '/admin/projects',
+  path: '/admin/projects',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -82,6 +88,7 @@ export interface FileRoutesByFullPath {
   '/setup': typeof SetupRoute
   '/summary': typeof SummaryRoute
   '/validation': typeof ValidationRoute
+  '/admin/projects': typeof AdminProjectsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
   '/summary': typeof SummaryRoute
   '/validation': typeof ValidationRoute
+  '/admin/projects': typeof AdminProjectsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -107,6 +115,7 @@ export interface FileRoutesById {
   '/setup': typeof SetupRoute
   '/summary': typeof SummaryRoute
   '/validation': typeof ValidationRoute
+  '/admin/projects': typeof AdminProjectsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -121,6 +130,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/summary'
     | '/validation'
+    | '/admin/projects'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -133,6 +143,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/summary'
     | '/validation'
+    | '/admin/projects'
   id:
     | '__root__'
     | '/'
@@ -145,6 +156,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/summary'
     | '/validation'
+    | '/admin/projects'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -158,6 +170,7 @@ export interface RootRouteChildren {
   SetupRoute: typeof SetupRoute
   SummaryRoute: typeof SummaryRoute
   ValidationRoute: typeof ValidationRoute
+  AdminProjectsRoute: typeof AdminProjectsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -232,6 +245,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/projects': {
+      id: '/admin/projects'
+      path: '/admin/projects'
+      fullPath: '/admin/projects'
+      preLoaderRoute: typeof AdminProjectsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -246,6 +266,7 @@ const rootRouteChildren: RootRouteChildren = {
   SetupRoute: SetupRoute,
   SummaryRoute: SummaryRoute,
   ValidationRoute: ValidationRoute,
+  AdminProjectsRoute: AdminProjectsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

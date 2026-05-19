@@ -5,12 +5,14 @@ import {
   ChevronRight,
   PanelLeftClose,
   PanelLeftOpen,
+  Shield,
   X,
 } from "lucide-react";
 import React from "react";
 import { disciplines } from "~/config/disciplines";
 import { useSelectedProject } from "~/lib/selected-project";
 import { allowedCbsL1CodesQueryOptions } from "~/utils/setup";
+import { useIsAdmin } from "~/lib/use-current-user";
 
 export function Sidebar({
   mobileOpen = false,
@@ -21,7 +23,7 @@ export function Sidebar({
 }) {
   const [collapsed, setCollapsed] = React.useState(false);
   const [openSections, setOpenSections] = React.useState<Set<string>>(
-    () => new Set(["project-controls"]),
+    () => new Set(["project-controls", "admin"]),
   );
 
   const toggleSection = (id: string) => {
@@ -49,6 +51,10 @@ export function Sidebar({
       return d.l1Codes.some((code) => allowed.has(code));
     });
   }, [projectId, allowedL1Codes]);
+
+  const isAdmin = useIsAdmin();
+
+  const navClassName = `w-full flex items-center gap-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors ${collapsed ? "md:justify-center md:px-0 px-4" : "px-4"}`;
 
   return (
     <>
@@ -83,8 +89,6 @@ export function Sidebar({
           {visibleDisciplines.map((discipline) => {
             const Icon = discipline.icon;
             const isOpen = openSections.has(discipline.id);
-
-            const navClassName = `w-full flex items-center gap-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors ${collapsed ? "md:justify-center md:px-0 px-4" : "px-4"}`;
 
             return (
               <div key={discipline.id}>
@@ -165,6 +169,55 @@ export function Sidebar({
             );
           })}
         </nav>
+
+        {/* Admin — pinned below the scrolling discipline list so it stays
+            visible regardless of how many disciplines are shown. Only
+            rendered for ADMINISTRATOR users; the /admin routes are also
+            guarded server-side, so hiding this is purely UX. */}
+        {isAdmin && (
+          <div className="border-t border-slate-200 py-1 shrink-0">
+            <button
+              onClick={() => toggleSection("admin")}
+              title={collapsed ? "Admin" : undefined}
+              className={navClassName}
+            >
+              <Shield size={17} className="shrink-0 text-slate-500" />
+              <span
+                className={`flex-1 text-left ${collapsed ? "md:hidden" : ""}`}
+              >
+                Admin
+              </span>
+              <span className={collapsed ? "md:hidden" : ""}>
+                {openSections.has("admin") ? (
+                  <ChevronDown size={13} className="text-slate-400" />
+                ) : (
+                  <ChevronRight size={13} className="text-slate-400" />
+                )}
+              </span>
+            </button>
+
+            {openSections.has("admin") && (
+              <div
+                className={`ml-9 border-l border-slate-200 mb-1 ${collapsed ? "md:hidden" : ""}`}
+              >
+                <Link
+                  to="/admin/projects"
+                  activeOptions={{ exact: true }}
+                  onClick={onMobileClose}
+                  className="block pl-3 pr-2 py-1.5 text-sm rounded-r transition-colors"
+                  activeProps={{
+                    className: "text-red-800 bg-red-50 font-medium",
+                  }}
+                  inactiveProps={{
+                    className: "text-slate-600 hover:bg-slate-100",
+                  }}
+                >
+                  Projects
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
       </aside>
     </>
   );

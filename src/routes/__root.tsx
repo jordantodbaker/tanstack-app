@@ -37,6 +37,7 @@ import { UserButton, Show, SignIn } from "@clerk/tanstack-react-start";
 import { Sidebar } from "~/components/Sidebar";
 import { SelectedProjectProvider } from "~/lib/selected-project";
 import { ProjectSelect } from "~/components/ProjectSelect";
+import { useCurrentUser } from "~/lib/use-current-user";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -141,6 +142,10 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 function SignedInLayout({ children }: { children: React.ReactNode }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = React.useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  // Resolve (and lazily create/bootstrap) the signed-in user's local record
+  // so their role is available app-wide via the React Query cache.
+  useCurrentUser();
 
   React.useEffect(() => {
     setMobileSidebarOpen(false);

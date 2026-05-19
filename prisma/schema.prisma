@@ -19,6 +19,24 @@ model Post {
   createdAt DateTime @default(now())
 }
 
+// Privilege levels, extensible: add a value here and a rank in ROLE_RANK
+// (src/utils/users.ts) to introduce an intermediate level later.
+enum UserRole {
+  USER
+  ADMINISTRATOR
+}
+
+// App user, lazily synced from Clerk on first authenticated request.
+// `clerkId` is the Clerk user id; `role` drives role-based access control.
+model User {
+  id        Int      @id @default(autoincrement())
+  clerkId   String   @unique
+  email     String   @unique
+  role      UserRole @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Project {
   id                 Int                 @id @default(autoincrement())
   displayId          String

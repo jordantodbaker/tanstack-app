@@ -28,6 +28,8 @@ export type FefRow = {
   notes: string;
   /** "true" when the user has ticked the Sub checkbox, otherwise "". */
   sub: string;
+  /** Selected area's id (as a string), or "" when none. */
+  area: string;
 };
 
 export type CbsOption = {

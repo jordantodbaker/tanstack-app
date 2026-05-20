@@ -23,6 +23,7 @@ function row(overrides: Partial<FefRow>): FefRow {
     equipment: "",
     notes: "",
     sub: "",
+    area: "",
     ...overrides,
   };
 }

@@ -25,6 +25,7 @@ export const FEF_ROW_STRING_FIELDS = [
   "equipment",
   "notes",
   "sub",
+  "area",
 ] as const satisfies readonly (keyof FefRow)[];
 
 /** Builds a FefRow with every field blank, then applies `partial` overrides. */

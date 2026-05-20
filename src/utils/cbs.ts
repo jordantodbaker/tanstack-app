@@ -146,3 +146,19 @@ export const cbsItemsQueryOptions = () =>
     queryKey: ["cbsItems"],
     queryFn: () => fetchCbsItems(),
   });
+
+/** Lightweight code + name list for CBS item pickers (e.g. FCO dialog). */
+export const fetchCbsCodeOptions = createServerFn({ method: "GET" }).handler(
+  () =>
+    prisma.cbsItem.findMany({
+      orderBy: { displayCode: "asc" },
+      select: { displayCode: true, name: true },
+    }),
+);
+
+export const cbsCodeOptionsQueryOptions = () =>
+  queryOptions({
+    queryKey: ["cbsCodeOptions"],
+    queryFn: () => fetchCbsCodeOptions(),
+    staleTime: Infinity,
+  });

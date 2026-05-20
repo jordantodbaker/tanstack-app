@@ -46,9 +46,25 @@ model Project {
   fieldChangeOrders  FieldChangeOrder[]
   allowedFefCbsItems CbsItem[]           @relation("ProjectAllowedFefCbsItems")
   fefRows            FefRow[]
+  areas              Area[]
   basisInputs        BasisInputs?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @default(now())
+}
+
+// A physical location on a project. Owned by exactly one project for now
+// (one-to-many); could become a shared pool (many-to-many) later.
+model Area {
+  id          Int      @id @default(autoincrement())
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId   Int
+  displayId   String
+  name        String
+  description String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([projectId])
 }
 
 enum FefSection {
@@ -83,6 +99,7 @@ model FefRow {
   equipment            String     @default("")
   notes                String     @default("")
   sub                  String     @default("")
+  area                 String     @default("")
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
 

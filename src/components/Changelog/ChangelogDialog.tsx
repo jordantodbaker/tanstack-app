@@ -1,4 +1,5 @@
 import React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
@@ -31,6 +32,9 @@ import {
   STATUS_LABELS,
   TYPE_LABELS,
 } from "~/components/Changelog/StatusBadge";
+import { SearchableMultiSelect } from "~/components/SearchableMultiSelect";
+import type { SearchableSelectOption } from "~/components/SearchableSelect";
+import { cbsCodeOptionsQueryOptions } from "~/utils/cbs";
 
 const DISCIPLINE_OPTIONS = disciplines
   .filter((d) => d.l1Codes && d.l1Codes.length > 0)
@@ -113,18 +117,20 @@ export function ChangelogDialog({
     setForm((f) => ({ ...f, [key]: value }));
   }
 
-  const [cbsCodesText, setCbsCodesText] = React.useState("");
-  React.useEffect(() => {
-    setCbsCodesText(form.cbsCodes.join(", "));
-  }, [form.cbsCodes]);
+  const { data: cbsCodeOptions = [] } = useQuery({
+    ...cbsCodeOptionsQueryOptions(),
+    enabled: open,
+  });
 
-  function commitCbsCodes(raw: string) {
-    const codes = raw
-      .split(/[,\n]/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    update("cbsCodes", codes);
-  }
+  const cbsOptions: SearchableSelectOption[] = React.useMemo(
+    () =>
+      cbsCodeOptions.map((c) => ({
+        value: c.displayCode,
+        label: c.name ? `${c.displayCode} — ${c.name}` : c.displayCode,
+        searchText: `${c.displayCode} ${c.name ?? ""}`.toLowerCase(),
+      })),
+    [cbsCodeOptions],
+  );
 
   async function handleSubmit() {
     setBusy(true);
@@ -251,26 +257,14 @@ export function ChangelogDialog({
 
           <Labeled
             label="Affected CBS Codes"
-            help="Comma-separated displayCodes (e.g. 612-00-0000-00-C, 612-00-0000-00-L)"
+            help="Search and select one or more CBS items"
           >
-            <Input
-              value={cbsCodesText}
-              onChange={(e) => setCbsCodesText(e.target.value)}
-              onBlur={(e) => commitCbsCodes(e.target.value)}
-              placeholder="612-00-0000-00-C, 632-00-0000-00-L"
+            <SearchableMultiSelect
+              values={form.cbsCodes}
+              options={cbsOptions}
+              placeholder="Search CBS items…"
+              onChange={(v) => update("cbsCodes", v)}
             />
-            {form.cbsCodes.length > 0 && (
-              <div className="mt-1 flex flex-wrap gap-1">
-                {form.cbsCodes.map((code) => (
-                  <span
-                    key={code}
-                    className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-700"
-                  >
-                    {code}
-                  </span>
-                ))}
-              </div>
-            )}
           </Labeled>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

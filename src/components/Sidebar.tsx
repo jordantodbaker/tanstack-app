@@ -214,6 +214,34 @@ export function Sidebar({
                 >
                   Projects
                 </Link>
+                <Link
+                  to="/admin/areas"
+                  activeOptions={{ exact: true }}
+                  onClick={onMobileClose}
+                  className="block pl-3 pr-2 py-1.5 text-sm rounded-r transition-colors"
+                  activeProps={{
+                    className: "text-red-800 bg-red-50 font-medium",
+                  }}
+                  inactiveProps={{
+                    className: "text-slate-600 hover:bg-slate-100",
+                  }}
+                >
+                  Areas
+                </Link>
+                <Link
+                  to="/admin/users"
+                  activeOptions={{ exact: true }}
+                  onClick={onMobileClose}
+                  className="block pl-3 pr-2 py-1.5 text-sm rounded-r transition-colors"
+                  activeProps={{
+                    className: "text-red-800 bg-red-50 font-medium",
+                  }}
+                  inactiveProps={{
+                    className: "text-slate-600 hover:bg-slate-100",
+                  }}
+                >
+                  Users
+                </Link>
               </div>
             )}
           </div>

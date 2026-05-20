@@ -13,7 +13,7 @@ import {
 } from "~/components/ui/accordion";
 import { useSelectedProject } from "~/lib/selected-project";
 import { allowedFefCbsItemIdsQueryOptions } from "~/utils/setup";
-import { toCbsOption } from "~/lib/fef-helpers";
+import { makeFefRow, toCbsOption } from "~/lib/fef-helpers";
 
 export const Route = createFileRoute("/materials")({
   loader: () => fetchCbsItemsByL1EndsWith({ data: ["01", "31"] }),
@@ -56,27 +56,13 @@ function MaterialsPage() {
         key,
         title: items[0].accountDescription ?? key,
         cbsOptions: items.map(toCbsOption),
-        rows: items.map((item) => ({
-          id: item.displayCode,
-          name: item.name ?? "",
-          description: "",
-          shopField: "",
-          weldGroupDescription: "",
-          quantity: "",
-          size: "",
-          unit: item.uom,
-          metallurgyCode: "",
-          boreSize: "",
-          role: "",
-          schedule: "",
-          taskCode: "",
-          laborHours: "",
-          laborRate: "",
-          materialCost: "",
-          equipment: "",
-          notes: "",
-          sub: "",
-        })),
+        rows: items.map((item) =>
+          makeFefRow({
+            id: item.displayCode,
+            name: item.name ?? "",
+            unit: item.uom,
+          }),
+        ),
       };
     });
   }, [cbsItems, projectId, allowedIdSet]);

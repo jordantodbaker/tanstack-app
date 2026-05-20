@@ -34,6 +34,9 @@ import {
   FCO_PRIORITY_LABELS,
   FCO_STATUS_LABELS,
 } from "~/components/FCOLog/FcoBadges";
+import { SearchableMultiSelect } from "~/components/SearchableMultiSelect";
+import type { SearchableSelectOption } from "~/components/SearchableSelect";
+import { cbsCodeOptionsQueryOptions } from "~/utils/cbs";
 
 const DISCIPLINE_OPTIONS = disciplines
   .filter((d) => d.l1Codes && d.l1Codes.length > 0)
@@ -126,6 +129,21 @@ export function FcoDialog({
     enabled: open && projectId !== null,
   });
 
+  const { data: cbsCodeOptions = [] } = useQuery({
+    ...cbsCodeOptionsQueryOptions(),
+    enabled: open,
+  });
+
+  const cbsOptions: SearchableSelectOption[] = React.useMemo(
+    () =>
+      cbsCodeOptions.map((c) => ({
+        value: c.displayCode,
+        label: c.name ? `${c.displayCode} — ${c.name}` : c.displayCode,
+        searchText: `${c.displayCode} ${c.name ?? ""}`.toLowerCase(),
+      })),
+    [cbsCodeOptions],
+  );
+
   React.useEffect(() => {
     if (open) {
       setForm(initial ? fromItem(initial) : blankForm());
@@ -136,19 +154,14 @@ export function FcoDialog({
     setForm((f) => ({ ...f, [key]: value }));
   }
 
-  const [cbsCodesText, setCbsCodesText] = React.useState("");
   const [drawingRefsText, setDrawingRefsText] = React.useState("");
   const [rfiNumbersText, setRfiNumbersText] = React.useState("");
   React.useEffect(() => {
-    setCbsCodesText(form.cbsCodes.join(", "));
     setDrawingRefsText(form.drawingRefs.join(", "));
     setRfiNumbersText(form.rfiNumbers.join(", "));
-  }, [form.cbsCodes, form.drawingRefs, form.rfiNumbers]);
+  }, [form.drawingRefs, form.rfiNumbers]);
 
-  function commitList(
-    raw: string,
-    key: "cbsCodes" | "drawingRefs" | "rfiNumbers",
-  ) {
+  function commitList(raw: string, key: "drawingRefs" | "rfiNumbers") {
     const items = raw
       .split(/[,\n]/)
       .map((s) => s.trim())
@@ -404,26 +417,14 @@ export function FcoDialog({
 
           <Labeled
             label="Affected CBS Codes"
-            help="Comma-separated displayCodes"
+            help="Search and select one or more CBS items"
           >
-            <Input
-              value={cbsCodesText}
-              onChange={(e) => setCbsCodesText(e.target.value)}
-              onBlur={(e) => commitList(e.target.value, "cbsCodes")}
-              placeholder="612-00-0000-00-C, 632-00-0000-00-L"
+            <SearchableMultiSelect
+              values={form.cbsCodes}
+              options={cbsOptions}
+              placeholder="Search CBS items…"
+              onChange={(v) => update("cbsCodes", v)}
             />
-            {form.cbsCodes.length > 0 && (
-              <div className="mt-1 flex flex-wrap gap-1">
-                {form.cbsCodes.map((code) => (
-                  <span
-                    key={code}
-                    className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-700"
-                  >
-                    {code}
-                  </span>
-                ))}
-              </div>
-            )}
           </Labeled>
 
           {/* Impact */}

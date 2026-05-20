@@ -1,6 +1,11 @@
 import { auth, clerkClient } from "@clerk/tanstack-react-start/server";
 import { prisma } from "../server/db";
-import { hasAtLeastRole, type CurrentUser, type UserRole } from "./users";
+import {
+  hasAtLeastRole,
+  type AdminUser,
+  type CurrentUser,
+  type UserRole,
+} from "./users";
 
 /**
  * SERVER-ONLY. This module imports `prisma` and Clerk's server SDK, so it must
@@ -93,3 +98,45 @@ export async function requireRole(minimum: UserRole): Promise<CurrentUser> {
 /** Convenience guard: requires ADMINISTRATOR privilege. */
 export const requireAdmin = (): Promise<CurrentUser> =>
   requireRole("ADMINISTRATOR");
+
+function toAdminUser(row: {
+  id: number;
+  email: string;
+  role: string;
+  createdAt: Date;
+}): AdminUser {
+  return {
+    id: row.id,
+    email: row.email,
+    role: row.role as UserRole,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/** Lists every synced user, admins first. Admin-only. */
+export async function listUsers(): Promise<AdminUser[]> {
+  await requireAdmin();
+  const rows = await prisma.user.findMany({
+    orderBy: [{ role: "desc" }, { email: "asc" }],
+  });
+  return rows.map(toAdminUser);
+}
+
+/**
+ * Changes a user's role. Admin-only. Blocks admins from removing their own
+ * administrator access so they can't lock themselves out.
+ */
+export async function setUserRole(
+  userId: number,
+  role: UserRole,
+): Promise<AdminUser> {
+  const admin = await requireAdmin();
+  if (userId === admin.id && role !== "ADMINISTRATOR") {
+    throw new Error("You cannot remove your own administrator access.");
+  }
+  const row = await prisma.user.update({
+    where: { id: userId },
+    data: { role },
+  });
+  return toAdminUser(row);
+}

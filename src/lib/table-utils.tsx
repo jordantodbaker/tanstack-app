@@ -228,6 +228,32 @@ export function CbsUomCell(props: CellProps) {
   return <CbsLookupCell {...props} field="uom" />;
 }
 
+/**
+ * Dropdown of areas for the current project. Stores the selected area's id
+ * (as a string) on the row's `area` field; options come from
+ * `meta.areaOptions`.
+ */
+export function AreaSelectCell({ getValue, row, column, table }: CellProps) {
+  const value = getValue() as string;
+  const areaOptions = table.options.meta?.areaOptions ?? [];
+  return (
+    <select
+      className={editableCellClass}
+      value={value}
+      onChange={(e) =>
+        table.options.meta?.updateData?.(row.index, column.id, e.target.value)
+      }
+    >
+      <option value="">-- Select --</option>
+      {areaOptions.map((opt) => (
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 type PaginatableTable = {
   firstPage: () => void;
   previousPage: () => void;
@@ -334,6 +360,7 @@ export function ColumnFilter({
 type RoleRate = { roleName: string; schedule: string; rate: number };
 
 export type TaskCodeOption = { code: string; taskDefinition: string };
+export type AreaSelectOption = { value: string; label: string };
 
 export type FefTableMeta = {
   cbsOptions?: CbsOption[];
@@ -350,6 +377,7 @@ export type FefTableMeta = {
     string,
     { unit: string; values: Map<number, number> }
   >;
+  areaOptions?: AreaSelectOption[];
 };
 
 export type FefTableState = {
@@ -463,6 +491,7 @@ export function FefTableContent({
       roleRates: meta?.roleRates ?? [],
       taskCodeOptions: meta?.taskCodeOptions ?? [],
       pipingFactorLookup: meta?.pipingFactorLookup,
+      areaOptions: meta?.areaOptions ?? [],
       updateData: (rowIndex: number, columnId: string, value: string) => {
         debug("updateData", { rowIndex, columnId, value });
         setData((old) =>

@@ -1,5 +1,6 @@
 import React from "react";
 import { type VisibilityState } from "@tanstack/react-table";
+import { useQuery } from "@tanstack/react-query";
 import type { CbsOption, FefRow } from "~/lib/types";
 import {
   type FefTableMeta,
@@ -11,6 +12,8 @@ import {
   fieldEstimateColumns,
   supportLaborColumns,
 } from "~/components/Piping/columns";
+import { useSelectedProject } from "~/lib/selected-project";
+import { areasByProjectQueryOptions } from "~/utils/areas";
 
 type PipingGroupValue = {
   id: number;
@@ -99,6 +102,17 @@ export function PipingDisciplinePage({
     return m;
   }, [pipingFactors]);
 
+  const { projectId } = useSelectedProject();
+  const { data: areas = [] } = useQuery(areasByProjectQueryOptions(projectId));
+  const areaOptions = React.useMemo(
+    () =>
+      areas.map((a) => ({
+        value: String(a.id),
+        label: a.displayId ? `${a.displayId} — ${a.name}` : a.name,
+      })),
+    [areas],
+  );
+
   const LABOR_DETAIL_COLS = [
     "unit",
     "laborFactor",
@@ -128,6 +142,7 @@ export function PipingDisciplinePage({
     roleRates,
     taskCodeOptions,
     pipingFactorLookup,
+    areaOptions,
   };
   const craftMeta: FefTableMeta = {
     cbsOptions,

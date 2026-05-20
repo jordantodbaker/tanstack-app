@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
-import { resolveCurrentUser } from "./users.server";
+import { listUsers, resolveCurrentUser, setUserRole } from "./users.server";
 
 /**
  * CLIENT-SAFE. This module is imported by client code (`use-current-user.ts`,
@@ -31,11 +31,25 @@ export function hasAtLeastRole(role: UserRole, minimum: UserRole): boolean {
   return ROLE_RANK[role] >= ROLE_RANK[minimum];
 }
 
+/** Human-readable labels. Add an entry when adding a new UserRole. */
+export const ROLE_LABELS: Record<UserRole, string> = {
+  USER: "User",
+  ADMINISTRATOR: "Administrator",
+};
+
 export type CurrentUser = {
   id: number;
   clerkId: string;
   email: string;
   role: UserRole;
+};
+
+/** A synced user as shown in the admin Users table. */
+export type AdminUser = {
+  id: number;
+  email: string;
+  role: UserRole;
+  createdAt: string;
 };
 
 /** Returns the signed-in user (with role), or null when signed out. */
@@ -49,3 +63,21 @@ export const currentUserQueryOptions = () =>
     queryFn: () => fetchCurrentUser(),
     staleTime: 5 * 60 * 1000,
   });
+
+/** Lists every synced user. Admin-only (gated server-side). */
+export const fetchUsers = createServerFn({ method: "GET" }).handler(
+  (): Promise<AdminUser[]> => listUsers(),
+);
+
+export const usersQueryOptions = () =>
+  queryOptions({
+    queryKey: ["adminUsers"],
+    queryFn: () => fetchUsers(),
+  });
+
+/** Changes a user's role. Admin-only (gated server-side). */
+export const updateUserRole = createServerFn({ method: "POST" })
+  .inputValidator((input: { userId: number; role: UserRole }) => input)
+  .handler(({ data }): Promise<AdminUser> =>
+    setUserRole(data.userId, data.role),
+  );

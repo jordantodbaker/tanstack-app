@@ -1,6 +1,6 @@
 import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
 import type { FefRow } from "~/lib/types";
-import { EditableCell, SizeCell, CbsSelectCell, ReadOnlyCell, TakeOffIdReadOnlyCell, CbsNameCell, CbsUomCell, DeleteRowCell } from "~/lib/table-utils";
+import { EditableCell, SizeCell, CbsSelectCell, ReadOnlyCell, TakeOffIdReadOnlyCell, CbsNameCell, CbsUomCell, DeleteRowCell, AreaSelectCell } from "~/lib/table-utils";
 import {
   ShopFieldSelectCell,
   WeldGroupSelectCell,
@@ -27,6 +27,11 @@ export const takeOffColumns: ColumnDef<FefRow, string>[] = [
     header: "Description",
     cell: EditableCell,
     size: 250,
+  }),
+  columnHelper.accessor("area", {
+    header: "Area",
+    cell: AreaSelectCell,
+    size: 200,
   }),
   columnHelper.accessor("role", {
     header: "Role",

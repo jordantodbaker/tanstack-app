@@ -28,6 +28,7 @@ type FefRowDb = {
   equipment: string;
   notes: string;
   sub: string;
+  area: string;
   position: number;
 };
 

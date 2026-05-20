@@ -20,7 +20,7 @@ import {
 } from "~/utils/setup";
 import { fefRowsQueryOptions } from "~/utils/fefRows";
 import { readProjectIdForLoader } from "~/utils/projectCookie";
-import { toCbsOption } from "~/lib/fef-helpers";
+import { makeFefRow, toCbsOption } from "~/lib/fef-helpers";
 
 const PIPING_L1 = disciplineById.piping.l1Codes!;
 const PIPING_CRAFT_L1 = PIPING_L1.filter(
@@ -131,27 +131,13 @@ function PipingPage() {
 
   const supportLaborRows = React.useMemo(
     () =>
-      filteredSupportLaborItems.map((item) => ({
-        id: item.displayCode,
-        name: item.name ?? "",
-        description: "",
-        shopField: "",
-        weldGroupDescription: "",
-        quantity: "",
-        size: "",
-        unit: item.uom,
-        metallurgyCode: "",
-        boreSize: "",
-        role: "",
-        schedule: "",
-        taskCode: "",
-        laborHours: "",
-        laborRate: "",
-        materialCost: "",
-        equipment: "",
-        notes: "",
-        sub: "",
-      })),
+      filteredSupportLaborItems.map((item) =>
+        makeFefRow({
+          id: item.displayCode,
+          name: item.name ?? "",
+          unit: item.uom,
+        }),
+      ),
     [filteredSupportLaborItems],
   );
 

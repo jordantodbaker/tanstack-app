@@ -1,6 +1,8 @@
 import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
 import React from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { FefRow, CbsOption } from "~/lib/types";
+import { areasByProjectQueryOptions } from "~/utils/areas";
 import {
   EditableCell,
   CbsSelectCell,
@@ -9,6 +11,7 @@ import {
   ReadOnlyCell,
   TakeOffIdReadOnlyCell,
   DeleteRowCell,
+  AreaSelectCell,
   useFefTableState,
   FefTableContent,
   readOnlyCellClass,
@@ -71,6 +74,7 @@ const takeOffColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("id", { header: "ID", cell: TakeOffIdReadOnlyCell, size: 150 }),
   columnHelper.accessor("name", { header: "Name", cell: CbsSelectCell, size: 300 }),
   columnHelper.accessor("description", { header: "Description", cell: EditableCell, size: 250 }),
+  columnHelper.accessor("area", { header: "Area", cell: AreaSelectCell, size: 200 }),
   columnHelper.accessor("role", { header: "Role", cell: RoleSelectCell, size: 180 }),
   columnHelper.accessor("schedule", { header: "Schedule", cell: ScheduleSelectCell, size: 150 }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: EditableCell }),
@@ -151,6 +155,19 @@ export function DisciplinePage({
   scheduleOptions?: string[];
   roleRates?: { roleName: string; schedule: string; rate: number }[];
 }) {
+  // Areas for the Take Off "Area" dropdown. Called unconditionally so it
+  // sits above the materials early-return per the rules of hooks.
+  const { projectId } = useSelectedProject();
+  const { data: areas = [] } = useQuery(areasByProjectQueryOptions(projectId));
+  const areaOptions = React.useMemo(
+    () =>
+      areas.map((a) => ({
+        value: String(a.id),
+        label: a.displayId ? `${a.displayId} — ${a.name}` : a.name,
+      })),
+    [areas],
+  );
+
   if (variant === "materials") {
     return (
       <MaterialsSection
@@ -168,6 +185,8 @@ export function DisciplinePage({
     scheduleOptions,
     roleRates,
   };
+  // Take Off gets areaOptions; craft & support don't render an area column.
+  const takeOffMeta: FefTableMeta = { ...laborMeta, areaOptions };
   const supportMeta: FefTableMeta = { roleOptions, scheduleOptions, roleRates };
 
   return (
@@ -178,7 +197,7 @@ export function DisciplinePage({
       takeOffColumns={takeOffColumns}
       craftColumns={fieldEstimateColumns}
       supportLaborColumns={supportLaborColumns}
-      takeOffMeta={laborMeta}
+      takeOffMeta={takeOffMeta}
       craftMeta={laborMeta}
       supportLaborMeta={supportMeta}
       supportLaborInitialRows={supportLaborInitialRows}

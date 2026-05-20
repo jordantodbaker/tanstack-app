@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
+import { requireProjectAccess } from "./users.server";
 
 export const FCO_STATUSES = [
   "DRAFT",
@@ -105,6 +106,7 @@ const toItem = (r: Row): FcoItem => {
 export const fetchFcoList = createServerFn({ method: "GET" })
   .inputValidator((projectId: number) => projectId)
   .handler(async ({ data: projectId }): Promise<FcoItem[]> => {
+    await requireProjectAccess(projectId);
     const rows = await prisma.fieldChangeOrder.findMany({
       where: { projectId },
       include: {
@@ -158,6 +160,7 @@ export type UpsertFcoInput = {
 export const upsertFco = createServerFn({ method: "POST" })
   .inputValidator((input: UpsertFcoInput) => input)
   .handler(async ({ data }): Promise<FcoItem> => {
+    await requireProjectAccess(data.projectId);
     const payload = {
       projectId: data.projectId,
       fcoNumber: data.fcoNumber,
@@ -205,6 +208,12 @@ export const upsertFco = createServerFn({ method: "POST" })
 export const deleteFco = createServerFn({ method: "POST" })
   .inputValidator((input: { id: number }) => input)
   .handler(async ({ data }): Promise<{ ok: true }> => {
+    // Resolve the FCO's project first to authorize the caller.
+    const row = await prisma.fieldChangeOrder.findUniqueOrThrow({
+      where: { id: data.id },
+      select: { projectId: true },
+    });
+    await requireProjectAccess(row.projectId);
     await prisma.fieldChangeOrder.delete({ where: { id: data.id } });
     return { ok: true };
   });
@@ -220,6 +229,7 @@ export const promoteFcoToCvr = createServerFn({ method: "POST" })
     const fco = await prisma.fieldChangeOrder.findUniqueOrThrow({
       where: { id: data.fcoId },
     });
+    await requireProjectAccess(fco.projectId);
 
     const cvr = await prisma.changeLog.create({
       data: {
@@ -249,6 +259,9 @@ export const promoteFcoToCvr = createServerFn({ method: "POST" })
         reasonCode: fco.originType,
         requestedAt: new Date(),
         notes: `Linked from FCO ${fco.fcoNumber || `#${fco.id}`}`,
+        // Carry the FCO's area through to the new CVR so the change keeps
+        // its location context after escalation.
+        area: fco.locationArea,
       },
     });
 
@@ -270,6 +283,7 @@ export const fetchCvrOptions = createServerFn({ method: "GET" })
     async ({
       data: projectId,
     }): Promise<{ id: number; cvrNumber: string; title: string }[]> => {
+      await requireProjectAccess(projectId);
       const rows = await prisma.changeLog.findMany({
         where: { projectId },
         select: { id: true, cvrNumber: true, title: true },

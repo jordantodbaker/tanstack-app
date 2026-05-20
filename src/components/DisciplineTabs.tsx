@@ -22,8 +22,18 @@ import {
   type FefTableMeta,
   type ServerPagination,
 } from "~/lib/table-utils";
+import { isTakeOffRowInvalid } from "~/lib/fef-helpers";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useFefRowPersistence } from "~/lib/use-fef-row-persistence";
+
+/**
+ * Take Off row-level validator. The predicate accepts a full FefRow shape;
+ * we just hand it off. Picking any field (schedule, role, task code, name,
+ * a CBS code, etc.) marks the row as "started"; if Total Cost can't be
+ * computed, the row is flagged.
+ */
+const isTakeOffRowInvalidLive = (row: FefRow): boolean =>
+  isTakeOffRowInvalid(row);
 
 export type DisciplineTabsProps = {
   /** When provided, renders a `<main>` wrapper with an `<h1>` header. */
@@ -176,6 +186,7 @@ export function DisciplineTabs({
             columnVisibility={takeOffColumnVisibility}
             onColumnVisibilityChange={onTakeOffColumnVisibilityChange}
             minRows={20}
+            getRowInvalid={isTakeOffRowInvalidLive}
           />
         </TabsContent>
         <TabsContent value="estimate" className="mt-4">

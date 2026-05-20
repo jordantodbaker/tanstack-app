@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
+  AlertTriangle,
   ChevronDown,
   ChevronRight,
   PanelLeftClose,
@@ -13,6 +14,19 @@ import { disciplines } from "~/config/disciplines";
 import { useSelectedProject } from "~/lib/selected-project";
 import { allowedCbsL1CodesQueryOptions } from "~/utils/setup";
 import { useIsAdmin } from "~/lib/use-current-user";
+import { projectFefRowTotalsQueryOptions } from "~/utils/projectTotals";
+
+/**
+ * Order shown under the Admin section. The `to` paths must exist as routes
+ * under `/admin/*`; the parent `admin.tsx` layout enforces the role gate so
+ * adding an entry here doesn't require touching auth.
+ */
+const ADMIN_LINKS = [
+  { to: "/admin/projects", label: "Projects" },
+  { to: "/admin/subcontractors", label: "Subcontractors" },
+  { to: "/admin/areas", label: "Areas" },
+  { to: "/admin/users", label: "Users" },
+] as const;
 
 export function Sidebar({
   mobileOpen = false,
@@ -40,19 +54,30 @@ export function Sidebar({
     ...allowedCbsL1CodesQueryOptions(projectId ?? 0),
     enabled: projectId !== null,
   });
-
-  const visibleDisciplines = React.useMemo(() => {
-    if (projectId === null) {
-      return disciplines.filter((d) => d.id === "setup");
-    }
-    const allowed = new Set(allowedL1Codes ?? []);
-    return disciplines.filter((d) => {
-      if (!d.l1Codes) return true;
-      return d.l1Codes.some((code) => allowed.has(code));
-    });
-  }, [projectId, allowedL1Codes]);
+  // Drives the warning icon on disciplines whose Take Off has invalid rows
+  // (started but Total Cost not computable). Same cache the validation page
+  // reads, so a save anywhere refreshes both views.
+  const { data: projectTotals } = useQuery(
+    projectFefRowTotalsQueryOptions(projectId),
+  );
+  const invalidByDiscipline = projectTotals?.invalidByDiscipline ?? {};
 
   const isAdmin = useIsAdmin();
+
+  const visibleDisciplines = React.useMemo(() => {
+    // Setup is project-configuration; only admins should see or reach it.
+    const allowed = isAdmin
+      ? disciplines
+      : disciplines.filter((d) => d.id !== "setup");
+    if (projectId === null) {
+      return allowed.filter((d) => d.id === "setup");
+    }
+    const allowedSet = new Set(allowedL1Codes ?? []);
+    return allowed.filter((d) => {
+      if (!d.l1Codes) return true;
+      return d.l1Codes.some((code) => allowedSet.has(code));
+    });
+  }, [projectId, allowedL1Codes, isAdmin]);
 
   const navClassName = `w-full flex items-center gap-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors ${collapsed ? "md:justify-center md:px-0 px-4" : "px-4"}`;
 
@@ -89,13 +114,28 @@ export function Sidebar({
           {visibleDisciplines.map((discipline) => {
             const Icon = discipline.icon;
             const isOpen = openSections.has(discipline.id);
+            const invalidCount = invalidByDiscipline[discipline.id] ?? 0;
+            const warning =
+              invalidCount > 0 ? (
+                <AlertTriangle
+                  size={13}
+                  className="shrink-0 text-amber-500"
+                  aria-label={`${invalidCount} invalid Take Off row${invalidCount === 1 ? "" : "s"}`}
+                />
+              ) : null;
 
             return (
               <div key={discipline.id}>
                 {discipline.to && !discipline.items ? (
                   <Link
                     to={discipline.to}
-                    title={collapsed ? discipline.label : undefined}
+                    title={
+                      invalidCount > 0
+                        ? `${invalidCount} invalid Take Off row${invalidCount === 1 ? "" : "s"}`
+                        : collapsed
+                          ? discipline.label
+                          : undefined
+                    }
                     className={navClassName}
                     onClick={onMobileClose}
                     activeProps={{
@@ -108,11 +148,18 @@ export function Sidebar({
                     >
                       {discipline.label}
                     </span>
+                    {!collapsed && warning}
                   </Link>
                 ) : (
                   <button
                     onClick={() => toggleSection(discipline.id)}
-                    title={collapsed ? discipline.label : undefined}
+                    title={
+                      invalidCount > 0
+                        ? `${invalidCount} invalid Take Off row${invalidCount === 1 ? "" : "s"}`
+                        : collapsed
+                          ? discipline.label
+                          : undefined
+                    }
                     className={navClassName}
                   >
                     <Icon size={17} className="shrink-0 text-slate-500" />
@@ -121,6 +168,7 @@ export function Sidebar({
                     >
                       {discipline.label}
                     </span>
+                    {!collapsed && warning}
                     {discipline.items && (
                       <span className={collapsed ? "md:hidden" : ""}>
                         {isOpen ? (
@@ -200,48 +248,23 @@ export function Sidebar({
               <div
                 className={`ml-9 border-l border-slate-200 mb-1 ${collapsed ? "md:hidden" : ""}`}
               >
-                <Link
-                  to="/admin/projects"
-                  activeOptions={{ exact: true }}
-                  onClick={onMobileClose}
-                  className="block pl-3 pr-2 py-1.5 text-sm rounded-r transition-colors"
-                  activeProps={{
-                    className: "text-red-800 bg-red-50 font-medium",
-                  }}
-                  inactiveProps={{
-                    className: "text-slate-600 hover:bg-slate-100",
-                  }}
-                >
-                  Projects
-                </Link>
-                <Link
-                  to="/admin/areas"
-                  activeOptions={{ exact: true }}
-                  onClick={onMobileClose}
-                  className="block pl-3 pr-2 py-1.5 text-sm rounded-r transition-colors"
-                  activeProps={{
-                    className: "text-red-800 bg-red-50 font-medium",
-                  }}
-                  inactiveProps={{
-                    className: "text-slate-600 hover:bg-slate-100",
-                  }}
-                >
-                  Areas
-                </Link>
-                <Link
-                  to="/admin/users"
-                  activeOptions={{ exact: true }}
-                  onClick={onMobileClose}
-                  className="block pl-3 pr-2 py-1.5 text-sm rounded-r transition-colors"
-                  activeProps={{
-                    className: "text-red-800 bg-red-50 font-medium",
-                  }}
-                  inactiveProps={{
-                    className: "text-slate-600 hover:bg-slate-100",
-                  }}
-                >
-                  Users
-                </Link>
+                {ADMIN_LINKS.map((link) => (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    activeOptions={{ exact: true }}
+                    onClick={onMobileClose}
+                    className="block pl-3 pr-2 py-1.5 text-sm rounded-r transition-colors"
+                    activeProps={{
+                      className: "text-red-800 bg-red-50 font-medium",
+                    }}
+                    inactiveProps={{
+                      className: "text-slate-600 hover:bg-slate-100",
+                    }}
+                  >
+                    {link.label}
+                  </Link>
+                ))}
               </div>
             )}
           </div>

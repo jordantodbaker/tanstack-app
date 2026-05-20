@@ -1,16 +1,35 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { AlertTriangle } from "lucide-react";
 import {
   Accordion,
   AccordionItem,
   AccordionTrigger,
   AccordionContent,
 } from "~/components/ui/accordion";
-import { SUMMARY_DISCIPLINES } from "~/config/disciplines";
+import {
+  disciplines,
+  SUMMARY_DISCIPLINES,
+  type DisciplineConfig,
+} from "~/config/disciplines";
 import { formatMoney } from "~/lib/formatting";
 import { useSelectedProject } from "~/lib/selected-project";
 import { projectFefRowTotalsQueryOptions } from "~/utils/projectTotals";
 import { readProjectIdForLoader } from "~/utils/projectCookie";
+
+/**
+ * Map from a Summary-table discipline label (e.g. "Electrical") back to the
+ * full discipline config. Only includes disciplines with a route (`to`) and
+ * an L1-code bucket — the routable ones the Take Off sheet exists for.
+ * Matches on `summaryLabel ?? label` so renamed-for-summary disciplines like
+ * Electric/Electrical resolve correctly.
+ */
+const disciplineBySummaryLabel: Record<string, DisciplineConfig> =
+  Object.fromEntries(
+    disciplines
+      .filter((d) => d.to && d.l1Codes && d.l1Codes.length > 0)
+      .map((d) => [d.summaryLabel ?? d.label, d]),
+  );
 
 export const Route = createFileRoute("/summary")({
   loader: async ({ context }) => {
@@ -36,6 +55,12 @@ type SummaryRow = {
   sub: string;
   equip: string;
   other: string;
+  /** Discipline id used to look up invalid-row counts and route. Omitted
+   *  for rows that don't correspond to a take-off-bearing discipline (e.g.
+   *  the Shop variants and the Indirects rows). */
+  disciplineId?: string;
+  /** Target route for the "errors" link — the discipline's take-off page. */
+  disciplineTo?: string;
 };
 
 const INDIRECTS = [
@@ -111,7 +136,16 @@ const columns: {
   { key: "totalCost", header: "Total Cost $", width: "w-28", currency: true },
 ];
 
-function SummaryTable({ rows }: { rows: SummaryRow[] }) {
+function SummaryTable({
+  rows,
+  invalidByDiscipline,
+}: {
+  rows: SummaryRow[];
+  /** Map of discipline-id → invalid-Take-Off-row count, used to render the
+   *  "errors" link in each row's description cell. Omit for tables (e.g.
+   *  Indirects) where no row corresponds to a Take-Off-bearing discipline. */
+  invalidByDiscipline?: Record<string, number>;
+}) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-sm">
@@ -128,7 +162,11 @@ function SummaryTable({ rows }: { rows: SummaryRow[] }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
+          {rows.map((row) => {
+            const invalidCount = row.disciplineId
+              ? (invalidByDiscipline?.[row.disciplineId] ?? 0)
+              : 0;
+            return (
             <tr key={row.description} className="border-b border-gray-200">
               {columns.map((col) => {
                 if (col.key === "description") {
@@ -137,7 +175,22 @@ function SummaryTable({ rows }: { rows: SummaryRow[] }) {
                       key={col.key}
                       className="px-3 py-1.5 border border-gray-200 font-medium text-gray-800 whitespace-nowrap"
                     >
-                      {row.description}
+                      <div className="flex items-center gap-2">
+                        <span>{row.description}</span>
+                        {invalidCount > 0 && row.disciplineTo && (
+                          <Link
+                            to={row.disciplineTo}
+                            className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-100"
+                            title={`${invalidCount} invalid Take Off row${invalidCount === 1 ? "" : "s"} — open the sheet`}
+                          >
+                            <AlertTriangle size={12} />
+                            <span>
+                              {invalidCount} error
+                              {invalidCount === 1 ? "" : "s"}
+                            </span>
+                          </Link>
+                        )}
+                      </div>
                     </td>
                   );
                 }
@@ -156,7 +209,8 @@ function SummaryTable({ rows }: { rows: SummaryRow[] }) {
                 );
               })}
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -182,6 +236,9 @@ function SummaryPage() {
       const unitRate =
         quantity > 0 && laborHours > 0 ? laborHours / quantity : 0;
       const rate = laborHours > 0 && laborTotal > 0 ? laborTotal / laborHours : 0;
+      // Rows like "Structural Steel Shop" / "Piping Shop" have no underlying
+      // discipline, so neither id nor route are set and no link renders.
+      const matched = disciplineBySummaryLabel[label];
       return {
         description: label,
         ...emptyRow(),
@@ -192,6 +249,8 @@ function SummaryPage() {
         rate: rate > 0 ? formatMoney(rate) : "",
         material: materialTotal > 0 ? formatMoney(materialTotal) : "",
         totalLabor: laborTotal > 0 ? formatMoney(laborTotal) : "",
+        disciplineId: matched?.id,
+        disciplineTo: matched?.to,
       };
     },
   );
@@ -225,7 +284,10 @@ function SummaryPage() {
         <AccordionItem value="disciplines">
           <AccordionTrigger>Disciplines</AccordionTrigger>
           <AccordionContent>
-            <SummaryTable rows={disciplineRows} />
+            <SummaryTable
+              rows={disciplineRows}
+              invalidByDiscipline={dbTotals?.invalidByDiscipline}
+            />
           </AccordionContent>
         </AccordionItem>
         <AccordionItem value="indirects">

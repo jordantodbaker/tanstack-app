@@ -38,6 +38,7 @@ import {
   TableEmptyState,
   Th,
 } from "~/components/ui/list-page";
+import { areasByProjectQueryOptions } from "~/utils/areas";
 import { readProjectIdForLoader } from "~/utils/projectCookie";
 import { disciplineById } from "~/config/disciplines";
 import { formatMoney } from "~/lib/formatting";
@@ -58,6 +59,21 @@ function FcoLogPage() {
   const { projectId } = useSelectedProject();
   const queryClient = useQueryClient();
   const { data: items = [] } = useQuery(fcoListQueryOptions(projectId));
+  // Areas for label resolution. `locationArea` now holds the area id as a
+  // string (matching FefRow.area). Legacy free-text values won't resolve
+  // and fall through to displaying the raw string.
+  const { data: areas = [] } = useQuery(
+    areasByProjectQueryOptions(projectId),
+  );
+  const areaLabel = React.useCallback(
+    (raw: string): string => {
+      if (!raw) return "";
+      const match = areas.find((a) => String(a.id) === raw);
+      if (!match) return raw;
+      return match.name ? `${match.displayId} — ${match.name}` : match.displayId;
+    },
+    [areas],
+  );
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["fcoLog", projectId] });
@@ -94,12 +110,12 @@ function FcoLogPage() {
       if (linkageFilter === "unlinked" && it.linkedCvrId !== null) return false;
       if (q) {
         const haystack =
-          `${it.fcoNumber} ${it.title} ${it.description} ${it.locationArea} ${it.initiatedBy} ${it.reasonNarrative} ${it.cbsCodes.join(" ")} ${it.drawingRefs.join(" ")} ${it.rfiNumbers.join(" ")} ${it.linkedCvrNumber ?? ""}`.toLowerCase();
+          `${it.fcoNumber} ${it.title} ${it.description} ${areaLabel(it.locationArea)} ${it.initiatedBy} ${it.reasonNarrative} ${it.cbsCodes.join(" ")} ${it.drawingRefs.join(" ")} ${it.rfiNumbers.join(" ")} ${it.linkedCvrNumber ?? ""}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
     });
-  }, [items, search, statusFilter, disciplineFilter, linkageFilter]);
+  }, [items, search, statusFilter, disciplineFilter, linkageFilter, areaLabel]);
 
   const stats = React.useMemo(() => {
     const openCount = items.filter((i) =>
@@ -229,6 +245,7 @@ function FcoLogPage() {
       <FcoTable
         items={filtered}
         projectId={projectId}
+        areaLabel={areaLabel}
         onSubmit={handleSubmit}
         onDelete={handleDelete}
         onPromote={handlePromote}
@@ -291,12 +308,14 @@ function FcoStatsCards({
 function FcoTable({
   items,
   projectId,
+  areaLabel,
   onSubmit,
   onDelete,
   onPromote,
 }: {
   items: FcoItem[];
   projectId: number | null;
+  areaLabel: (raw: string) => string;
   onSubmit: (input: Omit<UpsertFcoInput, "projectId">) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;
   onPromote: (id: number) => Promise<unknown>;
@@ -330,6 +349,7 @@ function FcoTable({
               key={item.id}
               item={item}
               projectId={projectId}
+              areaLabel={areaLabel}
               onSubmit={onSubmit}
               onDelete={onDelete}
               onPromote={onPromote}
@@ -344,12 +364,14 @@ function FcoTable({
 function FcoRow({
   item,
   projectId,
+  areaLabel,
   onSubmit,
   onDelete,
   onPromote,
 }: {
   item: FcoItem;
   projectId: number | null;
+  areaLabel: (raw: string) => string;
   onSubmit: (input: Omit<UpsertFcoInput, "projectId">) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;
   onPromote: (id: number) => Promise<unknown>;
@@ -378,7 +400,7 @@ function FcoRow({
                 <div>{item.title}</div>
                 {item.locationArea && (
                   <div className="text-xs text-slate-500 mt-0.5">
-                    {item.locationArea}
+                    {areaLabel(item.locationArea)}
                   </div>
                 )}
                 {item.drawingRefs.length > 0 && (

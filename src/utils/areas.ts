@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
-import { requireAdmin } from "./users.server";
+import { adminHandler, requireProjectAccess } from "./users.server";
 
 export type AreaOption = {
   id: number;
@@ -33,13 +33,14 @@ export const areasQueryOptions = () =>
 /** Lightweight area list for a single project, used to populate dropdowns. */
 export const fetchAreasByProject = createServerFn({ method: "GET" })
   .inputValidator((projectId: number) => projectId)
-  .handler(({ data: projectId }) =>
-    prisma.area.findMany({
+  .handler(async ({ data: projectId }) => {
+    await requireProjectAccess(projectId);
+    return prisma.area.findMany({
       where: { projectId },
       orderBy: { displayId: "asc" },
       select: { id: true, displayId: true, name: true },
-    }),
-  );
+    });
+  });
 
 export const areasByProjectQueryOptions = (projectId: number | null) =>
   queryOptions({
@@ -64,27 +65,29 @@ export type UpsertAreaInput = {
 /** Create or update an area. Admin-only. */
 export const upsertArea = createServerFn({ method: "POST" })
   .inputValidator((input: UpsertAreaInput) => input)
-  .handler(async ({ data }): Promise<{ ok: true }> => {
-    await requireAdmin();
-    const payload = {
-      projectId: data.projectId,
-      displayId: data.displayId,
-      name: data.name,
-      description: data.description,
-    };
-    if (data.id) {
-      await prisma.area.update({ where: { id: data.id }, data: payload });
-    } else {
-      await prisma.area.create({ data: payload });
-    }
-    return { ok: true };
-  });
+  .handler(
+    adminHandler(async ({ data }): Promise<{ ok: true }> => {
+      const payload = {
+        projectId: data.projectId,
+        displayId: data.displayId,
+        name: data.name,
+        description: data.description,
+      };
+      if (data.id) {
+        await prisma.area.update({ where: { id: data.id }, data: payload });
+      } else {
+        await prisma.area.create({ data: payload });
+      }
+      return { ok: true };
+    }),
+  );
 
 /** Delete an area. Admin-only. */
 export const deleteArea = createServerFn({ method: "POST" })
   .inputValidator((input: { id: number }) => input)
-  .handler(async ({ data }): Promise<{ ok: true }> => {
-    await requireAdmin();
-    await prisma.area.delete({ where: { id: data.id } });
-    return { ok: true };
-  });
+  .handler(
+    adminHandler(async ({ data }): Promise<{ ok: true }> => {
+      await prisma.area.delete({ where: { id: data.id } });
+      return { ok: true };
+    }),
+  );

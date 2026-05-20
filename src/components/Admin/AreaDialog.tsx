@@ -10,31 +10,11 @@ import {
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { Labeled, NativeSelect } from "~/components/ui/form-helpers";
+import { useFormDialog } from "~/lib/use-form-dialog";
 import type { AreaOption, UpsertAreaInput } from "~/utils/areas";
 import type { ProjectOption } from "~/utils/projects";
 
 type FormState = UpsertAreaInput;
-
-function blankForm(projects: ProjectOption[]): FormState {
-  // Default to the first project so the dropdown shows a real selection and
-  // the Create button isn't mysteriously disabled on an unselected project.
-  return {
-    projectId: projects[0]?.id ?? 0,
-    displayId: "",
-    name: "",
-    description: "",
-  };
-}
-
-function fromItem(a: AreaOption): FormState {
-  return {
-    id: a.id,
-    projectId: a.projectId,
-    displayId: a.displayId,
-    name: a.name,
-    description: a.description,
-  };
-}
 
 export function AreaDialog({
   trigger,
@@ -50,52 +30,29 @@ export function AreaDialog({
   onSubmit: (form: FormState) => Promise<unknown>;
   onDelete?: (id: number) => Promise<unknown>;
 }) {
-  const [open, setOpen] = React.useState(false);
-  const [form, setForm] = React.useState<FormState>(() =>
-    initial ? fromItem(initial) : blankForm(projects),
-  );
-  const [busy, setBusy] = React.useState(false);
-
-  React.useEffect(() => {
-    if (open) {
-      setForm(initial ? fromItem(initial) : blankForm(projects));
-    }
-    // `projects` intentionally omitted: re-running on a project-list refetch
-    // would wipe in-progress input. The list at open time is what we need.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initial]);
-
-  function update<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((f) => ({ ...f, [key]: value }));
-  }
-
-  async function handleSubmit() {
-    setBusy(true);
-    try {
-      await onSubmit(form);
-      setOpen(false);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleDelete() {
-    if (!initial?.id || !onDelete) return;
-    if (
-      !confirm(
-        `Delete area "${initial.displayId} — ${initial.name}"? This cannot ` +
-          `be undone.`,
-      )
-    )
-      return;
-    setBusy(true);
-    try {
-      await onDelete(initial.id);
-      setOpen(false);
-    } finally {
-      setBusy(false);
-    }
-  }
+  const { open, setOpen, form, busy, update, handleSubmit, handleDelete } =
+    useFormDialog<AreaOption, FormState>({
+      initial,
+      // Default to the first project so the dropdown shows a real selection
+      // and the Create button isn't mysteriously disabled.
+      blank: () => ({
+        projectId: projects[0]?.id ?? 0,
+        displayId: "",
+        name: "",
+        description: "",
+      }),
+      fromItem: (a) => ({
+        id: a.id,
+        projectId: a.projectId,
+        displayId: a.displayId,
+        name: a.name,
+        description: a.description,
+      }),
+      onSubmit,
+      onDelete,
+      deleteConfirm: (a) =>
+        `Delete area "${a.displayId} — ${a.name}"? This cannot be undone.`,
+    });
 
   const canSave =
     !busy &&

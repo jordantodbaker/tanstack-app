@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
+import { requireProjectAccess } from "./users.server";
 
 export type BasisMilestone = {
   event: string;
@@ -23,6 +24,7 @@ const EMPTY: BasisInputsPayload = {
 export const fetchBasisInputs = createServerFn({ method: "GET" })
   .inputValidator((projectId: number) => projectId)
   .handler(async ({ data }) => {
+    await requireProjectAccess(data);
     const row = await prisma.basisInputs.findUnique({
       where: { projectId: data },
     });
@@ -50,6 +52,7 @@ export const saveBasisInputs = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const { projectId, payload } = data;
+    await requireProjectAccess(projectId);
     await prisma.basisInputs.upsert({
       where: { projectId },
       create: {

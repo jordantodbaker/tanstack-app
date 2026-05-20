@@ -37,7 +37,8 @@ import { UserButton, Show, SignIn } from "@clerk/tanstack-react-start";
 import { Sidebar } from "~/components/Sidebar";
 import { SelectedProjectProvider } from "~/lib/selected-project";
 import { ProjectSelect } from "~/components/ProjectSelect";
-import { useCurrentUser } from "~/lib/use-current-user";
+import { ProjectGuard } from "~/components/ProjectGuard";
+import { useCurrentUser, useIsAdmin } from "~/lib/use-current-user";
 import { Button } from "~/components/ui/button";
 
 export const Route = createRootRouteWithContext<{
@@ -168,6 +169,7 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
   // Resolve (and lazily create/bootstrap) the signed-in user's local record
   // so their role is available app-wide via the React Query cache.
   useCurrentUser();
+  const isAdmin = useIsAdmin();
 
   React.useEffect(() => {
     setMobileSidebarOpen(false);
@@ -233,18 +235,20 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
               >
                 FCO Log
               </Link>
-              <Link
-                to="/setup"
-                className="px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                activeProps={{ className: "text-red-800 bg-red-50" }}
-                inactiveProps={{
-                  className:
-                    "text-slate-600 hover:text-slate-900 hover:bg-slate-100",
-                }}
-                activeOptions={{ exact: true }}
-              >
-                Field Estimate Form
-              </Link>
+              {isAdmin && (
+                <Link
+                  to="/setup"
+                  className="px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                  activeProps={{ className: "text-red-800 bg-red-50" }}
+                  inactiveProps={{
+                    className:
+                      "text-slate-600 hover:text-slate-900 hover:bg-slate-100",
+                  }}
+                  activeOptions={{ exact: true }}
+                >
+                  Field Estimate Form
+                </Link>
+              )}
             </nav>
             <div className="shrink-0 flex items-center gap-2 md:gap-3 ml-auto sm:ml-0">
               <UserButton />
@@ -256,7 +260,16 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
         </header>
         <div className="flex flex-1 overflow-hidden relative">
           <Sidebar mobileOpen={mobileSidebarOpen} onMobileClose={closeSidebar} />
-          <main className="flex-1 overflow-auto bg-slate-50">{children}</main>
+          <main className="flex-1 overflow-auto bg-slate-50">
+            {/* Admin routes don't require a selected project; everything
+                else flows through the guard for the not-assigned /
+                not-selected screens. */}
+            {pathname.startsWith("/admin") ? (
+              children
+            ) : (
+              <ProjectGuard>{children}</ProjectGuard>
+            )}
+          </main>
         </div>
       </div>
       <React.Suspense fallback={null}>

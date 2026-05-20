@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Settings } from "lucide-react";
@@ -8,6 +8,7 @@ import {
   allowedFefCbsItemIdsQueryOptions,
   updateAllowedFefCbsItems,
 } from "~/utils/setup";
+import { currentUserQueryOptions, hasAtLeastRole } from "~/utils/users";
 import {
   buildCbsTree,
   filterCbsTree,
@@ -22,6 +23,16 @@ import { useSelectedProject } from "~/lib/selected-project";
 import { logger } from "~/lib/logger";
 
 export const Route = createFileRoute("/setup")({
+  // Setup configures project-level allow-lists — admin-only. Non-admins are
+  // redirected away rather than seeing a forbidden error.
+  beforeLoad: async ({ context }) => {
+    const user = await context.queryClient.ensureQueryData(
+      currentUserQueryOptions(),
+    );
+    if (!user || !hasAtLeastRole(user.role, "ADMINISTRATOR")) {
+      throw redirect({ to: "/changelog" });
+    }
+  },
   loader: ({ context }) =>
     context.queryClient.ensureQueryData(setupCbsItemsQueryOptions()),
   component: SetupPage,

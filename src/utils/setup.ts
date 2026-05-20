@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
+import { adminHandler, requireProjectAccess } from "./users.server";
 
 export const fetchSetupCbsItems = createServerFn({ method: "GET" }).handler(
   () =>
@@ -35,6 +36,7 @@ export const setupCbsItemsQueryOptions = () =>
 export const fetchAllowedFefCbsItemIds = createServerFn({ method: "GET" })
   .inputValidator((projectId: number) => projectId)
   .handler(async ({ data: projectId }) => {
+    await requireProjectAccess(projectId);
     const project = await prisma.project.findUnique({
       where: { id: projectId },
       select: { allowedFefCbsItems: { select: { id: true } } },
@@ -52,6 +54,7 @@ export const allowedFefCbsItemIdsQueryOptions = (projectId: number) =>
 export const fetchAllowedCbsL1Codes = createServerFn({ method: "GET" })
   .inputValidator((projectId: number) => projectId)
   .handler(async ({ data: projectId }) => {
+    await requireProjectAccess(projectId);
     const project = await prisma.project.findUnique({
       where: { id: projectId },
       select: { allowedFefCbsItems: { select: { l1: true } } },
@@ -68,22 +71,25 @@ export const allowedCbsL1CodesQueryOptions = (projectId: number) =>
     queryFn: () => fetchAllowedCbsL1Codes({ data: projectId }),
   });
 
+/** Admin-only: edits a project's CBS allow-list. */
 export const updateAllowedFefCbsItems = createServerFn({ method: "POST" })
   .inputValidator(
     (input: { projectId: number; addIds: number[]; removeIds: number[] }) =>
       input,
   )
-  .handler(async ({ data }) => {
-    const { projectId, addIds, removeIds } = data;
-    if (addIds.length === 0 && removeIds.length === 0) return { ok: true };
-    await prisma.project.update({
-      where: { id: projectId },
-      data: {
-        allowedFefCbsItems: {
-          connect: addIds.map((id) => ({ id })),
-          disconnect: removeIds.map((id) => ({ id })),
+  .handler(
+    adminHandler(async ({ data }) => {
+      const { projectId, addIds, removeIds } = data;
+      if (addIds.length === 0 && removeIds.length === 0) return { ok: true };
+      await prisma.project.update({
+        where: { id: projectId },
+        data: {
+          allowedFefCbsItems: {
+            connect: addIds.map((id) => ({ id })),
+            disconnect: removeIds.map((id) => ({ id })),
+          },
         },
-      },
-    });
-    return { ok: true };
-  });
+      });
+      return { ok: true };
+    }),
+  );

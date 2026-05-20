@@ -17,6 +17,8 @@ import {
   fromDateInputValue,
   toDateInputValue,
 } from "~/components/ui/form-helpers";
+import { useFormDialog } from "~/lib/use-form-dialog";
+import { areasByProjectQueryOptions } from "~/utils/areas";
 import {
   FCO_STATUSES,
   FCO_ORIGIN_TYPES,
@@ -118,11 +120,23 @@ export function FcoDialog({
   onDelete?: (id: number) => Promise<unknown>;
   onPromote?: (id: number) => Promise<unknown>;
 }) {
-  const [open, setOpen] = React.useState(false);
-  const [form, setForm] = React.useState<FormState>(() =>
-    initial ? fromItem(initial) : blankForm(),
-  );
-  const [busy, setBusy] = React.useState(false);
+  const {
+    open,
+    setOpen,
+    form,
+    busy,
+    setBusy,
+    update,
+    handleSubmit,
+    handleDelete,
+  } = useFormDialog<FcoItem, FormState>({
+    initial,
+    blank: blankForm,
+    fromItem,
+    onSubmit,
+    onDelete,
+    deleteConfirm: (i) => `Delete FCO "${i.title}"? This cannot be undone.`,
+  });
 
   const { data: cvrOptions = [] } = useQuery({
     ...cvrOptionsQueryOptions(projectId),
@@ -134,6 +148,15 @@ export function FcoDialog({
     enabled: open,
   });
 
+  // Areas for the selected project — populates the Area dropdown. We store
+  // the area id as a string in `locationArea`, mirroring the FefRow.area
+  // convention, so legacy free-text values gracefully fall back to "— None —"
+  // (and the user can re-pick on save).
+  const { data: areas = [] } = useQuery({
+    ...areasByProjectQueryOptions(projectId),
+    enabled: open && projectId !== null,
+  });
+
   const cbsOptions: SearchableSelectOption[] = React.useMemo(
     () =>
       cbsCodeOptions.map((c) => ({
@@ -143,16 +166,6 @@ export function FcoDialog({
       })),
     [cbsCodeOptions],
   );
-
-  React.useEffect(() => {
-    if (open) {
-      setForm(initial ? fromItem(initial) : blankForm());
-    }
-  }, [open, initial]);
-
-  function update<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((f) => ({ ...f, [key]: value }));
-  }
 
   const [drawingRefsText, setDrawingRefsText] = React.useState("");
   const [rfiNumbersText, setRfiNumbersText] = React.useState("");
@@ -167,31 +180,6 @@ export function FcoDialog({
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
     update(key, items);
-  }
-
-  async function handleSubmit() {
-    setBusy(true);
-    try {
-      await onSubmit(form);
-      setOpen(false);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleDelete() {
-    if (!initial?.id || !onDelete) return;
-    if (
-      !confirm(`Delete FCO "${initial.title}"? This cannot be undone.`)
-    )
-      return;
-    setBusy(true);
-    try {
-      await onDelete(initial.id);
-      setOpen(false);
-    } finally {
-      setBusy(false);
-    }
   }
 
   async function handlePromote() {
@@ -343,11 +331,26 @@ export function FcoDialog({
               Field Context
             </legend>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <Labeled label="Location / Area">
-                <Input
+              <Labeled
+                label="Area"
+                help={
+                  projectId === null
+                    ? "Select a project first."
+                    : areas.length === 0
+                      ? "No areas defined. Add some in Admin → Areas."
+                      : undefined
+                }
+              >
+                <NativeSelect
                   value={form.locationArea}
-                  placeholder="e.g. Pump House A, Grid C-7"
-                  onChange={(e) => update("locationArea", e.target.value)}
+                  onChange={(v) => update("locationArea", v)}
+                  options={[
+                    { value: "", label: "— None —" },
+                    ...areas.map((a) => ({
+                      value: String(a.id),
+                      label: a.name ? `${a.displayId} — ${a.name}` : a.displayId,
+                    })),
+                  ]}
                 />
               </Labeled>
               <Labeled label="Initiated By">

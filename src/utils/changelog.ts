@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
+import { requireProjectAccess } from "./users.server";
 
 export const CHANGE_STATUSES = [
   "REQUESTED",
@@ -49,6 +50,8 @@ export type ChangeLogItem = {
   approvedAt: string | null;
   approver: string;
   notes: string;
+  /** Optional area scope — holds an Area.id as a string. "" = project-wide. */
+  area: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -76,6 +79,7 @@ const toItem = (r: ChangeLogRow): ChangeLogItem => ({
 export const fetchChangeLogList = createServerFn({ method: "GET" })
   .inputValidator((projectId: number) => projectId)
   .handler(async ({ data: projectId }): Promise<ChangeLogItem[]> => {
+    await requireProjectAccess(projectId);
     const rows = await prisma.changeLog.findMany({
       where: { projectId },
       orderBy: [{ requestedAt: "desc" }],
@@ -115,11 +119,15 @@ export type UpsertChangeLogInput = {
   approvedAt: string | null;
   approver: string;
   notes: string;
+  area: string;
 };
 
 export const upsertChangeLog = createServerFn({ method: "POST" })
   .inputValidator((input: UpsertChangeLogInput) => input)
+  // Note: project access is enforced inside the handler since we need to read
+  // `data.projectId` for both create and update paths.
   .handler(async ({ data }): Promise<ChangeLogItem> => {
+    await requireProjectAccess(data.projectId);
     const payload = {
       projectId: data.projectId,
       cvrNumber: data.cvrNumber,
@@ -140,6 +148,7 @@ export const upsertChangeLog = createServerFn({ method: "POST" })
       approvedAt: data.approvedAt ? new Date(data.approvedAt) : null,
       approver: data.approver,
       notes: data.notes,
+      area: data.area,
     };
     const row = data.id
       ? await prisma.changeLog.update({
@@ -153,6 +162,13 @@ export const upsertChangeLog = createServerFn({ method: "POST" })
 export const deleteChangeLog = createServerFn({ method: "POST" })
   .inputValidator((input: { id: number }) => input)
   .handler(async ({ data }): Promise<{ ok: true }> => {
+    // Look up the row's project to authorize the caller. Throws if they
+    // can't access the project this change log belongs to.
+    const row = await prisma.changeLog.findUniqueOrThrow({
+      where: { id: data.id },
+      select: { projectId: true },
+    });
+    await requireProjectAccess(row.projectId);
     await prisma.changeLog.delete({ where: { id: data.id } });
     return { ok: true };
   });

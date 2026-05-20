@@ -438,6 +438,7 @@ export function FefTableContent({
   columnVisibility,
   onColumnVisibilityChange,
   minRows,
+  getRowInvalid,
 }: {
   state: FefTableState;
   meta?: FefTableMeta;
@@ -449,6 +450,12 @@ export function FefTableContent({
    *  this many rows tall. Useful for keeping the Take Off table close to
    *  viewport height even when only a few real rows exist. */
   minRows?: number;
+  /**
+   * Optional per-row validator. Rows where this returns `true` are tinted
+   * red with a "Invalid — Total Cost can't be computed" tooltip. Take Off
+   * passes this; other sections leave it undefined and render unmarked.
+   */
+  getRowInvalid?: (row: FefRow) => boolean;
 }) {
   const { data, setData, columnFilters, setColumnFilters } = state;
   const [localPageIndex, setLocalPageIndex] = React.useState(0);
@@ -541,22 +548,37 @@ export function FefTableContent({
           ))}
         </thead>
         <tbody>
-          {table.getRowModel().rows.map((row, i) => (
-            <tr
-              key={row.id}
-              className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}
-            >
-              {row.getVisibleCells().map((cell) => (
-                <td
-                  key={cell.id}
-                  style={{ minWidth: cell.column.getSize() }}
-                  className="border border-gray-300"
-                >
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </td>
-              ))}
-            </tr>
-          ))}
+          {table.getRowModel().rows.map((row, i) => {
+            const invalid = getRowInvalid?.(row.original) ?? false;
+            // Invalid rows get a faint red wash + thicker red left border so
+            // they stand out against the alternating zebra without obscuring
+            // the existing field inputs.
+            const baseBg = i % 2 === 0 ? "bg-white" : "bg-gray-50";
+            const rowClass = invalid
+              ? `${baseBg} bg-red-50 border-l-4 border-l-red-500`
+              : baseBg;
+            return (
+              <tr
+                key={row.id}
+                className={rowClass}
+                title={
+                  invalid
+                    ? "Invalid — labor hours and rate are required to compute Total Cost."
+                    : undefined
+                }
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <td
+                    key={cell.id}
+                    style={{ minWidth: cell.column.getSize() }}
+                    className="border border-gray-300"
+                  >
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
           {minRows !== undefined &&
             Array.from(
               {

@@ -27,6 +27,7 @@ import {
   TableEmptyState,
   Th,
 } from "~/components/ui/list-page";
+import { areasByProjectQueryOptions } from "~/utils/areas";
 import { readProjectIdForLoader } from "~/utils/projectCookie";
 import { disciplineById } from "~/config/disciplines";
 import { formatMoney } from "~/lib/formatting";
@@ -53,6 +54,20 @@ function ChangelogPage() {
   const { projectId } = useSelectedProject();
   const queryClient = useQueryClient();
   const { data: items = [] } = useQuery(changeLogListQueryOptions(projectId));
+  // CVRs hold an Area.id as a string; resolve to "displayId — name" for the
+  // table and the search haystack. Empty `area` means project-wide (no link).
+  const { data: areas = [] } = useQuery(
+    areasByProjectQueryOptions(projectId),
+  );
+  const areaLabel = React.useCallback(
+    (raw: string): string => {
+      if (!raw) return "";
+      const match = areas.find((a) => String(a.id) === raw);
+      if (!match) return raw;
+      return match.name ? `${match.displayId} — ${match.name}` : match.displayId;
+    },
+    [areas],
+  );
 
   const upsert = useMutation({
     mutationFn: (input: UpsertChangeLogInput) =>
@@ -81,12 +96,12 @@ function ChangelogPage() {
       if (disciplineFilter && it.discipline !== disciplineFilter) return false;
       if (q) {
         const haystack =
-          `${it.cvrNumber} ${it.title} ${it.description} ${it.originator} ${it.approver} ${it.reasonCode} ${it.cbsCodes.join(` `)}`.toLowerCase();
+          `${it.cvrNumber} ${it.title} ${it.description} ${it.originator} ${it.approver} ${it.reasonCode} ${it.cbsCodes.join(` `)} ${areaLabel(it.area)}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
     });
-  }, [items, search, statusFilter, disciplineFilter]);
+  }, [items, search, statusFilter, disciplineFilter, areaLabel]);
 
   const stats = React.useMemo(() => {
     const totalCost = items.reduce((acc, i) => acc + i.costImpact, 0);
@@ -186,6 +201,7 @@ function ChangelogPage() {
 
       <ChangelogTable
         items={filtered}
+        areaLabel={areaLabel}
         onSubmit={handleSubmit}
         onDelete={handleDelete}
       />
@@ -235,10 +251,12 @@ function StatsCards({
 
 function ChangelogTable({
   items,
+  areaLabel,
   onSubmit,
   onDelete,
 }: {
   items: ChangeLogItem[];
+  areaLabel: (raw: string) => string;
   onSubmit: (input: Omit<UpsertChangeLogInput, "projectId">) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;
 }) {
@@ -258,6 +276,7 @@ function ChangelogTable({
             <Th>Status</Th>
             <Th>Type</Th>
             <Th>Discipline</Th>
+            <Th>Area</Th>
             <Th>Risk</Th>
             <Th className="text-right">Cost $</Th>
             <Th className="text-right">Sched (d)</Th>
@@ -270,6 +289,7 @@ function ChangelogTable({
             <ChangelogRow
               key={item.id}
               item={item}
+              areaLabel={areaLabel}
               onSubmit={onSubmit}
               onDelete={onDelete}
             />
@@ -282,16 +302,19 @@ function ChangelogTable({
 
 function ChangelogRow({
   item,
+  areaLabel,
   onSubmit,
   onDelete,
 }: {
   item: ChangeLogItem;
+  areaLabel: (raw: string) => string;
   onSubmit: (input: Omit<UpsertChangeLogInput, "projectId">) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;
 }) {
   const disciplineLabel = item.discipline
     ? (disciplineById[item.discipline]?.label ?? item.discipline)
     : "—";
+  const areaLabelText = item.area ? areaLabel(item.area) : "—";
   const cellCls = "px-3 py-2 border-b border-slate-100";
   return (
     <ChangelogDialog
@@ -317,6 +340,7 @@ function ChangelogRow({
             {TYPE_LABELS[item.type]}
           </td>
           <td className={`${cellCls} text-slate-700`}>{disciplineLabel}</td>
+          <td className={`${cellCls} text-slate-700`}>{areaLabelText}</td>
           <td className={cellCls}>
             <RiskBadge level={item.riskLevel} />
           </td>

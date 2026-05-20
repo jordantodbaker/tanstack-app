@@ -29,12 +29,15 @@ enum UserRole {
 // App user, lazily synced from Clerk on first authenticated request.
 // `clerkId` is the Clerk user id; `role` drives role-based access control.
 model User {
-  id        Int      @id @default(autoincrement())
-  clerkId   String   @unique
-  email     String   @unique
-  role      UserRole @default(USER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        Int       @id @default(autoincrement())
+  clerkId   String    @unique
+  email     String    @unique
+  role      UserRole  @default(USER)
+  // Projects this user is granted access to. Administrators ignore this set
+  // and can access every project; see `requireProjectAccess` in users.server.
+  projects  Project[] @relation("UserProjects")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
 model Project {
@@ -47,9 +50,26 @@ model Project {
   allowedFefCbsItems CbsItem[]           @relation("ProjectAllowedFefCbsItems")
   fefRows            FefRow[]
   areas              Area[]
+  subcontractors     Subcontractor[]     @relation("ProjectSubcontractors")
+  users              User[]              @relation("UserProjects")
   basisInputs        BasisInputs?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @default(now())
+}
+
+// Subcontractor company. `displayId` is the human-assigned ID code (unique).
+// `disciplines` holds discipline ids from src/config/disciplines.ts. Projects
+// is a many-to-many: a sub can work multiple projects and a project hires
+// multiple subs.
+model Subcontractor {
+  id          Int       @id @default(autoincrement())
+  displayId   String    @unique
+  name        String
+  description String    @default("")
+  disciplines String[]  @default([])
+  projects    Project[] @relation("ProjectSubcontractors")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 // A physical location on a project. Owned by exactly one project for now
@@ -222,6 +242,10 @@ model ChangeLog {
   approvedAt          DateTime?
   approver            String              @default("")
   notes               String              @default("")
+  // Optional area scope. Holds the Area.id as a string, matching the
+  // FefRow.area / FieldChangeOrder.locationArea convention. Empty when the
+  // CVR is project-wide (no single area).
+  area                String              @default("")
   fieldChangeOrders   FieldChangeOrder[]
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt

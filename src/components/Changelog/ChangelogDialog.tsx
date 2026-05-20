@@ -34,7 +34,10 @@ import {
 } from "~/components/Changelog/StatusBadge";
 import { SearchableMultiSelect } from "~/components/SearchableMultiSelect";
 import type { SearchableSelectOption } from "~/components/SearchableSelect";
+import { useFormDialog } from "~/lib/use-form-dialog";
+import { useSelectedProject } from "~/lib/selected-project";
 import { cbsCodeOptionsQueryOptions } from "~/utils/cbs";
+import { areasByProjectQueryOptions } from "~/utils/areas";
 
 const DISCIPLINE_OPTIONS = disciplines
   .filter((d) => d.l1Codes && d.l1Codes.length > 0)
@@ -62,6 +65,7 @@ function blankForm(): FormState {
     approvedAt: null,
     approver: "",
     notes: "",
+    area: "",
   };
 }
 
@@ -86,6 +90,7 @@ function fromItem(item: ChangeLogItem): FormState {
     approvedAt: item.approvedAt,
     approver: item.approver,
     notes: item.notes,
+    area: item.area,
   };
 }
 
@@ -101,25 +106,29 @@ export function ChangelogDialog({
   onSubmit: (form: FormState) => Promise<unknown>;
   onDelete?: (id: number) => Promise<unknown>;
 }) {
-  const [open, setOpen] = React.useState(false);
-  const [form, setForm] = React.useState<FormState>(() =>
-    initial ? fromItem(initial) : blankForm(),
-  );
-  const [busy, setBusy] = React.useState(false);
-
-  React.useEffect(() => {
-    if (open) {
-      setForm(initial ? fromItem(initial) : blankForm());
-    }
-  }, [open, initial]);
-
-  function update<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((f) => ({ ...f, [key]: value }));
-  }
+  const { open, setOpen, form, busy, update, handleSubmit, handleDelete } =
+    useFormDialog<ChangeLogItem, FormState>({
+      initial,
+      blank: blankForm,
+      fromItem,
+      onSubmit,
+      onDelete,
+      deleteConfirm: (i) =>
+        `Delete change item "${i.title}"? This cannot be undone.`,
+    });
 
   const { data: cbsCodeOptions = [] } = useQuery({
     ...cbsCodeOptionsQueryOptions(),
     enabled: open,
+  });
+
+  // Areas for the selected project — populates the Area dropdown. CVRs may
+  // be project-wide, so "— None —" is the default. Legacy rows that pre-date
+  // this field default to "" and naturally land on "— None —".
+  const { projectId } = useSelectedProject();
+  const { data: areas = [] } = useQuery({
+    ...areasByProjectQueryOptions(projectId),
+    enabled: open && projectId !== null,
   });
 
   const cbsOptions: SearchableSelectOption[] = React.useMemo(
@@ -131,29 +140,6 @@ export function ChangelogDialog({
       })),
     [cbsCodeOptions],
   );
-
-  async function handleSubmit() {
-    setBusy(true);
-    try {
-      await onSubmit(form);
-      setOpen(false);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleDelete() {
-    if (!initial?.id || !onDelete) return;
-    if (!confirm(`Delete change item "${initial.title}"? This cannot be undone.`))
-      return;
-    setBusy(true);
-    try {
-      await onDelete(initial.id);
-      setOpen(false);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -254,6 +240,29 @@ export function ChangelogDialog({
               />
             </Labeled>
           </div>
+
+          <Labeled
+            label="Area"
+            help={
+              projectId === null
+                ? "Select a project first."
+                : areas.length === 0
+                  ? "No areas defined. Optional — leave as None for project-wide changes."
+                  : "Optional — leave as None for project-wide changes."
+            }
+          >
+            <NativeSelect
+              value={form.area}
+              onChange={(v) => update("area", v)}
+              options={[
+                { value: "", label: "— None (project-wide) —" },
+                ...areas.map((a) => ({
+                  value: String(a.id),
+                  label: a.name ? `${a.displayId} — ${a.name}` : a.displayId,
+                })),
+              ]}
+            />
+          </Labeled>
 
           <Labeled
             label="Affected CBS Codes"

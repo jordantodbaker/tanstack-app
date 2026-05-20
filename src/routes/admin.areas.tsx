@@ -1,10 +1,12 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { MapPin, Plus } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Th, TableEmptyState } from "~/components/ui/list-page";
 import { AreaDialog } from "~/components/Admin/AreaDialog";
+import { AdminPageHeader } from "~/components/Admin/AdminPageHeader";
+import { invalidateAdminEntity } from "~/lib/admin-invalidations";
 import {
   areasQueryOptions,
   upsertArea,
@@ -13,19 +15,9 @@ import {
   type UpsertAreaInput,
 } from "~/utils/areas";
 import { projectsQueryOptions, type ProjectOption } from "~/utils/projects";
-import { currentUserQueryOptions, hasAtLeastRole } from "~/utils/users";
 
+// Admin role gate lives on the parent `/admin` layout route.
 export const Route = createFileRoute("/admin/areas")({
-  // Server-side gate: the nav link is hidden for non-admins, but block direct
-  // navigation here too. Redirects anyone below ADMINISTRATOR away.
-  beforeLoad: async ({ context }) => {
-    const user = await context.queryClient.ensureQueryData(
-      currentUserQueryOptions(),
-    );
-    if (!user || !hasAtLeastRole(user.role, "ADMINISTRATOR")) {
-      throw redirect({ to: "/changelog" });
-    }
-  },
   loader: async ({ context }) => {
     await Promise.all([
       context.queryClient.ensureQueryData(areasQueryOptions()),
@@ -40,8 +32,7 @@ function AdminAreasPage() {
   const { data: areas = [] } = useQuery(areasQueryOptions());
   const { data: projects = [] } = useQuery(projectsQueryOptions());
 
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: ["areas"] });
+  const invalidate = () => invalidateAdminEntity(queryClient, "areas");
 
   const upsert = useMutation({
     mutationFn: (input: UpsertAreaInput) => upsertArea({ data: input }),
@@ -69,27 +60,23 @@ function AdminAreasPage() {
 
   return (
     <main className="p-4 max-w-5xl space-y-6">
-      <div className="flex items-end justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <MapPin className="size-6 text-slate-600" />
-            Areas
-          </h1>
-          <p className="text-sm text-slate-500">
-            Physical locations on a project. Each area belongs to one project.
-          </p>
-        </div>
-        <AreaDialog
-          projects={projects}
-          trigger={
-            <Button disabled={projects.length === 0}>
-              <Plus className="mr-1 size-4" />
-              New Area
-            </Button>
-          }
-          onSubmit={handleSubmit}
-        />
-      </div>
+      <AdminPageHeader
+        icon={MapPin}
+        title="Areas"
+        subtitle="Physical locations on a project. Each area belongs to one project."
+        action={
+          <AreaDialog
+            projects={projects}
+            trigger={
+              <Button disabled={projects.length === 0}>
+                <Plus className="mr-1 size-4" />
+                New Area
+              </Button>
+            }
+            onSubmit={handleSubmit}
+          />
+        }
+      />
 
       {projects.length === 0 ? (
         <TableEmptyState message="Create a project first — areas must belong to one." />

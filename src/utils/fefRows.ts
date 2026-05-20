@@ -3,6 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import type { FefRow } from "~/lib/types";
 import { fefRowHasUserData } from "~/lib/fef-helpers";
+import { projectScopedHandler } from "./users.server";
 import { logger } from "~/lib/logger";
 
 export type FefSectionKey = "TAKE_OFF" | "SUPPORT_LABOR" | "MATERIALS";
@@ -48,17 +49,19 @@ export const fetchFefRows = createServerFn({ method: "GET" })
       section: FefSectionKey;
     }) => input,
   )
-  .handler(async ({ data }) => {
-    const rows = await prisma.fefRow.findMany({
-      where: {
-        projectId: data.projectId,
-        discipline: data.discipline,
-        section: data.section,
-      },
-      orderBy: { position: "asc" },
-    });
-    return rows.map(toFefRow);
-  });
+  .handler(
+    projectScopedHandler(async ({ data }) => {
+      const rows = await prisma.fefRow.findMany({
+        where: {
+          projectId: data.projectId,
+          discipline: data.discipline,
+          section: data.section,
+        },
+        orderBy: { position: "asc" },
+      });
+      return rows.map(toFefRow);
+    }),
+  );
 
 export const fefRowsQueryOptions = (input: {
   projectId: number | null;
@@ -89,9 +92,10 @@ export const saveFefRows = createServerFn({ method: "POST" })
       rows: FefRow[];
     }) => input,
   )
-  .handler(async ({ data }) => {
-    const { projectId, discipline, section, rows } = data;
-    try {
+  .handler(
+    projectScopedHandler(async ({ data }) => {
+      const { projectId, discipline, section, rows } = data;
+      try {
       const persistable = rows
         .filter((r) => !r.id.startsWith("__fe-blank-") || fefRowHasUserData(r))
         .map((r, i) => {
@@ -136,4 +140,5 @@ export const saveFefRows = createServerFn({ method: "POST" })
       });
       throw err;
     }
-  });
+    }),
+  );

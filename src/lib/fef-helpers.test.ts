@@ -3,6 +3,7 @@ import {
   FEF_ROW_STRING_FIELDS,
   canComputeTotalCost,
   fefRowHasUserData,
+  isTakeOffRowInvalid,
   makeFefRow,
   toCbsOption,
 } from "./fef-helpers";
@@ -160,6 +161,7 @@ describe("makeFefRow", () => {
     "equipment",
     "notes",
     "sub",
+    "area",
   ];
 
   it("returns a row with id and every string field blank", () => {
@@ -214,5 +216,98 @@ describe("fefRowHasUserData", () => {
     for (const f of FEF_ROW_STRING_FIELDS) {
       expect(fefRowHasUserData(makeFefRow({ [f]: "x" }))).toBe(true);
     }
+  });
+});
+
+describe("isTakeOffRowInvalid", () => {
+  const blank = {
+    quantity: "",
+    laborHours: "",
+    laborRate: "",
+    materialCost: "",
+  };
+
+  it("returns false for an untouched blank-template row (client form)", () => {
+    expect(
+      isTakeOffRowInvalid({ id: "__fe-blank-3", ...blank }),
+    ).toBe(false);
+  });
+
+  it("returns false for a row with no started signals (server form)", () => {
+    expect(isTakeOffRowInvalid({ cbsCode: "", name: "", ...blank })).toBe(
+      false,
+    );
+  });
+
+  it("flags a CBS-coded row that has no labor", () => {
+    // Client representation: id holds the CBS code, no blank-prefix.
+    expect(isTakeOffRowInvalid({ id: "601-01", ...blank })).toBe(true);
+    // Server representation: cbsCode column non-empty.
+    expect(
+      isTakeOffRowInvalid({ cbsCode: "601-01", ...blank }),
+    ).toBe(true);
+  });
+
+  it("flags a row where the user typed only a name", () => {
+    expect(isTakeOffRowInvalid({ name: "Pipe Fab", ...blank })).toBe(true);
+  });
+
+  it("flags a row where the user picked only a schedule", () => {
+    // Any picker counts as "started" — this is the case that motivated
+    // generalizing the rule beyond the cost-relevant fields.
+    expect(isTakeOffRowInvalid({ schedule: "ST", ...blank })).toBe(true);
+  });
+
+  it("flags a row where the user picked only a role", () => {
+    expect(isTakeOffRowInvalid({ role: "Pipefitter", ...blank })).toBe(true);
+  });
+
+  it("flags a row where the user picked only a task code", () => {
+    expect(isTakeOffRowInvalid({ taskCode: "INST-PIPE", ...blank })).toBe(
+      true,
+    );
+  });
+
+  it("flags a row where the user typed only a note", () => {
+    expect(isTakeOffRowInvalid({ notes: "needs cap", ...blank })).toBe(true);
+  });
+
+  it("flags a row with hours but no rate", () => {
+    expect(
+      isTakeOffRowInvalid({ ...blank, laborHours: "4" }),
+    ).toBe(true);
+  });
+
+  it("flags a row with rate but no hours", () => {
+    expect(
+      isTakeOffRowInvalid({ ...blank, laborRate: "50" }),
+    ).toBe(true);
+  });
+
+  it("flags a row with zero hours (not strictly positive)", () => {
+    expect(
+      isTakeOffRowInvalid({ ...blank, laborHours: "0", laborRate: "50" }),
+    ).toBe(true);
+  });
+
+  it("passes a row with positive hours and a parseable rate", () => {
+    expect(
+      isTakeOffRowInvalid({
+        id: "601-01",
+        ...blank,
+        laborHours: "4",
+        laborRate: "50",
+      }),
+    ).toBe(false);
+  });
+
+  it("flags a row with non-numeric labor entries", () => {
+    expect(
+      isTakeOffRowInvalid({
+        ...blank,
+        laborHours: "abc",
+        laborRate: "50",
+      }),
+    ).toBe(true);
   });
 });

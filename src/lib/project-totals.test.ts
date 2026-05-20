@@ -290,4 +290,185 @@ describe("accumulateProjectTotals", () => {
     expect(totals.craftSupportLabor).toBe(600);
     expect(totals.materialsByDigit).toEqual({ "6": 100 });
   });
+
+  describe("byArea breakdown", () => {
+    it("returns an empty array when given no rows", () => {
+      expect(accumulateProjectTotals([]).byArea).toEqual([]);
+    });
+
+    it("aggregates direct cost per (area, digit) and indirect per area", () => {
+      const totals = accumulateProjectTotals([
+        // Pump House A: $200 direct piping labor + $30 material
+        row({
+          section: "TAKE_OFF",
+          discipline: "piping",
+          laborHours: "4",
+          laborRate: "50",
+          area: "1",
+        }),
+        row({
+          section: "MATERIALS",
+          discipline: "601",
+          quantity: "3",
+          materialCost: "10",
+          area: "1",
+        }),
+        // Pump House A: $400 indirect support labor
+        row({
+          section: "SUPPORT_LABOR",
+          discipline: "piping",
+          laborHours: "8",
+          laborRate: "50",
+          area: "1",
+        }),
+        // Pump House B: $100 direct civil labor
+        row({
+          section: "TAKE_OFF",
+          discipline: "civil",
+          laborHours: "2",
+          laborRate: "50",
+          area: "2",
+        }),
+        // Unassigned: $50 material
+        row({
+          section: "MATERIALS",
+          discipline: "201",
+          quantity: "5",
+          materialCost: "10",
+        }),
+      ]);
+
+      const byId = Object.fromEntries(
+        totals.byArea.map((a) => [a.areaId, a]),
+      );
+      expect(byId["1"]).toEqual({
+        areaId: "1",
+        directByDigit: { "6": 230 }, // 200 labor + 30 material
+        indirect: 400,
+      });
+      expect(byId["2"]).toEqual({
+        areaId: "2",
+        directByDigit: { "1": 100 },
+        indirect: 0,
+      });
+      expect(byId[""]).toEqual({
+        areaId: "",
+        directByDigit: { "2": 50 },
+        indirect: 0,
+      });
+    });
+
+    it("does not emit a row for an area whose only contributions are zero", () => {
+      const totals = accumulateProjectTotals([
+        // labor*rate = 0 — skipped
+        row({
+          section: "TAKE_OFF",
+          discipline: "piping",
+          laborHours: "0",
+          laborRate: "50",
+          area: "9",
+        }),
+      ]);
+      expect(totals.byArea).toEqual([]);
+    });
+  });
+
+  describe("invalidByDiscipline", () => {
+    // `row()` defaults numeric fields to "0" so other tests can do math. For
+    // the invalidness check, "0" reads as "started" — explicitly blank these
+    // out below for cases that should look untouched.
+    const BLANK = {
+      quantity: "",
+      laborHours: "",
+      laborRate: "",
+      materialCost: "",
+    };
+
+    it("is empty when nothing is wrong", () => {
+      const totals = accumulateProjectTotals([
+        row({
+          section: "TAKE_OFF",
+          discipline: "piping",
+          laborHours: "4",
+          laborRate: "50",
+        }),
+      ]);
+      expect(totals.invalidByDiscipline).toEqual({});
+    });
+
+    it("counts Take Off rows that have user data but no computable Total", () => {
+      const totals = accumulateProjectTotals([
+        // touched (cbs) but no labor — invalid
+        row({
+          section: "TAKE_OFF",
+          discipline: "piping",
+          cbsCode: "601-01",
+          ...BLANK,
+        }),
+        // touched (qty) but no labor — invalid, same discipline
+        row({
+          section: "TAKE_OFF",
+          discipline: "piping",
+          ...BLANK,
+          quantity: "10",
+        }),
+        // valid — has hours and rate
+        row({
+          section: "TAKE_OFF",
+          discipline: "piping",
+          laborHours: "4",
+          laborRate: "50",
+        }),
+        // different discipline, invalid (hours without rate)
+        row({
+          section: "TAKE_OFF",
+          discipline: "civil",
+          ...BLANK,
+          laborHours: "4",
+        }),
+      ]);
+      expect(totals.invalidByDiscipline).toEqual({ piping: 2, civil: 1 });
+    });
+
+    it("ignores SUPPORT_LABOR and MATERIALS rows", () => {
+      const totals = accumulateProjectTotals([
+        row({
+          section: "SUPPORT_LABOR",
+          discipline: "piping",
+          ...BLANK,
+          laborHours: "4",
+          // missing rate — would be invalid if this were TAKE_OFF
+        }),
+        row({
+          section: "MATERIALS",
+          discipline: "601",
+          ...BLANK,
+          quantity: "5",
+          // missing material cost — would be invalid if this were TAKE_OFF
+        }),
+      ]);
+      expect(totals.invalidByDiscipline).toEqual({});
+    });
+
+    it("ignores untouched blank rows", () => {
+      const totals = accumulateProjectTotals([
+        row({ section: "TAKE_OFF", discipline: "piping", ...BLANK }),
+      ]);
+      expect(totals.invalidByDiscipline).toEqual({});
+    });
+
+    it("flags a row where only a picker field (e.g. schedule) is set", () => {
+      const totals = accumulateProjectTotals([
+        row({
+          section: "TAKE_OFF",
+          discipline: "piping",
+          ...BLANK,
+          // Cast through the wider type so the test row carries fields not
+          // in the legacy fixture; the aggregator now consumes them.
+          ...({ schedule: "ST" } as Partial<{ schedule: string }>),
+        }),
+      ]);
+      expect(totals.invalidByDiscipline).toEqual({ piping: 1 });
+    });
+  });
 });

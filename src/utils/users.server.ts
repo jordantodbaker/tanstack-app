@@ -99,16 +99,103 @@ export async function requireRole(minimum: UserRole): Promise<CurrentUser> {
 export const requireAdmin = (): Promise<CurrentUser> =>
   requireRole("ADMINISTRATOR");
 
+/**
+ * Wraps a server-fn handler so it runs `requireAdmin()` first. The point is
+ * not so much line savings as making the gate impossible to forget — every
+ * admin write goes through `adminHandler(...)` rather than a manual
+ * `await requireAdmin();` at the top of the body.
+ */
+export function adminHandler<I, O>(
+  fn: (args: { data: I }) => Promise<O>,
+): (args: { data: I }) => Promise<O> {
+  return async (args) => {
+    await requireAdmin();
+    return fn(args);
+  };
+}
+
+/** Same as `adminHandler` but for handlers that take no input. */
+export function adminHandlerNoInput<O>(
+  fn: () => Promise<O>,
+): () => Promise<O> {
+  return async () => {
+    await requireAdmin();
+    return fn();
+  };
+}
+
+/**
+ * Returns either the set of project ids the signed-in user may access, or
+ * the literal string `"all"` when the user is an administrator (and thus
+ * bypasses the per-project ACL).
+ *
+ * Throws on signed-out callers — every project-scoped server fn is behind
+ * authentication anyway.
+ */
+export async function getAccessibleProjectIds(): Promise<
+  Set<number> | "all"
+> {
+  const user = await resolveCurrentUser();
+  if (!user) throw new Error("Unauthorized: not signed in");
+  if (hasAtLeastRole(user.role, "ADMINISTRATOR")) return "all";
+  const rows = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { projects: { select: { id: true } } },
+  });
+  return new Set((rows?.projects ?? []).map((p) => p.id));
+}
+
+/**
+ * Server-side guard for any request that operates on a single project.
+ * Throws if the signed-in user is not an admin AND is not assigned to that
+ * project. Use inside every project-scoped server-fn handler.
+ */
+export async function requireProjectAccess(
+  projectId: number,
+): Promise<CurrentUser> {
+  const user = await resolveCurrentUser();
+  if (!user) throw new Error("Unauthorized: not signed in");
+  if (hasAtLeastRole(user.role, "ADMINISTRATOR")) return user;
+  const link = await prisma.user.findFirst({
+    where: { id: user.id, projects: { some: { id: projectId } } },
+    select: { id: true },
+  });
+  if (!link) {
+    throw new Error(
+      `Forbidden: no access to project ${projectId}`,
+    );
+  }
+  return user;
+}
+
+/**
+ * Wraps a server-fn handler whose `data` carries a `projectId`, gating it
+ * with `requireProjectAccess`. Equivalent to writing
+ * `await requireProjectAccess(data.projectId)` at the top of the body, but
+ * structural — impossible to forget on a per-handler basis.
+ */
+export function projectScopedHandler<
+  I extends { projectId: number },
+  O,
+>(fn: (args: { data: I }) => Promise<O>): (args: { data: I }) => Promise<O> {
+  return async (args) => {
+    await requireProjectAccess(args.data.projectId);
+    return fn(args);
+  };
+}
+
 function toAdminUser(row: {
   id: number;
   email: string;
   role: string;
+  projects: { id: number; displayId: string; name: string }[];
   createdAt: Date;
 }): AdminUser {
   return {
     id: row.id,
     email: row.email,
     role: row.role as UserRole,
+    projects: row.projects,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -117,18 +204,23 @@ function toAdminUser(row: {
 export async function listUsers(): Promise<AdminUser[]> {
   await requireAdmin();
   const rows = await prisma.user.findMany({
+    include: {
+      projects: { select: { id: true, displayId: true, name: true } },
+    },
     orderBy: [{ role: "desc" }, { email: "asc" }],
   });
   return rows.map(toAdminUser);
 }
 
 /**
- * Changes a user's role. Admin-only. Blocks admins from removing their own
- * administrator access so they can't lock themselves out.
+ * Updates a user's role and project assignments. Admin-only. Blocks admins
+ * from removing their own administrator access so they can't lock themselves
+ * out. `projectIds` replaces the full set.
  */
-export async function setUserRole(
+export async function setUser(
   userId: number,
   role: UserRole,
+  projectIds: number[],
 ): Promise<AdminUser> {
   const admin = await requireAdmin();
   if (userId === admin.id && role !== "ADMINISTRATOR") {
@@ -136,7 +228,13 @@ export async function setUserRole(
   }
   const row = await prisma.user.update({
     where: { id: userId },
-    data: { role },
+    data: {
+      role,
+      projects: { set: projectIds.map((id) => ({ id })) },
+    },
+    include: {
+      projects: { select: { id: true, displayId: true, name: true } },
+    },
   });
   return toAdminUser(row);
 }

@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
-import { listUsers, resolveCurrentUser, setUserRole } from "./users.server";
+import { listUsers, resolveCurrentUser, setUser } from "./users.server";
 
 /**
  * CLIENT-SAFE. This module is imported by client code (`use-current-user.ts`,
@@ -49,6 +49,9 @@ export type AdminUser = {
   id: number;
   email: string;
   role: UserRole;
+  /** Projects this user is assigned to. Admins implicitly access every
+   *  project regardless of this list. */
+  projects: { id: number; displayId: string; name: string }[];
   createdAt: string;
 };
 
@@ -75,9 +78,13 @@ export const usersQueryOptions = () =>
     queryFn: () => fetchUsers(),
   });
 
-/** Changes a user's role. Admin-only (gated server-side). */
-export const updateUserRole = createServerFn({ method: "POST" })
-  .inputValidator((input: { userId: number; role: UserRole }) => input)
+/** Updates a user's role and project assignments. Admin-only (gated
+ *  server-side). `projectIds` replaces the full set. */
+export const updateUser = createServerFn({ method: "POST" })
+  .inputValidator(
+    (input: { userId: number; role: UserRole; projectIds: number[] }) =>
+      input,
+  )
   .handler(({ data }): Promise<AdminUser> =>
-    setUserRole(data.userId, data.role),
+    setUser(data.userId, data.role, data.projectIds),
   );

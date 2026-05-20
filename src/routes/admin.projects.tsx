@@ -1,10 +1,12 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { Plus, Shield } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Th, TableEmptyState } from "~/components/ui/list-page";
 import { ProjectDialog } from "~/components/Admin/ProjectDialog";
+import { AdminPageHeader } from "~/components/Admin/AdminPageHeader";
+import { invalidateAdminEntity } from "~/lib/admin-invalidations";
 import {
   projectsQueryOptions,
   upsertProject,
@@ -12,19 +14,9 @@ import {
   type ProjectOption,
   type UpsertProjectInput,
 } from "~/utils/projects";
-import { currentUserQueryOptions, hasAtLeastRole } from "~/utils/users";
 
+// Admin role gate lives on the parent `/admin` layout route.
 export const Route = createFileRoute("/admin/projects")({
-  // Server-side gate: the nav link is hidden for non-admins, but block direct
-  // navigation here too. Redirects anyone below ADMINISTRATOR away.
-  beforeLoad: async ({ context }) => {
-    const user = await context.queryClient.ensureQueryData(
-      currentUserQueryOptions(),
-    );
-    if (!user || !hasAtLeastRole(user.role, "ADMINISTRATOR")) {
-      throw redirect({ to: "/changelog" });
-    }
-  },
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData(projectsQueryOptions());
   },
@@ -35,8 +27,7 @@ function AdminProjectsPage() {
   const queryClient = useQueryClient();
   const { data: projects = [] } = useQuery(projectsQueryOptions());
 
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: ["projects"] });
+  const invalidate = () => invalidateAdminEntity(queryClient, "projects");
 
   const upsert = useMutation({
     mutationFn: (input: UpsertProjectInput) => upsertProject({ data: input }),
@@ -57,26 +48,22 @@ function AdminProjectsPage() {
 
   return (
     <main className="p-4 max-w-5xl space-y-6">
-      <div className="flex items-end justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <Shield className="size-6 text-slate-600" />
-            Projects
-          </h1>
-          <p className="text-sm text-slate-500">
-            Add, edit, and remove the projects available across the platform.
-          </p>
-        </div>
-        <ProjectDialog
-          trigger={
-            <Button>
-              <Plus className="mr-1 size-4" />
-              New Project
-            </Button>
-          }
-          onSubmit={handleSubmit}
-        />
-      </div>
+      <AdminPageHeader
+        icon={Shield}
+        title="Projects"
+        subtitle="Add, edit, and remove the projects available across the platform."
+        action={
+          <ProjectDialog
+            trigger={
+              <Button>
+                <Plus className="mr-1 size-4" />
+                New Project
+              </Button>
+            }
+            onSubmit={handleSubmit}
+          />
+        }
+      />
 
       <ProjectsTable
         projects={projects}

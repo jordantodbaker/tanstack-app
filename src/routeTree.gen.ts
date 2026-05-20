@@ -17,9 +17,11 @@ import { Route as MaterialsRouteImport } from './routes/materials'
 import { Route as FcoLogRouteImport } from './routes/fco-log'
 import { Route as ChangelogRouteImport } from './routes/changelog'
 import { Route as BasisRouteImport } from './routes/basis'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as DisciplineRouteImport } from './routes/$discipline'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
+import { Route as AdminSubcontractorsRouteImport } from './routes/admin.subcontractors'
 import { Route as AdminProjectsRouteImport } from './routes/admin.projects'
 import { Route as AdminAreasRouteImport } from './routes/admin.areas'
 
@@ -63,6 +65,11 @@ const BasisRoute = BasisRouteImport.update({
   path: '/basis',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DisciplineRoute = DisciplineRouteImport.update({
   id: '/$discipline',
   path: '/$discipline',
@@ -74,24 +81,30 @@ const IndexRoute = IndexRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminUsersRoute = AdminUsersRouteImport.update({
-  id: '/admin/users',
-  path: '/admin/users',
-  getParentRoute: () => rootRouteImport,
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSubcontractorsRoute = AdminSubcontractorsRouteImport.update({
+  id: '/subcontractors',
+  path: '/subcontractors',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminProjectsRoute = AdminProjectsRouteImport.update({
-  id: '/admin/projects',
-  path: '/admin/projects',
-  getParentRoute: () => rootRouteImport,
+  id: '/projects',
+  path: '/projects',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminAreasRoute = AdminAreasRouteImport.update({
-  id: '/admin/areas',
-  path: '/admin/areas',
-  getParentRoute: () => rootRouteImport,
+  id: '/areas',
+  path: '/areas',
+  getParentRoute: () => AdminRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$discipline': typeof DisciplineRoute
+  '/admin': typeof AdminRouteWithChildren
   '/basis': typeof BasisRoute
   '/changelog': typeof ChangelogRoute
   '/fco-log': typeof FcoLogRoute
@@ -102,11 +115,13 @@ export interface FileRoutesByFullPath {
   '/validation': typeof ValidationRoute
   '/admin/areas': typeof AdminAreasRoute
   '/admin/projects': typeof AdminProjectsRoute
+  '/admin/subcontractors': typeof AdminSubcontractorsRoute
   '/admin/users': typeof AdminUsersRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$discipline': typeof DisciplineRoute
+  '/admin': typeof AdminRouteWithChildren
   '/basis': typeof BasisRoute
   '/changelog': typeof ChangelogRoute
   '/fco-log': typeof FcoLogRoute
@@ -117,12 +132,14 @@ export interface FileRoutesByTo {
   '/validation': typeof ValidationRoute
   '/admin/areas': typeof AdminAreasRoute
   '/admin/projects': typeof AdminProjectsRoute
+  '/admin/subcontractors': typeof AdminSubcontractorsRoute
   '/admin/users': typeof AdminUsersRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$discipline': typeof DisciplineRoute
+  '/admin': typeof AdminRouteWithChildren
   '/basis': typeof BasisRoute
   '/changelog': typeof ChangelogRoute
   '/fco-log': typeof FcoLogRoute
@@ -133,6 +150,7 @@ export interface FileRoutesById {
   '/validation': typeof ValidationRoute
   '/admin/areas': typeof AdminAreasRoute
   '/admin/projects': typeof AdminProjectsRoute
+  '/admin/subcontractors': typeof AdminSubcontractorsRoute
   '/admin/users': typeof AdminUsersRoute
 }
 export interface FileRouteTypes {
@@ -140,6 +158,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/$discipline'
+    | '/admin'
     | '/basis'
     | '/changelog'
     | '/fco-log'
@@ -150,11 +169,13 @@ export interface FileRouteTypes {
     | '/validation'
     | '/admin/areas'
     | '/admin/projects'
+    | '/admin/subcontractors'
     | '/admin/users'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/$discipline'
+    | '/admin'
     | '/basis'
     | '/changelog'
     | '/fco-log'
@@ -165,11 +186,13 @@ export interface FileRouteTypes {
     | '/validation'
     | '/admin/areas'
     | '/admin/projects'
+    | '/admin/subcontractors'
     | '/admin/users'
   id:
     | '__root__'
     | '/'
     | '/$discipline'
+    | '/admin'
     | '/basis'
     | '/changelog'
     | '/fco-log'
@@ -180,12 +203,14 @@ export interface FileRouteTypes {
     | '/validation'
     | '/admin/areas'
     | '/admin/projects'
+    | '/admin/subcontractors'
     | '/admin/users'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DisciplineRoute: typeof DisciplineRoute
+  AdminRoute: typeof AdminRouteWithChildren
   BasisRoute: typeof BasisRoute
   ChangelogRoute: typeof ChangelogRoute
   FcoLogRoute: typeof FcoLogRoute
@@ -194,9 +219,6 @@ export interface RootRouteChildren {
   SetupRoute: typeof SetupRoute
   SummaryRoute: typeof SummaryRoute
   ValidationRoute: typeof ValidationRoute
-  AdminAreasRoute: typeof AdminAreasRoute
-  AdminProjectsRoute: typeof AdminProjectsRoute
-  AdminUsersRoute: typeof AdminUsersRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -257,6 +279,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BasisRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/$discipline': {
       id: '/$discipline'
       path: '/$discipline'
@@ -273,31 +302,55 @@ declare module '@tanstack/react-router' {
     }
     '/admin/users': {
       id: '/admin/users'
-      path: '/admin/users'
+      path: '/users'
       fullPath: '/admin/users'
       preLoaderRoute: typeof AdminUsersRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/subcontractors': {
+      id: '/admin/subcontractors'
+      path: '/subcontractors'
+      fullPath: '/admin/subcontractors'
+      preLoaderRoute: typeof AdminSubcontractorsRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/projects': {
       id: '/admin/projects'
-      path: '/admin/projects'
+      path: '/projects'
       fullPath: '/admin/projects'
       preLoaderRoute: typeof AdminProjectsRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/areas': {
       id: '/admin/areas'
-      path: '/admin/areas'
+      path: '/areas'
       fullPath: '/admin/areas'
       preLoaderRoute: typeof AdminAreasRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
   }
 }
 
+interface AdminRouteChildren {
+  AdminAreasRoute: typeof AdminAreasRoute
+  AdminProjectsRoute: typeof AdminProjectsRoute
+  AdminSubcontractorsRoute: typeof AdminSubcontractorsRoute
+  AdminUsersRoute: typeof AdminUsersRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminAreasRoute: AdminAreasRoute,
+  AdminProjectsRoute: AdminProjectsRoute,
+  AdminSubcontractorsRoute: AdminSubcontractorsRoute,
+  AdminUsersRoute: AdminUsersRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DisciplineRoute: DisciplineRoute,
+  AdminRoute: AdminRouteWithChildren,
   BasisRoute: BasisRoute,
   ChangelogRoute: ChangelogRoute,
   FcoLogRoute: FcoLogRoute,
@@ -306,9 +359,6 @@ const rootRouteChildren: RootRouteChildren = {
   SetupRoute: SetupRoute,
   SummaryRoute: SummaryRoute,
   ValidationRoute: ValidationRoute,
-  AdminAreasRoute: AdminAreasRoute,
-  AdminProjectsRoute: AdminProjectsRoute,
-  AdminUsersRoute: AdminUsersRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

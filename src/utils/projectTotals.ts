@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
+import { requireProjectAccess } from "./users.server";
 import {
   accumulateProjectTotals,
   type ProjectFefRowTotals,
@@ -15,21 +16,42 @@ const EMPTY_TOTALS: ProjectFefRowTotals = {
   craftSupportLabor: 0,
   craftSupportLaborHours: 0,
   materialsByDigit: {},
+  byArea: [],
+  invalidByDiscipline: {},
 };
 
 export const fetchProjectFefRowTotals = createServerFn({ method: "GET" })
   .inputValidator((projectId: number) => projectId)
   .handler(async ({ data: projectId }): Promise<ProjectFefRowTotals> => {
+    await requireProjectAccess(projectId);
     const rows = await prisma.fefRow.findMany({
       where: { projectId },
+      // All FEF free-text fields are selected: the Take Off invalid check
+      // treats *any* non-empty field as "user touched this row", so any one
+      // of these missing on the server side would silently under-count.
       select: {
         discipline: true,
         section: true,
         cbsCode: true,
+        area: true,
+        name: true,
+        description: true,
+        shopField: true,
+        weldGroupDescription: true,
         quantity: true,
+        size: true,
+        unit: true,
+        metallurgyCode: true,
+        boreSize: true,
+        role: true,
+        schedule: true,
+        taskCode: true,
         laborHours: true,
         laborRate: true,
         materialCost: true,
+        equipment: true,
+        notes: true,
+        sub: true,
       },
     });
     return accumulateProjectTotals(rows);

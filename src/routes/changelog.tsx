@@ -10,6 +10,7 @@ import {
   upsertChangeLog,
   deleteChangeLog,
   CHANGE_STATUSES,
+  CVR_OPEN_STATUSES,
   type ChangeLogItem,
   type ChangeStatus,
   type UpsertChangeLogInput,
@@ -48,12 +49,6 @@ export const Route = createFileRoute("/changelog")({
   },
   component: ChangelogPage,
 });
-
-const OPEN_STATUSES: ChangeStatus[] = [
-  "REQUESTED",
-  "IN_REVIEW",
-  "PENDING_APPROVAL",
-];
 
 function ChangelogPage() {
   const { projectId } = useSelectedProject();
@@ -114,7 +109,7 @@ function ChangelogPage() {
       .filter((i) => i.status === "APPROVED" || i.status === "EXECUTED")
       .reduce((acc, i) => acc + i.costImpact, 0);
     const openCount = items.filter((i) =>
-      OPEN_STATUSES.includes(i.status),
+      CVR_OPEN_STATUSES.includes(i.status),
     ).length;
     const executedCount = items.filter((i) => i.status === "EXECUTED").length;
     return { totalCost, approvedCost, openCount, executedCount };

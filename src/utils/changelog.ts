@@ -21,6 +21,13 @@ export const CHANGE_STATUSES = [
 ] as const;
 export type ChangeStatus = (typeof CHANGE_STATUSES)[number];
 
+/** CVR statuses still in flight — not yet executed, rejected, or voided. */
+export const CVR_OPEN_STATUSES: ChangeStatus[] = [
+  "REQUESTED",
+  "IN_REVIEW",
+  "PENDING_APPROVAL",
+];
+
 export const CHANGE_TYPES = [
   "SCOPE",
   "COST",

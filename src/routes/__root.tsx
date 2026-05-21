@@ -212,6 +212,18 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
             </div>
             <nav className="hidden sm:flex items-center gap-1 flex-1">
               <Link
+                to="/dashboard"
+                className="px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                activeProps={{ className: "text-red-800 bg-red-50" }}
+                inactiveProps={{
+                  className:
+                    "text-slate-600 hover:text-slate-900 hover:bg-slate-100",
+                }}
+                activeOptions={{ exact: true }}
+              >
+                Dashboard
+              </Link>
+              <Link
                 to="/changelog"
                 className="px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
                 activeProps={{ className: "text-red-800 bg-red-50" }}

@@ -96,13 +96,19 @@ export async function recordDelete(
   });
 }
 
-/** Records one UPDATE event per changed field. No-op when nothing changed. */
+/**
+ * Records one UPDATE event per changed field. No-op when nothing changed.
+ * An optional `note` (e.g. an approval/rejection comment) is attached to
+ * every row in the batch.
+ */
 export async function recordUpdate(
   db: AuditDb,
   target: AuditTarget,
   changes: FieldChange[],
+  note?: string,
 ): Promise<void> {
   if (changes.length === 0) return;
+  const cleanNote = note?.trim() ? note.trim() : null;
   await db.auditEvent.createMany({
     data: changes.map((c) => ({
       entityType: target.entityType,
@@ -114,6 +120,7 @@ export async function recordUpdate(
       newValue: c.newValue,
       actorId: target.actor.id,
       actorEmail: target.actor.email,
+      note: cleanNote,
     })),
   });
 }

@@ -9,7 +9,7 @@ import {
 // Independent enumeration of every UserRole. If a role is added to the
 // `UserRole` union, this list must be updated too — the "key set" assertions
 // below then fail unless ROLE_RANK and ROLE_LABELS were updated to match.
-const ALL_ROLES: UserRole[] = ["USER", "ADMINISTRATOR"];
+const ALL_ROLES: UserRole[] = ["USER", "APPROVER", "ADMINISTRATOR"];
 
 describe("ROLE_RANK", () => {
   it("has an entry for every role", () => {
@@ -18,6 +18,11 @@ describe("ROLE_RANK", () => {
 
   it("ranks ADMINISTRATOR strictly above USER", () => {
     expect(ROLE_RANK.ADMINISTRATOR).toBeGreaterThan(ROLE_RANK.USER);
+  });
+
+  it("places APPROVER between USER and ADMINISTRATOR", () => {
+    expect(ROLE_RANK.APPROVER).toBeGreaterThan(ROLE_RANK.USER);
+    expect(ROLE_RANK.APPROVER).toBeLessThan(ROLE_RANK.ADMINISTRATOR);
   });
 
   it("assigns a distinct rank to every role", () => {

@@ -8,6 +8,7 @@ import {
   recordDelete,
   recordUpdate,
 } from "./audit.server";
+import { CVR_TRANSITIONS, availableTransitions } from "./workflow";
 
 export const CHANGE_STATUSES = [
   "REQUESTED",
@@ -58,6 +59,8 @@ export type ChangeLogItem = {
   notes: string;
   /** Optional area scope — holds an Area.id as a string. "" = project-wide. */
   area: string;
+  /** User.id of the creator, or null on rows predating the column. */
+  createdById: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -158,12 +161,14 @@ export const upsertChangeLog = createServerFn({ method: "POST" })
   // `data.projectId` for both create and update paths.
   .handler(async ({ data }): Promise<ChangeLogItem> => {
     const actor = await requireProjectAccess(data.projectId);
+    // `status` is intentionally omitted: lifecycle changes go through
+    // `transitionChangeLog`, never the generic upsert. Create falls back to
+    // the schema default (REQUESTED); update leaves the existing status.
     const payload = {
       projectId: data.projectId,
       cvrNumber: data.cvrNumber,
       title: data.title,
       description: data.description,
-      status: data.status,
       type: data.type,
       discipline: data.discipline,
       cbsCodes: data.cbsCodes,
@@ -201,7 +206,9 @@ export const upsertChangeLog = createServerFn({ method: "POST" })
         );
         return updated;
       }
-      const created = await tx.changeLog.create({ data: payload });
+      const created = await tx.changeLog.create({
+        data: { ...payload, createdById: actor.id },
+      });
       await recordCreate(tx, {
         entityType: "ChangeLog",
         entityId: created.id,
@@ -209,6 +216,65 @@ export const upsertChangeLog = createServerFn({ method: "POST" })
         actor,
       });
       return created;
+    });
+    return toItem(row);
+  });
+
+/**
+ * Performs a workflow status transition on a CVR. The requested `action` is
+ * validated against `CVR_TRANSITIONS` for the actor's role and the
+ * originator block — the same source of truth the UI renders buttons from.
+ * An optional `comment` is stored on the audit event as its note.
+ */
+export const transitionChangeLog = createServerFn({ method: "POST" })
+  .inputValidator(
+    (input: { id: number; action: string; comment?: string }) => input,
+  )
+  .handler(async ({ data }): Promise<ChangeLogItem> => {
+    const pre = await prisma.changeLog.findUniqueOrThrow({
+      where: { id: data.id },
+      select: { projectId: true },
+    });
+    const actor = await requireProjectAccess(pre.projectId);
+    const row = await prisma.$transaction(async (tx) => {
+      const before = await tx.changeLog.findUniqueOrThrow({
+        where: { id: data.id },
+      });
+      const isOriginator =
+        before.createdById !== null && before.createdById === actor.id;
+      const transition = availableTransitions(
+        CVR_TRANSITIONS,
+        before.status as ChangeStatus,
+        actor.role,
+        isOriginator,
+      ).find((t) => t.action === data.action);
+      if (!transition) {
+        throw new Error(
+          `"${data.action}" is not a permitted transition from ${before.status}.`,
+        );
+      }
+      const updated = await tx.changeLog.update({
+        where: { id: data.id },
+        data: {
+          status: transition.to,
+          // Stamp the approver on the approval step only.
+          ...(transition.to === "APPROVED"
+            ? { approver: actor.email, approvedAt: new Date() }
+            : {}),
+        },
+      });
+      await recordUpdate(
+        tx,
+        {
+          entityType: "ChangeLog",
+          entityId: updated.id,
+          projectId: updated.projectId,
+          actor,
+        },
+        diffFields(before, updated, ["status", "approver", "approvedAt"]),
+        data.comment,
+      );
+      return updated;
     });
     return toItem(row);
   });

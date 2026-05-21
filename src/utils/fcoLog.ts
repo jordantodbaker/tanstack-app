@@ -8,6 +8,7 @@ import {
   recordDelete,
   recordUpdate,
 } from "./audit.server";
+import { FCO_TRANSITIONS, availableTransitions } from "./workflow";
 
 export const FCO_STATUSES = [
   "DRAFT",
@@ -75,6 +76,8 @@ export type FcoItem = {
   linkedCvrId: number | null;
   linkedCvrNumber: string | null;
   linkedCvrTitle: string | null;
+  /** User.id of the creator, or null on rows predating the column. */
+  createdById: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -200,12 +203,14 @@ export const upsertFco = createServerFn({ method: "POST" })
   .inputValidator((input: UpsertFcoInput) => input)
   .handler(async ({ data }): Promise<FcoItem> => {
     const actor = await requireProjectAccess(data.projectId);
+    // `status` is intentionally omitted: lifecycle changes go through
+    // `transitionFco`, never the generic upsert. Create falls back to the
+    // schema default (DRAFT); update leaves the existing status.
     const payload = {
       projectId: data.projectId,
       fcoNumber: data.fcoNumber,
       title: data.title,
       description: data.description,
-      status: data.status,
       originType: data.originType,
       priority: data.priority,
       discipline: data.discipline,
@@ -248,7 +253,9 @@ export const upsertFco = createServerFn({ method: "POST" })
         );
         return updated.id;
       }
-      const created = await tx.fieldChangeOrder.create({ data: payload });
+      const created = await tx.fieldChangeOrder.create({
+        data: { ...payload, createdById: actor.id },
+      });
       await recordCreate(tx, {
         entityType: "FieldChangeOrder",
         entityId: created.id,
@@ -256,6 +263,63 @@ export const upsertFco = createServerFn({ method: "POST" })
         actor,
       });
       return created.id;
+    });
+    // Re-fetch with the relation for the response shape.
+    const row = await prisma.fieldChangeOrder.findUniqueOrThrow({
+      where: { id },
+      include: linkedCvrInclude,
+    });
+    return toItem(row);
+  });
+
+/**
+ * Performs a workflow status transition on an FCO. The requested `action` is
+ * validated against `FCO_TRANSITIONS` for the actor's role and the
+ * originator block. An optional `comment` is stored on the audit event.
+ */
+export const transitionFco = createServerFn({ method: "POST" })
+  .inputValidator(
+    (input: { id: number; action: string; comment?: string }) => input,
+  )
+  .handler(async ({ data }): Promise<FcoItem> => {
+    const pre = await prisma.fieldChangeOrder.findUniqueOrThrow({
+      where: { id: data.id },
+      select: { projectId: true },
+    });
+    const actor = await requireProjectAccess(pre.projectId);
+    const id = await prisma.$transaction(async (tx) => {
+      const before = await tx.fieldChangeOrder.findUniqueOrThrow({
+        where: { id: data.id },
+      });
+      const isOriginator =
+        before.createdById !== null && before.createdById === actor.id;
+      const transition = availableTransitions(
+        FCO_TRANSITIONS,
+        before.status as FcoStatus,
+        actor.role,
+        isOriginator,
+      ).find((t) => t.action === data.action);
+      if (!transition) {
+        throw new Error(
+          `"${data.action}" is not a permitted transition from ${before.status}.`,
+        );
+      }
+      const updated = await tx.fieldChangeOrder.update({
+        where: { id: data.id },
+        data: { status: transition.to },
+      });
+      await recordUpdate(
+        tx,
+        {
+          entityType: "FieldChangeOrder",
+          entityId: updated.id,
+          projectId: updated.projectId,
+          actor,
+        },
+        diffFields(before, updated, ["status"]),
+        data.comment,
+      );
+      return updated.id;
     });
     // Re-fetch with the relation for the response shape.
     const row = await prisma.fieldChangeOrder.findUniqueOrThrow({
@@ -331,6 +395,7 @@ export const promoteFcoToCvr = createServerFn({ method: "POST" })
           // Carry the FCO's area through to the new CVR so the change keeps
           // its location context after escalation.
           area: fco.locationArea,
+          createdById: actor.id,
         },
       });
       await recordCreate(tx, {

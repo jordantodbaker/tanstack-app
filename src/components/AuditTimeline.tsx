@@ -57,6 +57,11 @@ function AuditRow({ event }: { event: AuditEventItem }) {
       <div className="text-sm text-slate-700">
         <AuditSummary event={event} />
       </div>
+      {event.note && (
+        <div className="mt-0.5 text-xs italic text-slate-500">
+          “{event.note}”
+        </div>
+      )}
       <div className="text-xs text-slate-400">
         {event.actorEmail} · {new Date(event.createdAt).toLocaleString()}
       </div>

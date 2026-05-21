@@ -40,6 +40,9 @@ model AuditEvent {
   newValue   String?
   actorId    Int
   actorEmail String
+  // Optional free-text note — carries an approval/rejection comment when the
+  // event is a workflow status transition.
+  note       String?
   createdAt  DateTime    @default(now())
 
   @@index([entityType, entityId])
@@ -47,9 +50,12 @@ model AuditEvent {
 }
 
 // Privilege levels, extensible: add a value here and a rank in ROLE_RANK
-// (src/utils/users.ts) to introduce an intermediate level later.
+// (src/utils/users.ts) to introduce an intermediate level later. APPROVER
+// sits between USER and ADMINISTRATOR — it can action approval-workflow
+// transitions but has no admin access.
 enum UserRole {
   USER
+  APPROVER
   ADMINISTRATOR
 }
 
@@ -273,6 +279,10 @@ model ChangeLog {
   // FefRow.area / FieldChangeOrder.locationArea convention. Empty when the
   // CVR is project-wide (no single area).
   area                String              @default("")
+  // User.id of whoever created this CVR. Plain column (no FK) so it survives
+  // user deletion; drives the approval workflow's "approver ≠ originator"
+  // rule. Null on rows that predate the column.
+  createdById         Int?
   fieldChangeOrders   FieldChangeOrder[]
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
@@ -341,6 +351,10 @@ model FieldChangeOrder {
   closedAt           DateTime?
   linkedCvr          ChangeLog?    @relation(fields: [linkedCvrId], references: [id], onDelete: SetNull)
   linkedCvrId        Int?
+  // User.id of whoever raised this FCO. Plain column (no FK) so it survives
+  // user deletion; drives the approval workflow's "approver ≠ originator"
+  // rule. Null on rows that predate the column.
+  createdById        Int?
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 

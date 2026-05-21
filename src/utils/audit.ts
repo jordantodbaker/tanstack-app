@@ -13,6 +13,8 @@ export type AuditEventItem = {
   field: string | null;
   oldValue: string | null;
   newValue: string | null;
+  /** Free-text comment, e.g. an approval/rejection reason. */
+  note: string | null;
   actorEmail: string;
   createdAt: string;
 };
@@ -38,6 +40,7 @@ export const fetchAuditEvents = createServerFn({ method: "GET" })
       field: r.field,
       oldValue: r.oldValue,
       newValue: r.newValue,
+      note: r.note,
       actorEmail: r.actorEmail,
       createdAt: r.createdAt.toISOString(),
     }));

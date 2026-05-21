@@ -6,18 +6,25 @@ import { formatMoney, formatCompact } from "~/lib/formatting";
 import { useSelectedProject } from "~/lib/selected-project";
 import { projectFefRowTotalsQueryOptions } from "~/utils/projectTotals";
 import { areasByProjectQueryOptions } from "~/utils/areas";
-import { readProjectIdForLoader } from "~/utils/projectCookie";
+import {
+  readProjectIdForLoader,
+  tryPrefetchProjectQuery,
+} from "~/utils/projectCookie";
 
 export const Route = createFileRoute("/validation")({
   loader: async ({ context }) => {
     const projectId = await readProjectIdForLoader();
     if (projectId !== null) {
       await Promise.all([
-        context.queryClient.ensureQueryData(
-          projectFefRowTotalsQueryOptions(projectId),
+        tryPrefetchProjectQuery(
+          context.queryClient.ensureQueryData(
+            projectFefRowTotalsQueryOptions(projectId),
+          ),
         ),
-        context.queryClient.ensureQueryData(
-          areasByProjectQueryOptions(projectId),
+        tryPrefetchProjectQuery(
+          context.queryClient.ensureQueryData(
+            areasByProjectQueryOptions(projectId),
+          ),
         ),
       ]);
     }

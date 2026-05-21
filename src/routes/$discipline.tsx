@@ -8,7 +8,10 @@ import {
   allowedFefCbsItemIdsQueryOptions,
 } from "~/utils/setup";
 import { fefRowsQueryOptions } from "~/utils/fefRows";
-import { readProjectIdForLoader } from "~/utils/projectCookie";
+import {
+  readProjectIdForLoader,
+  tryPrefetchProjectQuery,
+} from "~/utils/projectCookie";
 
 export const Route = createFileRoute("/$discipline")({
   loader: async ({ params, context }) => {
@@ -16,25 +19,34 @@ export const Route = createFileRoute("/$discipline")({
     if (!config?.l1Codes) throw notFound();
 
     const projectId = await readProjectIdForLoader();
+    // Project-scoped prefetches are best-effort: a stale cookie projectId
+    // the user no longer has access to throws server-side; the page still
+    // renders and ProjectGuard surfaces the not-assigned state.
     const fefRowPrefetches =
       projectId !== null
         ? [
-            context.queryClient.ensureQueryData(
-              fefRowsQueryOptions({
-                projectId,
-                discipline: config.id,
-                section: "TAKE_OFF",
-              }),
+            tryPrefetchProjectQuery(
+              context.queryClient.ensureQueryData(
+                fefRowsQueryOptions({
+                  projectId,
+                  discipline: config.id,
+                  section: "TAKE_OFF",
+                }),
+              ),
             ),
-            context.queryClient.ensureQueryData(
-              fefRowsQueryOptions({
-                projectId,
-                discipline: config.id,
-                section: "SUPPORT_LABOR",
-              }),
+            tryPrefetchProjectQuery(
+              context.queryClient.ensureQueryData(
+                fefRowsQueryOptions({
+                  projectId,
+                  discipline: config.id,
+                  section: "SUPPORT_LABOR",
+                }),
+              ),
             ),
-            context.queryClient.ensureQueryData(
-              allowedFefCbsItemIdsQueryOptions(projectId),
+            tryPrefetchProjectQuery(
+              context.queryClient.ensureQueryData(
+                allowedFefCbsItemIdsQueryOptions(projectId),
+              ),
             ),
           ]
         : [];

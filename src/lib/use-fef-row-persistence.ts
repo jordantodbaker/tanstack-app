@@ -35,7 +35,7 @@ export function useFefRowPersistence({
   const queryClient = useQueryClient();
   const { isHydrated: isProjectHydrated } = useSelectedProject();
   const queryOpts = fefRowsQueryOptions({ projectId, discipline, section });
-  const { data: loadedRows } = useQuery(queryOpts);
+  const { data: loadedRows, isError: isLoadError } = useQuery(queryOpts);
   const { data, setData } = state;
 
   const hydratedKeyRef = React.useRef<string | null>(null);
@@ -52,7 +52,13 @@ export function useFefRowPersistence({
       setAppliedKey(currentKey);
       return;
     }
-    if (loadedRows === undefined) return;
+    if (loadedRows === undefined) {
+      // Errored queries also have `data === undefined`. Treat that as
+      // "settled, nothing to apply" so the LoadMask hides — the page
+      // boundary (ProjectGuard / route loader) handles real no-access.
+      if (isLoadError) setAppliedKey(currentKey);
+      return;
+    }
     if (hydratedKeyRef.current === currentKey) {
       setAppliedKey(currentKey);
       return;
@@ -84,6 +90,7 @@ export function useFefRowPersistence({
     projectId,
     currentKey,
     loadedRows,
+    isLoadError,
     fallbackRows,
     setData,
   ]);

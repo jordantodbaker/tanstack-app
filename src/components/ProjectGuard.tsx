@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { FolderOpen, Loader2, Lock } from "lucide-react";
+import { AlertTriangle, FolderOpen, Loader2, Lock } from "lucide-react";
 import { useSelectedProject } from "~/lib/selected-project";
 import { projectsQueryOptions } from "~/utils/projects";
 import { currentUserQueryOptions, hasAtLeastRole } from "~/utils/users";
@@ -34,10 +34,12 @@ export function ProjectGuard({ children }: { children: React.ReactNode }) {
   const user = currentUserQuery.data;
   const isAdmin = user ? hasAtLeastRole(user.role, "ADMINISTRATOR") : false;
 
+  // "Ready" = queries have a result (success OR error). `data !== undefined`
+  // alone would leave us spinning forever on an error, because errored
+  // queries also have `data === undefined`. Use `isPending` instead so the
+  // error branch below can render something actionable.
   const ready =
-    isHydrated &&
-    currentUserQuery.data !== undefined &&
-    projectsQuery.data !== undefined;
+    isHydrated && !currentUserQuery.isPending && !projectsQuery.isPending;
 
   // Auto-select / stale-clear runs once per mount-and-hydrate cycle. After
   // that the user is free to clear the selection from the dropdown — they'll
@@ -59,6 +61,18 @@ export function ProjectGuard({ children }: { children: React.ReactNode }) {
   }, [ready, projectId, projects, isAdmin, setProjectId]);
 
   if (!ready) return <CenteredLoading />;
+
+  // Surface real failures (DB down, Clerk session issue, etc.) instead of
+  // mis-rendering them as "no projects".
+  if (currentUserQuery.isError || projectsQuery.isError) {
+    return (
+      <QueryErrorState
+        error={
+          (currentUserQuery.error ?? projectsQuery.error) as Error | undefined
+        }
+      />
+    );
+  }
 
   if (!isAdmin && projects.length === 0) {
     return <NoProjectsAssigned />;
@@ -124,6 +138,22 @@ function NoProjectSelected() {
         </h2>
         <p className="text-sm text-slate-500">
           Please select a project from the dropdown in the header.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function QueryErrorState({ error }: { error?: Error }) {
+  return (
+    <div className="flex items-center justify-center min-h-[60vh] p-8">
+      <div className="max-w-md text-center">
+        <AlertTriangle className="size-12 text-amber-500 mx-auto mb-4" />
+        <h2 className="text-lg font-semibold text-slate-800 mb-1">
+          Couldn't load your account
+        </h2>
+        <p className="text-sm text-slate-500">
+          {error?.message ?? "Something went wrong loading your projects."}
         </p>
       </div>
     </div>

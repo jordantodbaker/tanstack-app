@@ -39,7 +39,10 @@ import {
   Th,
 } from "~/components/ui/list-page";
 import { areasByProjectQueryOptions } from "~/utils/areas";
-import { readProjectIdForLoader } from "~/utils/projectCookie";
+import {
+  readProjectIdForLoader,
+  tryPrefetchProjectQuery,
+} from "~/utils/projectCookie";
 import { disciplineById } from "~/config/disciplines";
 import { formatMoney } from "~/lib/formatting";
 
@@ -47,8 +50,8 @@ export const Route = createFileRoute("/fco-log")({
   loader: async ({ context }) => {
     const projectId = await readProjectIdForLoader();
     if (projectId !== null) {
-      await context.queryClient.ensureQueryData(
-        fcoListQueryOptions(projectId),
+      await tryPrefetchProjectQuery(
+        context.queryClient.ensureQueryData(fcoListQueryOptions(projectId)),
       );
     }
   },

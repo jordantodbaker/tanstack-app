@@ -2,6 +2,12 @@ import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { requireProjectAccess } from "./users.server";
+import {
+  diffFields,
+  recordCreate,
+  recordDelete,
+  recordUpdate,
+} from "./audit.server";
 
 export const CHANGE_STATUSES = [
   "REQUESTED",
@@ -122,12 +128,36 @@ export type UpsertChangeLogInput = {
   area: string;
 };
 
+// User-meaningful columns tracked by the audit log. Excludes id, projectId,
+// and the createdAt/updatedAt timestamps.
+const CHANGELOG_AUDIT_FIELDS = [
+  "cvrNumber",
+  "title",
+  "description",
+  "status",
+  "type",
+  "discipline",
+  "cbsCodes",
+  "originator",
+  "costImpact",
+  "scheduleDaysImpact",
+  "laborHoursImpact",
+  "riskLevel",
+  "reasonCode",
+  "requestedAt",
+  "dueDate",
+  "approvedAt",
+  "approver",
+  "notes",
+  "area",
+] as const satisfies readonly (keyof ChangeLogRow)[];
+
 export const upsertChangeLog = createServerFn({ method: "POST" })
   .inputValidator((input: UpsertChangeLogInput) => input)
   // Note: project access is enforced inside the handler since we need to read
   // `data.projectId` for both create and update paths.
   .handler(async ({ data }): Promise<ChangeLogItem> => {
-    await requireProjectAccess(data.projectId);
+    const actor = await requireProjectAccess(data.projectId);
     const payload = {
       projectId: data.projectId,
       cvrNumber: data.cvrNumber,
@@ -150,12 +180,36 @@ export const upsertChangeLog = createServerFn({ method: "POST" })
       notes: data.notes,
       area: data.area,
     };
-    const row = data.id
-      ? await prisma.changeLog.update({
+    const row = await prisma.$transaction(async (tx) => {
+      if (data.id) {
+        const before = await tx.changeLog.findUniqueOrThrow({
+          where: { id: data.id },
+        });
+        const updated = await tx.changeLog.update({
           where: { id: data.id },
           data: payload,
-        })
-      : await prisma.changeLog.create({ data: payload });
+        });
+        await recordUpdate(
+          tx,
+          {
+            entityType: "ChangeLog",
+            entityId: updated.id,
+            projectId: updated.projectId,
+            actor,
+          },
+          diffFields(before, updated, CHANGELOG_AUDIT_FIELDS),
+        );
+        return updated;
+      }
+      const created = await tx.changeLog.create({ data: payload });
+      await recordCreate(tx, {
+        entityType: "ChangeLog",
+        entityId: created.id,
+        projectId: created.projectId,
+        actor,
+      });
+      return created;
+    });
     return toItem(row);
   });
 
@@ -168,7 +222,15 @@ export const deleteChangeLog = createServerFn({ method: "POST" })
       where: { id: data.id },
       select: { projectId: true },
     });
-    await requireProjectAccess(row.projectId);
-    await prisma.changeLog.delete({ where: { id: data.id } });
+    const actor = await requireProjectAccess(row.projectId);
+    await prisma.$transaction(async (tx) => {
+      await tx.changeLog.delete({ where: { id: data.id } });
+      await recordDelete(tx, {
+        entityType: "ChangeLog",
+        entityId: data.id,
+        projectId: row.projectId,
+        actor,
+      });
+    });
     return { ok: true };
   });

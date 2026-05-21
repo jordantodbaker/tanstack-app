@@ -15,7 +15,10 @@ import {
 import { formatMoney } from "~/lib/formatting";
 import { useSelectedProject } from "~/lib/selected-project";
 import { projectFefRowTotalsQueryOptions } from "~/utils/projectTotals";
-import { readProjectIdForLoader } from "~/utils/projectCookie";
+import {
+  readProjectIdForLoader,
+  tryPrefetchProjectQuery,
+} from "~/utils/projectCookie";
 
 /**
  * Map from a Summary-table discipline label (e.g. "Electrical") back to the
@@ -35,8 +38,10 @@ export const Route = createFileRoute("/summary")({
   loader: async ({ context }) => {
     const projectId = await readProjectIdForLoader();
     if (projectId !== null) {
-      await context.queryClient.ensureQueryData(
-        projectFefRowTotalsQueryOptions(projectId),
+      await tryPrefetchProjectQuery(
+        context.queryClient.ensureQueryData(
+          projectFefRowTotalsQueryOptions(projectId),
+        ),
       );
     }
   },

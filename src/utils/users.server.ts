@@ -6,6 +6,7 @@ import {
   type CurrentUser,
   type UserRole,
 } from "./users";
+import { recordUpdate, type FieldChange } from "./audit.server";
 
 /**
  * SERVER-ONLY. This module imports `prisma` and Clerk's server SDK, so it must
@@ -226,15 +227,52 @@ export async function setUser(
   if (userId === admin.id && role !== "ADMINISTRATOR") {
     throw new Error("You cannot remove your own administrator access.");
   }
-  const row = await prisma.user.update({
-    where: { id: userId },
-    data: {
-      role,
-      projects: { set: projectIds.map((id) => ({ id })) },
-    },
-    include: {
-      projects: { select: { id: true, displayId: true, name: true } },
-    },
+  return prisma.$transaction(async (tx) => {
+    const before = await tx.user.findUniqueOrThrow({
+      where: { id: userId },
+      include: { projects: { select: { id: true } } },
+    });
+    const updated = await tx.user.update({
+      where: { id: userId },
+      data: {
+        role,
+        projects: { set: projectIds.map((id) => ({ id })) },
+      },
+      include: {
+        projects: { select: { id: true, displayId: true, name: true } },
+      },
+    });
+
+    // Project assignment is a relation, not a column — diff the id sets by
+    // hand. Role is a plain scalar.
+    const changes: FieldChange[] = [];
+    if (before.role !== updated.role) {
+      changes.push({
+        field: "role",
+        oldValue: before.role,
+        newValue: updated.role,
+      });
+    }
+    const projectIdList = (rows: { id: number }[]) =>
+      rows
+        .map((p) => p.id)
+        .sort((a, b) => a - b)
+        .join(", ");
+    const beforeProjects = projectIdList(before.projects);
+    const afterProjects = projectIdList(updated.projects);
+    if (beforeProjects !== afterProjects) {
+      changes.push({
+        field: "projects",
+        oldValue: beforeProjects || null,
+        newValue: afterProjects || null,
+      });
+    }
+    await recordUpdate(
+      tx,
+      { entityType: "User", entityId: userId, projectId: null, actor: admin },
+      changes,
+    );
+
+    return toAdminUser(updated);
   });
-  return toAdminUser(row);
 }

@@ -34,6 +34,13 @@ import {
 } from "~/components/Changelog/StatusBadge";
 import { SearchableMultiSelect } from "~/components/SearchableMultiSelect";
 import type { SearchableSelectOption } from "~/components/SearchableSelect";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "~/components/ui/tabs";
+import { AuditTimeline } from "~/components/AuditTimeline";
 import { useFormDialog } from "~/lib/use-form-dialog";
 import { useSelectedProject } from "~/lib/selected-project";
 import { cbsCodeOptionsQueryOptions } from "~/utils/cbs";
@@ -168,6 +175,13 @@ export function ChangelogDialog({
               </Button>
             )}
           </div>
+
+          <Tabs defaultValue="details" className="w-full">
+            <TabsList>
+              <TabsTrigger value="details">Details</TabsTrigger>
+              <TabsTrigger value="history">History</TabsTrigger>
+            </TabsList>
+            <TabsContent value="details" className="space-y-4 mt-3">
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Labeled label="CVR Number">
@@ -378,6 +392,16 @@ export function ChangelogDialog({
               onChange={(e) => update("notes", e.target.value)}
             />
           </Labeled>
+
+            </TabsContent>
+            <TabsContent value="history" className="mt-3">
+              <AuditTimeline
+                entityType="ChangeLog"
+                entityId={initial?.id ?? null}
+                projectId={initial?.projectId ?? null}
+              />
+            </TabsContent>
+          </Tabs>
 
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
             <DialogClose asChild>

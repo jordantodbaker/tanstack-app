@@ -2,6 +2,12 @@ import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { requireProjectAccess } from "./users.server";
+import {
+  diffFields,
+  recordCreate,
+  recordDelete,
+  recordUpdate,
+} from "./audit.server";
 
 export const FCO_STATUSES = [
   "DRAFT",
@@ -76,13 +82,13 @@ export type FcoItem = {
 const serializeDate = (d: Date | null): string | null =>
   d === null ? null : d.toISOString();
 
-/**
- * Prisma scalar row, derived from the client so it tracks schema changes,
- * plus the `linkedCvr` relation pulled in via `include`.
- */
-type Row = Awaited<
+/** Prisma scalar row, derived from the client so it tracks schema changes. */
+type FcoScalarRow = Awaited<
   ReturnType<typeof prisma.fieldChangeOrder.findMany>
->[number] & {
+>[number];
+
+/** Scalar row plus the `linkedCvr` relation pulled in via `include`. */
+type Row = FcoScalarRow & {
   linkedCvr: { id: number; cvrNumber: string; title: string } | null;
 };
 
@@ -157,10 +163,43 @@ export type UpsertFcoInput = {
   linkedCvrId: number | null;
 };
 
+// User-meaningful columns tracked by the audit log. Excludes id, projectId,
+// and the createdAt/updatedAt timestamps.
+const FCO_AUDIT_FIELDS = [
+  "fcoNumber",
+  "title",
+  "description",
+  "status",
+  "originType",
+  "priority",
+  "discipline",
+  "cbsCodes",
+  "locationArea",
+  "drawingRefs",
+  "rfiNumbers",
+  "initiatedBy",
+  "fieldContact",
+  "estimatedCost",
+  "estimatedHours",
+  "workStopped",
+  "photosUrl",
+  "reasonNarrative",
+  "resolution",
+  "notes",
+  "initiatedAt",
+  "neededBy",
+  "closedAt",
+  "linkedCvrId",
+] as const satisfies readonly (keyof FcoScalarRow)[];
+
+const linkedCvrInclude = {
+  linkedCvr: { select: { id: true, cvrNumber: true, title: true } },
+} as const;
+
 export const upsertFco = createServerFn({ method: "POST" })
   .inputValidator((input: UpsertFcoInput) => input)
   .handler(async ({ data }): Promise<FcoItem> => {
-    await requireProjectAccess(data.projectId);
+    const actor = await requireProjectAccess(data.projectId);
     const payload = {
       projectId: data.projectId,
       fcoNumber: data.fcoNumber,
@@ -188,20 +227,41 @@ export const upsertFco = createServerFn({ method: "POST" })
       closedAt: data.closedAt ? new Date(data.closedAt) : null,
       linkedCvrId: data.linkedCvrId,
     };
-    const row = data.id
-      ? await prisma.fieldChangeOrder.update({
+    const id = await prisma.$transaction(async (tx) => {
+      if (data.id) {
+        const before = await tx.fieldChangeOrder.findUniqueOrThrow({
+          where: { id: data.id },
+        });
+        const updated = await tx.fieldChangeOrder.update({
           where: { id: data.id },
           data: payload,
-          include: {
-            linkedCvr: { select: { id: true, cvrNumber: true, title: true } },
-          },
-        })
-      : await prisma.fieldChangeOrder.create({
-          data: payload,
-          include: {
-            linkedCvr: { select: { id: true, cvrNumber: true, title: true } },
-          },
         });
+        await recordUpdate(
+          tx,
+          {
+            entityType: "FieldChangeOrder",
+            entityId: updated.id,
+            projectId: updated.projectId,
+            actor,
+          },
+          diffFields(before, updated, FCO_AUDIT_FIELDS),
+        );
+        return updated.id;
+      }
+      const created = await tx.fieldChangeOrder.create({ data: payload });
+      await recordCreate(tx, {
+        entityType: "FieldChangeOrder",
+        entityId: created.id,
+        projectId: created.projectId,
+        actor,
+      });
+      return created.id;
+    });
+    // Re-fetch with the relation for the response shape.
+    const row = await prisma.fieldChangeOrder.findUniqueOrThrow({
+      where: { id },
+      include: linkedCvrInclude,
+    });
     return toItem(row);
   });
 
@@ -213,8 +273,16 @@ export const deleteFco = createServerFn({ method: "POST" })
       where: { id: data.id },
       select: { projectId: true },
     });
-    await requireProjectAccess(row.projectId);
-    await prisma.fieldChangeOrder.delete({ where: { id: data.id } });
+    const actor = await requireProjectAccess(row.projectId);
+    await prisma.$transaction(async (tx) => {
+      await tx.fieldChangeOrder.delete({ where: { id: data.id } });
+      await recordDelete(tx, {
+        entityType: "FieldChangeOrder",
+        entityId: data.id,
+        projectId: row.projectId,
+        actor,
+      });
+    });
     return { ok: true };
   });
 
@@ -229,48 +297,66 @@ export const promoteFcoToCvr = createServerFn({ method: "POST" })
     const fco = await prisma.fieldChangeOrder.findUniqueOrThrow({
       where: { id: data.fcoId },
     });
-    await requireProjectAccess(fco.projectId);
+    const actor = await requireProjectAccess(fco.projectId);
 
-    const cvr = await prisma.changeLog.create({
-      data: {
-        projectId: fco.projectId,
-        cvrNumber: fco.fcoNumber ? `CVR-from-${fco.fcoNumber}` : "",
-        title: fco.title,
-        description:
-          fco.description ||
-          fco.reasonNarrative ||
-          `Promoted from FCO ${fco.fcoNumber}`,
-        status: "REQUESTED",
-        type: "SCOPE",
-        discipline: fco.discipline,
-        cbsCodes: fco.cbsCodes,
-        originator: fco.initiatedBy,
-        costImpact: fco.estimatedCost,
-        scheduleDaysImpact: 0,
-        laborHoursImpact: fco.estimatedHours,
-        riskLevel:
-          fco.priority === "URGENT"
-            ? "CRITICAL"
-            : fco.priority === "HIGH"
-              ? "HIGH"
-              : fco.priority === "LOW"
-                ? "LOW"
-                : "MEDIUM",
-        reasonCode: fco.originType,
-        requestedAt: new Date(),
-        notes: `Linked from FCO ${fco.fcoNumber || `#${fco.id}`}`,
-        // Carry the FCO's area through to the new CVR so the change keeps
-        // its location context after escalation.
-        area: fco.locationArea,
-      },
+    return prisma.$transaction(async (tx) => {
+      const cvr = await tx.changeLog.create({
+        data: {
+          projectId: fco.projectId,
+          cvrNumber: fco.fcoNumber ? `CVR-from-${fco.fcoNumber}` : "",
+          title: fco.title,
+          description:
+            fco.description ||
+            fco.reasonNarrative ||
+            `Promoted from FCO ${fco.fcoNumber}`,
+          status: "REQUESTED",
+          type: "SCOPE",
+          discipline: fco.discipline,
+          cbsCodes: fco.cbsCodes,
+          originator: fco.initiatedBy,
+          costImpact: fco.estimatedCost,
+          scheduleDaysImpact: 0,
+          laborHoursImpact: fco.estimatedHours,
+          riskLevel:
+            fco.priority === "URGENT"
+              ? "CRITICAL"
+              : fco.priority === "HIGH"
+                ? "HIGH"
+                : fco.priority === "LOW"
+                  ? "LOW"
+                  : "MEDIUM",
+          reasonCode: fco.originType,
+          requestedAt: new Date(),
+          notes: `Linked from FCO ${fco.fcoNumber || `#${fco.id}`}`,
+          // Carry the FCO's area through to the new CVR so the change keeps
+          // its location context after escalation.
+          area: fco.locationArea,
+        },
+      });
+      await recordCreate(tx, {
+        entityType: "ChangeLog",
+        entityId: cvr.id,
+        projectId: cvr.projectId,
+        actor,
+      });
+
+      const updatedFco = await tx.fieldChangeOrder.update({
+        where: { id: fco.id },
+        data: { linkedCvrId: cvr.id, status: "LINKED_TO_CVR" },
+      });
+      await recordUpdate(
+        tx,
+        {
+          entityType: "FieldChangeOrder",
+          entityId: fco.id,
+          projectId: fco.projectId,
+          actor,
+        },
+        diffFields(fco, updatedFco, ["status", "linkedCvrId"] as const),
+      );
+
+      return { cvrId: cvr.id };
     });
-
-    await prisma.fieldChangeOrder.update({
-      where: { id: fco.id },
-      data: { linkedCvrId: cvr.id, status: "LINKED_TO_CVR" },
-    });
-
-    return { cvrId: cvr.id };
   });
 
 /**

@@ -19,7 +19,10 @@ import {
   allowedFefCbsItemIdsQueryOptions,
 } from "~/utils/setup";
 import { fefRowsQueryOptions } from "~/utils/fefRows";
-import { readProjectIdForLoader } from "~/utils/projectCookie";
+import {
+  readProjectIdForLoader,
+  tryPrefetchProjectQuery,
+} from "~/utils/projectCookie";
 import { makeFefRow, toCbsOption } from "~/lib/fef-helpers";
 
 const PIPING_L1 = disciplineById.piping.l1Codes!;
@@ -57,19 +60,26 @@ export const Route = createFileRoute("/piping")({
       context.queryClient.ensureQueryData(pipingFactorDataQueryOptions()),
     ];
     if (projectId !== null) {
+      // Project-scoped prefetches are best-effort: a stale cookie projectId
+      // the user no longer has access to throws server-side; the page still
+      // renders and ProjectGuard surfaces the not-assigned state.
       critical.push(
-        context.queryClient.ensureQueryData(
-          fefRowsQueryOptions({
-            projectId,
-            discipline: "piping",
-            section: "TAKE_OFF",
-          }),
+        tryPrefetchProjectQuery(
+          context.queryClient.ensureQueryData(
+            fefRowsQueryOptions({
+              projectId,
+              discipline: "piping",
+              section: "TAKE_OFF",
+            }),
+          ),
         ),
-        context.queryClient.ensureQueryData(
-          cbsItemsByL1FilteredQueryOptions({
-            l1Values: PIPING_CRAFT_L1,
-            projectId,
-          }),
+        tryPrefetchProjectQuery(
+          context.queryClient.ensureQueryData(
+            cbsItemsByL1FilteredQueryOptions({
+              l1Values: PIPING_CRAFT_L1,
+              projectId,
+            }),
+          ),
         ),
       );
     }

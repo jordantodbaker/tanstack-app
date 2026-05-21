@@ -39,6 +39,13 @@ import {
 import { SearchableMultiSelect } from "~/components/SearchableMultiSelect";
 import type { SearchableSelectOption } from "~/components/SearchableSelect";
 import { cbsCodeOptionsQueryOptions } from "~/utils/cbs";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "~/components/ui/tabs";
+import { AuditTimeline } from "~/components/AuditTimeline";
 
 const DISCIPLINE_OPTIONS = disciplines
   .filter((d) => d.l1Codes && d.l1Codes.length > 0)
@@ -259,6 +266,13 @@ export function FcoDialog({
               </span>
             </div>
           )}
+
+          <Tabs defaultValue="details" className="w-full">
+            <TabsList>
+              <TabsTrigger value="details">Details</TabsTrigger>
+              <TabsTrigger value="history">History</TabsTrigger>
+            </TabsList>
+            <TabsContent value="details" className="space-y-4 mt-3">
 
           {/* Identity */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -541,6 +555,16 @@ export function FcoDialog({
               onChange={(e) => update("notes", e.target.value)}
             />
           </Labeled>
+
+            </TabsContent>
+            <TabsContent value="history" className="mt-3">
+              <AuditTimeline
+                entityType="FieldChangeOrder"
+                entityId={initial?.id ?? null}
+                projectId={initial?.projectId ?? null}
+              />
+            </TabsContent>
+          </Tabs>
 
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
             <DialogClose asChild>

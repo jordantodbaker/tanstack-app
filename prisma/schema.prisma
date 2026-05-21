@@ -19,6 +19,33 @@ model Post {
   createdAt DateTime @default(now())
 }
 
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+// Append-only audit log. One row per CREATE/DELETE, one row per changed
+// field on UPDATE. `projectId` and `actorId` are intentionally plain columns
+// (no FK relations) so history survives project or user deletion;
+// `actorEmail` is a denormalized snapshot for the same reason.
+model AuditEvent {
+  id         Int         @id @default(autoincrement())
+  entityType String
+  entityId   Int
+  projectId  Int?
+  action     AuditAction
+  field      String?
+  oldValue   String?
+  newValue   String?
+  actorId    Int
+  actorEmail String
+  createdAt  DateTime    @default(now())
+
+  @@index([entityType, entityId])
+  @@index([projectId, createdAt])
+}
+
 // Privilege levels, extensible: add a value here and a rank in ROLE_RANK
 // (src/utils/users.ts) to introduce an intermediate level later.
 enum UserRole {

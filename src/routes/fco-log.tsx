@@ -21,6 +21,7 @@ import {
   upsertFco,
   deleteFco,
   promoteFcoToCvr,
+  transitionFco,
   type FcoItem,
   type FcoStatus,
   type UpsertFcoInput,
@@ -96,6 +97,11 @@ function FcoLogPage() {
     mutationFn: (id: number) => promoteFcoToCvr({ data: { fcoId: id } }),
     onSuccess: invalidate,
   });
+  const transition = useMutation({
+    mutationFn: (input: { id: number; action: string }) =>
+      transitionFco({ data: input }),
+    onSuccess: invalidate,
+  });
 
   const [search, setSearch] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState<"" | FcoStatus>("");
@@ -150,6 +156,10 @@ function FcoLogPage() {
 
   function handlePromote(id: number) {
     return promote.mutateAsync(id);
+  }
+
+  function handleTransition(input: { id: number; action: string }) {
+    return transition.mutateAsync(input);
   }
 
   return (
@@ -252,6 +262,7 @@ function FcoLogPage() {
         onSubmit={handleSubmit}
         onDelete={handleDelete}
         onPromote={handlePromote}
+        onTransition={handleTransition}
       />
     </main>
   );
@@ -315,6 +326,7 @@ function FcoTable({
   onSubmit,
   onDelete,
   onPromote,
+  onTransition,
 }: {
   items: FcoItem[];
   projectId: number | null;
@@ -322,6 +334,7 @@ function FcoTable({
   onSubmit: (input: Omit<UpsertFcoInput, "projectId">) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;
   onPromote: (id: number) => Promise<unknown>;
+  onTransition: (input: { id: number; action: string }) => Promise<unknown>;
 }) {
   if (items.length === 0) {
     return (
@@ -356,6 +369,7 @@ function FcoTable({
               onSubmit={onSubmit}
               onDelete={onDelete}
               onPromote={onPromote}
+              onTransition={onTransition}
             />
           ))}
         </tbody>
@@ -371,6 +385,7 @@ function FcoRow({
   onSubmit,
   onDelete,
   onPromote,
+  onTransition,
 }: {
   item: FcoItem;
   projectId: number | null;
@@ -378,6 +393,7 @@ function FcoRow({
   onSubmit: (input: Omit<UpsertFcoInput, "projectId">) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;
   onPromote: (id: number) => Promise<unknown>;
+  onTransition: (input: { id: number; action: string }) => Promise<unknown>;
 }) {
   const disciplineLabel = item.discipline
     ? (disciplineById[item.discipline]?.label ?? item.discipline)
@@ -461,6 +477,7 @@ function FcoRow({
       onSubmit={onSubmit}
       onDelete={onDelete}
       onPromote={onPromote}
+      onTransition={onTransition}
     />
   );
 }

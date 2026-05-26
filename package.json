@@ -45,7 +45,8 @@
     "@types/react-query": "^1.2.8",
     "@vitejs/plugin-react": "^6.0.1",
     "tailwindcss": "^4.2.2",
-    "typescript": "^6.0.2",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
     "vite": "^8.0.0",
     "vitest": "^4.1.6"
   }

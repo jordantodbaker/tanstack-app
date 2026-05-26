@@ -9,6 +9,7 @@ import {
   changeLogListQueryOptions,
   upsertChangeLog,
   deleteChangeLog,
+  transitionChangeLog,
   CHANGE_STATUSES,
   CVR_OPEN_STATUSES,
   type ChangeLogItem,
@@ -82,6 +83,13 @@ function ChangelogPage() {
       queryClient.invalidateQueries({ queryKey: ["changeLog", projectId] });
     },
   });
+  const transition = useMutation({
+    mutationFn: (input: { id: number; action: string }) =>
+      transitionChangeLog({ data: input }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["changeLog", projectId] });
+    },
+  });
 
   const [search, setSearch] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState<"" | ChangeStatus>(
@@ -124,6 +132,10 @@ function ChangelogPage() {
 
   function handleDelete(id: number) {
     return remove.mutateAsync(id);
+  }
+
+  function handleTransition(input: { id: number; action: string }) {
+    return transition.mutateAsync(input);
   }
 
   return (
@@ -204,6 +216,7 @@ function ChangelogPage() {
         areaLabel={areaLabel}
         onSubmit={handleSubmit}
         onDelete={handleDelete}
+        onTransition={handleTransition}
       />
     </main>
   );
@@ -254,11 +267,13 @@ function ChangelogTable({
   areaLabel,
   onSubmit,
   onDelete,
+  onTransition,
 }: {
   items: ChangeLogItem[];
   areaLabel: (raw: string) => string;
   onSubmit: (input: Omit<UpsertChangeLogInput, "projectId">) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;
+  onTransition: (input: { id: number; action: string }) => Promise<unknown>;
 }) {
   if (items.length === 0) {
     return (
@@ -292,6 +307,7 @@ function ChangelogTable({
               areaLabel={areaLabel}
               onSubmit={onSubmit}
               onDelete={onDelete}
+              onTransition={onTransition}
             />
           ))}
         </tbody>
@@ -305,11 +321,13 @@ function ChangelogRow({
   areaLabel,
   onSubmit,
   onDelete,
+  onTransition,
 }: {
   item: ChangeLogItem;
   areaLabel: (raw: string) => string;
   onSubmit: (input: Omit<UpsertChangeLogInput, "projectId">) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;
+  onTransition: (input: { id: number; action: string }) => Promise<unknown>;
 }) {
   const disciplineLabel = item.discipline
     ? (disciplineById[item.discipline]?.label ?? item.discipline)
@@ -363,6 +381,7 @@ function ChangelogRow({
       initial={item}
       onSubmit={onSubmit}
       onDelete={onDelete}
+      onTransition={onTransition}
     />
   );
 }

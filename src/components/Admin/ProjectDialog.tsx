@@ -196,7 +196,7 @@ export function ProjectDialog({
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,720px)] max-h-[90vh] overflow-y-auto">
         <div className="space-y-4">
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start justify-between gap-2 pr-8">
             <div>
               <h2 className="text-lg font-semibold text-slate-800">
                 {initial ? "Edit Project" : "New Project"}

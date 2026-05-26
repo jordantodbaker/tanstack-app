@@ -65,7 +65,7 @@ export function AreaDialog({
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,560px)]">
         <div className="space-y-4">
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start justify-between gap-2 pr-8">
             <div>
               <h2 className="text-lg font-semibold text-slate-800">
                 {initial ? "Edit Area" : "New Area"}

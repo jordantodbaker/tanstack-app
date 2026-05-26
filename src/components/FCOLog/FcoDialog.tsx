@@ -20,21 +20,21 @@ import {
 import { useFormDialog } from "~/lib/use-form-dialog";
 import { areasByProjectQueryOptions } from "~/utils/areas";
 import {
-  FCO_STATUSES,
   FCO_ORIGIN_TYPES,
   FCO_PRIORITIES,
   cvrOptionsQueryOptions,
   type FcoItem,
   type FcoOriginType,
   type FcoPriority,
-  type FcoStatus,
   type UpsertFcoInput,
 } from "~/utils/fcoLog";
+import { FCO_TRANSITIONS, availableTransitions } from "~/utils/workflow";
+import { useCurrentUser } from "~/lib/use-current-user";
 import { disciplines } from "~/config/disciplines";
 import {
   FCO_ORIGIN_LABELS,
   FCO_PRIORITY_LABELS,
-  FCO_STATUS_LABELS,
+  FcoStatusBadge,
 } from "~/components/FCOLog/FcoBadges";
 import { SearchableMultiSelect } from "~/components/SearchableMultiSelect";
 import type { SearchableSelectOption } from "~/components/SearchableSelect";
@@ -119,6 +119,7 @@ export function FcoDialog({
   onSubmit,
   onDelete,
   onPromote,
+  onTransition,
 }: {
   trigger: React.ReactNode;
   initial?: FcoItem;
@@ -126,6 +127,12 @@ export function FcoDialog({
   onSubmit: (form: FormState) => Promise<unknown>;
   onDelete?: (id: number) => Promise<unknown>;
   onPromote?: (id: number) => Promise<unknown>;
+  /**
+   * Run a workflow status transition. Only meaningful in edit mode; the dialog
+   * renders one button per transition allowed by the current user's role and
+   * originator status. See `FCO_TRANSITIONS` in workflow.ts.
+   */
+  onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
 }) {
   const {
     open,
@@ -144,6 +151,33 @@ export function FcoDialog({
     onDelete,
     deleteConfirm: (i) => `Delete FCO "${i.title}"? This cannot be undone.`,
   });
+
+  const { data: currentUser } = useCurrentUser();
+  const isOriginator =
+    !!currentUser &&
+    initial?.createdById !== null &&
+    initial?.createdById === currentUser.id;
+  const transitions =
+    initial && currentUser && onTransition
+      ? availableTransitions(
+          FCO_TRANSITIONS,
+          initial.status,
+          currentUser.role,
+          isOriginator,
+        )
+      : [];
+
+  async function runTransition(action: string, destructive: boolean) {
+    if (!initial?.id || !onTransition) return;
+    if (destructive && !confirm(`${action} this FCO?`)) return;
+    setBusy(true);
+    try {
+      await onTransition({ id: initial.id, action });
+      setOpen(false);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const { data: cvrOptions = [] } = useQuery({
     ...cvrOptionsQueryOptions(projectId),
@@ -214,7 +248,7 @@ export function FcoDialog({
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,1100px)] max-h-[90vh] overflow-y-auto">
         <div className="space-y-4">
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start justify-between gap-2 pr-8">
             <div>
               <h2 className="text-lg font-semibold text-slate-800">
                 {initial ? "Edit Field Change Order" : "New Field Change Order"}
@@ -294,15 +328,17 @@ export function FcoDialog({
 
           {/* State row */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Labeled label="Status">
-              <NativeSelect
-                value={form.status}
-                onChange={(v) => update("status", v as FcoStatus)}
-                options={FCO_STATUSES.map((s) => ({
-                  value: s,
-                  label: FCO_STATUS_LABELS[s],
-                }))}
-              />
+            <Labeled
+              label="Status"
+              help={
+                initial
+                  ? "Use the workflow actions below to advance status."
+                  : "New FCOs start as Draft."
+              }
+            >
+              <div className="flex h-9 items-center">
+                <FcoStatusBadge status={initial ? initial.status : "DRAFT"} />
+              </div>
             </Labeled>
             <Labeled label="Origin">
               <NativeSelect
@@ -338,6 +374,43 @@ export function FcoDialog({
               />
             </Labeled>
           </div>
+
+          {initial && onTransition && (
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+                Workflow Actions
+              </div>
+              {transitions.length === 0 ? (
+                <p className="text-xs text-slate-500">
+                  No actions available from this status for your role.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {transitions.map((t) => {
+                    const destructive =
+                      t.to === "VOID" || t.to === "REJECTED";
+                    return (
+                      <Button
+                        key={t.action}
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => runTransition(t.action, destructive)}
+                        className={
+                          destructive
+                            ? "text-red-700 hover:bg-red-50 hover:text-red-800"
+                            : undefined
+                        }
+                      >
+                        {t.action}
+                      </Button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Field context */}
           <fieldset className="rounded-lg border border-slate-200 p-3 space-y-3">

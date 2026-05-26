@@ -32,6 +32,7 @@ import {
   StatusBadge,
   TYPE_LABELS,
 } from "~/components/Changelog/StatusBadge";
+import { WorkflowActions } from "~/components/WorkflowActions";
 import { SearchableMultiSelect } from "~/components/SearchableMultiSelect";
 import type { SearchableSelectOption } from "~/components/SearchableSelect";
 import {
@@ -145,18 +146,6 @@ export function ChangelogDialog({
           isOriginator,
         )
       : [];
-
-  async function runTransition(action: string, destructive: boolean) {
-    if (!initial?.id || !onTransition) return;
-    if (destructive && !confirm(`${action} this CVR?`)) return;
-    setBusy(true);
-    try {
-      await onTransition({ id: initial.id, action });
-      setOpen(false);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   const { data: cbsCodeOptions = [] } = useQuery({
     ...cbsCodeOptionsQueryOptions(),
@@ -292,40 +281,15 @@ export function ChangelogDialog({
           </div>
 
           {initial && onTransition && (
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
-                Workflow Actions
-              </div>
-              {transitions.length === 0 ? (
-                <p className="text-xs text-slate-500">
-                  No actions available from this status for your role.
-                </p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {transitions.map((t) => {
-                    const destructive =
-                      t.to === "VOID" || t.to === "REJECTED";
-                    return (
-                      <Button
-                        key={t.action}
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={busy}
-                        onClick={() => runTransition(t.action, destructive)}
-                        className={
-                          destructive
-                            ? "text-red-700 hover:bg-red-50 hover:text-red-800"
-                            : undefined
-                        }
-                      >
-                        {t.action}
-                      </Button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            <WorkflowActions
+              transitions={transitions}
+              busy={busy}
+              setBusy={setBusy}
+              onTransition={onTransition}
+              entityId={initial.id}
+              entityNoun="CVR"
+              onSuccess={() => setOpen(false)}
+            />
           )}
 
           <Labeled

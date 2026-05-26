@@ -117,6 +117,9 @@ export function useFefRowPersistence({
           queryClient.invalidateQueries({
             queryKey: ["projectFefRowTotals", projectId],
           });
+          queryClient.invalidateQueries({
+            queryKey: ["invalidByDiscipline", projectId],
+          });
         })
         .catch((err) => {
           logger.error("fef-persist save failed", {

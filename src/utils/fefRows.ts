@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
+import { Prisma } from "../generated/prisma/client";
 import { prisma } from "../server/db";
 import type { FefRow } from "~/lib/types";
 import { fefRowHasUserData } from "~/lib/fef-helpers";
@@ -96,49 +97,106 @@ export const saveFefRows = createServerFn({ method: "POST" })
     projectScopedHandler(async ({ data }) => {
       const { projectId, discipline, section, rows } = data;
       try {
-      const persistable = rows
-        .filter((r) => !r.id.startsWith("__fe-blank-") || fefRowHasUserData(r))
-        .map((r, i) => {
-          const { id, ...fields } = r;
-          return {
-            projectId,
-            discipline,
-            section,
-            position: i,
-            cbsCode: id.startsWith("__fe-blank-") ? "" : id,
-            ...fields,
-          };
+        const persistable = rows
+          .filter(
+            (r) => !r.id.startsWith("__fe-blank-") || fefRowHasUserData(r),
+          )
+          .map((r, i) => {
+            const { id, ...fields } = r;
+            return {
+              projectId,
+              discipline,
+              section,
+              position: i,
+              cbsCode: id.startsWith("__fe-blank-") ? "" : id,
+              ...fields,
+            };
+          });
+
+        if (persistable.length === 0) {
+          // No persistable rows from the client. Wipe any existing rows for
+          // this (project, discipline, section) and bail.
+          await prisma.fefRow.deleteMany({
+            where: { projectId, discipline, section },
+          });
+          return [];
+        }
+
+        // Single round-trip upsert keyed by the (projectId, discipline,
+        // section, position) unique index, plus a trailing DELETE for any
+        // positions that no longer exist. Replaces the previous wipe-and-
+        // recreate which churned every row's primary key on every keystroke
+        // (the agentid stability is what keeps React keys stable during edits
+        // and keeps the response payload addressable).
+        const values = persistable.map(
+          (p) => Prisma.sql`(
+            ${p.projectId}, ${p.discipline}, ${p.section}::"FefSection", ${p.position},
+            ${p.cbsCode}, ${p.name}, ${p.description}, ${p.shopField}, ${p.weldGroupDescription},
+            ${p.quantity}, ${p.size}, ${p.unit}, ${p.metallurgyCode}, ${p.boreSize},
+            ${p.role}, ${p.schedule}, ${p.taskCode}, ${p.laborHours}, ${p.laborRate},
+            ${p.materialCost}, ${p.equipment}, ${p.notes}, ${p.sub}, ${p.area},
+            NOW(), NOW()
+          )`,
+        );
+
+        const saved = await prisma.$transaction(async (tx) => {
+          await tx.$executeRaw`
+            INSERT INTO "FefRow" (
+              "projectId", "discipline", "section", "position",
+              "cbsCode", "name", "description", "shopField", "weldGroupDescription",
+              "quantity", "size", "unit", "metallurgyCode", "boreSize",
+              "role", "schedule", "taskCode", "laborHours", "laborRate",
+              "materialCost", "equipment", "notes", "sub", "area",
+              "createdAt", "updatedAt"
+            )
+            VALUES ${Prisma.join(values)}
+            ON CONFLICT ("projectId", "discipline", "section", "position")
+            DO UPDATE SET
+              "cbsCode" = EXCLUDED."cbsCode",
+              "name" = EXCLUDED."name",
+              "description" = EXCLUDED."description",
+              "shopField" = EXCLUDED."shopField",
+              "weldGroupDescription" = EXCLUDED."weldGroupDescription",
+              "quantity" = EXCLUDED."quantity",
+              "size" = EXCLUDED."size",
+              "unit" = EXCLUDED."unit",
+              "metallurgyCode" = EXCLUDED."metallurgyCode",
+              "boreSize" = EXCLUDED."boreSize",
+              "role" = EXCLUDED."role",
+              "schedule" = EXCLUDED."schedule",
+              "taskCode" = EXCLUDED."taskCode",
+              "laborHours" = EXCLUDED."laborHours",
+              "laborRate" = EXCLUDED."laborRate",
+              "materialCost" = EXCLUDED."materialCost",
+              "equipment" = EXCLUDED."equipment",
+              "notes" = EXCLUDED."notes",
+              "sub" = EXCLUDED."sub",
+              "area" = EXCLUDED."area",
+              "updatedAt" = NOW()
+          `;
+          await tx.$executeRaw`
+            DELETE FROM "FefRow"
+            WHERE "projectId" = ${projectId}
+              AND "discipline" = ${discipline}
+              AND "section" = ${section}::"FefSection"
+              AND "position" >= ${persistable.length}
+          `;
+          return tx.fefRow.findMany({
+            where: { projectId, discipline, section },
+            orderBy: { position: "asc" },
+          });
         });
 
-      if (persistable.length === 0) {
-        const current = await prisma.fefRow.findMany({
-          where: { projectId, discipline, section },
-          orderBy: { position: "asc" },
+        return saved.map(toFefRow);
+      } catch (err) {
+        logger.error("saveFefRows failed", {
+          projectId,
+          discipline,
+          section,
+          rowCount: rows.length,
+          err,
         });
-        return current.map(toFefRow);
+        throw err;
       }
-
-      const saved = await prisma.$transaction(async (tx) => {
-        await tx.fefRow.deleteMany({
-          where: { projectId, discipline, section },
-        });
-        await tx.fefRow.createMany({ data: persistable });
-        return tx.fefRow.findMany({
-          where: { projectId, discipline, section },
-          orderBy: { position: "asc" },
-        });
-      });
-
-      return saved.map(toFefRow);
-    } catch (err) {
-      logger.error("saveFefRows failed", {
-        projectId,
-        discipline,
-        section,
-        rowCount: rows.length,
-        err,
-      });
-      throw err;
-    }
     }),
   );

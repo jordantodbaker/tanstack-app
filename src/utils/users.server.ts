@@ -147,6 +147,27 @@ export async function getAccessibleProjectIds(): Promise<
 }
 
 /**
+ * Asserts that an already-resolved actor has access to a project. Admins
+ * always pass without a query. Used by `requireProjectAccess` but also
+ * exposed directly so handlers that have already resolved the actor — and
+ * have to read the entity to discover its `projectId` anyway (transitions,
+ * deletes) — can avoid a duplicate `resolveCurrentUser` round-trip.
+ */
+export async function assertProjectAccess(
+  actor: CurrentUser,
+  projectId: number,
+): Promise<void> {
+  if (hasAtLeastRole(actor.role, "ADMINISTRATOR")) return;
+  const link = await prisma.user.findFirst({
+    where: { id: actor.id, projects: { some: { id: projectId } } },
+    select: { id: true },
+  });
+  if (!link) {
+    throw new Error(`Forbidden: no access to project ${projectId}`);
+  }
+}
+
+/**
  * Server-side guard for any request that operates on a single project.
  * Throws if the signed-in user is not an admin AND is not assigned to that
  * project. Use inside every project-scoped server-fn handler.
@@ -156,16 +177,7 @@ export async function requireProjectAccess(
 ): Promise<CurrentUser> {
   const user = await resolveCurrentUser();
   if (!user) throw new Error("Unauthorized: not signed in");
-  if (hasAtLeastRole(user.role, "ADMINISTRATOR")) return user;
-  const link = await prisma.user.findFirst({
-    where: { id: user.id, projects: { some: { id: projectId } } },
-    select: { id: true },
-  });
-  if (!link) {
-    throw new Error(
-      `Forbidden: no access to project ${projectId}`,
-    );
-  }
+  await assertProjectAccess(user, projectId);
   return user;
 }
 

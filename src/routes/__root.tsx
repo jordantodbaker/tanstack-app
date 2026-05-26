@@ -40,6 +40,7 @@ import { ProjectSelect } from "~/components/ProjectSelect";
 import { ProjectGuard } from "~/components/ProjectGuard";
 import { useCurrentUser, useIsAdmin } from "~/lib/use-current-user";
 import { Button } from "~/components/ui/button";
+import { NotificationBell } from "~/components/NotificationBell";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -262,7 +263,8 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               )}
             </nav>
-            <div className="shrink-0 flex items-center gap-2 md:gap-3 ml-auto sm:ml-0">
+            <div className="shrink-0 flex items-center gap-1 md:gap-2 ml-auto sm:ml-0">
+              <NotificationBell />
               <UserButton />
               <div className="hidden sm:block">
                 <SignOutControl />

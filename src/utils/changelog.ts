@@ -1,14 +1,44 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
-import { requireProjectAccess } from "./users.server";
+import {
+  assertProjectAccess,
+  requireProjectAccess,
+  resolveCurrentUser,
+} from "./users.server";
 import {
   diffFields,
   recordCreate,
   recordDelete,
   recordUpdate,
 } from "./audit.server";
-import { CVR_TRANSITIONS, availableTransitions } from "./workflow";
+import { CVR_TRANSITIONS } from "./workflow";
+import { STATUS_LABELS } from "./changelogLabels";
+import {
+  applyWorkflowTransition,
+  type WorkflowTransitionConfig,
+} from "./workflow.server";
+
+const CVR_STATUSES_NEEDING_REVIEW = new Set<string>([
+  "IN_REVIEW",
+  "PENDING_APPROVAL",
+]);
+
+const CVR_WORKFLOW_CONFIG: WorkflowTransitionConfig<ChangeLogRow, ChangeStatus> = {
+  entityType: "ChangeLog",
+  transitionMap: CVR_TRANSITIONS,
+  statusLabels: STATUS_LABELS,
+  statusesNeedingReview: CVR_STATUSES_NEEDING_REVIEW,
+  // Status is always diffed; approver/approvedAt only change on the APPROVED
+  // step but live in the diff set so the audit row picks them up when they do.
+  auditFields: ["status", "approver", "approvedAt"],
+  buildTitle: (row) =>
+    row.cvrNumber ? `${row.cvrNumber} — ${row.title}` : row.title,
+  extraUpdateData: (transition, actor) =>
+    transition.to === "APPROVED"
+      ? { approver: actor.email, approvedAt: new Date() }
+      : {},
+};
 
 export const CHANGE_STATUSES = [
   "REQUESTED",
@@ -164,15 +194,20 @@ const CHANGELOG_AUDIT_FIELDS = [
 
 export const upsertChangeLog = createServerFn({ method: "POST" })
   .inputValidator((input: UpsertChangeLogInput) => input)
-  // Note: project access is enforced inside the handler since we need to read
-  // `data.projectId` for both create and update paths.
   .handler(async ({ data }): Promise<ChangeLogItem> => {
-    const actor = await requireProjectAccess(data.projectId);
+    // Resolve the actor once; authorize per-branch inside the transaction
+    // against the *actual* project: for creates that's the claimed
+    // `data.projectId`; for updates it's the row's existing `projectId`.
+    // Trusting `data.projectId` for updates would let a caller with access
+    // to project A modify (and reassign) a row that belongs to project B.
+    const actor = await resolveCurrentUser();
+    if (!actor) throw new Error("Unauthorized: not signed in");
+
     // `status` is intentionally omitted: lifecycle changes go through
     // `transitionChangeLog`, never the generic upsert. Create falls back to
     // the schema default (REQUESTED); update leaves the existing status.
-    const payload = {
-      projectId: data.projectId,
+    // `projectId` is also omitted here — it's set on create only.
+    const editableFields = {
       cvrNumber: data.cvrNumber,
       title: data.title,
       description: data.description,
@@ -197,9 +232,19 @@ export const upsertChangeLog = createServerFn({ method: "POST" })
         const before = await tx.changeLog.findUniqueOrThrow({
           where: { id: data.id },
         });
+        await assertProjectAccess(actor, before.projectId);
+        // Cross-project moves aren't a supported operation on the generic
+        // upsert. Disallow rather than silently dropping the input so a
+        // confused client surfaces the mismatch instead of "saving" against
+        // the wrong project.
+        if (data.projectId !== before.projectId) {
+          throw new Error(
+            "Cannot move this change item to a different project.",
+          );
+        }
         const updated = await tx.changeLog.update({
           where: { id: data.id },
-          data: payload,
+          data: editableFields,
         });
         await recordUpdate(
           tx,
@@ -213,8 +258,13 @@ export const upsertChangeLog = createServerFn({ method: "POST" })
         );
         return updated;
       }
+      await assertProjectAccess(actor, data.projectId);
       const created = await tx.changeLog.create({
-        data: { ...payload, createdById: actor.id },
+        data: {
+          ...editableFields,
+          projectId: data.projectId,
+          createdById: actor.id,
+        },
       });
       await recordCreate(tx, {
         entityType: "ChangeLog",
@@ -238,50 +288,26 @@ export const transitionChangeLog = createServerFn({ method: "POST" })
     (input: { id: number; action: string; comment?: string }) => input,
   )
   .handler(async ({ data }): Promise<ChangeLogItem> => {
-    const pre = await prisma.changeLog.findUniqueOrThrow({
-      where: { id: data.id },
-      select: { projectId: true },
-    });
-    const actor = await requireProjectAccess(pre.projectId);
+    // Resolve the actor once up front; we read the row inside the
+    // transaction (avoiding a pre-read round-trip just to discover its
+    // `projectId` for the access check).
+    const actor = await resolveCurrentUser();
+    if (!actor) throw new Error("Unauthorized: not signed in");
     const row = await prisma.$transaction(async (tx) => {
       const before = await tx.changeLog.findUniqueOrThrow({
         where: { id: data.id },
       });
-      const isOriginator =
-        before.createdById !== null && before.createdById === actor.id;
-      const transition = availableTransitions(
-        CVR_TRANSITIONS,
-        before.status as ChangeStatus,
-        actor.role,
-        isOriginator,
-      ).find((t) => t.action === data.action);
-      if (!transition) {
-        throw new Error(
-          `"${data.action}" is not a permitted transition from ${before.status}.`,
-        );
-      }
-      const updated = await tx.changeLog.update({
-        where: { id: data.id },
-        data: {
-          status: transition.to,
-          // Stamp the approver on the approval step only.
-          ...(transition.to === "APPROVED"
-            ? { approver: actor.email, approvedAt: new Date() }
-            : {}),
-        },
-      });
-      await recordUpdate(
+      await assertProjectAccess(actor, before.projectId);
+      return applyWorkflowTransition({
         tx,
-        {
-          entityType: "ChangeLog",
-          entityId: updated.id,
-          projectId: updated.projectId,
-          actor,
-        },
-        diffFields(before, updated, ["status", "approver", "approvedAt"]),
-        data.comment,
-      );
-      return updated;
+        before,
+        actor,
+        action: data.action,
+        comment: data.comment,
+        config: CVR_WORKFLOW_CONFIG,
+        updateRow: (payload) =>
+          tx.changeLog.update({ where: { id: data.id }, data: payload }),
+      });
     });
     return toItem(row);
   });
@@ -289,14 +315,18 @@ export const transitionChangeLog = createServerFn({ method: "POST" })
 export const deleteChangeLog = createServerFn({ method: "POST" })
   .inputValidator((input: { id: number }) => input)
   .handler(async ({ data }): Promise<{ ok: true }> => {
-    // Look up the row's project to authorize the caller. Throws if they
-    // can't access the project this change log belongs to.
-    const row = await prisma.changeLog.findUniqueOrThrow({
-      where: { id: data.id },
-      select: { projectId: true },
-    });
-    const actor = await requireProjectAccess(row.projectId);
+    const actor = await resolveCurrentUser();
+    if (!actor) throw new Error("Unauthorized: not signed in");
     await prisma.$transaction(async (tx) => {
+      // Single read for projectId + access check, then delete + audit.
+      // Doing the lookup inside the transaction also closes the race where
+      // a row's project could be reassigned between the access check and
+      // the delete.
+      const row = await tx.changeLog.findUniqueOrThrow({
+        where: { id: data.id },
+        select: { projectId: true },
+      });
+      await assertProjectAccess(actor, row.projectId);
       await tx.changeLog.delete({ where: { id: data.id } });
       await recordDelete(tx, {
         entityType: "ChangeLog",

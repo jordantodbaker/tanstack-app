@@ -1,14 +1,38 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
-import { requireProjectAccess } from "./users.server";
+import {
+  assertProjectAccess,
+  requireProjectAccess,
+  resolveCurrentUser,
+} from "./users.server";
 import {
   diffFields,
   recordCreate,
   recordDelete,
   recordUpdate,
 } from "./audit.server";
-import { FCO_TRANSITIONS, availableTransitions } from "./workflow";
+import { FCO_TRANSITIONS } from "./workflow";
+import { FCO_STATUS_LABELS } from "./fcoLogLabels";
+import {
+  applyWorkflowTransition,
+  type WorkflowTransitionConfig,
+} from "./workflow.server";
+
+const FCO_STATUSES_NEEDING_REVIEW = new Set<string>([
+  "SUBMITTED",
+  "IN_REVIEW",
+]);
+
+const FCO_WORKFLOW_CONFIG: WorkflowTransitionConfig<FcoScalarRow, FcoStatus> = {
+  entityType: "FieldChangeOrder",
+  transitionMap: FCO_TRANSITIONS,
+  statusLabels: FCO_STATUS_LABELS,
+  statusesNeedingReview: FCO_STATUSES_NEEDING_REVIEW,
+  auditFields: ["status"],
+  buildTitle: (row) =>
+    row.fcoNumber ? `${row.fcoNumber} — ${row.title}` : row.title,
+};
 
 export const FCO_STATUSES = [
   "DRAFT",
@@ -202,12 +226,19 @@ const linkedCvrInclude = {
 export const upsertFco = createServerFn({ method: "POST" })
   .inputValidator((input: UpsertFcoInput) => input)
   .handler(async ({ data }): Promise<FcoItem> => {
-    const actor = await requireProjectAccess(data.projectId);
+    // Resolve the actor once; authorize per-branch inside the transaction
+    // against the *actual* project: for creates that's the claimed
+    // `data.projectId`; for updates it's the row's existing `projectId`.
+    // Trusting `data.projectId` for updates would let a caller with access
+    // to project A modify (and reassign) a row that belongs to project B.
+    const actor = await resolveCurrentUser();
+    if (!actor) throw new Error("Unauthorized: not signed in");
+
     // `status` is intentionally omitted: lifecycle changes go through
     // `transitionFco`, never the generic upsert. Create falls back to the
     // schema default (DRAFT); update leaves the existing status.
-    const payload = {
-      projectId: data.projectId,
+    // `projectId` is also omitted — it's set on create only.
+    const editableFields = {
       fcoNumber: data.fcoNumber,
       title: data.title,
       description: data.description,
@@ -237,9 +268,17 @@ export const upsertFco = createServerFn({ method: "POST" })
         const before = await tx.fieldChangeOrder.findUniqueOrThrow({
           where: { id: data.id },
         });
+        await assertProjectAccess(actor, before.projectId);
+        // Cross-project moves aren't a supported operation on the generic
+        // upsert. Disallow rather than silently dropping the input.
+        if (data.projectId !== before.projectId) {
+          throw new Error(
+            "Cannot move this FCO to a different project.",
+          );
+        }
         const updated = await tx.fieldChangeOrder.update({
           where: { id: data.id },
-          data: payload,
+          data: editableFields,
         });
         await recordUpdate(
           tx,
@@ -253,8 +292,13 @@ export const upsertFco = createServerFn({ method: "POST" })
         );
         return updated.id;
       }
+      await assertProjectAccess(actor, data.projectId);
       const created = await tx.fieldChangeOrder.create({
-        data: { ...payload, createdById: actor.id },
+        data: {
+          ...editableFields,
+          projectId: data.projectId,
+          createdById: actor.id,
+        },
       });
       await recordCreate(tx, {
         entityType: "FieldChangeOrder",
@@ -282,43 +326,26 @@ export const transitionFco = createServerFn({ method: "POST" })
     (input: { id: number; action: string; comment?: string }) => input,
   )
   .handler(async ({ data }): Promise<FcoItem> => {
-    const pre = await prisma.fieldChangeOrder.findUniqueOrThrow({
-      where: { id: data.id },
-      select: { projectId: true },
-    });
-    const actor = await requireProjectAccess(pre.projectId);
+    const actor = await resolveCurrentUser();
+    if (!actor) throw new Error("Unauthorized: not signed in");
     const id = await prisma.$transaction(async (tx) => {
       const before = await tx.fieldChangeOrder.findUniqueOrThrow({
         where: { id: data.id },
       });
-      const isOriginator =
-        before.createdById !== null && before.createdById === actor.id;
-      const transition = availableTransitions(
-        FCO_TRANSITIONS,
-        before.status as FcoStatus,
-        actor.role,
-        isOriginator,
-      ).find((t) => t.action === data.action);
-      if (!transition) {
-        throw new Error(
-          `"${data.action}" is not a permitted transition from ${before.status}.`,
-        );
-      }
-      const updated = await tx.fieldChangeOrder.update({
-        where: { id: data.id },
-        data: { status: transition.to },
-      });
-      await recordUpdate(
+      await assertProjectAccess(actor, before.projectId);
+      const updated = await applyWorkflowTransition({
         tx,
-        {
-          entityType: "FieldChangeOrder",
-          entityId: updated.id,
-          projectId: updated.projectId,
-          actor,
-        },
-        diffFields(before, updated, ["status"]),
-        data.comment,
-      );
+        before,
+        actor,
+        action: data.action,
+        comment: data.comment,
+        config: FCO_WORKFLOW_CONFIG,
+        updateRow: (payload) =>
+          tx.fieldChangeOrder.update({
+            where: { id: data.id },
+            data: payload,
+          }),
+      });
       return updated.id;
     });
     // Re-fetch with the relation for the response shape.
@@ -332,13 +359,14 @@ export const transitionFco = createServerFn({ method: "POST" })
 export const deleteFco = createServerFn({ method: "POST" })
   .inputValidator((input: { id: number }) => input)
   .handler(async ({ data }): Promise<{ ok: true }> => {
-    // Resolve the FCO's project first to authorize the caller.
-    const row = await prisma.fieldChangeOrder.findUniqueOrThrow({
-      where: { id: data.id },
-      select: { projectId: true },
-    });
-    const actor = await requireProjectAccess(row.projectId);
+    const actor = await resolveCurrentUser();
+    if (!actor) throw new Error("Unauthorized: not signed in");
     await prisma.$transaction(async (tx) => {
+      const row = await tx.fieldChangeOrder.findUniqueOrThrow({
+        where: { id: data.id },
+        select: { projectId: true },
+      });
+      await assertProjectAccess(actor, row.projectId);
       await tx.fieldChangeOrder.delete({ where: { id: data.id } });
       await recordDelete(tx, {
         entityType: "FieldChangeOrder",
@@ -358,12 +386,14 @@ export const deleteFco = createServerFn({ method: "POST" })
 export const promoteFcoToCvr = createServerFn({ method: "POST" })
   .inputValidator((input: { fcoId: number }) => input)
   .handler(async ({ data }): Promise<{ cvrId: number }> => {
-    const fco = await prisma.fieldChangeOrder.findUniqueOrThrow({
-      where: { id: data.fcoId },
-    });
-    const actor = await requireProjectAccess(fco.projectId);
+    const actor = await resolveCurrentUser();
+    if (!actor) throw new Error("Unauthorized: not signed in");
 
     return prisma.$transaction(async (tx) => {
+      const fco = await tx.fieldChangeOrder.findUniqueOrThrow({
+        where: { id: data.fcoId },
+      });
+      await assertProjectAccess(actor, fco.projectId);
       const cvr = await tx.changeLog.create({
         data: {
           projectId: fco.projectId,

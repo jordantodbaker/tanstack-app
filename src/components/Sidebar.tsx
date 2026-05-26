@@ -14,7 +14,7 @@ import { disciplines } from "~/config/disciplines";
 import { useSelectedProject } from "~/lib/selected-project";
 import { allowedCbsL1CodesQueryOptions } from "~/utils/setup";
 import { useIsAdmin } from "~/lib/use-current-user";
-import { projectFefRowTotalsQueryOptions } from "~/utils/projectTotals";
+import { invalidByDisciplineQueryOptions } from "~/utils/projectTotals";
 
 /**
  * Order shown under the Admin section. The `to` paths must exist as routes
@@ -55,12 +55,13 @@ export function Sidebar({
     enabled: projectId !== null,
   });
   // Drives the warning icon on disciplines whose Take Off has invalid rows
-  // (started but Total Cost not computable). Same cache the validation page
-  // reads, so a save anywhere refreshes both views.
-  const { data: projectTotals } = useQuery(
-    projectFefRowTotalsQueryOptions(projectId),
+  // (started but Total Cost not computable). Has its own slim query — the
+  // sidebar mounts on every page, so we want it cheap; Summary/Validation
+  // pages pull the full `projectFefRowTotals` payload when they actually
+  // need the rest of the breakdown.
+  const { data: invalidByDiscipline = {} } = useQuery(
+    invalidByDisciplineQueryOptions(projectId),
   );
-  const invalidByDiscipline = projectTotals?.invalidByDiscipline ?? {};
 
   const isAdmin = useIsAdmin();
 

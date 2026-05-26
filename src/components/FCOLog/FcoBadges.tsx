@@ -1,8 +1,9 @@
-import type {
-  FcoOriginType,
-  FcoPriority,
-  FcoStatus,
-} from "~/utils/fcoLog";
+import type { FcoPriority, FcoStatus } from "~/utils/fcoLog";
+import {
+  FCO_ORIGIN_LABELS,
+  FCO_PRIORITY_LABELS,
+  FCO_STATUS_LABELS,
+} from "~/utils/fcoLogLabels";
 
 const STATUS_STYLES: Record<FcoStatus, string> = {
   DRAFT: "bg-slate-100 text-slate-700 border-slate-300",
@@ -14,18 +15,6 @@ const STATUS_STYLES: Record<FcoStatus, string> = {
   IMPLEMENTED: "bg-teal-50 text-teal-700 border-teal-300",
   CLOSED: "bg-slate-200 text-slate-700 border-slate-300",
   VOID: "bg-slate-50 text-slate-400 border-slate-200 line-through",
-};
-
-export const FCO_STATUS_LABELS: Record<FcoStatus, string> = {
-  DRAFT: "Draft",
-  SUBMITTED: "Submitted",
-  IN_REVIEW: "In Review",
-  LINKED_TO_CVR: "Linked to CVR",
-  APPROVED: "Approved",
-  REJECTED: "Rejected",
-  IMPLEMENTED: "Implemented",
-  CLOSED: "Closed",
-  VOID: "Void",
 };
 
 export function FcoStatusBadge({ status }: { status: FcoStatus }) {
@@ -45,13 +34,6 @@ const PRIORITY_STYLES: Record<FcoPriority, string> = {
   URGENT: "bg-red-100 text-red-800 animate-pulse",
 };
 
-export const FCO_PRIORITY_LABELS: Record<FcoPriority, string> = {
-  LOW: "Low",
-  NORMAL: "Normal",
-  HIGH: "High",
-  URGENT: "Urgent",
-};
-
 export function FcoPriorityBadge({ priority }: { priority: FcoPriority }) {
   return (
     <span
@@ -62,15 +44,4 @@ export function FcoPriorityBadge({ priority }: { priority: FcoPriority }) {
   );
 }
 
-export const FCO_ORIGIN_LABELS: Record<FcoOriginType, string> = {
-  FIELD_CONDITION: "Field Condition",
-  RFI_RESPONSE: "RFI Response",
-  DESIGN_OMISSION: "Design Omission",
-  DESIGN_CONFLICT: "Design Conflict",
-  OWNER_DIRECTIVE: "Owner Directive",
-  SAFETY: "Safety",
-  REGULATORY: "Regulatory",
-  WEATHER: "Weather",
-  SUBCONTRACTOR: "Subcontractor",
-  OTHER: "Other",
-};
+export { FCO_STATUS_LABELS, FCO_PRIORITY_LABELS, FCO_ORIGIN_LABELS };

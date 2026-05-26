@@ -62,15 +62,38 @@ enum UserRole {
 // App user, lazily synced from Clerk on first authenticated request.
 // `clerkId` is the Clerk user id; `role` drives role-based access control.
 model User {
-  id        Int       @id @default(autoincrement())
-  clerkId   String    @unique
-  email     String    @unique
-  role      UserRole  @default(USER)
+  id            Int            @id @default(autoincrement())
+  clerkId       String         @unique
+  email         String         @unique
+  role          UserRole       @default(USER)
   // Projects this user is granted access to. Administrators ignore this set
   // and can access every project; see `requireProjectAccess` in users.server.
-  projects  Project[] @relation("UserProjects")
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  projects      Project[]      @relation("UserProjects")
+  notifications Notification[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+// Per-user inbox entry, emitted on workflow transitions (and, later, comments
+// or due-date reminders). One row per recipient — the same transition fans
+// out to multiple notifications. Cleaned up when the user is deleted; the
+// `projectId` is a plain column (no FK) so a deleted project doesn't blast
+// every related notification, mirroring `AuditEvent`'s philosophy.
+model Notification {
+  id         Int       @id @default(autoincrement())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     Int
+  projectId  Int?
+  entityType String
+  entityId   Int
+  title      String
+  message    String
+  actorEmail String    @default("")
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
 }
 
 model Project {
@@ -157,6 +180,10 @@ model FefRow {
   updatedAt            DateTime   @updatedAt
 
   @@index([projectId, discipline, section])
+  // Stable identity for ON CONFLICT upsert in `saveFefRows`. Positions are
+  // always sequential within a (project, discipline, section); the constraint
+  // codifies that invariant so the upsert key is well-defined.
+  @@unique([projectId, discipline, section, position])
 }
 
 model BasisInputs {

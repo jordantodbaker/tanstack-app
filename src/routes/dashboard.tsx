@@ -31,19 +31,30 @@ import {
   readProjectIdForLoader,
   tryPrefetchProjectQuery,
 } from "~/utils/projectCookie";
+import { latestPeriodWithEvmQueryOptions } from "~/utils/reporting";
+import { EvmDashboardCard } from "~/components/EvmDashboardCard";
 
 export const Route = createFileRoute("/dashboard")({
   loader: async ({ context }) => {
     const projectId = await readProjectIdForLoader();
     if (projectId !== null) {
-      await tryPrefetchProjectQuery(
-        context.queryClient.ensureQueryData(
-          changeLogListQueryOptions(projectId),
+      // Three independent prefetches — run in parallel rather than serially
+      // awaiting each in turn. Validation page already follows this pattern.
+      await Promise.all([
+        tryPrefetchProjectQuery(
+          context.queryClient.ensureQueryData(
+            changeLogListQueryOptions(projectId),
+          ),
         ),
-      );
-      await tryPrefetchProjectQuery(
-        context.queryClient.ensureQueryData(fcoListQueryOptions(projectId)),
-      );
+        tryPrefetchProjectQuery(
+          context.queryClient.ensureQueryData(fcoListQueryOptions(projectId)),
+        ),
+        tryPrefetchProjectQuery(
+          context.queryClient.ensureQueryData(
+            latestPeriodWithEvmQueryOptions(projectId),
+          ),
+        ),
+      ]);
     }
   },
   component: DashboardPage,
@@ -79,6 +90,10 @@ function DashboardPage() {
         </p>
       ) : (
         <>
+          <Section title="Earned Value">
+            <EvmDashboardCard />
+          </Section>
+
           <Section title="Change Log (CVRs)">
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               <StatCard

@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { auditEventsQueryOptions, type AuditEventItem } from "~/utils/audit";
+import { QueryError } from "~/components/ui/list-page";
 
 /** "estimatedCost" → "Estimated cost" — good enough for audit field labels. */
 function humanizeField(field: string): string {
@@ -24,9 +25,12 @@ export function AuditTimeline({
   entityId: number | null;
   projectId: number | null;
 }) {
-  const { data: events = [], isPending } = useQuery(
-    auditEventsQueryOptions({ entityType, entityId, projectId }),
-  );
+  const {
+    data: events = [],
+    isPending,
+    isError,
+    error,
+  } = useQuery(auditEventsQueryOptions({ entityType, entityId, projectId }));
 
   if (entityId === null || projectId === null) {
     return (
@@ -34,6 +38,9 @@ export function AuditTimeline({
         History will appear here after this record is first saved.
       </p>
     );
+  }
+  if (isError) {
+    return <QueryError error={error} label="audit history" />;
   }
   if (isPending) {
     return <p className="text-sm text-slate-400">Loading history…</p>;

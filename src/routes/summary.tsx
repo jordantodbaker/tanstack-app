@@ -15,6 +15,7 @@ import {
 import { formatMoney } from "~/lib/formatting";
 import { useSelectedProject } from "~/lib/selected-project";
 import { projectFefRowTotalsQueryOptions } from "~/utils/projectTotals";
+import { SnapshotsSection } from "~/components/SnapshotsSection";
 import {
   readProjectIdForLoader,
   tryPrefetchProjectQuery,
@@ -283,7 +284,7 @@ function SummaryPage() {
   });
 
   return (
-    <main className="p-4">
+    <main className="p-4 space-y-4">
       <h1 className="text-2xl font-bold mb-4">Summary</h1>
       <Accordion type="multiple" defaultValue={["disciplines", "indirects"]}>
         <AccordionItem value="disciplines">
@@ -302,6 +303,7 @@ function SummaryPage() {
           </AccordionContent>
         </AccordionItem>
       </Accordion>
+      <SnapshotsSection />
     </main>
   );
 }

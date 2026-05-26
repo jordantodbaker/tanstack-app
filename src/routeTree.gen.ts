@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as ValidationRouteImport } from './routes/validation'
 import { Route as SummaryRouteImport } from './routes/summary'
 import { Route as SetupRouteImport } from './routes/setup'
+import { Route as ReportingRouteImport } from './routes/reporting'
 import { Route as PipingRouteImport } from './routes/piping'
 import { Route as MaterialsRouteImport } from './routes/materials'
 import { Route as FcoLogRouteImport } from './routes/fco-log'
@@ -39,6 +40,11 @@ const SummaryRoute = SummaryRouteImport.update({
 const SetupRoute = SetupRouteImport.update({
   id: '/setup',
   path: '/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportingRoute = ReportingRouteImport.update({
+  id: '/reporting',
+  path: '/reporting',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PipingRoute = PipingRouteImport.update({
@@ -117,6 +123,7 @@ export interface FileRoutesByFullPath {
   '/fco-log': typeof FcoLogRoute
   '/materials': typeof MaterialsRoute
   '/piping': typeof PipingRoute
+  '/reporting': typeof ReportingRoute
   '/setup': typeof SetupRoute
   '/summary': typeof SummaryRoute
   '/validation': typeof ValidationRoute
@@ -135,6 +142,7 @@ export interface FileRoutesByTo {
   '/fco-log': typeof FcoLogRoute
   '/materials': typeof MaterialsRoute
   '/piping': typeof PipingRoute
+  '/reporting': typeof ReportingRoute
   '/setup': typeof SetupRoute
   '/summary': typeof SummaryRoute
   '/validation': typeof ValidationRoute
@@ -154,6 +162,7 @@ export interface FileRoutesById {
   '/fco-log': typeof FcoLogRoute
   '/materials': typeof MaterialsRoute
   '/piping': typeof PipingRoute
+  '/reporting': typeof ReportingRoute
   '/setup': typeof SetupRoute
   '/summary': typeof SummaryRoute
   '/validation': typeof ValidationRoute
@@ -174,6 +183,7 @@ export interface FileRouteTypes {
     | '/fco-log'
     | '/materials'
     | '/piping'
+    | '/reporting'
     | '/setup'
     | '/summary'
     | '/validation'
@@ -192,6 +202,7 @@ export interface FileRouteTypes {
     | '/fco-log'
     | '/materials'
     | '/piping'
+    | '/reporting'
     | '/setup'
     | '/summary'
     | '/validation'
@@ -210,6 +221,7 @@ export interface FileRouteTypes {
     | '/fco-log'
     | '/materials'
     | '/piping'
+    | '/reporting'
     | '/setup'
     | '/summary'
     | '/validation'
@@ -229,6 +241,7 @@ export interface RootRouteChildren {
   FcoLogRoute: typeof FcoLogRoute
   MaterialsRoute: typeof MaterialsRoute
   PipingRoute: typeof PipingRoute
+  ReportingRoute: typeof ReportingRoute
   SetupRoute: typeof SetupRoute
   SummaryRoute: typeof SummaryRoute
   ValidationRoute: typeof ValidationRoute
@@ -255,6 +268,13 @@ declare module '@tanstack/react-router' {
       path: '/setup'
       fullPath: '/setup'
       preLoaderRoute: typeof SetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reporting': {
+      id: '/reporting'
+      path: '/reporting'
+      fullPath: '/reporting'
+      preLoaderRoute: typeof ReportingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/piping': {
@@ -377,6 +397,7 @@ const rootRouteChildren: RootRouteChildren = {
   FcoLogRoute: FcoLogRoute,
   MaterialsRoute: MaterialsRoute,
   PipingRoute: PipingRoute,
+  ReportingRoute: ReportingRoute,
   SetupRoute: SetupRoute,
   SummaryRoute: SummaryRoute,
   ValidationRoute: ValidationRoute,

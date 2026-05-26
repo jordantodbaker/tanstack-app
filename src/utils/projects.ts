@@ -8,6 +8,9 @@ export type ProjectOption = {
   displayId: string;
   name: string;
   description: string;
+  /** ISO timestamps or null. Drive the time-linear PV fallback in EVM. */
+  startDate: string | null;
+  endDate: string | null;
 };
 
 /**
@@ -18,11 +21,26 @@ export type ProjectOption = {
 export const fetchProjects = createServerFn({ method: "GET" }).handler(
   async (): Promise<ProjectOption[]> => {
     const access = await getAccessibleProjectIds();
-    return prisma.project.findMany({
+    const rows = await prisma.project.findMany({
       where: access === "all" ? {} : { id: { in: [...access] } },
       orderBy: { id: "asc" },
-      select: { id: true, displayId: true, name: true, description: true },
+      select: {
+        id: true,
+        displayId: true,
+        name: true,
+        description: true,
+        startDate: true,
+        endDate: true,
+      },
     });
+    return rows.map((r) => ({
+      id: r.id,
+      displayId: r.displayId,
+      name: r.name,
+      description: r.description,
+      startDate: r.startDate ? r.startDate.toISOString() : null,
+      endDate: r.endDate ? r.endDate.toISOString() : null,
+    }));
   },
 );
 
@@ -37,6 +55,10 @@ export type UpsertProjectInput = {
   displayId: string;
   name: string;
   description: string;
+  /** ISO date strings (YYYY-MM-DD) or null. Drive the time-linear PV
+   *  fallback in EVM; both nullable so a project can exist without a schedule. */
+  startDate: string | null;
+  endDate: string | null;
   /** Full set of subcontractor ids assigned to this project (M2M replace). */
   subcontractorIds: number[];
   /**
@@ -65,6 +87,8 @@ export const upsertProject = createServerFn({ method: "POST" })
         displayId: data.displayId,
         name: data.name,
         description: data.description,
+        startDate: data.startDate ? new Date(data.startDate) : null,
+        endDate: data.endDate ? new Date(data.endDate) : null,
       };
       const subRefs = data.subcontractorIds.map((id) => ({ id }));
       const userRefs = data.userIds.map((id) => ({ id }));

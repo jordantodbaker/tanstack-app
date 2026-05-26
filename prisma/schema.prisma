@@ -101,6 +101,11 @@ model Project {
   displayId          String
   name               String
   description        String
+  // Optional schedule window — drives the time-linear PV fallback in EVM
+  // when a `ReportingPeriod.PeriodMeasurement` doesn't set a manual override.
+  // Both nullable so existing projects don't require backfill.
+  startDate          DateTime?
+  endDate            DateTime?
   changeLogs         ChangeLog[]
   fieldChangeOrders  FieldChangeOrder[]
   allowedFefCbsItems CbsItem[]           @relation("ProjectAllowedFefCbsItems")
@@ -109,6 +114,8 @@ model Project {
   subcontractors     Subcontractor[]     @relation("ProjectSubcontractors")
   users              User[]              @relation("UserProjects")
   basisInputs        BasisInputs?
+  estimateSnapshots  EstimateSnapshot[]
+  reportingPeriods   ReportingPeriod[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @default(now())
 }
@@ -387,6 +394,105 @@ model FieldChangeOrder {
 
   @@index([projectId, status])
   @@index([linkedCvrId])
+}
+
+// Frozen copy of a project's estimate at a point in time. Captures every
+// FefRow and the BasisInputs as JSON so the snapshot survives schema changes
+// on either side. Inputs are frozen; the totals are recomputed on view from
+// the same `accumulateProjectTotals` the live Summary page uses, so there's
+// one source of truth for the aggregation math. Areas + CBS allow-list are
+// intentionally NOT snapshotted — they're cheap to recompute live and don't
+// change often enough to matter for the "as-bid vs. now" comparison.
+model EstimateSnapshot {
+  id          Int      @id @default(autoincrement())
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId   Int
+  /// Free-text identity ("v1", "as-bid 2026-04-15", "rev 2 after RFI-042").
+  label       String
+  notes       String   @default("")
+  /// Serialized `FefRow[]` at snapshot time. Whatever shape `prisma.fefRow.findMany`
+  /// returns — no schema enforcement here on purpose so this table doesn't
+  /// need a migration every time the FefRow column set evolves.
+  fefRows     Json
+  /// Serialized `BasisInputs` at snapshot time, or null when the project had none.
+  basisInputs Json?
+  /// Pre-computed `ProjectFefRowTotals` at snapshot creation. Lets read paths
+  /// (snapshot detail dialog, EVM period view) skip parsing the heavy
+  /// `fefRows` blob and re-running the aggregator on every fetch — snapshots
+  /// are immutable so the cached totals can never go stale.
+  /// Nullable to keep migration painless: old snapshots fall back to
+  /// computing on read. New snapshots always write it.
+  totals      Json?
+  /// Denormalized for the list view so we don't parse `fefRows` to count.
+  rowCount    Int
+  /// User.id of whoever clicked "Create snapshot". Plain column (no FK) so it
+  /// survives user deletion — mirrors the audit/notifications convention.
+  createdById Int?
+  createdAt   DateTime @default(now())
+  /// Reporting periods that use this snapshot as their baseline. Drives the
+  /// `Restrict` delete behavior — a snapshot in use as a baseline can't be
+  /// removed without first detaching the period(s).
+  reportingPeriods ReportingPeriod[]
+
+  @@index([projectId, createdAt])
+}
+
+/// Origin of a measurement number. `MANUAL` is what the UI writes today;
+/// `SPECTRUM` / `HEAVY_JOB` are reserved for future integrations so we can
+/// tell auto-pulled values apart from PM-entered ones without a migration.
+enum MeasurementSource {
+  MANUAL
+  SPECTRUM
+  HEAVY_JOB
+}
+
+/// A point-in-time EVM cutoff for a project — typically monthly. Each period
+/// is locked to a baseline snapshot so re-baselining doesn't retroactively
+/// change last month's variance numbers.
+model ReportingPeriod {
+  id                 Int       @id @default(autoincrement())
+  project            Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId          Int
+  label              String
+  /// The "as of" date — measurements describe work performed through here.
+  dataDate           DateTime
+  /// Required: the snapshot whose totals define BAC for this period.
+  /// `Restrict` prevents deleting a snapshot that any period still depends on.
+  baselineSnapshot   EstimateSnapshot @relation(fields: [baselineSnapshotId], references: [id], onDelete: Restrict)
+  baselineSnapshotId Int
+  createdById        Int?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  measurements       PeriodMeasurement[]
+
+  @@unique([projectId, dataDate])
+  @@index([projectId, dataDate])
+}
+
+/// One row per discipline-digit bucket per reporting period. Matches the
+/// aggregation `accumulateProjectTotals` already produces (digit-bucketed)
+/// so EVM rolls up the same way the rest of the app does.
+model PeriodMeasurement {
+  id                   Int               @id @default(autoincrement())
+  period               ReportingPeriod   @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  periodId             Int
+  /// "0".."9" — the leading digit of the CBS code bucket.
+  bucket               String
+  /// 0..1 fraction complete by the period's data date.
+  percentComplete      Float             @default(0)
+  /// $ actually incurred against this bucket through the data date.
+  actualCost           Float             @default(0)
+  /// Optional hours actually burned (for hours-based variance views).
+  actualHours          Float?
+  /// Optional manual PV override. When null, PV is derived time-linearly
+  /// from project start/end + the period's data date.
+  plannedValueOverride Float?
+  source               MeasurementSource @default(MANUAL)
+  notes                String            @default("")
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  @@unique([periodId, bucket])
 }
 
 model CbsItem {

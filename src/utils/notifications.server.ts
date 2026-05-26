@@ -1,6 +1,7 @@
 import type { PrismaClient } from "../generated/prisma/client";
 import { prisma } from "../server/db";
 import type { CurrentUser } from "./users";
+import { resolveNotificationRecipients } from "./notification-recipients";
 
 /**
  * SERVER-ONLY notification fan-out. Called from inside workflow-transition
@@ -47,35 +48,37 @@ export async function emitWorkflowNotification(
   event: WorkflowEvent,
 ): Promise<void> {
   try {
-    const recipients = new Set<number>();
-
-    if (event.originatorId !== null) {
-      recipients.add(event.originatorId);
-    }
-
-    if (event.needsReview) {
-      // APPROVER must be assigned to the project; ADMINISTRATOR bypasses the
-      // per-project ACL (matches `requireProjectAccess`).
-      const reviewers = await db.user.findMany({
-        where: {
-          OR: [
-            { role: "ADMINISTRATOR" },
-            {
-              role: "APPROVER",
-              projects: { some: { id: event.projectId } },
+    // Reviewer lookup is only worth doing when the destination state needs
+    // attention — skip the round-trip for outcome-only transitions.
+    // APPROVER must be assigned to the project; ADMINISTRATOR bypasses the
+    // per-project ACL (matches `requireProjectAccess`).
+    const reviewerIds = event.needsReview
+      ? (
+          await db.user.findMany({
+            where: {
+              OR: [
+                { role: "ADMINISTRATOR" },
+                {
+                  role: "APPROVER",
+                  projects: { some: { id: event.projectId } },
+                },
+              ],
             },
-          ],
-        },
-        select: { id: true },
-      });
-      for (const r of reviewers) recipients.add(r.id);
-    }
+            select: { id: true },
+          })
+        ).map((u) => u.id)
+      : [];
 
-    recipients.delete(event.actor.id);
-    if (recipients.size === 0) return;
+    const recipients = resolveNotificationRecipients({
+      originatorId: event.originatorId,
+      actorId: event.actor.id,
+      needsReview: event.needsReview,
+      reviewerIds,
+    });
+    if (recipients.length === 0) return;
 
     await db.notification.createMany({
-      data: Array.from(recipients).map((userId) => ({
+      data: recipients.map((userId) => ({
         userId,
         projectId: event.projectId,
         entityType: event.entityType,

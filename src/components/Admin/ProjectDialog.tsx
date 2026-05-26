@@ -10,7 +10,11 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
-import { Labeled } from "~/components/ui/form-helpers";
+import {
+  Labeled,
+  fromDateInputValue,
+  toDateInputValue,
+} from "~/components/ui/form-helpers";
 import { SearchableMultiSelect } from "~/components/SearchableMultiSelect";
 import type { SearchableSelectOption } from "~/components/SearchableSelect";
 import { useFormDialog } from "~/lib/use-form-dialog";
@@ -49,6 +53,8 @@ export function ProjectDialog({
       displayId: "",
       name: "",
       description: "",
+      startDate: null,
+      endDate: null,
       subcontractorIds: [],
       userIds: [],
       addAreaIds: [],
@@ -60,6 +66,8 @@ export function ProjectDialog({
       displayId: p.displayId,
       name: p.name,
       description: p.description,
+      startDate: p.startDate,
+      endDate: p.endDate,
       subcontractorIds: [],
       userIds: [],
       addAreaIds: [],
@@ -244,6 +252,33 @@ export function ProjectDialog({
               onChange={(e) => update("description", e.target.value)}
             />
           </Labeled>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Labeled
+              label="Start date"
+              help="Optional. Used as the start of the time-linear PV curve in EVM reporting."
+            >
+              <Input
+                type="date"
+                value={toDateInputValue(form.startDate)}
+                onChange={(e) =>
+                  update("startDate", fromDateInputValue(e.target.value))
+                }
+              />
+            </Labeled>
+            <Labeled
+              label="End date"
+              help="Optional. End of the PV curve. Without both dates, EVM falls back to manual PV per period."
+            >
+              <Input
+                type="date"
+                value={toDateInputValue(form.endDate)}
+                onChange={(e) =>
+                  update("endDate", fromDateInputValue(e.target.value))
+                }
+              />
+            </Labeled>
+          </div>
 
           <Labeled
             label="Subcontractors"

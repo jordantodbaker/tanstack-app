@@ -15,6 +15,7 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
+import { QueryError } from "~/components/ui/list-page";
 
 /**
  * Header bell + dropdown inbox. Driven by workflow transitions emitted from
@@ -31,7 +32,12 @@ export function NotificationBell() {
   );
   // Only fetch the list when the popover is open so we don't churn the cache
   // on every page load.
-  const { data: notifications = [], isPending } = useQuery({
+  const {
+    data: notifications = [],
+    isPending,
+    isError,
+    error,
+  } = useQuery({
     ...notificationsQueryOptions(),
     enabled: open,
   });
@@ -96,7 +102,11 @@ export function NotificationBell() {
             Mark all read
           </Button>
         </div>
-        {isPending ? (
+        {isError ? (
+          <div className="px-3 py-3">
+            <QueryError error={error} label="notifications" />
+          </div>
+        ) : isPending ? (
           <p className="px-3 py-6 text-center text-xs text-slate-400">
             Loading…
           </p>

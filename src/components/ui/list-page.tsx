@@ -85,3 +85,24 @@ export function TableEmptyState({ message }: { message: string }) {
     </div>
   );
 }
+
+/**
+ * Inline error banner for failed `useQuery` calls — exists so an error state
+ * shows up as itself instead of being silently swallowed into a permanent
+ * spinner or an "empty" state. Used wherever a list/detail view depends on
+ * a single query whose failure would otherwise hide a real bug.
+ */
+export function QueryError({
+  error,
+  label,
+}: {
+  error: unknown;
+  label: string;
+}) {
+  const msg = error instanceof Error ? error.message : String(error);
+  return (
+    <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+      Couldn't load {label}: {msg}
+    </div>
+  );
+}

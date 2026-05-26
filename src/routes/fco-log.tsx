@@ -7,6 +7,7 @@ import {
   HardHat,
   AlertTriangle,
   ArrowUpRight,
+  Download,
   Hourglass,
   Link as LinkIcon,
   ListChecks,
@@ -46,6 +47,46 @@ import {
 } from "~/utils/projectCookie";
 import { disciplineById } from "~/config/disciplines";
 import { formatMoney } from "~/lib/formatting";
+import {
+  downloadCsv,
+  rowsToCsv,
+  todayStamp,
+  type CsvColumn,
+} from "~/lib/csv-export";
+
+/**
+ * Column definitions for the CSV export of the FCO log. Module-scope so the
+ * column array reference is stable. `areaLabel` is a closure parameter —
+ * area resolution depends on the project's loaded area list, which is
+ * component-scoped.
+ */
+const FCO_CSV_COLUMNS = (
+  areaLabel: (raw: string) => string,
+): CsvColumn<FcoItem>[] => [
+  { header: "FCO #", get: (f) => f.fcoNumber },
+  { header: "Title", get: (f) => f.title },
+  { header: "Status", get: (f) => FCO_STATUS_LABELS[f.status] },
+  { header: "Origin", get: (f) => FCO_ORIGIN_LABELS[f.originType] },
+  { header: "Priority", get: (f) => f.priority },
+  { header: "Discipline", get: (f) => disciplineById[f.discipline]?.label ?? f.discipline },
+  { header: "Area", get: (f) => (f.locationArea ? areaLabel(f.locationArea) : "") },
+  { header: "Est. Cost ($)", get: (f) => f.estimatedCost },
+  { header: "Est. Hours", get: (f) => f.estimatedHours },
+  { header: "Work Stopped", get: (f) => (f.workStopped ? "Yes" : "No") },
+  { header: "Initiated By", get: (f) => f.initiatedBy },
+  { header: "Field Contact", get: (f) => f.fieldContact },
+  { header: "CBS Codes", get: (f) => f.cbsCodes.join("; ") },
+  { header: "Drawing Refs", get: (f) => f.drawingRefs.join("; ") },
+  { header: "RFI Numbers", get: (f) => f.rfiNumbers.join("; ") },
+  { header: "Initiated Date", get: (f) => f.initiatedAt.slice(0, 10) },
+  { header: "Needed By", get: (f) => f.neededBy?.slice(0, 10) ?? "" },
+  { header: "Closed Date", get: (f) => f.closedAt?.slice(0, 10) ?? "" },
+  { header: "Linked CVR #", get: (f) => f.linkedCvrNumber ?? "" },
+  { header: "Description", get: (f) => f.description },
+  { header: "Reason Narrative", get: (f) => f.reasonNarrative },
+  { header: "Resolution", get: (f) => f.resolution },
+  { header: "Notes", get: (f) => f.notes },
+];
 
 export const Route = createFileRoute("/fco-log")({
   loader: async ({ context }) => {
@@ -253,6 +294,19 @@ function FcoLogPage() {
         <span className="ml-auto text-xs text-slate-500">
           Showing {filtered.length} of {items.length}
         </span>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={filtered.length === 0}
+          onClick={() => {
+            const csv = rowsToCsv(filtered, FCO_CSV_COLUMNS(areaLabel));
+            downloadCsv(`fco-export-${todayStamp()}.csv`, csv);
+          }}
+          title="Export the filtered list to a CSV file (opens in Excel)"
+        >
+          <Download className="size-3.5 mr-1" />
+          Export CSV
+        </Button>
       </div>
 
       <FcoTable

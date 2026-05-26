@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
+import { Printer, Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -185,18 +185,32 @@ export function ChangelogDialog({
                 Track a CVR or scope change with cost, schedule, and CBS impact
               </p>
             </div>
-            {initial && onDelete && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleDelete}
-                disabled={busy}
-                className="text-red-600 hover:bg-red-50 hover:text-red-700"
-              >
-                <Trash2 className="size-3.5 mr-1" />
-                Delete
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {initial?.id && (
+                <a
+                  href={`/cvr-print/${initial.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  title="Open the printable / PDF version in a new tab"
+                >
+                  <Printer className="size-3.5" />
+                  Print / PDF
+                </a>
+              )}
+              {initial && onDelete && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDelete}
+                  disabled={busy}
+                  className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                >
+                  <Trash2 className="size-3.5 mr-1" />
+                  Delete
+                </Button>
+              )}
+            </div>
           </div>
 
           <Tabs defaultValue="details" className="w-full">

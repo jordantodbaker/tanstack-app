@@ -144,6 +144,30 @@ export const changeLogListQueryOptions = (projectId: number | null) =>
     staleTime: 30 * 1000,
   });
 
+/**
+ * Single-CVR fetcher used by the printable detail view (`/changelog/print/$id`).
+ * The list query is the hot path; this one only loads when a user opens the
+ * print URL directly (bookmarked, emailed, etc.) so it has no caching beyond
+ * React Query defaults.
+ */
+export const fetchChangeLog = createServerFn({ method: "GET" })
+  .inputValidator((id: number) => id)
+  .handler(async ({ data: id }): Promise<ChangeLogItem> => {
+    const row = await prisma.changeLog.findUniqueOrThrow({
+      where: { id },
+    });
+    await requireProjectAccess(row.projectId);
+    return toItem(row);
+  });
+
+export const changeLogQueryOptions = (id: number | null) =>
+  queryOptions({
+    queryKey: ["changeLog", "single", id],
+    queryFn: (): Promise<ChangeLogItem | null> =>
+      id === null ? Promise.resolve(null) : fetchChangeLog({ data: id }),
+    enabled: id !== null,
+  });
+
 export type UpsertChangeLogInput = {
   id?: number;
   projectId: number;

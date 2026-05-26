@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search } from "lucide-react";
+import { Download, Plus, Search } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
@@ -36,6 +36,42 @@ import {
 } from "~/utils/projectCookie";
 import { disciplineById } from "~/config/disciplines";
 import { formatMoney } from "~/lib/formatting";
+import {
+  downloadCsv,
+  rowsToCsv,
+  todayStamp,
+  type CsvColumn,
+} from "~/lib/csv-export";
+
+/**
+ * Column definitions for the CSV export of the change log. Defined at module
+ * scope (not inside the component) so the array reference is stable and the
+ * shape stays inspectable. `areaLabel` is a closure parameter because area
+ * resolution requires the project's area list, which is component-scoped.
+ */
+const CVR_CSV_COLUMNS = (
+  areaLabel: (raw: string) => string,
+): CsvColumn<ChangeLogItem>[] => [
+  { header: "CVR #", get: (c) => c.cvrNumber },
+  { header: "Title", get: (c) => c.title },
+  { header: "Status", get: (c) => STATUS_LABELS[c.status] },
+  { header: "Type", get: (c) => c.type },
+  { header: "Discipline", get: (c) => disciplineById[c.discipline]?.label ?? c.discipline },
+  { header: "Area", get: (c) => (c.area ? areaLabel(c.area) : "") },
+  { header: "Risk Level", get: (c) => c.riskLevel },
+  { header: "Cost Impact ($)", get: (c) => c.costImpact },
+  { header: "Schedule Impact (days)", get: (c) => c.scheduleDaysImpact },
+  { header: "Labor Hours Impact", get: (c) => c.laborHoursImpact },
+  { header: "Originator", get: (c) => c.originator },
+  { header: "Approver", get: (c) => c.approver },
+  { header: "Reason Code", get: (c) => c.reasonCode },
+  { header: "CBS Codes", get: (c) => c.cbsCodes.join("; ") },
+  { header: "Requested Date", get: (c) => c.requestedAt.slice(0, 10) },
+  { header: "Due Date", get: (c) => c.dueDate?.slice(0, 10) ?? "" },
+  { header: "Approved Date", get: (c) => c.approvedAt?.slice(0, 10) ?? "" },
+  { header: "Description", get: (c) => c.description },
+  { header: "Notes", get: (c) => c.notes },
+];
 
 export const Route = createFileRoute("/changelog")({
   loader: async ({ context }) => {
@@ -209,6 +245,19 @@ function ChangelogPage() {
         <span className="ml-auto text-xs text-slate-500">
           Showing {filtered.length} of {items.length}
         </span>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={filtered.length === 0}
+          onClick={() => {
+            const csv = rowsToCsv(filtered, CVR_CSV_COLUMNS(areaLabel));
+            downloadCsv(`cvr-export-${todayStamp()}.csv`, csv);
+          }}
+          title="Export the filtered list to a CSV file (opens in Excel)"
+        >
+          <Download className="size-3.5 mr-1" />
+          Export CSV
+        </Button>
       </div>
 
       <ChangelogTable

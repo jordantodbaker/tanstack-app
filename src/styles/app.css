@@ -121,6 +121,42 @@
   --sidebar-ring: oklch(0.52 0.1 18);
 }
 
+/*
+ * Print stylesheet. Drives the "Print / Save as PDF" path on
+ * /changelog/print/$id (and any future print-only route). Hides every fixed
+ * piece of app chrome — the header bar, the sidebar, the overflow scrollers
+ * — so the printed PDF contains only the document, full-width and on a
+ * white background. Page margins are set via `@page` so the user doesn't
+ * have to fiddle in the browser print dialog.
+ */
+@media print {
+  @page {
+    margin: 0.5in;
+  }
+  html,
+  body {
+    background: white !important;
+    color: #000 !important;
+  }
+  /* The shell from __root.tsx: <header> + <aside> (sidebar). */
+  header,
+  aside {
+    display: none !important;
+  }
+  /* The scrolling main wrapper would otherwise clip the print content. */
+  main {
+    overflow: visible !important;
+    background: white !important;
+  }
+  /* Drop shadows/borders look muddy when laser-printed. */
+  .shadow,
+  .shadow-sm,
+  .shadow-md,
+  .shadow-lg {
+    box-shadow: none !important;
+  }
+}
+
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);

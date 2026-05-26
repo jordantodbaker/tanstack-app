@@ -22,6 +22,7 @@ import { Route as BasisRouteImport } from './routes/basis'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as DisciplineRouteImport } from './routes/$discipline'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CvrPrintIdRouteImport } from './routes/cvr-print.$id'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminSubcontractorsRouteImport } from './routes/admin.subcontractors'
 import { Route as AdminProjectsRouteImport } from './routes/admin.projects'
@@ -92,6 +93,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CvrPrintIdRoute = CvrPrintIdRouteImport.update({
+  id: '/cvr-print/$id',
+  path: '/cvr-print/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminUsersRoute = AdminUsersRouteImport.update({
   id: '/users',
   path: '/users',
@@ -131,6 +137,7 @@ export interface FileRoutesByFullPath {
   '/admin/projects': typeof AdminProjectsRoute
   '/admin/subcontractors': typeof AdminSubcontractorsRoute
   '/admin/users': typeof AdminUsersRoute
+  '/cvr-print/$id': typeof CvrPrintIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -150,6 +157,7 @@ export interface FileRoutesByTo {
   '/admin/projects': typeof AdminProjectsRoute
   '/admin/subcontractors': typeof AdminSubcontractorsRoute
   '/admin/users': typeof AdminUsersRoute
+  '/cvr-print/$id': typeof CvrPrintIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -170,6 +178,7 @@ export interface FileRoutesById {
   '/admin/projects': typeof AdminProjectsRoute
   '/admin/subcontractors': typeof AdminSubcontractorsRoute
   '/admin/users': typeof AdminUsersRoute
+  '/cvr-print/$id': typeof CvrPrintIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -191,6 +200,7 @@ export interface FileRouteTypes {
     | '/admin/projects'
     | '/admin/subcontractors'
     | '/admin/users'
+    | '/cvr-print/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -210,6 +220,7 @@ export interface FileRouteTypes {
     | '/admin/projects'
     | '/admin/subcontractors'
     | '/admin/users'
+    | '/cvr-print/$id'
   id:
     | '__root__'
     | '/'
@@ -229,6 +240,7 @@ export interface FileRouteTypes {
     | '/admin/projects'
     | '/admin/subcontractors'
     | '/admin/users'
+    | '/cvr-print/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -245,6 +257,7 @@ export interface RootRouteChildren {
   SetupRoute: typeof SetupRoute
   SummaryRoute: typeof SummaryRoute
   ValidationRoute: typeof ValidationRoute
+  CvrPrintIdRoute: typeof CvrPrintIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -340,6 +353,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cvr-print/$id': {
+      id: '/cvr-print/$id'
+      path: '/cvr-print/$id'
+      fullPath: '/cvr-print/$id'
+      preLoaderRoute: typeof CvrPrintIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/users': {
       id: '/admin/users'
       path: '/users'
@@ -401,6 +421,7 @@ const rootRouteChildren: RootRouteChildren = {
   SetupRoute: SetupRoute,
   SummaryRoute: SummaryRoute,
   ValidationRoute: ValidationRoute,
+  CvrPrintIdRoute: CvrPrintIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

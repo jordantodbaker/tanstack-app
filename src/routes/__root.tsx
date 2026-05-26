@@ -287,10 +287,14 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
         <div className="flex flex-1 overflow-hidden relative">
           <Sidebar mobileOpen={mobileSidebarOpen} onMobileClose={closeSidebar} />
           <main className="flex-1 overflow-auto bg-slate-50">
-            {/* Admin routes don't require a selected project; everything
-                else flows through the guard for the not-assigned /
-                not-selected screens. */}
-            {pathname.startsWith("/admin") ? (
+            {/* Admin routes don't require a selected project; the printable
+                CVR routes also skip the guard since they fetch the CVR by
+                id and can derive the project context from the record
+                itself — the user may be opening the URL from an email or
+                bookmark without a selected project. Everything else flows
+                through the guard for the not-assigned / not-selected screens. */}
+            {pathname.startsWith("/admin") ||
+            pathname.startsWith("/cvr-print/") ? (
               children
             ) : (
               <ProjectGuard>{children}</ProjectGuard>

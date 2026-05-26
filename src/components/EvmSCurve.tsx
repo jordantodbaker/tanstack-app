@@ -226,32 +226,42 @@ function SCurveChart({ points }: { points: EvmTimeSeriesPoint[] }) {
           </g>
         ))}
 
-        {/* Legend (top-right) */}
-        <g transform={`translate(${WIDTH - PAD_RIGHT + 12}, ${PAD_TOP + 4})`}>
-          {(["pv", "ev", "ac"] as const).map((k, i) => (
-            <g key={k} transform={`translate(0, ${i * 22})`}>
-              <rect
-                x={0}
-                y={0}
-                width={12}
-                height={4}
-                rx={1}
-                fill={COLORS[k]}
-              />
-              <text x={18} y={6} fontSize="11" fill="#0f172a">
-                {SERIES_LABELS[k]}
-              </text>
-              <text x={18} y={20} fontSize="10" fill="#64748b">
-                latest: {formatCompact(
-                  k === "pv"
-                    ? points[points.length - 1].total.pv
-                    : k === "ev"
-                      ? points[points.length - 1].total.ev
-                      : points[points.length - 1].total.ac,
-                )}
-              </text>
-            </g>
-          ))}
+        {/* Legend (top-right). Items spaced wide enough that the previous
+            item's sub-label descenders clear the next item's label cap
+            height — at 22px spacing they collided visually. */}
+        <g transform={`translate(${WIDTH - PAD_RIGHT + 12}, ${PAD_TOP + 8})`}>
+          {(["pv", "ev", "ac"] as const).map((k, i) => {
+            const latest =
+              k === "pv"
+                ? points[points.length - 1].total.pv
+                : k === "ev"
+                  ? points[points.length - 1].total.ev
+                  : points[points.length - 1].total.ac;
+            return (
+              <g key={k} transform={`translate(0, ${i * 36})`}>
+                <rect
+                  x={0}
+                  y={4}
+                  width={14}
+                  height={4}
+                  rx={1}
+                  fill={COLORS[k]}
+                />
+                <text
+                  x={20}
+                  y={10}
+                  fontSize="11"
+                  fontWeight="500"
+                  fill="#0f172a"
+                >
+                  {SERIES_LABELS[k]}
+                </text>
+                <text x={20} y={24} fontSize="10" fill="#64748b">
+                  latest: {formatCompact(latest)}
+                </text>
+              </g>
+            );
+          })}
         </g>
       </svg>
     </div>

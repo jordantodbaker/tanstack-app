@@ -1,3 +1,9 @@
+// Defensive: `prisma db seed` loads dotenv via prisma.config.ts before
+// invoking this file, but a direct `tsx prisma/seed.ts` invocation would not.
+// Importing here makes both paths work — and `dotenv/config` is a no-op when
+// the env was already populated.
+import "dotenv/config";
+
 import { prisma } from "../src/server/db";
 import { Project } from "~/lib/types";
 import { readFileSync } from "fs";
@@ -6,7 +12,7 @@ import { dirname, join } from "path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const projects: Project[] = [
+export const seedProjects: Project[] = [
   {
     id: 1,
     displayId: "1901",
@@ -229,7 +235,17 @@ function loadCbsItems() {
     });
 }
 
-async function main() {
+/**
+ * Wipes and reseeds the reference data every project needs: projects, the CBS
+ * master, piping groups/factors, and composite role rates. Exported so the
+ * test-data seed (`seed-test.ts`) can run the same baseline before adding its
+ * sample CVRs / FCOs / FEF rows / snapshots / reporting periods on top.
+ *
+ * Does NOT touch: users, areas, subcontractors, fef rows, change logs, FCOs,
+ * snapshots, reporting periods, audit events, notifications. Those are added
+ * (only) by the test-data seed.
+ */
+export async function seedBaseData() {
   await prisma.project.deleteMany();
   await prisma.cbsItem.deleteMany();
   await prisma.pipingGroupValue.deleteMany();
@@ -239,7 +255,7 @@ async function main() {
   await prisma.roleRate.deleteMany();
   await prisma.role.deleteMany();
 
-  await prisma.project.createMany({ data: projects });
+  await prisma.project.createMany({ data: seedProjects });
 
   const cbsItems = loadCbsItems();
   const batchSize = 500;
@@ -286,6 +302,14 @@ async function main() {
   console.log(`Inserted ${compositeRates.size} roles`);
 }
 
-main().then(async () => {
-  await prisma.$disconnect();
-});
+// Run the base seed only when this file is executed directly (via
+// `prisma db seed` → `tsx prisma/seed.ts`). When `seed-test.ts` imports
+// `seedBaseData`, we don't want the top-level call here to fire too.
+import { pathToFileURL } from "url";
+const isDirectInvocation =
+  import.meta.url === pathToFileURL(process.argv[1] ?? "").href;
+if (isDirectInvocation) {
+  seedBaseData().then(async () => {
+    await prisma.$disconnect();
+  });
+}

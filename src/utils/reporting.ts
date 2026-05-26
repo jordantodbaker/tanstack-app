@@ -12,7 +12,11 @@ import {
   type ProjectFefRowTotals,
   type ProjectTotalsRow,
 } from "~/lib/project-totals";
-import { aggregateEvm, computeEvm, timeLinearPv, type EvmMetrics } from "~/lib/evm";
+import type { EvmMetrics } from "~/lib/evm";
+import {
+  computePeriodEvm,
+  type PeriodBucketRow as PurePeriodBucketRow,
+} from "~/lib/period-evm";
 import { resolveCvrBucket } from "./cvr-bucket";
 
 /**
@@ -38,18 +42,9 @@ export type ReportingPeriodItem = {
   createdAt: string;
 };
 
-export type PeriodBucketRow = {
-  bucket: string;
-  /** Discipline label for the bucket digit; "" when the digit has none assigned. */
-  disciplineLabel: string;
-  percentComplete: number;
-  actualCost: number;
-  actualHours: number | null;
-  /** The PV used to compute SPI: override if set, else time-linear fallback. */
-  pvSource: "override" | "time-linear" | "none";
-  notes: string;
-  metrics: EvmMetrics;
-};
+// Re-export the pure type so existing consumers (route, dashboard card)
+// keep their `~/utils/reporting` import path unchanged.
+export type PeriodBucketRow = PurePeriodBucketRow;
 
 export type PeriodWithEvm = {
   id: number;
@@ -103,6 +98,27 @@ export const fetchReportingPeriods = createServerFn({ method: "GET" })
       createdAt: p.createdAt.toISOString(),
     }));
   });
+
+// Sum of APPROVED/EXECUTED CVR cost impacts grouped by their resolved digit
+// bucket. Caveat: uses the *current* approved set, not the set as of any
+// historical date — so historical period reads show today's revisions
+// against the period's measurements. PV/EV/AC don't depend on this; only
+// `currentBudget` and `vac` are approximate against historical state.
+async function loadRevisionsByBucket(
+  projectId: number,
+): Promise<Record<string, number>> {
+  const cvrs = await prisma.changeLog.findMany({
+    where: { projectId, status: { in: ["APPROVED", "EXECUTED"] } },
+    select: { costImpact: true, cbsCodes: true, discipline: true },
+  });
+  const revisions: Record<string, number> = {};
+  for (const c of cvrs) {
+    const b = resolveCvrBucket(c);
+    if (!b) continue;
+    revisions[b] = (revisions[b] ?? 0) + c.costImpact;
+  }
+  return revisions;
+}
 
 export const createReportingPeriod = createServerFn({ method: "POST" })
   .inputValidator(
@@ -261,78 +277,18 @@ export const fetchPeriodWithEvm = createServerFn({ method: "GET" })
 
     // 2. CVR-driven budget revisions per bucket. Only APPROVED / EXECUTED
     //    count — pending/rejected/voided CVRs aren't authorized budget.
-    const cvrs = await prisma.changeLog.findMany({
-      where: {
-        projectId: period.projectId,
-        status: { in: ["APPROVED", "EXECUTED"] },
-      },
-      select: { costImpact: true, cbsCodes: true, discipline: true },
-    });
-    const revisionsByBucket: Record<string, number> = {};
-    for (const c of cvrs) {
-      const b = resolveCvrBucket(c);
-      if (!b) continue;
-      revisionsByBucket[b] = (revisionsByBucket[b] ?? 0) + c.costImpact;
-    }
+    const revisionsByBucket = await loadRevisionsByBucket(period.projectId);
 
-    // 3. Measurement lookup.
-    const measByBucket = new Map(period.measurements.map((m) => [m.bucket, m]));
-
-    // 4. Union of buckets from all sources.
-    const bucketSet = new Set<string>([
-      ...Object.keys(baselineTotals.laborByDigit),
-      ...Object.keys(baselineTotals.materialsByDigit),
-      ...Object.keys(revisionsByBucket),
-      ...measByBucket.keys(),
-    ]);
-    const buckets = Array.from(bucketSet).sort();
-
+    // 3. Hand the loaded data to the pure helper for the per-bucket math.
     const dataDateIso = period.dataDate.toISOString();
-    const rows: PeriodBucketRow[] = buckets.map((bucket) => {
-      const bac =
-        (baselineTotals.laborByDigit[bucket] ?? 0) +
-        (baselineTotals.materialsByDigit[bucket] ?? 0);
-      const budgetRevisions = revisionsByBucket[bucket] ?? 0;
-      const meas = measByBucket.get(bucket);
-      const percentComplete = meas?.percentComplete ?? 0;
-      const actualCost = meas?.actualCost ?? 0;
-      const actualHours = meas?.actualHours ?? null;
-      // PV: explicit override wins; else time-linear from project dates;
-      // else null source (PV = 0, SPI null in the table).
-      let pv = 0;
-      let pvSource: PeriodBucketRow["pvSource"] = "none";
-      if (meas?.plannedValueOverride != null) {
-        pv = meas.plannedValueOverride;
-        pvSource = "override";
-      } else if (period.project.startDate && period.project.endDate) {
-        pv = timeLinearPv(
-          bac,
-          period.project.startDate,
-          period.project.endDate,
-          dataDateIso,
-        );
-        pvSource = pv > 0 ? "time-linear" : "none";
-      }
-      const metrics = computeEvm({
-        bac,
-        budgetRevisions,
-        percentComplete,
-        actualCost,
-        pv,
-      });
-      return {
-        bucket,
-        disciplineLabel: "",
-        percentComplete,
-        actualCost,
-        actualHours,
-        pvSource,
-        notes: meas?.notes ?? "",
-        metrics,
-      };
+    const { buckets: rows, total } = computePeriodEvm({
+      baselineTotals,
+      revisionsByBucket,
+      measurements: period.measurements,
+      projectStartDate: period.project.startDate,
+      projectEndDate: period.project.endDate,
+      dataDate: dataDateIso,
     });
-
-    const total = aggregateEvm(rows.map((r) => r.metrics));
 
     return {
       id: period.id,
@@ -439,19 +395,7 @@ export const fetchEvmTimeSeries = createServerFn({ method: "GET" })
       select: { startDate: true, endDate: true },
     });
 
-    const cvrs = await prisma.changeLog.findMany({
-      where: {
-        projectId,
-        status: { in: ["APPROVED", "EXECUTED"] },
-      },
-      select: { costImpact: true, cbsCodes: true, discipline: true },
-    });
-    const revisionsByBucket: Record<string, number> = {};
-    for (const c of cvrs) {
-      const b = resolveCvrBucket(c);
-      if (!b) continue;
-      revisionsByBucket[b] = (revisionsByBucket[b] ?? 0) + c.costImpact;
-    }
+    const revisionsByBucket = await loadRevisionsByBucket(projectId);
 
     // Resolve any legacy snapshots (no cached `totals`) up front — one extra
     // query each. Almost always empty; only matters for snapshots created
@@ -479,55 +423,38 @@ export const fetchEvmTimeSeries = createServerFn({ method: "GET" })
       const baselineTotals: ProjectFefRowTotals =
         p.baselineSnapshot.totals !== null
           ? (p.baselineSnapshot.totals as unknown as ProjectFefRowTotals)
-          : (legacyTotalsById.get(p.baselineSnapshot.id) ?? {
-              laborByDigit: {},
-              laborHoursByDigit: {},
-              quantityByDigit: {},
-              craftSupportLabor: 0,
-              craftSupportLaborHours: 0,
-              materialsByDigit: {},
-              byArea: [],
-              invalidByDiscipline: {},
-            });
-      const measByBucket = new Map(
-        p.measurements.map((m) => [m.bucket, m]),
-      );
-      const buckets = Array.from(
-        new Set<string>([
-          ...Object.keys(baselineTotals.laborByDigit),
-          ...Object.keys(baselineTotals.materialsByDigit),
-          ...Object.keys(revisionsByBucket),
-          ...measByBucket.keys(),
-        ]),
-      );
-      const dataDateIso = p.dataDate.toISOString();
-      const perBucket: EvmMetrics[] = buckets.map((bucket) => {
-        const bac =
-          (baselineTotals.laborByDigit[bucket] ?? 0) +
-          (baselineTotals.materialsByDigit[bucket] ?? 0);
-        const meas = measByBucket.get(bucket);
-        let pv = 0;
-        if (meas?.plannedValueOverride != null) {
-          pv = meas.plannedValueOverride;
-        } else if (project.startDate && project.endDate) {
-          pv = timeLinearPv(bac, project.startDate, project.endDate, dataDateIso);
-        }
-        return computeEvm({
-          bac,
-          budgetRevisions: revisionsByBucket[bucket] ?? 0,
-          percentComplete: meas?.percentComplete ?? 0,
-          actualCost: meas?.actualCost ?? 0,
-          pv,
-        });
+          : (legacyTotalsById.get(p.baselineSnapshot.id) ?? EMPTY_TOTALS);
+      const { total } = computePeriodEvm({
+        baselineTotals,
+        revisionsByBucket,
+        measurements: p.measurements,
+        projectStartDate: project.startDate,
+        projectEndDate: project.endDate,
+        dataDate: p.dataDate.toISOString(),
       });
       return {
         periodId: p.id,
         label: p.label,
-        dataDate: dataDateIso,
-        total: aggregateEvm(perBucket),
+        dataDate: p.dataDate.toISOString(),
+        total,
       };
     });
   });
+
+// Local empty-totals constant for the legacy-snapshot fallback in
+// `fetchEvmTimeSeries`. Same shape `EMPTY_TOTALS` in projectTotals.ts uses,
+// duplicated here to avoid cross-module import (projectTotals.ts is its own
+// server module and the file boundary keeps the dependency one-way).
+const EMPTY_TOTALS: ProjectFefRowTotals = {
+  laborByDigit: {},
+  laborHoursByDigit: {},
+  quantityByDigit: {},
+  craftSupportLabor: 0,
+  craftSupportLaborHours: 0,
+  materialsByDigit: {},
+  byArea: [],
+  invalidByDiscipline: {},
+};
 
 export const evmTimeSeriesQueryOptions = (projectId: number | null) =>
   queryOptions({

@@ -7,6 +7,7 @@ import {
   useReactTable,
   type ColumnDef,
   type ColumnFiltersState,
+  type Row,
   type VisibilityState,
   type PaginationState,
   type RowData,
@@ -394,6 +395,69 @@ export type ServerPagination = {
   onPageChange: (page: number) => void;
 };
 
+/**
+ * Memoized table row. The big perf win for the FEF / Piping take-off: with
+ * 50+ rows × ~20 cells each, an unmemoized typing burst re-renders every
+ * cell on every keystroke because the parent's `data` array reference flips
+ * on each immutable update. The memo's comparator skips re-render when the
+ * underlying row data and zebra position are unchanged — so only the row
+ * actually being edited (and any rows that genuinely shifted) re-render.
+ *
+ * Trade-off: if `table.options.meta` legitimately changes (e.g. the
+ * `cbsOptions` query finishes loading after the table has mounted), rows
+ * already rendered with stale meta won't re-render until their underlying
+ * data changes. In practice meta is prefetched in the route loader so it's
+ * available by first paint; the brief inconsistency is acceptable for the
+ * editing-speed win.
+ */
+const FefTableRow = React.memo(
+  function FefTableRow({
+    row,
+    rowIndex,
+    getRowInvalid,
+  }: {
+    row: Row<FefRow>;
+    rowIndex: number;
+    getRowInvalid?: (row: FefRow) => boolean;
+  }) {
+    const invalid = getRowInvalid?.(row.original) ?? false;
+    // Invalid rows get a faint red wash + thicker red left border so they
+    // stand out against the alternating zebra without obscuring the inputs.
+    const baseBg = rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50";
+    const rowClass = invalid
+      ? `${baseBg} bg-red-50 border-l-4 border-l-red-500`
+      : baseBg;
+    return (
+      <tr
+        className={rowClass}
+        title={
+          invalid
+            ? "Invalid — labor hours and rate are required to compute Total Cost."
+            : undefined
+        }
+      >
+        {row.getVisibleCells().map((cell) => (
+          <td
+            key={cell.id}
+            style={{ minWidth: cell.column.getSize() }}
+            className="border border-gray-300"
+          >
+            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+          </td>
+        ))}
+      </tr>
+    );
+  },
+  (prev, next) =>
+    // Reference-equality on `row.original` is correct because the FEF state
+    // setter does immutable updates: only the edited row gets a new object;
+    // sibling rows keep the same reference. `getRowInvalid` is expected to
+    // be a stable module-level function (e.g. `isTakeOffRowInvalid`).
+    prev.row.original === next.row.original &&
+    prev.rowIndex === next.rowIndex &&
+    prev.getRowInvalid === next.getRowInvalid,
+);
+
 export function useFefTableState(opts: {
   initialRows?: FefRow[];
   /** Persists row data in the materials store under this key when set. */
@@ -548,37 +612,14 @@ export function FefTableContent({
           ))}
         </thead>
         <tbody>
-          {table.getRowModel().rows.map((row, i) => {
-            const invalid = getRowInvalid?.(row.original) ?? false;
-            // Invalid rows get a faint red wash + thicker red left border so
-            // they stand out against the alternating zebra without obscuring
-            // the existing field inputs.
-            const baseBg = i % 2 === 0 ? "bg-white" : "bg-gray-50";
-            const rowClass = invalid
-              ? `${baseBg} bg-red-50 border-l-4 border-l-red-500`
-              : baseBg;
-            return (
-              <tr
-                key={row.id}
-                className={rowClass}
-                title={
-                  invalid
-                    ? "Invalid — labor hours and rate are required to compute Total Cost."
-                    : undefined
-                }
-              >
-                {row.getVisibleCells().map((cell) => (
-                  <td
-                    key={cell.id}
-                    style={{ minWidth: cell.column.getSize() }}
-                    className="border border-gray-300"
-                  >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
-              </tr>
-            );
-          })}
+          {table.getRowModel().rows.map((row, i) => (
+            <FefTableRow
+              key={row.id}
+              row={row}
+              rowIndex={i}
+              getRowInvalid={getRowInvalid}
+            />
+          ))}
           {minRows !== undefined &&
             Array.from(
               {

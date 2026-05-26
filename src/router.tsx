@@ -11,7 +11,17 @@ export function getRouter() {
   const router = createRouter({
     routeTree,
     context: { queryClient },
-    defaultPreload: false,
+    // Run each route's loader on link hover (or focus on touch). By the time
+    // the user clicks, the data is already in the React Query cache and the
+    // page transitions feel instant. Loaders are already idempotent
+    // (`ensureQueryData` + `tryPrefetchProjectQuery`) so prefetching a route
+    // the user doesn't end up visiting is harmless and stays cached for the
+    // next intent.
+    defaultPreload: "intent",
+    // Treat preloaded data as fresh for 30s so a hover→click→hover→click
+    // burst doesn't fire the loader twice. Matches the staleTime we use on
+    // most project-scoped query options.
+    defaultPreloadStaleTime: 30 * 1000,
     defaultErrorComponent: DefaultCatchBoundary,
     defaultNotFoundComponent: () => <NotFound />,
   })

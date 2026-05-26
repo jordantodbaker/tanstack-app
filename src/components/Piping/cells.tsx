@@ -183,16 +183,40 @@ export function RoleSelectCell({ getValue, row, table }: CellProps) {
   );
 }
 
+type PipingFactorLookup = Map<
+  string,
+  { unit: string; values: Map<number, number> }
+>;
+
 function laborFactorFor(
-  row: FefRow,
-  lookup:
-    | Map<string, { unit: string; values: Map<number, number> }>
-    | undefined,
+  row: Pick<FefRow, "taskCode" | "size">,
+  lookup: PipingFactorLookup | undefined,
 ): number | undefined {
   if (!lookup || !row.taskCode || row.size === "") return undefined;
   const size = parseFloat(row.size);
   if (isNaN(size)) return undefined;
   return lookup.get(row.taskCode)?.values.get(size);
+}
+
+/**
+ * Derives the labor-hours string a Take Off row should hold given its
+ * current `taskCode`, `size`, and `quantity`. Returns `""` when the inputs
+ * can't produce a value (missing factor, blank quantity, non-numeric qty).
+ *
+ * Lives here because the derivation needs to fire on the same event that
+ * changes one of those three fields — the previous "compute on view, write
+ * via useEffect" pattern in `LaborHoursCell` was issuing a debounced save
+ * for every loaded row whose stored value didn't bit-match the recomputed
+ * one, so just opening the take-off triggered a fan-out of saves.
+ */
+export function deriveLaborHours(
+  row: Pick<FefRow, "taskCode" | "size" | "quantity">,
+  lookup: PipingFactorLookup | undefined,
+): string {
+  const factor = laborFactorFor(row, lookup);
+  const qty = parseFloat(row.quantity);
+  if (factor === undefined || isNaN(qty) || row.quantity === "") return "";
+  return (factor * qty).toFixed(1);
 }
 
 export function LaborFactorCell({ row, table }: CellProps) {
@@ -207,27 +231,15 @@ export function LaborFactorCell({ row, table }: CellProps) {
   );
 }
 
-export function LaborHoursCell({ row, table }: CellProps) {
-  const factor = laborFactorFor(
-    row.original,
-    table.options.meta?.pipingFactorLookup,
-  );
-  const qty = parseFloat(row.original.quantity);
-  const computed =
-    factor !== undefined && !isNaN(qty) && row.original.quantity !== ""
-      ? (factor * qty).toFixed(1)
-      : "";
-
-  const stored = row.original.laborHours;
-  const rowIndex = row.index;
-  const updateData = table.options.meta?.updateData;
-  React.useEffect(() => {
-    if (stored !== computed) {
-      updateData?.(rowIndex, "laborHours", computed);
-    }
-  }, [stored, computed, rowIndex, updateData]);
-
-  return <span className={readOnlyCellClass}>{computed}</span>;
+/**
+ * Pure display. The stored value is the authoritative one — derivation
+ * happens at edit time inside `TaskCodeSelectCell`, `PipingSizeCell`, and
+ * `PipingQuantityCell`. View-time recompute used to write back via effect,
+ * which generated a save on every row whose stored value diverged from the
+ * current piping-factor table (e.g. after a factor CSV update).
+ */
+export function LaborHoursCell({ row }: CellProps) {
+  return <span className={readOnlyCellClass}>{row.original.laborHours}</span>;
 }
 
 export function TaskCodeSelectCell({ getValue, row, table }: CellProps) {
@@ -252,9 +264,15 @@ export function TaskCodeSelectCell({ getValue, row, table }: CellProps) {
         const unit = newCode
           ? (pipingFactorLookup?.get(newCode)?.unit ?? "")
           : "";
+        const rowData = table.getRowModel().rows[row.index].original;
+        const laborHours = deriveLaborHours(
+          { ...rowData, taskCode: newCode },
+          pipingFactorLookup,
+        );
         table.options.meta?.updateRow?.(row.index, {
           taskCode: newCode,
           unit,
+          laborHours,
         });
       }}
     />
@@ -273,9 +291,14 @@ export function PipingSizeCell({ getValue, row, table }: CellProps) {
           boreSize,
           table.options.meta?.cbsOptions ?? [],
         );
+        const laborHours = deriveLaborHours(
+          { ...rowData, size: value },
+          table.options.meta?.pipingFactorLookup,
+        );
         table.options.meta?.updateRow?.(row.index, {
           size: value,
           boreSize,
+          laborHours,
           ...(cbsMatch
             ? {
                 id: cbsMatch.displayCode,
@@ -283,6 +306,32 @@ export function PipingSizeCell({ getValue, row, table }: CellProps) {
                 unit: cbsMatch.uom,
               }
             : {}),
+        });
+      }}
+    />
+  );
+}
+
+/**
+ * Quantity cell that keeps `laborHours` in sync when the user types a new
+ * quantity. Replaces the generic `EditableCell` on the piping take-off's
+ * quantity column — without this, changing quantity would update `quantity`
+ * alone and leave `laborHours` stale (the view-time auto-recompute loop is
+ * gone now).
+ */
+export function PipingQuantityCell({ getValue, row, table }: CellProps) {
+  return (
+    <TextCell
+      value={getValue() as string}
+      onCommit={(value) => {
+        const rowData = table.getRowModel().rows[row.index].original;
+        const laborHours = deriveLaborHours(
+          { ...rowData, quantity: value },
+          table.options.meta?.pipingFactorLookup,
+        );
+        table.options.meta?.updateRow?.(row.index, {
+          quantity: value,
+          laborHours,
         });
       }}
     />

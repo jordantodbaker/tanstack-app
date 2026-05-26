@@ -10,6 +10,7 @@ import {
   TaskCodeSelectCell,
   LaborFactorCell,
   LaborHoursCell,
+  PipingQuantityCell,
   PipingSizeCell,
   SubCheckboxCell,
 } from "~/components/Piping/cells";
@@ -58,7 +59,7 @@ export const takeOffColumns: ColumnDef<FefRow, string>[] = [
     cell: TaskCodeSelectCell,
     size: 160,
   }),
-  columnHelper.accessor("quantity", { header: "Quantity", cell: EditableCell }),
+  columnHelper.accessor("quantity", { header: "Quantity", cell: PipingQuantityCell }),
   columnHelper.accessor("size", { header: "Size", cell: PipingSizeCell }),
   columnHelper.accessor("sub", { header: "Sub", cell: SubCheckboxCell, size: 60 }),
   columnHelper.accessor("unit", { header: "Unit", cell: ReadOnlyCell }),

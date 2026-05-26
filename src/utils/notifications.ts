@@ -82,4 +82,9 @@ export const unreadNotificationCountQueryOptions = () =>
     // websocket; tab focus also retriggers via React Query defaults.
     staleTime: 30 * 1000,
     refetchInterval: 30 * 1000,
+    // Don't keep hammering the endpoint when the tab is in the background.
+    // Returning to the tab triggers an immediate refetch via the default
+    // `refetchOnWindowFocus`, so the badge catches up the instant the user
+    // looks at it.
+    refetchIntervalInBackground: false,
   });

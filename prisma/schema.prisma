@@ -49,6 +49,138 @@ model AuditEvent {
   @@index([projectId, createdAt])
 }
 
+// File attachments — uploaded photos, drawings, PDFs, etc. that back a CVR
+// or FCO. Polymorphic via `entityType` + `entityId`, mirroring AuditEvent.
+// `storageKey` is the path under the configured upload root; on local-FS
+// storage that's a real file, and on a future cloud backend it'd be the
+// object key. `uploadedById` and `uploadedByEmail` are plain columns (no
+// FK) so the attachment record survives user deletion, same pattern as
+// AuditEvent.
+model Attachment {
+  id              Int      @id @default(autoincrement())
+  entityType      String
+  entityId        Int
+  projectId       Int
+  filename        String
+  storageKey      String   @unique
+  mimeType        String
+  sizeBytes       Int
+  uploadedById    Int
+  uploadedByEmail String
+  createdAt       DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([projectId, createdAt])
+}
+
+// Free-form discussion on a CVR / FCO / RFI. Polymorphic via `entityType`
+// + `entityId`, mirroring `AuditEvent` and `Attachment`. Append-only — no
+// edit, no delete — so the conversation is part of the record of truth.
+// `authorId` is a plain column (no FK) so a comment survives user deletion;
+// `authorEmail` is the denormalized snapshot, same pattern as AuditEvent.
+model Comment {
+  id          Int      @id @default(autoincrement())
+  entityType  String
+  entityId    Int
+  projectId   Int
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// Plain text. Newlines preserved on display via `whitespace-pre-wrap`.
+  body        String
+  authorId    Int
+  authorEmail String
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@index([projectId, createdAt])
+}
+
+// Dedup table for the daily time-based reminder cron. One row per
+// (reminderType, entityType, entityId, recipientUserId, sentAt) — the
+// selector checks for an existing row within the dedup window before
+// firing a Notification, so the same person doesn't get pinged about the
+// same record more than once per day per reminder type.
+model ReminderLog {
+  id              Int      @id @default(autoincrement())
+  /// Discriminates which reminder rule fired ("cvr.pending_approval", etc.).
+  reminderType    String
+  entityType      String
+  entityId        Int
+  projectId       Int
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  recipientUserId Int
+  sentAt          DateTime @default(now())
+
+  @@index([reminderType, entityId, recipientUserId, sentAt])
+  @@index([projectId, sentAt])
+}
+
+// RFI (Request for Information) — upstream of an FCO. Field crew asks a
+// question; designer/engineer answers; if the answer reveals scope/cost
+// impact, the RFI is promoted to an FCO via `FieldChangeOrder.linkedRfiId`.
+// Lifecycle is question/answer flavoured, not approval: no APPROVER role.
+enum RfiStatus {
+  DRAFT
+  OPEN // submitted, awaiting answer
+  ANSWERED // response posted, awaiting originator confirmation
+  CLOSED // resolved
+  SUPERSEDED // replaced by another RFI
+  VOID
+}
+
+// Separate from FcoPriority even though the values match — keeps the two
+// state machines independent if one ever needs an extra level.
+enum RfiPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model Rfi {
+  id                     Int                @id @default(autoincrement())
+  project                Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId              Int
+  rfiNumber              String
+  subject                String
+  question               String
+  status                 RfiStatus          @default(DRAFT)
+  priority               RfiPriority        @default(NORMAL)
+  discipline             String
+  cbsCodes               String[]           @default([])
+  /// Area.id as a string ("" = project-wide), same convention as
+  /// ChangeLog.area and FieldChangeOrder.locationArea.
+  locationArea           String             @default("")
+  drawingRefs            String[]           @default([])
+  specRefs               String[]           @default([])
+  /// Originator's hint that an FCO/CVR may follow. Drives dashboard signal.
+  suspectsCostImpact     Boolean            @default(false)
+  suspectsScheduleImpact Boolean            @default(false)
+  initiatedBy            String             @default("")
+  /// Free-text responder (external designer / engineer); not a User FK.
+  assignedTo             String             @default("")
+  dueDate                DateTime?
+  initiatedAt            DateTime           @default(now())
+  // Response side — populated once status reaches ANSWERED.
+  response               String             @default("")
+  answeredBy             String             @default("")
+  answeredAt             DateTime?
+  closedAt               DateTime?
+  /// User.id of the originator, plain column (no FK) — same pattern as
+  /// ChangeLog.createdById. Drives the blockOriginator workflow check and
+  /// survives user deletion.
+  createdById            Int?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  /// FCOs promoted from this RFI. One RFI can spawn multiple FCOs; each
+  /// FCO has at most one source RFI (`FieldChangeOrder.linkedRfiId`).
+  linkedFcos             FieldChangeOrder[]
+  /// Trends raised against this RFI's anticipated cost impact. Same SetNull
+  /// pattern as the FCO/CVR cross-links — deleting the RFI keeps the trend.
+  linkedTrends           Trend[]
+
+  @@index([projectId, initiatedAt])
+}
+
 // Privilege levels, extensible: add a value here and a rank in ROLE_RANK
 // (src/utils/users.ts) to introduce an intermediate level later. APPROVER
 // sits between USER and ADMINISTRATOR — it can action approval-workflow
@@ -97,7 +229,7 @@ model Notification {
 }
 
 model Project {
-  id                 Int                 @id @default(autoincrement())
+  id                 Int                @id @default(autoincrement())
   displayId          String
   name               String
   description        String
@@ -108,16 +240,20 @@ model Project {
   endDate            DateTime?
   changeLogs         ChangeLog[]
   fieldChangeOrders  FieldChangeOrder[]
-  allowedFefCbsItems CbsItem[]           @relation("ProjectAllowedFefCbsItems")
+  rfis               Rfi[]
+  trends             Trend[]
+  comments           Comment[]
+  reminderLogs       ReminderLog[]
+  allowedFefCbsItems CbsItem[]          @relation("ProjectAllowedFefCbsItems")
   fefRows            FefRow[]
   areas              Area[]
-  subcontractors     Subcontractor[]     @relation("ProjectSubcontractors")
-  users              User[]              @relation("UserProjects")
+  subcontractors     Subcontractor[]    @relation("ProjectSubcontractors")
+  users              User[]             @relation("UserProjects")
   basisInputs        BasisInputs?
   estimateSnapshots  EstimateSnapshot[]
   reportingPeriods   ReportingPeriod[]
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @default(now())
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @default(now())
 }
 
 // Subcontractor company. `displayId` is the human-assigned ID code (unique).
@@ -186,11 +322,11 @@ model FefRow {
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
 
-  @@index([projectId, discipline, section])
   // Stable identity for ON CONFLICT upsert in `saveFefRows`. Positions are
   // always sequential within a (project, discipline, section); the constraint
   // codifies that invariant so the upsert key is well-defined.
   @@unique([projectId, discipline, section, position])
+  @@index([projectId, discipline, section])
 }
 
 model BasisInputs {
@@ -288,38 +424,42 @@ enum RiskLevel {
 }
 
 model ChangeLog {
-  id                  Int                 @id @default(autoincrement())
-  project             Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  projectId           Int
-  cvrNumber           String              @default("")
-  title               String
-  description         String              @default("")
-  status              ChangeStatus        @default(REQUESTED)
-  type                ChangeType          @default(SCOPE)
-  discipline          String              @default("")
-  cbsCodes            String[]            @default([])
-  originator          String              @default("")
-  costImpact          Float               @default(0)
-  scheduleDaysImpact  Int                 @default(0)
-  laborHoursImpact    Float               @default(0)
-  riskLevel           RiskLevel           @default(MEDIUM)
-  reasonCode          String              @default("")
-  requestedAt         DateTime            @default(now())
-  dueDate             DateTime?
-  approvedAt          DateTime?
-  approver            String              @default("")
-  notes               String              @default("")
+  id                 Int                @id @default(autoincrement())
+  project            Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId          Int
+  cvrNumber          String             @default("")
+  title              String
+  description        String             @default("")
+  status             ChangeStatus       @default(REQUESTED)
+  type               ChangeType         @default(SCOPE)
+  discipline         String             @default("")
+  cbsCodes           String[]           @default([])
+  originator         String             @default("")
+  costImpact         Float              @default(0)
+  scheduleDaysImpact Int                @default(0)
+  laborHoursImpact   Float              @default(0)
+  riskLevel          RiskLevel          @default(MEDIUM)
+  reasonCode         String             @default("")
+  requestedAt        DateTime           @default(now())
+  dueDate            DateTime?
+  approvedAt         DateTime?
+  approver           String             @default("")
+  notes              String             @default("")
   // Optional area scope. Holds the Area.id as a string, matching the
   // FefRow.area / FieldChangeOrder.locationArea convention. Empty when the
   // CVR is project-wide (no single area).
-  area                String              @default("")
+  area               String             @default("")
   // User.id of whoever created this CVR. Plain column (no FK) so it survives
   // user deletion; drives the approval workflow's "approver ≠ originator"
   // rule. Null on rows that predate the column.
-  createdById         Int?
-  fieldChangeOrders   FieldChangeOrder[]
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  createdById        Int?
+  fieldChangeOrders  FieldChangeOrder[]
+  /// Trends that were promoted to this CVR (`Trend.linkedCvrId`). Named
+  /// relation since Trend ↔ ChangeLog already has another path through
+  /// `linkedCvr`; without a name Prisma can't disambiguate.
+  promotedFromTrends Trend[]            @relation("TrendPromotedToCvr")
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
   @@index([projectId, status])
 }
@@ -357,43 +497,135 @@ enum FcoPriority {
 }
 
 model FieldChangeOrder {
-  id                 Int           @id @default(autoincrement())
-  project            Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  projectId          Int
-  fcoNumber          String        @default("")
-  title              String
-  description        String        @default("")
-  status             FcoStatus     @default(DRAFT)
-  originType         FcoOriginType @default(FIELD_CONDITION)
-  priority           FcoPriority   @default(NORMAL)
-  discipline         String        @default("")
-  cbsCodes           String[]      @default([])
-  locationArea       String        @default("")
-  drawingRefs        String[]      @default([])
-  rfiNumbers         String[]      @default([])
-  initiatedBy        String        @default("")
-  fieldContact       String        @default("")
-  estimatedCost      Float         @default(0)
-  estimatedHours     Float         @default(0)
-  workStopped        Boolean       @default(false)
-  photosUrl          String        @default("")
-  reasonNarrative    String        @default("")
-  resolution         String        @default("")
-  notes              String        @default("")
-  initiatedAt        DateTime      @default(now())
-  neededBy           DateTime?
-  closedAt           DateTime?
-  linkedCvr          ChangeLog?    @relation(fields: [linkedCvrId], references: [id], onDelete: SetNull)
-  linkedCvrId        Int?
+  id              Int           @id @default(autoincrement())
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId       Int
+  fcoNumber       String        @default("")
+  title           String
+  description     String        @default("")
+  status          FcoStatus     @default(DRAFT)
+  originType      FcoOriginType @default(FIELD_CONDITION)
+  priority        FcoPriority   @default(NORMAL)
+  discipline      String        @default("")
+  cbsCodes        String[]      @default([])
+  locationArea    String        @default("")
+  drawingRefs     String[]      @default([])
+  rfiNumbers      String[]      @default([])
+  initiatedBy     String        @default("")
+  fieldContact    String        @default("")
+  estimatedCost   Float         @default(0)
+  estimatedHours  Float         @default(0)
+  workStopped     Boolean       @default(false)
+  photosUrl       String        @default("")
+  reasonNarrative String        @default("")
+  resolution      String        @default("")
+  notes           String        @default("")
+  initiatedAt     DateTime      @default(now())
+  neededBy        DateTime?
+  closedAt        DateTime?
+  linkedCvr       ChangeLog?    @relation(fields: [linkedCvrId], references: [id], onDelete: SetNull)
+  linkedCvrId     Int?
+  /// Source RFI when this FCO was promoted from one. `onDelete: SetNull`
+  /// keeps the FCO intact if the RFI is deleted (matches the linkedCvr
+  /// pattern). Null when the FCO was raised directly without an RFI behind
+  /// it; legacy free-text `rfiNumbers` continues to cover the pre-module
+  /// case.
+  linkedRfi       Rfi?          @relation(fields: [linkedRfiId], references: [id], onDelete: SetNull)
+  linkedRfiId     Int?
+  /// Trends raised against this FCO (e.g. risk of a larger-than-estimated
+  /// cost impact). SetNull on the trend side keeps the trend's history if
+  /// the FCO is deleted.
+  linkedTrends    Trend[]
   // User.id of whoever raised this FCO. Plain column (no FK) so it survives
   // user deletion; drives the approval workflow's "approver ≠ originator"
   // rule. Null on rows that predate the column.
-  createdById        Int?
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
+  createdById     Int?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   @@index([projectId, status])
   @@index([linkedCvrId])
+}
+
+// Trend — anticipated cost impact that hasn't (yet) been approved as a CVR.
+// Feeds the project's Anticipated Final Cost (AFC) at a probability weight:
+//   AFC = EAC + sum(probability × costLikely) over IDENTIFIED + PROBABLE
+// Sits alongside FCO/RFI rather than replacing them: a trend can exist with
+// no field event behind it (escalation, productivity drift, indirect
+// overrun) and can also wrap an in-flight FCO/RFI to surface its forecast
+// impact on the EVM page before the change is authorized.
+enum TrendStatus {
+  IDENTIFIED // raised; AFC includes it at `probability × costLikely`
+  PROBABLE // PM endorses; AFC includes it at `probability × costLikely`
+  CONVERTED // a CVR was raised from this trend (terminal)
+  REJECTED // dismissed (terminal)
+  VOID
+}
+
+// Separate from FcoPriority/RfiPriority to keep state machines independent.
+enum TrendPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model Trend {
+  id                 Int               @id @default(autoincrement())
+  project            Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId          Int
+  trendNumber        String            @default("")
+  title              String
+  description        String            @default("")
+  status             TrendStatus       @default(IDENTIFIED)
+  priority           TrendPriority     @default(NORMAL)
+  discipline         String            @default("")
+  cbsCodes           String[]          @default([])
+  /// Area.id as a string ("" = project-wide). Same convention as ChangeLog.area
+  /// and FieldChangeOrder.locationArea.
+  locationArea       String            @default("")
+  /// 0..1 probability the trend lands as actual cost. Drives the
+  /// probability-weighted AFC roll-up. Defaults to 0.5 so a brand-new
+  /// trend without an explicit estimate doesn't anchor on either extreme.
+  probability        Float             @default(0.5)
+  /// Optional low/best-case estimate. 0 means "not yet sized".
+  costLow            Float             @default(0)
+  /// Likely / most-likely cost. The number AFC math uses.
+  costLikely         Float             @default(0)
+  /// Optional high/worst-case estimate. Surfaces exposure even though it
+  /// doesn't drive AFC math directly.
+  costHigh           Float             @default(0)
+  /// Optional schedule impact in days. Mirrors ChangeLog.scheduleDaysImpact.
+  scheduleDaysImpact Int               @default(0)
+  reasonNarrative    String            @default("")
+  notes              String            @default("")
+  identifiedAt       DateTime          @default(now())
+  neededBy           DateTime?
+  closedAt           DateTime?
+  // Cross-links to surrounding modules. All optional; SetNull keeps the
+  // trend record intact if a related FCO/RFI/CVR is later deleted —
+  // mirrors `FieldChangeOrder.linkedCvr` / `linkedRfi`.
+  linkedRfi          Rfi?              @relation(fields: [linkedRfiId], references: [id], onDelete: SetNull)
+  linkedRfiId        Int?
+  linkedFco          FieldChangeOrder? @relation(fields: [linkedFcoId], references: [id], onDelete: SetNull)
+  linkedFcoId        Int?
+  /// CVR that this trend was promoted to (set on the CONVERTED transition).
+  /// Named relation since ChangeLog already has another path via Trend, so
+  /// Prisma needs the disambiguator.
+  linkedCvr          ChangeLog?        @relation("TrendPromotedToCvr", fields: [linkedCvrId], references: [id], onDelete: SetNull)
+  linkedCvrId        Int?
+  initiatedBy        String            @default("")
+  /// User.id of whoever raised the trend. Plain column (no FK) so it
+  /// survives user deletion; drives the workflow's "approver ≠ originator"
+  /// rule, same as CVR/FCO/RFI.
+  createdById        Int?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@index([projectId, status])
+  @@index([linkedCvrId])
+  @@index([linkedFcoId])
+  @@index([linkedRfiId])
 }
 
 // Frozen copy of a project's estimate at a point in time. Captures every
@@ -404,31 +636,31 @@ model FieldChangeOrder {
 // intentionally NOT snapshotted — they're cheap to recompute live and don't
 // change often enough to matter for the "as-bid vs. now" comparison.
 model EstimateSnapshot {
-  id          Int      @id @default(autoincrement())
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  projectId   Int
+  id               Int               @id @default(autoincrement())
+  project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId        Int
   /// Free-text identity ("v1", "as-bid 2026-04-15", "rev 2 after RFI-042").
-  label       String
-  notes       String   @default("")
+  label            String
+  notes            String            @default("")
   /// Serialized `FefRow[]` at snapshot time. Whatever shape `prisma.fefRow.findMany`
   /// returns — no schema enforcement here on purpose so this table doesn't
   /// need a migration every time the FefRow column set evolves.
-  fefRows     Json
+  fefRows          Json
   /// Serialized `BasisInputs` at snapshot time, or null when the project had none.
-  basisInputs Json?
+  basisInputs      Json?
   /// Pre-computed `ProjectFefRowTotals` at snapshot creation. Lets read paths
   /// (snapshot detail dialog, EVM period view) skip parsing the heavy
   /// `fefRows` blob and re-running the aggregator on every fetch — snapshots
   /// are immutable so the cached totals can never go stale.
   /// Nullable to keep migration painless: old snapshots fall back to
   /// computing on read. New snapshots always write it.
-  totals      Json?
+  totals           Json?
   /// Denormalized for the list view so we don't parse `fefRows` to count.
-  rowCount    Int
+  rowCount         Int
   /// User.id of whoever clicked "Create snapshot". Plain column (no FK) so it
   /// survives user deletion — mirrors the audit/notifications convention.
-  createdById Int?
-  createdAt   DateTime @default(now())
+  createdById      Int?
+  createdAt        DateTime          @default(now())
   /// Reporting periods that use this snapshot as their baseline. Drives the
   /// `Restrict` delete behavior — a snapshot in use as a baseline can't be
   /// removed without first detaching the period(s).
@@ -450,19 +682,19 @@ enum MeasurementSource {
 /// is locked to a baseline snapshot so re-baselining doesn't retroactively
 /// change last month's variance numbers.
 model ReportingPeriod {
-  id                 Int       @id @default(autoincrement())
-  project            Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id                 Int                 @id @default(autoincrement())
+  project            Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   projectId          Int
   label              String
   /// The "as of" date — measurements describe work performed through here.
   dataDate           DateTime
   /// Required: the snapshot whose totals define BAC for this period.
   /// `Restrict` prevents deleting a snapshot that any period still depends on.
-  baselineSnapshot   EstimateSnapshot @relation(fields: [baselineSnapshotId], references: [id], onDelete: Restrict)
+  baselineSnapshot   EstimateSnapshot    @relation(fields: [baselineSnapshotId], references: [id], onDelete: Restrict)
   baselineSnapshotId Int
   createdById        Int?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
   measurements       PeriodMeasurement[]
 
   @@unique([projectId, dataDate])

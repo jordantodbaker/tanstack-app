@@ -52,6 +52,9 @@ export type ComputePeriodEvmInput = {
   baselineTotals: ProjectFefRowTotals;
   /** Sum of APPROVED/EXECUTED CVR cost impacts attributed to each bucket. */
   revisionsByBucket: Record<string, number>;
+  /** Probability-weighted pending-trend forecast attributed to each bucket
+   *  (IDENTIFIED + PROBABLE only). Optional — when omitted, AFC === EAC. */
+  trendForecastByBucket?: Record<string, number>;
   measurements: PeriodMeasurementInput[];
   /** Optional. Drives the time-linear PV fallback when a measurement has
    *  no `plannedValueOverride`. Either bound missing → PV falls back to 0. */
@@ -67,11 +70,13 @@ export function computePeriodEvm(input: ComputePeriodEvmInput): {
   const measByBucket = new Map(
     input.measurements.map((m) => [m.bucket, m]),
   );
+  const trendForecastByBucket = input.trendForecastByBucket ?? {};
   const buckets = Array.from(
     new Set<string>([
       ...Object.keys(input.baselineTotals.laborByDigit),
       ...Object.keys(input.baselineTotals.materialsByDigit),
       ...Object.keys(input.revisionsByBucket),
+      ...Object.keys(trendForecastByBucket),
       ...measByBucket.keys(),
     ]),
   ).sort();
@@ -106,6 +111,7 @@ export function computePeriodEvm(input: ComputePeriodEvmInput): {
       percentComplete: meas?.percentComplete ?? 0,
       actualCost: meas?.actualCost ?? 0,
       pv,
+      pendingTrendForecast: trendForecastByBucket[bucket] ?? 0,
     });
 
     return {

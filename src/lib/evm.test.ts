@@ -135,6 +135,60 @@ describe("computeEvm", () => {
     });
   });
 
+  describe("AFC + pending trends", () => {
+    it("AFC equals EAC when no pending trend is supplied", () => {
+      const m = computeEvm(inp({
+        bac: 1000,
+        percentComplete: 0.5,
+        actualCost: 600, // CPI = 500/600 = 0.833 → EAC = 1200
+        pv: 500,
+      }));
+      expect(m.pendingTrend).toBe(0);
+      expect(m.afc).toBe(m.eac);
+      expect(m.vafc).toBe(m.vac);
+    });
+
+    it("folds probability-weighted pending trend into AFC and VAFC", () => {
+      const m = computeEvm(inp({
+        bac: 1000,
+        percentComplete: 0.5,
+        actualCost: 500,        // CPI = 1 → EAC = 1000
+        pv: 500,
+        pendingTrendForecast: 200,
+      }));
+      expect(m.eac).toBe(1000);
+      expect(m.pendingTrend).toBe(200);
+      expect(m.afc).toBe(1200);
+      // currentBudget = bac (no revisions); VAFC = 1000 - 1200 = -200.
+      expect(m.vafc).toBe(-200);
+    });
+
+    it("aggregate sums pendingTrend across buckets and recomputes AFC/VAFC from totals", () => {
+      const a = computeEvm(inp({
+        bac: 600,
+        percentComplete: 0.5,
+        actualCost: 300, // CPI = 1 on this bucket
+        pv: 300,
+        pendingTrendForecast: 100,
+      }));
+      const b = computeEvm(inp({
+        bac: 400,
+        budgetRevisions: 50, // currentBudget = 450
+        percentComplete: 0.5,
+        actualCost: 250, // CPI = 0.8 → EAC = 500
+        pv: 200,
+        pendingTrendForecast: 80,
+      }));
+      const total = aggregateEvm([a, b]);
+      expect(total.pendingTrend).toBe(180);
+      // EAC: 600/1.0 + 400/0.8 = 600 + 500 = 1100.
+      expect(total.eac).toBe(1100);
+      expect(total.afc).toBe(1280);
+      // currentBudget = 600 + 450 = 1050; VAFC = 1050 - 1280 = -230.
+      expect(total.vafc).toBe(-230);
+    });
+  });
+
   describe("input hardening", () => {
     it("clamps percentComplete above 1 (typo guard)", () => {
       const m = computeEvm(inp({

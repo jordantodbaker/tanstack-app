@@ -48,6 +48,7 @@ import {
   type SemanticTone,
 } from "~/lib/formatting";
 import { TableEmptyState } from "~/components/ui/list-page";
+import { SelectProjectBanner } from "~/components/SelectProjectBanner";
 import type { EvmMetrics } from "~/lib/evm";
 
 export const Route = createFileRoute("/reporting")({
@@ -109,9 +110,9 @@ function ReportingPage() {
       </div>
 
       {projectId === null ? (
-        <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        <SelectProjectBanner>
           Select a project from the header to manage reporting periods.
-        </p>
+        </SelectProjectBanner>
       ) : periods.length === 0 ? (
         <TableEmptyState message="No reporting periods yet. Click New Period to create one." />
       ) : (
@@ -412,7 +413,22 @@ function EvmTable({ period }: { period: PeriodWithEvm }) {
             <th className="px-2 py-1 text-right">CPI</th>
             <th className="px-2 py-1 text-right">SPI</th>
             <th className="px-2 py-1 text-right">EAC</th>
+            <th className="px-2 py-1 text-right" title="Probability-weighted pending trends">
+              Pending
+            </th>
+            <th
+              className="px-2 py-1 text-right"
+              title="Anticipated Final Cost = EAC + Pending Trend forecast"
+            >
+              AFC
+            </th>
             <th className="px-2 py-1 text-right">VAC</th>
+            <th
+              className="px-2 py-1 text-right"
+              title="Variance at completion against AFC (after pending changes)"
+            >
+              VAFC
+            </th>
             <th className="px-2 py-1 text-left">Notes</th>
           </tr>
         </thead>
@@ -554,8 +570,21 @@ function BucketRow({
         {row.pvSource === "none" ? "—" : formatRatio(m.spi)}
       </td>
       <td className="px-2 py-1 text-right tabular-nums">{formatCurrency(m.eac)}</td>
+      <td
+        className={`px-2 py-1 text-right tabular-nums ${m.pendingTrend > 0 ? "text-amber-700" : "text-slate-400"}`}
+      >
+        {m.pendingTrend > 0 ? formatCurrency(m.pendingTrend) : "—"}
+      </td>
+      <td className="px-2 py-1 text-right tabular-nums font-medium">
+        {formatCurrency(m.afc)}
+      </td>
       <td className={`px-2 py-1 text-right tabular-nums ${toneClassCV(m.vac)}`}>
         {formatSignedCurrency(m.vac)}
+      </td>
+      <td
+        className={`px-2 py-1 text-right tabular-nums ${toneClassCV(m.vafc)}`}
+      >
+        {formatSignedCurrency(m.vafc)}
       </td>
       <td className="px-2 py-1">
         <Textarea
@@ -586,6 +615,25 @@ function ProjectTotalRow({ total }: { total: EvmMetrics }) {
         <Stat label="CPI" value={formatRatio(total.cpi)} tone={indexTone(total.cpi)} />
         <Stat label="SPI" value={formatRatio(total.spi)} tone={indexTone(total.spi)} />
         <Stat label="EAC" value={formatCurrency(total.eac)} />
+      </div>
+      {/* AFC row — separate because it carries different load (it's the
+          published forecast PMs hand to owners, not an EVM internal). */}
+      <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-3 text-sm border-t border-slate-200 pt-3">
+        <Stat
+          label="Pending trend (P×likely)"
+          value={formatCurrency(total.pendingTrend)}
+          tone={total.pendingTrend > 0 ? "red" : "slate"}
+        />
+        <Stat
+          label="AFC"
+          value={formatCurrency(total.afc)}
+          tone={total.pendingTrend > 0 ? "red" : "slate"}
+        />
+        <Stat
+          label="VAFC"
+          value={formatSignedCurrency(total.vafc)}
+          tone={cvTone(total.vafc)}
+        />
       </div>
       <div className="mt-2 text-xs text-slate-500">
         VAC{" "}

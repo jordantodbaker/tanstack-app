@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CVR_TRANSITIONS,
   FCO_TRANSITIONS,
+  RFI_TRANSITIONS,
   availableTransitions,
 } from "./workflow";
 
@@ -99,6 +100,51 @@ describe("availableTransitions", () => {
       ),
     ).toEqual(["Begin review"]);
   });
+
+  it("lets any USER answer an RFI they did not raise", () => {
+    // No APPROVER role on RFIs — question/answer flow, not approval.
+    expect(
+      actions(
+        availableTransitions(RFI_TRANSITIONS, "OPEN", "USER", false),
+      ),
+    ).toEqual(["Post answer", "Supersede"]);
+  });
+
+  it("blocks the originator from answering their own RFI", () => {
+    // blockOriginator strips Post answer; Supersede stays available.
+    expect(
+      actions(
+        availableTransitions(RFI_TRANSITIONS, "OPEN", "USER", true),
+      ),
+    ).toEqual(["Supersede"]);
+  });
+
+  it("gives an ADMINISTRATOR the Void option on every non-terminal RFI status", () => {
+    for (const status of ["DRAFT", "OPEN", "ANSWERED"] as const) {
+      expect(
+        availableTransitions(
+          RFI_TRANSITIONS,
+          status,
+          "ADMINISTRATOR",
+          false,
+        ).map((t) => t.action),
+      ).toContain("Void");
+    }
+  });
+
+  it("returns nothing for terminal RFI states", () => {
+    for (const role of ["USER", "APPROVER", "ADMINISTRATOR"] as const) {
+      expect(
+        availableTransitions(RFI_TRANSITIONS, "CLOSED", role, false),
+      ).toEqual([]);
+      expect(
+        availableTransitions(RFI_TRANSITIONS, "SUPERSEDED", role, false),
+      ).toEqual([]);
+      expect(
+        availableTransitions(RFI_TRANSITIONS, "VOID", role, false),
+      ).toEqual([]);
+    }
+  });
 });
 
 describe("transition maps", () => {
@@ -116,11 +162,21 @@ describe("transition maps", () => {
     }
   });
 
+  it("RFI transitions only target known statuses", () => {
+    const keys = new Set(Object.keys(RFI_TRANSITIONS));
+    for (const list of Object.values(RFI_TRANSITIONS)) {
+      for (const t of list) expect(keys.has(t.to)).toBe(true);
+    }
+  });
+
   it("has no self-loop transitions", () => {
     for (const [status, list] of Object.entries(CVR_TRANSITIONS)) {
       for (const t of list) expect(t.to).not.toBe(status);
     }
     for (const [status, list] of Object.entries(FCO_TRANSITIONS)) {
+      for (const t of list) expect(t.to).not.toBe(status);
+    }
+    for (const [status, list] of Object.entries(RFI_TRANSITIONS)) {
       for (const t of list) expect(t.to).not.toBe(status);
     }
   });

@@ -16,3 +16,9 @@ export const prisma =
   });
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+
+// Side-effect import: register the daily reminder cron exactly once per
+// Node process. Lives next door so any server fn that touches prisma also
+// boots the scheduler. `cron.ts` no-ops in non-production and guards
+// against duplicate registration via globalThis.
+import "./cron";

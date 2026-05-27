@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ExternalLink, Trash2, ArrowUpRight } from "lucide-react";
+import { ExternalLink, Printer, Trash2, ArrowUpRight } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -47,6 +47,8 @@ import {
   TabsContent,
 } from "~/components/ui/tabs";
 import { AuditTimeline } from "~/components/AuditTimeline";
+import { Attachments } from "~/components/Attachments";
+import { Comments } from "~/components/Comments";
 
 const DISCIPLINE_OPTIONS = disciplines
   .filter((d) => d.l1Codes && d.l1Codes.length > 0)
@@ -248,6 +250,18 @@ export function FcoDialog({
               </p>
             </div>
             <div className="flex items-center gap-2">
+              {initial?.id && (
+                <a
+                  href={`/fco-print/${initial.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  title="Open the printable / PDF version in a new tab"
+                >
+                  <Printer className="size-3.5" />
+                  Print / PDF
+                </a>
+              )}
               {canPromote && (
                 <Button
                   variant="outline"
@@ -290,9 +304,29 @@ export function FcoDialog({
             </div>
           )}
 
+          {initial?.linkedRfiId && (
+            <div className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm text-indigo-900 flex items-center gap-2">
+              <ExternalLink className="size-4" />
+              <span>
+                Promoted from RFI{" "}
+                <span className="font-mono font-semibold">
+                  {initial.linkedRfiNumber || `#${initial.linkedRfiId}`}
+                </span>
+                {initial.linkedRfiSubject && (
+                  <span className="text-indigo-700">
+                    {" "}
+                    — {initial.linkedRfiSubject}
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
+
           <Tabs defaultValue="details" className="w-full">
             <TabsList>
               <TabsTrigger value="details">Details</TabsTrigger>
+              <TabsTrigger value="attachments">Attachments</TabsTrigger>
+              <TabsTrigger value="comments">Comments</TabsTrigger>
               <TabsTrigger value="history">History</TabsTrigger>
             </TabsList>
             <TabsContent value="details" className="space-y-4 mt-3">
@@ -566,13 +600,6 @@ export function FcoDialog({
                 ]}
               />
             </Labeled>
-            <Labeled label="Photos / Attachments URL">
-              <Input
-                value={form.photosUrl}
-                placeholder="https://..."
-                onChange={(e) => update("photosUrl", e.target.value)}
-              />
-            </Labeled>
           </fieldset>
 
           <Labeled label="Resolution">
@@ -593,6 +620,30 @@ export function FcoDialog({
             />
           </Labeled>
 
+            </TabsContent>
+            <TabsContent value="attachments" className="mt-3 space-y-4">
+              <Labeled
+                label="External link"
+                help="Optional — link to an external doc store (Procore, SharePoint, etc.) when the source of truth lives outside this app."
+              >
+                <Input
+                  value={form.photosUrl}
+                  placeholder="https://..."
+                  onChange={(e) => update("photosUrl", e.target.value)}
+                />
+              </Labeled>
+              <Attachments
+                entityType="FieldChangeOrder"
+                entityId={initial?.id ?? null}
+                projectId={initial?.projectId ?? null}
+              />
+            </TabsContent>
+            <TabsContent value="comments" className="mt-3">
+              <Comments
+                entityType="FieldChangeOrder"
+                entityId={initial?.id ?? null}
+                projectId={initial?.projectId ?? null}
+              />
             </TabsContent>
             <TabsContent value="history" className="mt-3">
               <AuditTimeline

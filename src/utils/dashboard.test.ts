@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { ChangeLogItem } from "./changelog";
 import type { FcoItem } from "./fcoLog";
+import type { RfiItem } from "./rfis";
 import {
   isPast,
   summarizeAttention,
   summarizeCvrs,
   summarizeFcos,
+  summarizeRfis,
 } from "./dashboard";
 
 // Minimal factories — every field carries a harmless default so each test
@@ -70,9 +72,44 @@ function fco(partial: Partial<FcoItem> = {}): FcoItem {
     linkedCvrId: null,
     linkedCvrNumber: null,
     linkedCvrTitle: null,
+    linkedRfiId: null,
+    linkedRfiNumber: null,
+    linkedRfiSubject: null,
     createdById: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
+    ...partial,
+  };
+}
+
+function rfi(partial: Partial<RfiItem> = {}): RfiItem {
+  return {
+    id: 1,
+    projectId: 1,
+    rfiNumber: "RFI-001",
+    subject: "Test RFI",
+    question: "",
+    status: "OPEN",
+    priority: "NORMAL",
+    discipline: "piping",
+    cbsCodes: [],
+    locationArea: "",
+    drawingRefs: [],
+    specRefs: [],
+    suspectsCostImpact: false,
+    suspectsScheduleImpact: false,
+    initiatedBy: "",
+    assignedTo: "",
+    dueDate: null,
+    initiatedAt: "2026-01-01T00:00:00.000Z",
+    response: "",
+    answeredBy: "",
+    answeredAt: null,
+    closedAt: null,
+    createdById: null,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    linkedFcos: [],
     ...partial,
   };
 }
@@ -191,6 +228,95 @@ describe("summarizeFcos", () => {
   });
 });
 
+describe("summarizeRfis", () => {
+  const now = new Date("2026-05-21T12:00:00.000Z");
+
+  it("returns zeroed totals and empty buckets for no records", () => {
+    const s = summarizeRfis([], now);
+    expect(s).toMatchObject({
+      total: 0,
+      open: 0,
+      awaitingClose: 0,
+      pastDue: 0,
+      suspectsImpact: 0,
+    });
+    expect(s.byStatus).toEqual([]);
+  });
+
+  it("counts only in-flight statuses as open", () => {
+    const s = summarizeRfis(
+      [
+        rfi({ status: "DRAFT" }),
+        rfi({ status: "OPEN" }),
+        rfi({ status: "ANSWERED" }),
+        rfi({ status: "CLOSED" }),
+        rfi({ status: "SUPERSEDED" }),
+        rfi({ status: "VOID" }),
+      ],
+      now,
+    );
+    expect(s.total).toBe(6);
+    expect(s.open).toBe(3);
+  });
+
+  it("counts awaitingClose as just the ANSWERED bucket", () => {
+    const s = summarizeRfis(
+      [
+        rfi({ status: "ANSWERED" }),
+        rfi({ status: "ANSWERED" }),
+        rfi({ status: "OPEN" }),
+      ],
+      now,
+    );
+    expect(s.awaitingClose).toBe(2);
+  });
+
+  it("counts pastDue only for open RFIs with a due date in the past", () => {
+    const s = summarizeRfis(
+      [
+        rfi({ status: "OPEN", dueDate: "2026-05-01T00:00:00.000Z" }),
+        rfi({ status: "CLOSED", dueDate: "2026-05-01T00:00:00.000Z" }),
+        rfi({ status: "OPEN", dueDate: "2026-06-01T00:00:00.000Z" }),
+      ],
+      now,
+    );
+    expect(s.pastDue).toBe(1);
+  });
+
+  it("counts suspectsImpact only when the RFI is open and at least one flag is set", () => {
+    const s = summarizeRfis(
+      [
+        rfi({ status: "OPEN", suspectsCostImpact: true }),
+        rfi({ status: "OPEN", suspectsScheduleImpact: true }),
+        rfi({
+          status: "OPEN",
+          suspectsCostImpact: true,
+          suspectsScheduleImpact: true,
+        }),
+        rfi({ status: "CLOSED", suspectsCostImpact: true }),
+        rfi({ status: "OPEN" }),
+      ],
+      now,
+    );
+    expect(s.suspectsImpact).toBe(3);
+  });
+
+  it("buckets by status in lifecycle order, omitting empty statuses", () => {
+    const s = summarizeRfis(
+      [
+        rfi({ status: "CLOSED" }),
+        rfi({ status: "OPEN" }),
+        rfi({ status: "OPEN" }),
+      ],
+      now,
+    );
+    expect(s.byStatus).toEqual([
+      { status: "OPEN", count: 2 },
+      { status: "CLOSED", count: 1 },
+    ]);
+  });
+});
+
 describe("isPast", () => {
   const now = new Date("2026-05-21T12:00:00.000Z");
 
@@ -248,5 +374,27 @@ describe("summarizeAttention", () => {
     );
     expect(s.overdueFco).toBe(1);
     expect(s.workStopped).toBe(1);
+  });
+
+  it("defaults RFI counts to zero when no rfis are passed", () => {
+    const s = summarizeAttention([], [], now);
+    expect(s.rfiAwaitingClose).toBe(0);
+    expect(s.rfiPastDue).toBe(0);
+  });
+
+  it("counts answered RFIs awaiting close, and open RFIs past their due date", () => {
+    const s = summarizeAttention(
+      [],
+      [],
+      now,
+      [
+        rfi({ status: "ANSWERED" }),
+        rfi({ status: "ANSWERED" }),
+        rfi({ status: "OPEN", dueDate: "2026-05-01T00:00:00.000Z" }),
+        rfi({ status: "CLOSED", dueDate: "2026-05-01T00:00:00.000Z" }),
+      ],
+    );
+    expect(s.rfiAwaitingClose).toBe(2);
+    expect(s.rfiPastDue).toBe(1);
   });
 });

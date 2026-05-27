@@ -42,3 +42,34 @@ export function resolveNotificationRecipients(
   recipients.delete(input.actorId);
   return Array.from(recipients).sort((a, b) => a - b);
 }
+
+export type CommentRecipientsInput = {
+  /** User.id of whoever raised the parent record; null when unknown. */
+  originatorId: number | null;
+  /** User.id of the person posting the new comment. Always excluded. */
+  actorId: number;
+  /** User.ids of everyone who has commented on this record previously. */
+  priorAuthorIds: number[];
+};
+
+/**
+ * Returns the deduplicated list of User.ids that should be notified about a
+ * new comment. The rules:
+ *   - The originator of the parent record always receives a notification,
+ *     unless they're the actor.
+ *   - Everyone who has commented on this record previously (the thread
+ *     participants) also receives one, excluding the actor.
+ *   - Output is sorted ascending so it's stable for tests and the
+ *     downstream `createMany` call.
+ */
+export function resolveCommentRecipients(
+  input: CommentRecipientsInput,
+): number[] {
+  const recipients = new Set<number>();
+  if (input.originatorId !== null) {
+    recipients.add(input.originatorId);
+  }
+  for (const id of input.priorAuthorIds) recipients.add(id);
+  recipients.delete(input.actorId);
+  return Array.from(recipients).sort((a, b) => a - b);
+}

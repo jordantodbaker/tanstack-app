@@ -12,6 +12,12 @@ import {
   type FcoItem,
   type FcoStatus,
 } from "./fcoLog";
+import {
+  RFI_STATUSES,
+  RFI_OPEN_STATUSES,
+  type RfiItem,
+  type RfiStatus,
+} from "./rfis";
 
 /**
  * Pure, client-safe rollup math for the project dashboard. Kept separate from
@@ -107,6 +113,41 @@ export function summarizeFcos(items: FcoItem[]): FcoSummary {
   };
 }
 
+export type RfiSummary = {
+  total: number;
+  open: number;
+  /** Status === ANSWERED — responder posted an answer, originator hasn't closed. */
+  awaitingClose: number;
+  /** Open with `dueDate` in the past. */
+  pastDue: number;
+  /** Open with either suspect-impact flag set — early signal of FCO/CVR coming. */
+  suspectsImpact: number;
+  byStatus: { status: RfiStatus; count: number }[];
+};
+
+export function summarizeRfis(
+  items: RfiItem[],
+  now: Date = new Date(),
+): RfiSummary {
+  return {
+    total: items.length,
+    open: items.filter((r) => RFI_OPEN_STATUSES.includes(r.status)).length,
+    awaitingClose: items.filter((r) => r.status === "ANSWERED").length,
+    pastDue: items.filter(
+      (r) => RFI_OPEN_STATUSES.includes(r.status) && isPast(r.dueDate, now),
+    ).length,
+    suspectsImpact: items.filter(
+      (r) =>
+        RFI_OPEN_STATUSES.includes(r.status) &&
+        (r.suspectsCostImpact || r.suspectsScheduleImpact),
+    ).length,
+    byStatus: RFI_STATUSES.map((status) => ({
+      status,
+      count: items.filter((r) => r.status === status).length,
+    })).filter((b) => b.count > 0),
+  };
+}
+
 /** True when an ISO date string falls before the start of `now`'s day. */
 export function isPast(
   dateStr: string | null,
@@ -123,16 +164,21 @@ export type AttentionSummary = {
   overdueCvr: number;
   overdueFco: number;
   workStopped: number;
+  rfiAwaitingClose: number;
+  rfiPastDue: number;
 };
 
 /**
  * Counts the actionable items surfaced in the dashboard's "needs attention"
  * panel. `now` is injectable so the overdue logic is deterministic in tests.
+ * `rfis` defaults to an empty array so existing two-argument callers keep
+ * working — RFI counts simply collapse to zero.
  */
 export function summarizeAttention(
   cvrs: ChangeLogItem[],
   fcos: FcoItem[],
   now: Date = new Date(),
+  rfis: RfiItem[] = [],
 ): AttentionSummary {
   return {
     pendingApproval: cvrs.filter((c) => c.status === "PENDING_APPROVAL")
@@ -145,6 +191,10 @@ export function summarizeAttention(
     ).length,
     workStopped: fcos.filter(
       (f) => f.workStopped && FCO_OPEN_STATUSES.includes(f.status),
+    ).length,
+    rfiAwaitingClose: rfis.filter((r) => r.status === "ANSWERED").length,
+    rfiPastDue: rfis.filter(
+      (r) => RFI_OPEN_STATUSES.includes(r.status) && isPast(r.dueDate, now),
     ).length,
   };
 }

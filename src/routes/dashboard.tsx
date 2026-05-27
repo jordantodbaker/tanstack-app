@@ -12,19 +12,24 @@ import {
   HardHat,
   AlertTriangle,
   CalendarClock,
+  HelpCircle,
   Stamp,
 } from "lucide-react";
 import { useSelectedProject } from "~/lib/selected-project";
 import { changeLogListQueryOptions } from "~/utils/changelog";
 import { fcoListQueryOptions } from "~/utils/fcoLog";
+import { rfiListQueryOptions } from "~/utils/rfis";
 import {
   summarizeCvrs,
   summarizeFcos,
+  summarizeRfis,
   summarizeAttention,
 } from "~/utils/dashboard";
 import { StatCard } from "~/components/ui/list-page";
 import { StatusBadge, RiskBadge } from "~/components/Changelog/StatusBadge";
 import { FcoStatusBadge } from "~/components/FCOLog/FcoBadges";
+import { RfiStatusBadge } from "~/components/Rfi/RfiBadges";
+import { SelectProjectBanner } from "~/components/SelectProjectBanner";
 import { disciplineById } from "~/config/disciplines";
 import { formatMoney } from "~/lib/formatting";
 import {
@@ -38,7 +43,7 @@ export const Route = createFileRoute("/dashboard")({
   loader: async ({ context }) => {
     const projectId = await readProjectIdForLoader();
     if (projectId !== null) {
-      // Three independent prefetches — run in parallel rather than serially
+      // Independent prefetches — run in parallel rather than serially
       // awaiting each in turn. Validation page already follows this pattern.
       await Promise.all([
         tryPrefetchProjectQuery(
@@ -48,6 +53,9 @@ export const Route = createFileRoute("/dashboard")({
         ),
         tryPrefetchProjectQuery(
           context.queryClient.ensureQueryData(fcoListQueryOptions(projectId)),
+        ),
+        tryPrefetchProjectQuery(
+          context.queryClient.ensureQueryData(rfiListQueryOptions(projectId)),
         ),
         tryPrefetchProjectQuery(
           context.queryClient.ensureQueryData(
@@ -64,12 +72,14 @@ function DashboardPage() {
   const { projectId } = useSelectedProject();
   const { data: cvrs = [] } = useQuery(changeLogListQueryOptions(projectId));
   const { data: fcos = [] } = useQuery(fcoListQueryOptions(projectId));
+  const { data: rfis = [] } = useQuery(rfiListQueryOptions(projectId));
 
   const cvr = React.useMemo(() => summarizeCvrs(cvrs), [cvrs]);
   const fco = React.useMemo(() => summarizeFcos(fcos), [fcos]);
+  const rfi = React.useMemo(() => summarizeRfis(rfis), [rfis]);
   const attention = React.useMemo(
-    () => summarizeAttention(cvrs, fcos),
-    [cvrs, fcos],
+    () => summarizeAttention(cvrs, fcos, new Date(), rfis),
+    [cvrs, fcos, rfis],
   );
 
   return (
@@ -85,9 +95,9 @@ function DashboardPage() {
       </div>
 
       {projectId === null ? (
-        <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        <SelectProjectBanner>
           Select a project from the header to see the project dashboard.
-        </p>
+        </SelectProjectBanner>
       ) : (
         <>
           <Section title="Earned Value">
@@ -162,8 +172,41 @@ function DashboardPage() {
             </div>
           </Section>
 
+          <Section title="RFIs">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              <StatCard
+                label="Total RFIs"
+                value={rfi.total.toString()}
+                icon={HelpCircle}
+              />
+              <StatCard
+                label="Open"
+                value={rfi.open.toString()}
+                tone="amber"
+                icon={Hourglass}
+              />
+              <StatCard
+                label="Awaiting close"
+                value={rfi.awaitingClose.toString()}
+                tone="violet"
+              />
+              <StatCard
+                label="Past due"
+                value={rfi.pastDue.toString()}
+                tone={rfi.pastDue > 0 ? "red" : "slate"}
+                icon={CalendarClock}
+              />
+              <StatCard
+                label="Suspects impact"
+                value={rfi.suspectsImpact.toString()}
+                tone={rfi.suspectsImpact > 0 ? "red" : "slate"}
+                icon={AlertTriangle}
+              />
+            </div>
+          </Section>
+
           <Section title="Needs attention">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
               <AttentionItem
                 icon={Stamp}
                 count={attention.pendingApproval}
@@ -189,10 +232,22 @@ function DashboardPage() {
                 to="/fco-log"
                 urgent
               />
+              <AttentionItem
+                icon={HelpCircle}
+                count={attention.rfiAwaitingClose}
+                label="RFIs awaiting close"
+                to="/rfis"
+              />
+              <AttentionItem
+                icon={CalendarClock}
+                count={attention.rfiPastDue}
+                label="RFIs past due date"
+                to="/rfis"
+              />
             </div>
           </Section>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <Panel title="CVRs by status">
               <BreakdownTable
                 costLabel="Cost impact"
@@ -214,6 +269,25 @@ function DashboardPage() {
                   cost: r.cost,
                 }))}
               />
+            </Panel>
+            <Panel title="RFIs by status">
+              {rfi.byStatus.length === 0 ? (
+                <EmptyNote />
+              ) : (
+                <ul className="space-y-2">
+                  {rfi.byStatus.map((r) => (
+                    <li
+                      key={r.status}
+                      className="flex items-center justify-between"
+                    >
+                      <RfiStatusBadge status={r.status} />
+                      <span className="tabular-nums text-sm text-slate-700">
+                        {r.count}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </Panel>
           </div>
 
@@ -360,7 +434,7 @@ function AttentionItem({
   icon: React.ElementType;
   count: number;
   label: string;
-  to: "/changelog" | "/fco-log";
+  to: "/changelog" | "/fco-log" | "/rfis";
   urgent?: boolean;
 }) {
   const active = count > 0;

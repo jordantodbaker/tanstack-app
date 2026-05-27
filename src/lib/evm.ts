@@ -16,6 +16,8 @@
  *   EAC = BAC / CPI    (classic forecast; falls back to BAC when AC = 0)
  *   ETC = EAC − AC     (estimate to complete)
  *   VAC = currentBudget − EAC  (variance at completion against authorized budget)
+ *   AFC = EAC + pendingTrend   (anticipated final cost — EVM forecast plus pending trends)
+ *   VAFC = currentBudget − AFC (variance after probability-weighted pending changes)
  */
 
 export type EvmInputs = {
@@ -29,6 +31,12 @@ export type EvmInputs = {
   actualCost: number;
   /** Planned Value at the data date. Producer may compute time-linearly or accept a manual override. */
   pv: number;
+  /**
+   * Probability-weighted forecast of pending trends in this bucket
+   * (`sum(probability × costLikely)` over IDENTIFIED + PROBABLE trends).
+   * Optional so existing callers keep working; defaults to 0 when omitted.
+   */
+  pendingTrendForecast?: number;
 };
 
 export type EvmMetrics = {
@@ -46,6 +54,13 @@ export type EvmMetrics = {
   eac: number;
   etc: number;
   vac: number;
+  /** Probability-weighted pending-trend forecast for the bucket. 0 when no trends. */
+  pendingTrend: number;
+  /** Anticipated Final Cost = EAC + pendingTrend. The number a PM publishes
+   *  once trends are factored into the EVM forecast. */
+  afc: number;
+  /** VAC against AFC — variance after pending changes. Negative = over. */
+  vafc: number;
 };
 
 const clamp01 = (n: number): number => {
@@ -80,6 +95,9 @@ export function computeEvm(input: EvmInputs): EvmMetrics {
   const eac = cpi === null || cpi === 0 ? bac : bac / cpi;
   const etc = eac - ac;
   const vac = currentBudget - eac;
+  const pendingTrend = safe(input.pendingTrendForecast ?? 0);
+  const afc = eac + pendingTrend;
+  const vafc = currentBudget - afc;
 
   return {
     bac,
@@ -94,6 +112,9 @@ export function computeEvm(input: EvmInputs): EvmMetrics {
     eac,
     etc,
     vac,
+    pendingTrend,
+    afc,
+    vafc,
   };
 }
 
@@ -118,6 +139,9 @@ export function aggregateEvm(perBucket: EvmMetrics[]): EvmMetrics {
       eac: 0,
       etc: 0,
       vac: 0,
+      pendingTrend: 0,
+      afc: 0,
+      vafc: 0,
     };
   }
   const bac = perBucket.reduce((a, m) => a + m.bac, 0);
@@ -125,6 +149,7 @@ export function aggregateEvm(perBucket: EvmMetrics[]): EvmMetrics {
   const ev = perBucket.reduce((a, m) => a + m.ev, 0);
   const pv = perBucket.reduce((a, m) => a + m.pv, 0);
   const ac = perBucket.reduce((a, m) => a + m.ac, 0);
+  const pendingTrend = perBucket.reduce((a, m) => a + m.pendingTrend, 0);
   const cv = ev - ac;
   const sv = ev - pv;
   const cpi = ac === 0 ? null : ev / ac;
@@ -132,6 +157,8 @@ export function aggregateEvm(perBucket: EvmMetrics[]): EvmMetrics {
   const eac = cpi === null || cpi === 0 ? bac : bac / cpi;
   const etc = eac - ac;
   const vac = currentBudget - eac;
+  const afc = eac + pendingTrend;
+  const vafc = currentBudget - afc;
   return {
     bac,
     currentBudget,
@@ -145,6 +172,9 @@ export function aggregateEvm(perBucket: EvmMetrics[]): EvmMetrics {
     eac,
     etc,
     vac,
+    pendingTrend,
+    afc,
+    vafc,
   };
 }
 

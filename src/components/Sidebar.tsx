@@ -26,6 +26,7 @@ const ADMIN_LINKS = [
   { to: "/admin/subcontractors", label: "Subcontractors" },
   { to: "/admin/areas", label: "Areas" },
   { to: "/admin/users", label: "Users" },
+  { to: "/admin/system", label: "System" },
 ] as const;
 
 export function Sidebar({

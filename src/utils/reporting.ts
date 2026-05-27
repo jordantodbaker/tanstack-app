@@ -18,6 +18,11 @@ import {
   type PeriodBucketRow as PurePeriodBucketRow,
 } from "~/lib/period-evm";
 import { resolveCvrBucket } from "./cvr-bucket";
+import {
+  trendForecastContribution,
+  TREND_ACTIVE_STATUSES,
+  type TrendStatus,
+} from "./trends";
 
 /**
  * SERVER-SIDE reporting module: reporting periods (EVM cutoffs) and the
@@ -98,6 +103,51 @@ export const fetchReportingPeriods = createServerFn({ method: "GET" })
       createdAt: p.createdAt.toISOString(),
     }));
   });
+
+/**
+ * Bucketed pending-trend forecast — sums `probability × costLikely` of
+ * IDENTIFIED + PROBABLE trends per resolved digit bucket. Drives the AFC /
+ * VAFC columns on the reporting page.
+ *
+ * Lives here (not in `trends.ts`) so prisma access stays out of any module
+ * the client bundles — the rest of `trends.ts` keeps every prisma touch
+ * inside a `createServerFn` handler, so tree-shaking can drop the import
+ * from the client. A module-scope async function using prisma would defeat
+ * that and pull the Node-only prisma client into the browser bundle.
+ *
+ * Caveat (mirrors `loadRevisionsByBucket`): uses the *current* trend set,
+ * not the set as of any historical date — so historical period reads show
+ * today's pending trends against the period's measurements. Acceptable for
+ * the same reason the revisions one is: PV/EV/AC don't depend on trends;
+ * only AFC/VAFC are approximate against historical state.
+ */
+async function loadTrendForecastByBucket(
+  projectId: number,
+): Promise<Record<string, number>> {
+  const trends = await prisma.trend.findMany({
+    where: { projectId, status: { in: TREND_ACTIVE_STATUSES } },
+    select: {
+      status: true,
+      probability: true,
+      costLikely: true,
+      cbsCodes: true,
+      discipline: true,
+    },
+  });
+  const forecast: Record<string, number> = {};
+  for (const t of trends) {
+    const bucket = resolveCvrBucket(t);
+    if (!bucket) continue;
+    const contrib = trendForecastContribution({
+      status: t.status as TrendStatus,
+      probability: t.probability,
+      costLikely: t.costLikely,
+    });
+    if (contrib === 0) continue;
+    forecast[bucket] = (forecast[bucket] ?? 0) + contrib;
+  }
+  return forecast;
+}
 
 // Sum of APPROVED/EXECUTED CVR cost impacts grouped by their resolved digit
 // bucket. Caveat: uses the *current* approved set, not the set as of any
@@ -279,11 +329,19 @@ export const fetchPeriodWithEvm = createServerFn({ method: "GET" })
     //    count — pending/rejected/voided CVRs aren't authorized budget.
     const revisionsByBucket = await loadRevisionsByBucket(period.projectId);
 
-    // 3. Hand the loaded data to the pure helper for the per-bucket math.
+    // 3. Probability-weighted pending-trend forecast per bucket. Drives the
+    //    AFC / VAFC columns. IDENTIFIED + PROBABLE only — CONVERTED trends
+    //    already live in `revisionsByBucket` via their linked CVR.
+    const trendForecastByBucket = await loadTrendForecastByBucket(
+      period.projectId,
+    );
+
+    // 4. Hand the loaded data to the pure helper for the per-bucket math.
     const dataDateIso = period.dataDate.toISOString();
     const { buckets: rows, total } = computePeriodEvm({
       baselineTotals,
       revisionsByBucket,
+      trendForecastByBucket,
       measurements: period.measurements,
       projectStartDate: period.project.startDate,
       projectEndDate: period.project.endDate,
@@ -396,6 +454,7 @@ export const fetchEvmTimeSeries = createServerFn({ method: "GET" })
     });
 
     const revisionsByBucket = await loadRevisionsByBucket(projectId);
+    const trendForecastByBucket = await loadTrendForecastByBucket(projectId);
 
     // Resolve any legacy snapshots (no cached `totals`) up front — one extra
     // query each. Almost always empty; only matters for snapshots created
@@ -427,6 +486,7 @@ export const fetchEvmTimeSeries = createServerFn({ method: "GET" })
       const { total } = computePeriodEvm({
         baselineTotals,
         revisionsByBucket,
+        trendForecastByBucket,
         measurements: p.measurements,
         projectStartDate: project.startDate,
         projectEndDate: project.endDate,

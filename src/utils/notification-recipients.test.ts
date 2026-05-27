@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  resolveCommentRecipients,
   resolveNotificationRecipients,
+  type CommentRecipientsInput,
   type NotificationRecipientsInput,
 } from "./notification-recipients";
 
@@ -161,5 +163,101 @@ describe("resolveNotificationRecipients", () => {
         ),
       ).toEqual([]);
     });
+  });
+});
+
+function commentInput(
+  overrides: Partial<CommentRecipientsInput> = {},
+): CommentRecipientsInput {
+  return {
+    originatorId: 1,
+    actorId: 99,
+    priorAuthorIds: [],
+    ...overrides,
+  };
+}
+
+describe("resolveCommentRecipients", () => {
+  it("notifies the originator when a non-originator posts the first comment", () => {
+    expect(
+      resolveCommentRecipients(
+        commentInput({ originatorId: 1, actorId: 99, priorAuthorIds: [] }),
+      ),
+    ).toEqual([1]);
+  });
+
+  it("excludes the originator when they are the actor (no self-pings)", () => {
+    expect(
+      resolveCommentRecipients(
+        commentInput({ originatorId: 1, actorId: 1, priorAuthorIds: [] }),
+      ),
+    ).toEqual([]);
+  });
+
+  it("ignores a null originatorId (record predates the column)", () => {
+    expect(
+      resolveCommentRecipients(
+        commentInput({
+          originatorId: null,
+          actorId: 99,
+          priorAuthorIds: [2, 3],
+        }),
+      ),
+    ).toEqual([2, 3]);
+  });
+
+  it("notifies every prior thread author plus the originator", () => {
+    expect(
+      resolveCommentRecipients(
+        commentInput({
+          originatorId: 1,
+          actorId: 99,
+          priorAuthorIds: [2, 3, 4],
+        }),
+      ),
+    ).toEqual([1, 2, 3, 4]);
+  });
+
+  it("dedupes when the originator is also a prior thread author", () => {
+    // The originator commented earlier on their own record — should still
+    // get one notification when a third party replies.
+    expect(
+      resolveCommentRecipients(
+        commentInput({ originatorId: 1, actorId: 99, priorAuthorIds: [1, 2] }),
+      ),
+    ).toEqual([1, 2]);
+  });
+
+  it("excludes the actor from the prior-authors list", () => {
+    // The actor has commented before; they don't notify themselves.
+    expect(
+      resolveCommentRecipients(
+        commentInput({
+          originatorId: 1,
+          actorId: 3,
+          priorAuthorIds: [2, 3, 4],
+        }),
+      ),
+    ).toEqual([1, 2, 4]);
+  });
+
+  it("returns recipients sorted ascending for stable downstream writes", () => {
+    expect(
+      resolveCommentRecipients(
+        commentInput({
+          originatorId: 7,
+          actorId: 99,
+          priorAuthorIds: [4, 2, 11],
+        }),
+      ),
+    ).toEqual([2, 4, 7, 11]);
+  });
+
+  it("returns an empty array when the actor is the only candidate", () => {
+    expect(
+      resolveCommentRecipients(
+        commentInput({ originatorId: 5, actorId: 5, priorAuthorIds: [5] }),
+      ),
+    ).toEqual([]);
   });
 });

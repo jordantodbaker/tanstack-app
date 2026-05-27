@@ -1,7 +1,10 @@
 import type { PrismaClient } from "../generated/prisma/client";
 import { prisma } from "../server/db";
 import type { CurrentUser } from "./users";
-import { resolveNotificationRecipients } from "./notification-recipients";
+import {
+  resolveCommentRecipients,
+  resolveNotificationRecipients,
+} from "./notification-recipients";
 
 /**
  * SERVER-ONLY notification fan-out. Called from inside workflow-transition
@@ -90,6 +93,58 @@ export async function emitWorkflowNotification(
     });
   } catch (err) {
     console.error("emitWorkflowNotification failed:", err);
+  }
+}
+
+export type CommentEvent = {
+  /** Parent entity — "ChangeLog" / "FieldChangeOrder" / "Rfi". Used as the
+   *  Notification.entityType so clicking opens the parent record. */
+  entityType: string;
+  entityId: number;
+  projectId: number;
+  /** Human-readable parent record name surfaced in the inbox. */
+  title: string;
+  /** Pre-rendered message, e.g. "Alice commented on CVR-001". */
+  message: string;
+  /** User.id of whoever raised the parent record; null when unknown. */
+  originatorId: number | null;
+  /** User.id of whoever just posted the comment. Always excluded. */
+  actor: CurrentUser;
+  /** User.ids of everyone who has commented on this record previously. */
+  priorAuthorIds: number[];
+};
+
+/**
+ * Fans out a notification for a new comment to the originator + everyone
+ * who has commented on the record before (deduped, actor excluded). Same
+ * fail-soft error handling as `emitWorkflowNotification` — a notification
+ * miss is logged, not thrown, so a comment write always commits.
+ */
+export async function emitCommentNotification(
+  db: NotificationDb,
+  event: CommentEvent,
+): Promise<void> {
+  try {
+    const recipients = resolveCommentRecipients({
+      originatorId: event.originatorId,
+      actorId: event.actor.id,
+      priorAuthorIds: event.priorAuthorIds,
+    });
+    if (recipients.length === 0) return;
+
+    await db.notification.createMany({
+      data: recipients.map((userId) => ({
+        userId,
+        projectId: event.projectId,
+        entityType: event.entityType,
+        entityId: event.entityId,
+        title: event.title,
+        message: event.message,
+        actorEmail: event.actor.email,
+      })),
+    });
+  } catch (err) {
+    console.error("emitCommentNotification failed:", err);
   }
 }
 

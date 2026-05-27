@@ -42,6 +42,8 @@ import {
   TabsContent,
 } from "~/components/ui/tabs";
 import { AuditTimeline } from "~/components/AuditTimeline";
+import { Attachments } from "~/components/Attachments";
+import { Comments } from "~/components/Comments";
 import { useFormDialog } from "~/lib/use-form-dialog";
 import { useSelectedProject } from "~/lib/selected-project";
 import { cbsCodeOptionsQueryOptions } from "~/utils/cbs";
@@ -216,6 +218,8 @@ export function ChangelogDialog({
           <Tabs defaultValue="details" className="w-full">
             <TabsList>
               <TabsTrigger value="details">Details</TabsTrigger>
+              <TabsTrigger value="attachments">Attachments</TabsTrigger>
+              <TabsTrigger value="comments">Comments</TabsTrigger>
               <TabsTrigger value="history">History</TabsTrigger>
             </TabsList>
             <TabsContent value="details" className="space-y-4 mt-3">
@@ -444,6 +448,20 @@ export function ChangelogDialog({
             />
           </Labeled>
 
+            </TabsContent>
+            <TabsContent value="attachments" className="mt-3">
+              <Attachments
+                entityType="ChangeLog"
+                entityId={initial?.id ?? null}
+                projectId={initial?.projectId ?? null}
+              />
+            </TabsContent>
+            <TabsContent value="comments" className="mt-3">
+              <Comments
+                entityType="ChangeLog"
+                entityId={initial?.id ?? null}
+                projectId={initial?.projectId ?? null}
+              />
             </TabsContent>
             <TabsContent value="history" className="mt-3">
               <AuditTimeline

@@ -100,6 +100,10 @@ export type FcoItem = {
   linkedCvrId: number | null;
   linkedCvrNumber: string | null;
   linkedCvrTitle: string | null;
+  /** Source RFI when this FCO was promoted from one. */
+  linkedRfiId: number | null;
+  linkedRfiNumber: string | null;
+  linkedRfiSubject: string | null;
   /** User.id of the creator, or null on rows predating the column. */
   createdById: number | null;
   createdAt: string;
@@ -114,13 +118,14 @@ type FcoScalarRow = Awaited<
   ReturnType<typeof prisma.fieldChangeOrder.findMany>
 >[number];
 
-/** Scalar row plus the `linkedCvr` relation pulled in via `include`. */
+/** Scalar row plus the `linkedCvr` and `linkedRfi` relations pulled in via `include`. */
 type Row = FcoScalarRow & {
   linkedCvr: { id: number; cvrNumber: string; title: string } | null;
+  linkedRfi: { id: number; rfiNumber: string; subject: string } | null;
 };
 
 const toItem = (r: Row): FcoItem => {
-  const { linkedCvr, ...rest } = r;
+  const { linkedCvr, linkedRfi, ...rest } = r;
   return {
     ...rest,
     status: rest.status as FcoStatus,
@@ -133,6 +138,8 @@ const toItem = (r: Row): FcoItem => {
     updatedAt: rest.updatedAt.toISOString(),
     linkedCvrNumber: linkedCvr?.cvrNumber ?? null,
     linkedCvrTitle: linkedCvr?.title ?? null,
+    linkedRfiNumber: linkedRfi?.rfiNumber ?? null,
+    linkedRfiSubject: linkedRfi?.subject ?? null,
   };
 };
 
@@ -144,10 +151,38 @@ export const fetchFcoList = createServerFn({ method: "GET" })
       where: { projectId },
       include: {
         linkedCvr: { select: { id: true, cvrNumber: true, title: true } },
+        linkedRfi: { select: { id: true, rfiNumber: true, subject: true } },
       },
       orderBy: [{ initiatedAt: "desc" }],
     });
     return rows.map(toItem);
+  });
+
+/**
+ * Single-record fetch — used by the print route, where the caller knows the
+ * FCO id but doesn't have the list cached (e.g. opening the print URL
+ * directly). Mirrors `fetchChangeLog` over on the CVR side.
+ */
+export const fetchFco = createServerFn({ method: "GET" })
+  .inputValidator((id: number) => id)
+  .handler(async ({ data: id }): Promise<FcoItem> => {
+    const row = await prisma.fieldChangeOrder.findUniqueOrThrow({
+      where: { id },
+      include: {
+        linkedCvr: { select: { id: true, cvrNumber: true, title: true } },
+        linkedRfi: { select: { id: true, rfiNumber: true, subject: true } },
+      },
+    });
+    await requireProjectAccess(row.projectId);
+    return toItem(row);
+  });
+
+export const fcoQueryOptions = (id: number | null) =>
+  queryOptions({
+    queryKey: ["fcoLog", "single", id],
+    queryFn: (): Promise<FcoItem | null> =>
+      id === null ? Promise.resolve(null) : fetchFco({ data: id }),
+    enabled: id !== null,
   });
 
 export const fcoListQueryOptions = (projectId: number | null) =>
@@ -219,8 +254,9 @@ const FCO_AUDIT_FIELDS = [
   "linkedCvrId",
 ] as const satisfies readonly (keyof FcoScalarRow)[];
 
-const linkedCvrInclude = {
+const linkedRelationsInclude = {
   linkedCvr: { select: { id: true, cvrNumber: true, title: true } },
+  linkedRfi: { select: { id: true, rfiNumber: true, subject: true } },
 } as const;
 
 export const upsertFco = createServerFn({ method: "POST" })
@@ -311,7 +347,7 @@ export const upsertFco = createServerFn({ method: "POST" })
     // Re-fetch with the relation for the response shape.
     const row = await prisma.fieldChangeOrder.findUniqueOrThrow({
       where: { id },
-      include: linkedCvrInclude,
+      include: linkedRelationsInclude,
     });
     return toItem(row);
   });
@@ -351,7 +387,7 @@ export const transitionFco = createServerFn({ method: "POST" })
     // Re-fetch with the relation for the response shape.
     const row = await prisma.fieldChangeOrder.findUniqueOrThrow({
       where: { id },
-      include: linkedCvrInclude,
+      include: linkedRelationsInclude,
     });
     return toItem(row);
   });

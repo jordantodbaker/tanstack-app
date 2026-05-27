@@ -93,6 +93,24 @@ export function EvmDashboardCard() {
         />
       </div>
 
+      {/* AFC strip — only renders when there's a pending-trend signal, so the
+          card stays the same height for projects without a trend log. */}
+      {total.pendingTrend > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 border-t border-slate-200 pt-3">
+          <Metric
+            label="Pending trend"
+            value={formatCurrency(total.pendingTrend)}
+            tone="red"
+          />
+          <Metric
+            label="AFC"
+            value={formatCurrency(total.afc)}
+            tone={total.vafc < 0 ? "red" : "slate"}
+          />
+          <Variance label="VAFC" value={total.vafc} />
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
         <Variance label="CV" value={total.cv} />
         <Variance label="SV" value={total.sv} />

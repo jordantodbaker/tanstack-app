@@ -273,6 +273,18 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
                 Trends
               </Link>
               <Link
+                to="/pco"
+                className="px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                activeProps={{ className: "text-red-800 bg-red-50" }}
+                inactiveProps={{
+                  className:
+                    "text-slate-600 hover:text-slate-900 hover:bg-slate-100",
+                }}
+                activeOptions={{ exact: true }}
+              >
+                PCOs
+              </Link>
+              <Link
                 to="/reporting"
                 className="px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
                 activeProps={{ className: "text-red-800 bg-red-50" }}

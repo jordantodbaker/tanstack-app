@@ -41,7 +41,7 @@ export function DisciplineRoute({
 }) {
   const discipline = disciplines.find((d) => d.label === title);
   const icon = discipline?.icon;
-  const { data: roleData } = useQuery(roleDataQueryOptions());
+  const { data: roleData } = useQuery(roleDataQueryOptions(disciplineId));
   const roleOptions = roleData?.roleOptions;
   const scheduleOptions = roleData?.scheduleOptions;
   const roleRates = roleData?.roleRates;

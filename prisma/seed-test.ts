@@ -14,6 +14,9 @@
  *   - 10 Trends spanning every status (IDENTIFIED / PROBABLE / CONVERTED /
  *     REJECTED / VOID), several linked to RFIs/FCOs/CVRs, sized so the AFC
  *     column on the reporting page lights up across multiple buckets
+ *   - 6 PCOs spanning DRAFT / NEGOTIATING / APPROVED / INVOICED / CLOSED /
+ *     REJECTED, bundling six of the eligible CVRs so the CVR ↔ PCO link
+ *     appears on both sides and AR stat cards show non-zero values
  *   - 1 baseline EstimateSnapshot ("As-bid 2026-01-15") with cached totals
  *   - 5 monthly ReportingPeriods (Jan–May 2026) with per-bucket measurements
  *     producing a meaningful EVM S-curve with mild over/under variance
@@ -565,6 +568,181 @@ const DEMO_TRENDS: DemoTrend[] = [
   },
 ];
 
+// ── PCOs ─────────────────────────────────────────────────────────────────
+
+type DemoPco = {
+  pcoNumber: string;
+  ownerReference: string;
+  title: string;
+  description: string;
+  status:
+    | "DRAFT"
+    | "SUBMITTED"
+    | "NEGOTIATING"
+    | "APPROVED"
+    | "INVOICED"
+    | "CLOSED"
+    | "REJECTED"
+    | "VOID";
+  priority: "LOW" | "NORMAL" | "HIGH" | "URGENT";
+  requestedAmount: number;
+  approvedAmount: number;
+  scheduleDaysImpact: number;
+  ownerRepName: string;
+  ownerRepEmail: string;
+  reasonNarrative: string;
+  notes: string;
+  invoiceNumber: string;
+  initiatedBy: string;
+  /** Days ago each lifecycle event happened. Set only those that have
+   *  occurred for the PCO's current status (e.g. DRAFT sets none). */
+  daysAgoSubmitted?: number;
+  daysAgoApproved?: number;
+  daysAgoInvoiced?: number;
+  daysAgoClosed?: number;
+  /** CVR numbers attached. Resolved to ids at seed time; the seeder also
+   *  stamps `ChangeLog.linkedPcoId` so both sides of the link are
+   *  consistent. */
+  linkedCvrNumbers: string[];
+};
+
+const DEMO_PCOS: DemoPco[] = [
+  {
+    pcoNumber: "PCO-001",
+    ownerReference: "OWNER-CO-04",
+    title: "Underground piping coating + valve upgrade",
+    description:
+      "Bundles the owner-driven coating change and the SS valve material substitution into a single billable change.",
+    status: "CLOSED",
+    priority: "NORMAL",
+    requestedAmount: 66_500,
+    approvedAmount: 63_500,
+    scheduleDaysImpact: 3,
+    ownerRepName: "D. Reilly (Owner PM)",
+    ownerRepEmail: "d.reilly@owner.example",
+    reasonNarrative:
+      "Combined coating spec change (CVR-001) and stainless valve substitution (CVR-002). Both are owner-driven changes per soil report and process review.",
+    notes:
+      "Owner negotiated $3k down on the valve markup. Final amount agreed at owner's April finance review.",
+    invoiceNumber: "AR-2026-018",
+    initiatedBy: "L. Aldridge (PM)",
+    daysAgoSubmitted: 95,
+    daysAgoApproved: 75,
+    daysAgoInvoiced: 50,
+    daysAgoClosed: 20,
+    linkedCvrNumbers: ["CVR-001", "CVR-002"],
+  },
+  {
+    pcoNumber: "PCO-002",
+    ownerReference: "OWNER-CO-09",
+    title: "Conduit reroute around revised civil layout",
+    description: "Conduit relocation needed after civil pad layout revision.",
+    status: "INVOICED",
+    priority: "NORMAL",
+    requestedAmount: 26_400,
+    approvedAmount: 26_400,
+    scheduleDaysImpact: 5,
+    ownerRepName: "D. Reilly (Owner PM)",
+    ownerRepEmail: "d.reilly@owner.example",
+    reasonNarrative:
+      "Field condition required electrical reroute; covered under owner change clause. Owner approved at submitted amount.",
+    notes: "Awaiting payment — 30 days net.",
+    invoiceNumber: "AR-2026-031",
+    initiatedBy: "L. Aldridge (PM)",
+    daysAgoSubmitted: 35,
+    daysAgoApproved: 25,
+    daysAgoInvoiced: 5,
+    linkedCvrNumbers: ["CVR-003"],
+  },
+  {
+    pcoNumber: "PCO-003",
+    ownerReference: "OWNER-CO-12",
+    title: "MCC feeder upsize + foundation rebar increase",
+    description:
+      "Two engineering-driven changes bundled for the owner's next monthly approval cycle.",
+    status: "APPROVED",
+    priority: "NORMAL",
+    requestedAmount: 51_000,
+    approvedAmount: 48_000,
+    scheduleDaysImpact: 3,
+    ownerRepName: "S. Whittaker (Owner Eng)",
+    ownerRepEmail: "s.whittaker@owner.example",
+    reasonNarrative:
+      "Owner directive for MCC spare capacity (CVR-004) plus geotech-recommended rebar increase (CVR-005). Owner accepted final amount at this week's commercial meeting.",
+    notes:
+      "Send invoice next week — AR holding it until quarter-end for tax reasons per owner request.",
+    invoiceNumber: "",
+    initiatedBy: "L. Aldridge (PM)",
+    daysAgoSubmitted: 22,
+    daysAgoApproved: 8,
+    linkedCvrNumbers: ["CVR-004", "CVR-005"],
+  },
+  {
+    pcoNumber: "PCO-004",
+    ownerReference: "OWNER-CO-13",
+    title: "Cold-weather concrete cure extension",
+    description: "Schedule + cost impact for extended cure under cold weather.",
+    status: "NEGOTIATING",
+    priority: "NORMAL",
+    requestedAmount: 9_000,
+    approvedAmount: 0,
+    scheduleDaysImpact: 7,
+    ownerRepName: "D. Reilly (Owner PM)",
+    ownerRepEmail: "d.reilly@owner.example",
+    reasonNarrative:
+      "CVR-006 documents the EPC's cost. Owner argues weather is contractor risk; we're pointing to the contract's weather provision in spec 03 30 00.",
+    notes:
+      "Owner counter at $7,500. Settling for $8k likely — commercial team to send revised submission.",
+    invoiceNumber: "",
+    initiatedBy: "L. Aldridge (PM)",
+    daysAgoSubmitted: 12,
+    linkedCvrNumbers: ["CVR-006"],
+  },
+  {
+    pcoNumber: "PCO-005",
+    ownerReference: "",
+    title: "Bundle: cold-weather welding premium (placeholder)",
+    description:
+      "Placeholder PCO drafted ahead of internal CVR — sized off RFI-047 response and field welding crew estimates.",
+    status: "DRAFT",
+    priority: "NORMAL",
+    requestedAmount: 0,
+    approvedAmount: 0,
+    scheduleDaysImpact: 0,
+    ownerRepName: "D. Reilly (Owner PM)",
+    ownerRepEmail: "d.reilly@owner.example",
+    reasonNarrative:
+      "Waiting on CVR(s) to be raised against TR-004 before attaching and submitting. Holds the negotiation thread once the internal cost lands.",
+    notes:
+      "Don't submit until CVRs are approved internally — owner will reject anything without an internal cost basis.",
+    invoiceNumber: "",
+    initiatedBy: "L. Aldridge (PM)",
+    linkedCvrNumbers: [],
+  },
+  {
+    pcoNumber: "PCO-006",
+    ownerReference: "OWNER-CO-08",
+    title: "Backup generator hookup (withdrawn)",
+    description:
+      "Submitted speculatively when owner indicated interest; owner pulled the scope at the April finance review.",
+    status: "REJECTED",
+    priority: "LOW",
+    requestedAmount: 52_500,
+    approvedAmount: 0,
+    scheduleDaysImpact: 10,
+    ownerRepName: "S. Whittaker (Owner Eng)",
+    ownerRepEmail: "s.whittaker@owner.example",
+    reasonNarrative:
+      "Cost basis tracked from CVR-010 (subsequently rejected). PCO kept on file for traceability if owner re-asks.",
+    notes:
+      "Rejection driven by owner finance, not technical disagreement. Could come back in next year's budget.",
+    invoiceNumber: "",
+    initiatedBy: "L. Aldridge (PM)",
+    daysAgoSubmitted: 60,
+    linkedCvrNumbers: [],
+  },
+];
+
 // ── reporting period definitions ─────────────────────────────────────────
 
 type DemoPeriod = {
@@ -1010,6 +1188,58 @@ async function seedDemoData() {
     });
   }
   console.log(`  Created ${DEMO_TRENDS.length} Trends`);
+
+  // 9.6. PCOs. Created after CVRs (so linkedCvrNumbers resolve) and after
+  //      Trends to keep the change-flow records together. Each PCO is
+  //      created first, then `ChangeLog.linkedPcoId` is stamped on its
+  //      bundled CVRs so both sides of the link are consistent.
+  for (const p of DEMO_PCOS) {
+    const cvrIds = p.linkedCvrNumbers
+      .map((n) => cvrIdByNumber.get(n))
+      .filter((id): id is number => id !== undefined);
+    if (cvrIds.length !== p.linkedCvrNumbers.length) {
+      console.warn(
+        `  PCO ${p.pcoNumber}: ${p.linkedCvrNumbers.length - cvrIds.length} linkedCvrNumber(s) did not resolve`,
+      );
+    }
+    const pco = await prisma.pco.create({
+      data: {
+        projectId: DEMO_PROJECT_ID,
+        pcoNumber: p.pcoNumber,
+        ownerReference: p.ownerReference,
+        title: p.title,
+        description: p.description,
+        status: p.status,
+        priority: p.priority,
+        requestedAmount: p.requestedAmount,
+        approvedAmount: p.approvedAmount,
+        scheduleDaysImpact: p.scheduleDaysImpact,
+        ownerRepName: p.ownerRepName,
+        ownerRepEmail: p.ownerRepEmail,
+        reasonNarrative: p.reasonNarrative,
+        notes: p.notes,
+        invoiceNumber: p.invoiceNumber,
+        initiatedBy: p.initiatedBy,
+        submittedAt:
+          p.daysAgoSubmitted !== undefined ? daysAgo(p.daysAgoSubmitted) : null,
+        approvedAt:
+          p.daysAgoApproved !== undefined ? daysAgo(p.daysAgoApproved) : null,
+        invoicedAt:
+          p.daysAgoInvoiced !== undefined ? daysAgo(p.daysAgoInvoiced) : null,
+        paidAt: p.daysAgoClosed !== undefined ? daysAgo(p.daysAgoClosed) : null,
+        closedAt:
+          p.daysAgoClosed !== undefined ? daysAgo(p.daysAgoClosed) : null,
+        createdById: approverUser.id,
+      },
+    });
+    if (cvrIds.length > 0) {
+      await prisma.changeLog.updateMany({
+        where: { id: { in: cvrIds } },
+        data: { linkedPcoId: pco.id },
+      });
+    }
+  }
+  console.log(`  Created ${DEMO_PCOS.length} PCOs`);
 
   // 10. Baseline snapshot — also stamps the cached `totals` so the
   //     dashboard EVM card and S-curve don't hit the legacy fallback path.

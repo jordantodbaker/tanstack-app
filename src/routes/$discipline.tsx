@@ -55,7 +55,7 @@ export const Route = createFileRoute("/$discipline")({
       context.queryClient.ensureQueryData(
         cbsItemsByL1QueryOptions(config.l1Codes),
       ),
-      context.queryClient.ensureQueryData(roleDataQueryOptions()),
+      context.queryClient.ensureQueryData(roleDataQueryOptions(config.id)),
       ...fefRowPrefetches,
     ]);
 

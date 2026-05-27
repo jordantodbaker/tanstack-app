@@ -16,6 +16,7 @@ const EXPECTED_ENTITIES: AdminEntity[] = [
   "subcontractors",
   "areas",
   "users",
+  "roles",
 ];
 
 /**
@@ -28,6 +29,7 @@ const EXPECTED_FAN_OUT: Record<AdminEntity, string[]> = {
   subcontractors: ["subcontractors", "projects"],
   areas: ["areas", "projects"],
   users: ["adminUsers", "projects"],
+  roles: ["rolesAdmin", "roleData"],
 };
 
 /**

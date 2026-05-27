@@ -269,10 +269,28 @@ export function TaskCodeSelectCell({ getValue, row, table }: CellProps) {
           { ...rowData, taskCode: newCode },
           pipingFactorLookup,
         );
+        // Re-resolve CBS using the row's current shopField + weldGroup +
+        // boreSize. Task code isn't itself in the lookup formula, but
+        // users expect any of the four trigger inputs (Shop / Weld /
+        // Task / Size) to refresh the matched item — so a task-code
+        // change re-runs the lookup with existing inputs and overrides
+        // id/name/unit if a match is now available.
+        const cbsMatch = lookupCbsItem(
+          rowData.metallurgyCode,
+          rowData.boreSize,
+          table.options.meta?.cbsOptions ?? [],
+        );
         table.options.meta?.updateRow?.(row.index, {
           taskCode: newCode,
           unit,
           laborHours,
+          ...(cbsMatch
+            ? {
+                id: cbsMatch.displayCode,
+                name: cbsMatch.name,
+                unit: cbsMatch.uom,
+              }
+            : {}),
         });
       }}
     />
@@ -302,7 +320,7 @@ export function PipingSizeCell({ getValue, row, table }: CellProps) {
           ...(cbsMatch
             ? {
                 id: cbsMatch.displayCode,
-                description: cbsMatch.name,
+                name: cbsMatch.name,
                 unit: cbsMatch.uom,
               }
             : {}),

@@ -17,6 +17,10 @@ const FAN_OUT = {
   // User save can change project assignments — bust the projects list too
   // because non-admins' visible-project set may change.
   users: ["adminUsers", "projects"],
+  // Role save changes which roles appear in each discipline's Take Off
+  // dropdown — bust every `roleData` cache (any disciplineId arg) as well
+  // as the admin list itself.
+  roles: ["rolesAdmin", "roleData"],
 } as const;
 
 export type AdminEntity = keyof typeof FAN_OUT;

@@ -2,6 +2,7 @@ import type { ChangeStatus } from "./changelog";
 import type { FcoStatus } from "./fcoLog";
 import type { RfiStatus } from "./rfis";
 import type { TrendStatus } from "./trends";
+import type { PcoStatus } from "./pco";
 import { hasAtLeastRole, type UserRole } from "./users";
 
 /**
@@ -186,6 +187,68 @@ export const TREND_TRANSITIONS: Record<TrendStatus, Transition<TrendStatus>[]> =
     ],
     VOID: [],
   };
+
+/**
+ * PCO (owner change order) lifecycle. Approval / negotiation transitions
+ * are APPROVER-gated because they shift the EPC's revenue posture with the
+ * owner. INVOICED / CLOSED are USER actions — once owner approval is in,
+ * the AR-side bookkeeping moves freely. `blockOriginator` on APPROVE keeps
+ * a single user from acting as both the PCO submitter and the approver.
+ * Terminal states: CLOSED, REJECTED, VOID.
+ */
+export const PCO_TRANSITIONS: Record<PcoStatus, Transition<PcoStatus>[]> = {
+  DRAFT: [
+    { action: "Submit to owner", to: "SUBMITTED", minRole: "USER" },
+    { action: "Void", to: "VOID", minRole: "ADMINISTRATOR" },
+  ],
+  SUBMITTED: [
+    {
+      action: "Approve",
+      to: "APPROVED",
+      minRole: "APPROVER",
+      blockOriginator: true,
+    },
+    { action: "Open negotiation", to: "NEGOTIATING", minRole: "APPROVER" },
+    {
+      action: "Reject",
+      to: "REJECTED",
+      minRole: "APPROVER",
+      blockOriginator: true,
+    },
+    { action: "Withdraw", to: "DRAFT", minRole: "USER" },
+    { action: "Void", to: "VOID", minRole: "ADMINISTRATOR" },
+  ],
+  NEGOTIATING: [
+    {
+      action: "Approve",
+      to: "APPROVED",
+      minRole: "APPROVER",
+      blockOriginator: true,
+    },
+    {
+      action: "Reject",
+      to: "REJECTED",
+      minRole: "APPROVER",
+      blockOriginator: true,
+    },
+    { action: "Resubmit", to: "SUBMITTED", minRole: "USER" },
+    { action: "Void", to: "VOID", minRole: "ADMINISTRATOR" },
+  ],
+  APPROVED: [
+    { action: "Mark invoiced", to: "INVOICED", minRole: "USER" },
+    { action: "Void", to: "VOID", minRole: "ADMINISTRATOR" },
+  ],
+  INVOICED: [
+    { action: "Close (paid)", to: "CLOSED", minRole: "USER" },
+    { action: "Void", to: "VOID", minRole: "ADMINISTRATOR" },
+  ],
+  CLOSED: [],
+  REJECTED: [
+    { action: "Revise & resubmit", to: "DRAFT", minRole: "USER" },
+    { action: "Void", to: "VOID", minRole: "ADMINISTRATOR" },
+  ],
+  VOID: [],
+};
 
 /**
  * The transitions a user may perform from `status` — filtered by privilege

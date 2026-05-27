@@ -20,6 +20,7 @@ export const COMMENT_ENTITY_TYPES = [
   "FieldChangeOrder",
   "Rfi",
   "Trend",
+  "Pco",
 ] as const;
 export type CommentEntityType = (typeof COMMENT_ENTITY_TYPES)[number];
 

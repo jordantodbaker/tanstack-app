@@ -16,6 +16,7 @@ import { Route as SetupRouteImport } from './routes/setup'
 import { Route as RfisRouteImport } from './routes/rfis'
 import { Route as ReportingRouteImport } from './routes/reporting'
 import { Route as PipingRouteImport } from './routes/piping'
+import { Route as PcoRouteImport } from './routes/pco'
 import { Route as MaterialsRouteImport } from './routes/materials'
 import { Route as FcoLogRouteImport } from './routes/fco-log'
 import { Route as DashboardRouteImport } from './routes/dashboard'
@@ -66,6 +67,11 @@ const ReportingRoute = ReportingRouteImport.update({
 const PipingRoute = PipingRouteImport.update({
   id: '/piping',
   path: '/piping',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PcoRoute = PcoRouteImport.update({
+  id: '/pco',
+  path: '/pco',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MaterialsRoute = MaterialsRouteImport.update({
@@ -158,6 +164,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRoute
   '/fco-log': typeof FcoLogRoute
   '/materials': typeof MaterialsRoute
+  '/pco': typeof PcoRoute
   '/piping': typeof PipingRoute
   '/reporting': typeof ReportingRoute
   '/rfis': typeof RfisRoute
@@ -183,6 +190,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/fco-log': typeof FcoLogRoute
   '/materials': typeof MaterialsRoute
+  '/pco': typeof PcoRoute
   '/piping': typeof PipingRoute
   '/reporting': typeof ReportingRoute
   '/rfis': typeof RfisRoute
@@ -209,6 +217,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/fco-log': typeof FcoLogRoute
   '/materials': typeof MaterialsRoute
+  '/pco': typeof PcoRoute
   '/piping': typeof PipingRoute
   '/reporting': typeof ReportingRoute
   '/rfis': typeof RfisRoute
@@ -236,6 +245,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/fco-log'
     | '/materials'
+    | '/pco'
     | '/piping'
     | '/reporting'
     | '/rfis'
@@ -261,6 +271,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/fco-log'
     | '/materials'
+    | '/pco'
     | '/piping'
     | '/reporting'
     | '/rfis'
@@ -286,6 +297,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/fco-log'
     | '/materials'
+    | '/pco'
     | '/piping'
     | '/reporting'
     | '/rfis'
@@ -312,6 +324,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   FcoLogRoute: typeof FcoLogRoute
   MaterialsRoute: typeof MaterialsRoute
+  PcoRoute: typeof PcoRoute
   PipingRoute: typeof PipingRoute
   ReportingRoute: typeof ReportingRoute
   RfisRoute: typeof RfisRoute
@@ -373,6 +386,13 @@ declare module '@tanstack/react-router' {
       path: '/piping'
       fullPath: '/piping'
       preLoaderRoute: typeof PipingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pco': {
+      id: '/pco'
+      path: '/pco'
+      fullPath: '/pco'
+      preLoaderRoute: typeof PcoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/materials': {
@@ -517,6 +537,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   FcoLogRoute: FcoLogRoute,
   MaterialsRoute: MaterialsRoute,
+  PcoRoute: PcoRoute,
   PipingRoute: PipingRoute,
   ReportingRoute: ReportingRoute,
   RfisRoute: RfisRoute,

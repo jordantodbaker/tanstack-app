@@ -31,6 +31,7 @@ export const ATTACHMENT_ENTITY_TYPES = [
   "FieldChangeOrder",
   "Rfi",
   "Trend",
+  "Pco",
 ] as const;
 export type AttachmentEntityType = (typeof ATTACHMENT_ENTITY_TYPES)[number];
 

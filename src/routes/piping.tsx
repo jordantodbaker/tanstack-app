@@ -56,7 +56,7 @@ export const Route = createFileRoute("/piping")({
     // Take-Off-critical data — block until ready so SSR HTML has Take Off rows.
     const critical: Promise<unknown>[] = [
       context.queryClient.ensureQueryData(pipingGroupsQueryOptions()),
-      context.queryClient.ensureQueryData(roleDataQueryOptions()),
+      context.queryClient.ensureQueryData(roleDataQueryOptions("piping")),
       context.queryClient.ensureQueryData(pipingFactorDataQueryOptions()),
     ];
     if (projectId !== null) {
@@ -108,7 +108,7 @@ function PipingPage() {
   const { data: supportLaborItems = [] } = useQuery(
     cbsItemsByL1QueryOptions(SUPPORT_LABOR_L1),
   );
-  const { data: roleData } = useQuery(roleDataQueryOptions());
+  const { data: roleData } = useQuery(roleDataQueryOptions("piping"));
   const { data: pipingFactorData } = useQuery(pipingFactorDataQueryOptions());
 
   const { data: items = [] } = useQuery(

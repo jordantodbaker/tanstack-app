@@ -242,6 +242,7 @@ model Project {
   fieldChangeOrders  FieldChangeOrder[]
   rfis               Rfi[]
   trends             Trend[]
+  pcos               Pco[]
   comments           Comment[]
   reminderLogs       ReminderLog[]
   allowedFefCbsItems CbsItem[]          @relation("ProjectAllowedFefCbsItems")
@@ -381,15 +382,21 @@ model PipingFactorValue {
   value          Float?
 }
 
+// Construction discipline role (Pipefitter, Electrician, etc.) — the
+// labour role assigned to a Take Off row. `disciplines` holds discipline
+// ids from src/config/disciplines.ts; a role only appears in the Take Off
+// "Role" dropdown for a discipline whose id is in this list. Empty means
+// the role shows up nowhere.
 model Role {
-  id    Int        @id @default(autoincrement())
-  name  String     @unique
-  rates RoleRate[]
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
+  disciplines String[]   @default([])
+  rates       RoleRate[]
 }
 
 model RoleRate {
   id       Int    @id @default(autoincrement())
-  role     Role   @relation(fields: [roleId], references: [id])
+  role     Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
   roleId   Int
   schedule String
   rate     Float
@@ -458,10 +465,17 @@ model ChangeLog {
   /// relation since Trend ↔ ChangeLog already has another path through
   /// `linkedCvr`; without a name Prisma can't disambiguate.
   promotedFromTrends Trend[]            @relation("TrendPromotedToCvr")
+  /// Owner-facing change order (PCO) this CVR rolls up into for billing.
+  /// One CVR → at most one PCO; the PCO holds multiple CVRs via the inverse
+  /// of this relation. `SetNull` keeps the CVR intact if the PCO is deleted
+  /// — the internal cost record outlives any owner negotiation.
+  linkedPco          Pco?               @relation(fields: [linkedPcoId], references: [id], onDelete: SetNull)
+  linkedPcoId        Int?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
   @@index([projectId, status])
+  @@index([linkedPcoId])
 }
 
 enum FcoStatus {
@@ -545,6 +559,80 @@ model FieldChangeOrder {
 
   @@index([projectId, status])
   @@index([linkedCvrId])
+}
+
+// PCO (Prime / Owner Change Order) — the EPC's billable ask to the owner,
+// usually bundling one or more internal CVRs. Sits on the revenue side of
+// the change pipeline: CVR tracks what the EPC will spend; PCO tracks what
+// the owner will pay. Lifecycle: DRAFT → SUBMITTED → NEGOTIATING →
+// APPROVED → INVOICED → CLOSED, with REJECTED / VOID terminals.
+enum PcoStatus {
+  DRAFT
+  SUBMITTED // sent to owner
+  NEGOTIATING // owner came back with questions / counter-offer
+  APPROVED // owner accepted (at requestedAmount or negotiated amount)
+  INVOICED // invoice issued to owner
+  CLOSED // paid (terminal)
+  REJECTED // owner rejected (terminal)
+  VOID
+}
+
+// Separate from FcoPriority/RfiPriority/TrendPriority — keeps the state
+// machines independent.
+enum PcoPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model Pco {
+  id                 Int         @id @default(autoincrement())
+  project            Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId          Int
+  pcoNumber          String      @default("")
+  /// Owner's reference number — what THEY call this change order on their
+  /// side (often a CO#/COR#). Stored as plain text since it lives in the
+  /// owner's system, not ours.
+  ownerReference     String      @default("")
+  title              String
+  description        String      @default("")
+  status             PcoStatus   @default(DRAFT)
+  priority           PcoPriority @default(NORMAL)
+  /// What the EPC is asking the owner to pay. Frozen at submission in
+  /// intent but editable until APPROVED — a PCO sometimes gets re-priced
+  /// during negotiation.
+  requestedAmount    Float       @default(0)
+  /// What the owner agreed to. Defaults to `requestedAmount` on creation;
+  /// edited during negotiation. Drives revenue-side reporting.
+  approvedAmount     Float       @default(0)
+  /// Days of schedule extension being requested.
+  scheduleDaysImpact Int         @default(0)
+  /// Free-text owner-rep contact (name / email). Not a User FK — the owner
+  /// rep is external.
+  ownerRepName       String      @default("")
+  ownerRepEmail      String      @default("")
+  reasonNarrative    String      @default("")
+  notes              String      @default("")
+  submittedAt        DateTime?
+  approvedAt         DateTime?
+  invoicedAt         DateTime?
+  /// Invoice reference once billed — typically an internal AR invoice #.
+  invoiceNumber      String      @default("")
+  paidAt             DateTime?
+  closedAt           DateTime?
+  /// Linked CVRs — the inverse of `ChangeLog.linkedPcoId`. A PCO bundles
+  /// multiple CVRs; each CVR sits in at most one PCO.
+  linkedCvrs         ChangeLog[]
+  initiatedBy        String      @default("")
+  /// User.id of whoever raised the PCO. Same plain-column-no-FK pattern
+  /// as CVR/FCO/RFI/Trend.
+  createdById        Int?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  @@index([projectId, status])
+  @@index([projectId, submittedAt])
 }
 
 // Trend — anticipated cost impact that hasn't (yet) been approved as a CVR.

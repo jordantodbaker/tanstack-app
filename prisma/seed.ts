@@ -290,11 +290,24 @@ export async function seedBaseData() {
   }
   console.log(`Inserted ${pipingFactorsMap.size} piping factors`);
 
+  // Seed every role into every real construction discipline (one with
+  // l1Codes). Roles are scoped per-discipline in the UI; admins refine the
+  // assignments later via the Admin → Roles page. The composite-rates CSV
+  // doesn't carry discipline info, so this gives the previous "all roles
+  // everywhere" behaviour as a starting point.
+  const { disciplines: disciplineConfigs } = await import(
+    "../src/config/disciplines"
+  );
+  const allDisciplineIds = disciplineConfigs
+    .filter((d) => d.l1Codes && d.l1Codes.length > 0)
+    .map((d) => d.id);
+
   const compositeRates = loadCompositeRates();
   for (const [name, rates] of compositeRates) {
     await prisma.role.create({
       data: {
         name,
+        disciplines: allDisciplineIds,
         rates: { createMany: { data: rates } },
       },
     });

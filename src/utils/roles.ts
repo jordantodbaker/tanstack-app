@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
+import { adminHandler, adminHandlerNoInput } from "./users.server";
 
 export type RoleData = {
   roleOptions: string[];
@@ -8,14 +9,25 @@ export type RoleData = {
   roleRates: { roleName: string; schedule: string; rate: number }[];
 };
 
-export const fetchRoleData = createServerFn({ method: "GET" }).handler(
-  async (): Promise<RoleData> => {
+/**
+ * Role data for a discipline's Take Off sheet. `disciplineId` filters the
+ * Role dropdown so only roles whose `disciplines` array contains it appear;
+ * pass `null` to return every role (used by callers that haven't been
+ * scoped yet, but production callers should always pass a discipline).
+ */
+export const fetchRoleData = createServerFn({ method: "GET" })
+  .inputValidator((disciplineId: string | null) => disciplineId)
+  .handler(async ({ data: disciplineId }): Promise<RoleData> => {
+    const roleWhere =
+      disciplineId === null ? {} : { disciplines: { has: disciplineId } };
     const [roles, rates] = await Promise.all([
       prisma.role.findMany({
+        where: roleWhere,
         select: { name: true },
         orderBy: { name: "asc" },
       }),
       prisma.roleRate.findMany({
+        where: disciplineId === null ? {} : { role: roleWhere },
         include: { role: { select: { name: true } } },
         orderBy: [{ role: { name: "asc" } }, { schedule: "asc" }],
       }),
@@ -31,12 +43,79 @@ export const fetchRoleData = createServerFn({ method: "GET" }).handler(
         rate: r.rate,
       })),
     };
-  },
-);
+  });
 
-export const roleDataQueryOptions = () =>
+export const roleDataQueryOptions = (disciplineId: string | null = null) =>
   queryOptions({
-    queryKey: ["roleData"],
-    queryFn: () => fetchRoleData(),
+    queryKey: ["roleData", disciplineId],
+    queryFn: () => fetchRoleData({ data: disciplineId }),
     staleTime: Infinity,
   });
+
+/** Admin-side role row: full identity plus the discipline assignments. */
+export type RoleAdminItem = {
+  id: number;
+  name: string;
+  disciplines: string[];
+  rateCount: number;
+};
+
+export const fetchRolesAdmin = createServerFn({ method: "GET" }).handler(
+  adminHandlerNoInput(async (): Promise<RoleAdminItem[]> => {
+    const rows = await prisma.role.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        disciplines: true,
+        _count: { select: { rates: true } },
+      },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      disciplines: r.disciplines,
+      rateCount: r._count.rates,
+    }));
+  }),
+);
+
+export const rolesAdminQueryOptions = () =>
+  queryOptions({
+    queryKey: ["rolesAdmin"],
+    queryFn: () => fetchRolesAdmin(),
+  });
+
+export type UpsertRoleInput = {
+  id?: number;
+  name: string;
+  disciplines: string[];
+};
+
+/** Create or update a construction discipline role. Admin-only. */
+export const upsertRole = createServerFn({ method: "POST" })
+  .inputValidator((input: UpsertRoleInput) => input)
+  .handler(
+    adminHandler(async ({ data }): Promise<{ ok: true }> => {
+      const payload = {
+        name: data.name.trim(),
+        disciplines: data.disciplines,
+      };
+      if (data.id) {
+        await prisma.role.update({ where: { id: data.id }, data: payload });
+      } else {
+        await prisma.role.create({ data: payload });
+      }
+      return { ok: true };
+    }),
+  );
+
+/** Delete a role. Cascades to its `RoleRate` rows. Admin-only. */
+export const deleteRole = createServerFn({ method: "POST" })
+  .inputValidator((input: { id: number }) => input)
+  .handler(
+    adminHandler(async ({ data }): Promise<{ ok: true }> => {
+      await prisma.role.delete({ where: { id: data.id } });
+      return { ok: true };
+    }),
+  );

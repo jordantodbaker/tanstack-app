@@ -16,6 +16,7 @@ import { Route as SetupRouteImport } from './routes/setup'
 import { Route as RfisRouteImport } from './routes/rfis'
 import { Route as ReportingRouteImport } from './routes/reporting'
 import { Route as PipingRouteImport } from './routes/piping'
+import { Route as PcoRouteImport } from './routes/pco'
 import { Route as MaterialsRouteImport } from './routes/materials'
 import { Route as FcoLogRouteImport } from './routes/fco-log'
 import { Route as DashboardRouteImport } from './routes/dashboard'
@@ -30,6 +31,7 @@ import { Route as CvrPrintIdRouteImport } from './routes/cvr-print.$id'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminSystemRouteImport } from './routes/admin.system'
 import { Route as AdminSubcontractorsRouteImport } from './routes/admin.subcontractors'
+import { Route as AdminRolesRouteImport } from './routes/admin.roles'
 import { Route as AdminProjectsRouteImport } from './routes/admin.projects'
 import { Route as AdminAreasRouteImport } from './routes/admin.areas'
 
@@ -66,6 +68,11 @@ const ReportingRoute = ReportingRouteImport.update({
 const PipingRoute = PipingRouteImport.update({
   id: '/piping',
   path: '/piping',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PcoRoute = PcoRouteImport.update({
+  id: '/pco',
+  path: '/pco',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MaterialsRoute = MaterialsRouteImport.update({
@@ -138,6 +145,11 @@ const AdminSubcontractorsRoute = AdminSubcontractorsRouteImport.update({
   path: '/subcontractors',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminRolesRoute = AdminRolesRouteImport.update({
+  id: '/roles',
+  path: '/roles',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminProjectsRoute = AdminProjectsRouteImport.update({
   id: '/projects',
   path: '/projects',
@@ -158,6 +170,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRoute
   '/fco-log': typeof FcoLogRoute
   '/materials': typeof MaterialsRoute
+  '/pco': typeof PcoRoute
   '/piping': typeof PipingRoute
   '/reporting': typeof ReportingRoute
   '/rfis': typeof RfisRoute
@@ -167,6 +180,7 @@ export interface FileRoutesByFullPath {
   '/validation': typeof ValidationRoute
   '/admin/areas': typeof AdminAreasRoute
   '/admin/projects': typeof AdminProjectsRoute
+  '/admin/roles': typeof AdminRolesRoute
   '/admin/subcontractors': typeof AdminSubcontractorsRoute
   '/admin/system': typeof AdminSystemRoute
   '/admin/users': typeof AdminUsersRoute
@@ -183,6 +197,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/fco-log': typeof FcoLogRoute
   '/materials': typeof MaterialsRoute
+  '/pco': typeof PcoRoute
   '/piping': typeof PipingRoute
   '/reporting': typeof ReportingRoute
   '/rfis': typeof RfisRoute
@@ -192,6 +207,7 @@ export interface FileRoutesByTo {
   '/validation': typeof ValidationRoute
   '/admin/areas': typeof AdminAreasRoute
   '/admin/projects': typeof AdminProjectsRoute
+  '/admin/roles': typeof AdminRolesRoute
   '/admin/subcontractors': typeof AdminSubcontractorsRoute
   '/admin/system': typeof AdminSystemRoute
   '/admin/users': typeof AdminUsersRoute
@@ -209,6 +225,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/fco-log': typeof FcoLogRoute
   '/materials': typeof MaterialsRoute
+  '/pco': typeof PcoRoute
   '/piping': typeof PipingRoute
   '/reporting': typeof ReportingRoute
   '/rfis': typeof RfisRoute
@@ -218,6 +235,7 @@ export interface FileRoutesById {
   '/validation': typeof ValidationRoute
   '/admin/areas': typeof AdminAreasRoute
   '/admin/projects': typeof AdminProjectsRoute
+  '/admin/roles': typeof AdminRolesRoute
   '/admin/subcontractors': typeof AdminSubcontractorsRoute
   '/admin/system': typeof AdminSystemRoute
   '/admin/users': typeof AdminUsersRoute
@@ -236,6 +254,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/fco-log'
     | '/materials'
+    | '/pco'
     | '/piping'
     | '/reporting'
     | '/rfis'
@@ -245,6 +264,7 @@ export interface FileRouteTypes {
     | '/validation'
     | '/admin/areas'
     | '/admin/projects'
+    | '/admin/roles'
     | '/admin/subcontractors'
     | '/admin/system'
     | '/admin/users'
@@ -261,6 +281,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/fco-log'
     | '/materials'
+    | '/pco'
     | '/piping'
     | '/reporting'
     | '/rfis'
@@ -270,6 +291,7 @@ export interface FileRouteTypes {
     | '/validation'
     | '/admin/areas'
     | '/admin/projects'
+    | '/admin/roles'
     | '/admin/subcontractors'
     | '/admin/system'
     | '/admin/users'
@@ -286,6 +308,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/fco-log'
     | '/materials'
+    | '/pco'
     | '/piping'
     | '/reporting'
     | '/rfis'
@@ -295,6 +318,7 @@ export interface FileRouteTypes {
     | '/validation'
     | '/admin/areas'
     | '/admin/projects'
+    | '/admin/roles'
     | '/admin/subcontractors'
     | '/admin/system'
     | '/admin/users'
@@ -312,6 +336,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   FcoLogRoute: typeof FcoLogRoute
   MaterialsRoute: typeof MaterialsRoute
+  PcoRoute: typeof PcoRoute
   PipingRoute: typeof PipingRoute
   ReportingRoute: typeof ReportingRoute
   RfisRoute: typeof RfisRoute
@@ -373,6 +398,13 @@ declare module '@tanstack/react-router' {
       path: '/piping'
       fullPath: '/piping'
       preLoaderRoute: typeof PipingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pco': {
+      id: '/pco'
+      path: '/pco'
+      fullPath: '/pco'
+      preLoaderRoute: typeof PcoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/materials': {
@@ -473,6 +505,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSubcontractorsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/roles': {
+      id: '/admin/roles'
+      path: '/roles'
+      fullPath: '/admin/roles'
+      preLoaderRoute: typeof AdminRolesRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/projects': {
       id: '/admin/projects'
       path: '/projects'
@@ -493,6 +532,7 @@ declare module '@tanstack/react-router' {
 interface AdminRouteChildren {
   AdminAreasRoute: typeof AdminAreasRoute
   AdminProjectsRoute: typeof AdminProjectsRoute
+  AdminRolesRoute: typeof AdminRolesRoute
   AdminSubcontractorsRoute: typeof AdminSubcontractorsRoute
   AdminSystemRoute: typeof AdminSystemRoute
   AdminUsersRoute: typeof AdminUsersRoute
@@ -501,6 +541,7 @@ interface AdminRouteChildren {
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAreasRoute: AdminAreasRoute,
   AdminProjectsRoute: AdminProjectsRoute,
+  AdminRolesRoute: AdminRolesRoute,
   AdminSubcontractorsRoute: AdminSubcontractorsRoute,
   AdminSystemRoute: AdminSystemRoute,
   AdminUsersRoute: AdminUsersRoute,
@@ -517,6 +558,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   FcoLogRoute: FcoLogRoute,
   MaterialsRoute: MaterialsRoute,
+  PcoRoute: PcoRoute,
   PipingRoute: PipingRoute,
   ReportingRoute: ReportingRoute,
   RfisRoute: RfisRoute,

@@ -8,7 +8,6 @@ yarn.lock
 .vercel
 .output
 /build/
-/api/
 /server/build
 /public/build
 /dist/

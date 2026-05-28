@@ -16,15 +16,10 @@ import {
   Stamp,
 } from "lucide-react";
 import { useSelectedProject } from "~/lib/selected-project";
-import { changeLogListQueryOptions } from "~/utils/changelog";
-import { fcoListQueryOptions } from "~/utils/fcoLog";
-import { rfiListQueryOptions } from "~/utils/rfis";
 import {
-  summarizeCvrs,
-  summarizeFcos,
-  summarizeRfis,
-  summarizeAttention,
-} from "~/utils/dashboard";
+  dashboardSummaryQueryOptions,
+  EMPTY_DASHBOARD_SUMMARY as EMPTY_DASHBOARD,
+} from "~/utils/dashboardSummary";
 import { StatCard } from "~/components/ui/list-page";
 import { StatusBadge, RiskBadge } from "~/components/Changelog/StatusBadge";
 import { FcoStatusBadge } from "~/components/FCOLog/FcoBadges";
@@ -43,19 +38,13 @@ export const Route = createFileRoute("/dashboard")({
   loader: async ({ context }) => {
     const projectId = await readProjectIdForLoader();
     if (projectId !== null) {
-      // Independent prefetches — run in parallel rather than serially
-      // awaiting each in turn. Validation page already follows this pattern.
+      // Prefetch the aggregated summary (one round-trip; replaces the
+      // prior three full-list prefetches).
       await Promise.all([
         tryPrefetchProjectQuery(
           context.queryClient.ensureQueryData(
-            changeLogListQueryOptions(projectId),
+            dashboardSummaryQueryOptions(projectId),
           ),
-        ),
-        tryPrefetchProjectQuery(
-          context.queryClient.ensureQueryData(fcoListQueryOptions(projectId)),
-        ),
-        tryPrefetchProjectQuery(
-          context.queryClient.ensureQueryData(rfiListQueryOptions(projectId)),
         ),
         tryPrefetchProjectQuery(
           context.queryClient.ensureQueryData(
@@ -70,17 +59,11 @@ export const Route = createFileRoute("/dashboard")({
 
 function DashboardPage() {
   const { projectId } = useSelectedProject();
-  const { data: cvrs = [] } = useQuery(changeLogListQueryOptions(projectId));
-  const { data: fcos = [] } = useQuery(fcoListQueryOptions(projectId));
-  const { data: rfis = [] } = useQuery(rfiListQueryOptions(projectId));
-
-  const cvr = React.useMemo(() => summarizeCvrs(cvrs), [cvrs]);
-  const fco = React.useMemo(() => summarizeFcos(fcos), [fcos]);
-  const rfi = React.useMemo(() => summarizeRfis(rfis), [rfis]);
-  const attention = React.useMemo(
-    () => summarizeAttention(cvrs, fcos, new Date(), rfis),
-    [cvrs, fcos, rfis],
-  );
+  const { data: summary } = useQuery(dashboardSummaryQueryOptions(projectId));
+  const cvr = summary?.cvr ?? EMPTY_DASHBOARD.cvr;
+  const fco = summary?.fco ?? EMPTY_DASHBOARD.fco;
+  const rfi = summary?.rfi ?? EMPTY_DASHBOARD.rfi;
+  const attention = summary?.attention ?? EMPTY_DASHBOARD.attention;
 
   return (
     <main className="p-4 max-w-7xl space-y-6">

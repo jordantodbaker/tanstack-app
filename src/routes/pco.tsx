@@ -16,12 +16,14 @@ import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
 import {
   pcoListQueryOptions,
+  pcoListFullQueryOptions,
   upsertPco,
   deletePco,
   transitionPco,
   PCO_STATUSES,
   PCO_OPEN_STATUSES,
   type PcoItem,
+  type PcoListItem,
   type PcoStatus,
   type UpsertPcoInput,
 } from "~/utils/pco";
@@ -85,18 +87,27 @@ function PcoLogPage() {
   const [search, setSearch] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState<"" | PcoStatus>("");
 
-  const filtered = React.useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return items.filter((it) => {
+  // Slim list payload drops `description` / `reasonNarrative` / `notes`;
+  // search by PCO #, owner ref, title, owner rep, invoice covers the
+  // common cases without pulling multi-paragraph text on every visit.
+  const matchesFilters = React.useCallback(
+    (it: PcoListItem): boolean => {
+      const q = search.trim().toLowerCase();
       if (statusFilter && it.status !== statusFilter) return false;
       if (q) {
         const haystack =
-          `${it.pcoNumber} ${it.ownerReference} ${it.title} ${it.description} ${it.ownerRepName} ${it.ownerRepEmail} ${it.invoiceNumber}`.toLowerCase();
+          `${it.pcoNumber} ${it.ownerReference} ${it.title} ${it.ownerRepName} ${it.ownerRepEmail} ${it.invoiceNumber}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
-    });
-  }, [items, search, statusFilter]);
+    },
+    [search, statusFilter],
+  );
+
+  const filtered = React.useMemo(
+    () => items.filter(matchesFilters),
+    [items, matchesFilters],
+  );
 
   const stats = React.useMemo(() => {
     // "Open" — pre-approval bucket. Sums requested $ (what we're chasing
@@ -281,7 +292,7 @@ function PcoTable({
   onDelete,
   onTransition,
 }: {
-  items: PcoItem[];
+  items: PcoListItem[];
   projectId: number | null;
   onSubmit: (input: Omit<UpsertPcoInput, "projectId">) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;
@@ -330,7 +341,7 @@ function PcoRow({
   onDelete,
   onTransition,
 }: {
-  item: PcoItem;
+  item: PcoListItem;
   projectId: number | null;
   onSubmit: (input: Omit<UpsertPcoInput, "projectId">) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;

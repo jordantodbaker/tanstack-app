@@ -156,6 +156,7 @@ describe("makeFefRow", () => {
     "schedule",
     "taskCode",
     "laborHours",
+    "laborFactor",
     "laborRate",
     "materialCost",
     "equipment",

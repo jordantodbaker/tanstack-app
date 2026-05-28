@@ -19,7 +19,9 @@ import {
 import {
   CHANGE_TYPES,
   RISK_LEVELS,
+  changeLogQueryOptions,
   type ChangeLogItem,
+  type ChangeLogListItem,
   type ChangeType,
   type RiskLevel,
   type UpsertChangeLogInput,
@@ -104,16 +106,10 @@ function fromItem(item: ChangeLogItem): FormState {
   };
 }
 
-export function ChangelogDialog({
-  trigger,
-  initial,
-  onSubmit,
-  onDelete,
-  onTransition,
-}: {
+type ChangelogDialogProps = {
   trigger: React.ReactNode;
-  /** When provided, the dialog opens in edit mode. */
-  initial?: ChangeLogItem;
+  /** Slim list-item shape; dialog lazy-fetches the full record on open. */
+  initial?: ChangeLogListItem;
   onSubmit: (form: FormState) => Promise<unknown>;
   onDelete?: (id: number) => Promise<unknown>;
   /**
@@ -122,14 +118,73 @@ export function ChangelogDialog({
    * originator status. See `CVR_TRANSITIONS` in workflow.ts.
    */
   onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
+};
+
+export function ChangelogDialog({
+  trigger,
+  initial: initialSlim,
+  onSubmit,
+  onDelete,
+  onTransition,
+}: ChangelogDialogProps) {
+  const [open, setOpen] = React.useState(false);
+  const isEdit = initialSlim?.id !== undefined;
+  const { data: full } = useQuery({
+    ...changeLogQueryOptions(isEdit ? (initialSlim?.id ?? null) : null),
+    enabled: open && isEdit,
+  });
+  const fullReady = !isEdit || !!full;
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,1100px)] max-h-[90vh] overflow-y-auto">
+        {!open ? null : !fullReady ? (
+          <div className="p-8 text-center text-sm text-slate-500">
+            Loading change item…
+          </div>
+        ) : (
+          <ChangelogDialogBody
+            key={initialSlim?.id ?? "new"}
+            initial={full ?? undefined}
+            onSubmit={onSubmit}
+            onDelete={onDelete}
+            onTransition={onTransition}
+            closeDialog={() => setOpen(false)}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ChangelogDialogBody({
+  initial,
+  onSubmit,
+  onDelete,
+  onTransition,
+  closeDialog,
+}: {
+  initial?: ChangeLogItem;
+  onSubmit: (form: FormState) => Promise<unknown>;
+  onDelete?: (id: number) => Promise<unknown>;
+  onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
+  closeDialog: () => void;
 }) {
-  const { open, setOpen, form, busy, setBusy, update, handleSubmit, handleDelete } =
+  const { form, busy, setBusy, update, handleSubmit, handleDelete } =
     useFormDialog<ChangeLogItem, FormState>({
       initial,
       blank: blankForm,
       fromItem,
-      onSubmit,
-      onDelete,
+      onSubmit: async (formState) => {
+        await onSubmit(formState);
+        closeDialog();
+      },
+      onDelete: onDelete
+        ? async (id) => {
+            await onDelete(id);
+            closeDialog();
+          }
+        : undefined,
       deleteConfirm: (i) =>
         `Delete change item "${i.title}"? This cannot be undone.`,
     });
@@ -149,10 +204,8 @@ export function ChangelogDialog({
         )
       : [];
 
-  const { data: cbsCodeOptions = [] } = useQuery({
-    ...cbsCodeOptionsQueryOptions(),
-    enabled: open,
-  });
+  // `open` is implicitly true — only mounted when outer is open + full loaded.
+  const { data: cbsCodeOptions = [] } = useQuery(cbsCodeOptionsQueryOptions());
 
   // Areas for the selected project — populates the Area dropdown. CVRs may
   // be project-wide, so "— None —" is the default. Legacy rows that pre-date
@@ -160,7 +213,7 @@ export function ChangelogDialog({
   const { projectId } = useSelectedProject();
   const { data: areas = [] } = useQuery({
     ...areasByProjectQueryOptions(projectId),
-    enabled: open && projectId !== null,
+    enabled: projectId !== null,
   });
 
   const cbsOptions: SearchableSelectOption[] = React.useMemo(
@@ -172,12 +225,13 @@ export function ChangelogDialog({
       })),
     [cbsCodeOptions],
   );
+  // `busy` doesn't reset when the outer toggles open; that's fine because
+  // mutation completion already sets it back to false in useFormDialog.
+  void setBusy;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,1100px)] max-h-[90vh] overflow-y-auto">
-        <div className="space-y-4">
+    <>
+      <div className="space-y-4">
           <div className="flex items-start justify-between gap-2 pr-8">
             <div>
               <h2 className="text-lg font-semibold text-slate-800">
@@ -306,7 +360,7 @@ export function ChangelogDialog({
               onTransition={onTransition}
               entityId={initial.id}
               entityNoun="CVR"
-              onSuccess={() => setOpen(false)}
+              onSuccess={closeDialog}
             />
           )}
 
@@ -486,9 +540,8 @@ export function ChangelogDialog({
               {busy ? "Saving…" : initial ? "Save Changes" : "Create"}
             </Button>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </>
   );
 }
 

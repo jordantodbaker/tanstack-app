@@ -2,20 +2,20 @@ import {
   CHANGE_STATUSES,
   CVR_OPEN_STATUSES,
   RISK_LEVELS,
-  type ChangeLogItem,
+  type ChangeLogListItem,
   type ChangeStatus,
   type RiskLevel,
 } from "./changelog";
 import {
   FCO_STATUSES,
   FCO_OPEN_STATUSES,
-  type FcoItem,
+  type FcoListItem,
   type FcoStatus,
 } from "./fcoLog";
 import {
   RFI_STATUSES,
   RFI_OPEN_STATUSES,
-  type RfiItem,
+  type RfiListItem,
   type RfiStatus,
 } from "./rfis";
 
@@ -48,8 +48,8 @@ export type CvrSummary = {
   byDiscipline: { discipline: string; cost: number }[];
 };
 
-export function summarizeCvrs(items: ChangeLogItem[]): CvrSummary {
-  const sum = (rows: ChangeLogItem[], pick: (c: ChangeLogItem) => number) =>
+export function summarizeCvrs(items: ChangeLogListItem[]): CvrSummary {
+  const sum = (rows: ChangeLogListItem[], pick: (c: ChangeLogListItem) => number) =>
     rows.reduce((acc, c) => acc + pick(c), 0);
 
   const discMap = new Map<string, number>();
@@ -94,7 +94,7 @@ export type FcoSummary = {
   byStatus: StatusBucket<FcoStatus>[];
 };
 
-export function summarizeFcos(items: FcoItem[]): FcoSummary {
+export function summarizeFcos(items: FcoListItem[]): FcoSummary {
   return {
     total: items.length,
     open: items.filter((f) => FCO_OPEN_STATUSES.includes(f.status)).length,
@@ -126,7 +126,7 @@ export type RfiSummary = {
 };
 
 export function summarizeRfis(
-  items: RfiItem[],
+  items: RfiListItem[],
   now: Date = new Date(),
 ): RfiSummary {
   return {
@@ -175,10 +175,10 @@ export type AttentionSummary = {
  * working — RFI counts simply collapse to zero.
  */
 export function summarizeAttention(
-  cvrs: ChangeLogItem[],
-  fcos: FcoItem[],
+  cvrs: ChangeLogListItem[],
+  fcos: FcoListItem[],
   now: Date = new Date(),
-  rfis: RfiItem[] = [],
+  rfis: RfiListItem[] = [],
 ): AttentionSummary {
   return {
     pendingApproval: cvrs.filter((c) => c.status === "PENDING_APPROVAL")

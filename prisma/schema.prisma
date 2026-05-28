@@ -314,6 +314,10 @@ model FefRow {
   schedule             String     @default("")
   taskCode             String     @default("")
   laborHours           String     @default("")
+  /// Per-row labor factor (hours per quantity unit). Empty falls back to
+  /// the project's Basis `estimateFactor` on the client; only the dynamic
+  /// disciplines expose this as a user input today.
+  laborFactor          String     @default("")
   laborRate            String     @default("")
   materialCost         String     @default("")
   equipment            String     @default("")

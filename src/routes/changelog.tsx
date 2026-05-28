@@ -7,12 +7,14 @@ import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
 import {
   changeLogListQueryOptions,
+  changeLogListFullQueryOptions,
   upsertChangeLog,
   deleteChangeLog,
   transitionChangeLog,
   CHANGE_STATUSES,
   CVR_OPEN_STATUSES,
   type ChangeLogItem,
+  type ChangeLogListItem,
   type ChangeStatus,
   type UpsertChangeLogInput,
 } from "~/utils/changelog";
@@ -69,25 +71,28 @@ function ChangelogPage() {
     [areas],
   );
 
+  // Shared between upsert/delete/transition. Also busts the dashboard's
+  // server-aggregated summary so the StatCards refresh next visit.
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["changeLog", projectId] });
+    queryClient.invalidateQueries({
+      queryKey: ["dashboardSummary", projectId],
+    });
+  };
+
   const upsert = useMutation({
     mutationFn: (input: UpsertChangeLogInput) =>
       upsertChangeLog({ data: input }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["changeLog", projectId] });
-    },
+    onSuccess: invalidate,
   });
   const remove = useMutation({
     mutationFn: (id: number) => deleteChangeLog({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["changeLog", projectId] });
-    },
+    onSuccess: invalidate,
   });
   const transition = useMutation({
     mutationFn: (input: { id: number; action: string }) =>
       transitionChangeLog({ data: input }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["changeLog", projectId] });
-    },
+    onSuccess: invalidate,
   });
 
   const [search, setSearch] = React.useState("");
@@ -96,19 +101,28 @@ function ChangelogPage() {
   );
   const [disciplineFilter, setDisciplineFilter] = React.useState("");
 
-  const filtered = React.useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return items.filter((it) => {
+  // Slim list payload drops `description` / `notes` / `reasonCode`;
+  // search by CVR #, title, originator, approver, CBS, area covers the
+  // common cases without pulling multi-paragraph text on every visit.
+  const matchesFilters = React.useCallback(
+    (it: ChangeLogListItem): boolean => {
+      const q = search.trim().toLowerCase();
       if (statusFilter && it.status !== statusFilter) return false;
       if (disciplineFilter && it.discipline !== disciplineFilter) return false;
       if (q) {
         const haystack =
-          `${it.cvrNumber} ${it.title} ${it.description} ${it.originator} ${it.approver} ${it.reasonCode} ${it.cbsCodes.join(` `)} ${areaLabel(it.area)}`.toLowerCase();
+          `${it.cvrNumber} ${it.title} ${it.originator} ${it.approver} ${it.cbsCodes.join(` `)} ${areaLabel(it.area)}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
-    });
-  }, [items, search, statusFilter, disciplineFilter, areaLabel]);
+    },
+    [search, statusFilter, disciplineFilter, areaLabel],
+  );
+
+  const filtered = React.useMemo(
+    () => items.filter(matchesFilters),
+    [items, matchesFilters],
+  );
 
   const stats = React.useMemo(() => {
     const totalCost = items.reduce((acc, i) => acc + i.costImpact, 0);
@@ -209,7 +223,13 @@ function ChangelogPage() {
           Showing {filtered.length} of {items.length}
         </span>
         <ExportCsvButton
-          items={filtered}
+          getItems={async () => {
+            const full = await queryClient.fetchQuery(
+              changeLogListFullQueryOptions(projectId),
+            );
+            return full.filter(matchesFilters);
+          }}
+          disabled={filtered.length === 0}
           columns={cvrCsvColumns(areaLabel)}
           filenamePrefix="cvr-export"
         />
@@ -273,7 +293,7 @@ function ChangelogTable({
   onDelete,
   onTransition,
 }: {
-  items: ChangeLogItem[];
+  items: ChangeLogListItem[];
   areaLabel: (raw: string) => string;
   onSubmit: (input: Omit<UpsertChangeLogInput, "projectId">) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;
@@ -327,7 +347,7 @@ function ChangelogRow({
   onDelete,
   onTransition,
 }: {
-  item: ChangeLogItem;
+  item: ChangeLogListItem;
   areaLabel: (raw: string) => string;
   onSubmit: (input: Omit<UpsertChangeLogInput, "projectId">) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;

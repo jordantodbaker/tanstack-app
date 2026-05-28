@@ -22,7 +22,7 @@ import {
 } from "./materialsStore";
 import { aggregateTakeOff } from "./take-off-sync";
 import { createDebug } from "./logger";
-import { makeFefRow } from "./fef-helpers";
+import { canComputeTotalCost, makeFefRow } from "./fef-helpers";
 
 const debug = createDebug("fef");
 
@@ -178,6 +178,129 @@ export function ReadOnlyCell({ getValue }: { getValue: () => unknown }) {
     <span className={readOnlyCellClass}>
       {getValue() as string}
     </span>
+  );
+}
+
+/**
+ * Default Labor Factor when a row hasn't been explicitly set. 1.0 → labor
+ * hours equals quantity, which is the lowest-surprise baseline for users
+ * who don't know what factor to enter.
+ */
+const DEFAULT_LABOR_FACTOR = "1";
+
+/**
+ * Resolves a row's effective labor factor: the row-stored value if the user
+ * typed one, otherwise the hardcoded `DEFAULT_LABOR_FACTOR`.
+ */
+function effectiveLaborFactor(storedFactor: string): string {
+  return storedFactor !== "" ? storedFactor : DEFAULT_LABOR_FACTOR;
+}
+
+/** Derived labor hours = quantity × labor factor, formatted to 1dp. Returns
+ *  "" when either input isn't a positive finite number. */
+function computeLaborHours(quantity: string, factor: string): string {
+  const q = parseFloat(quantity);
+  const f = parseFloat(factor);
+  if (!Number.isFinite(q) || !Number.isFinite(f)) return "";
+  return (q * f).toFixed(1);
+}
+
+/**
+ * Labor-factor input for the dynamic disciplines' Take Off sheet. Empty
+ * rows display `DEFAULT_LABOR_FACTOR` so a brand-new row produces a
+ * meaningful labor-hours estimate (labor hours == quantity) without
+ * further input. Typing overrides the default and stamps the row;
+ * clearing reverts to the default on the next render.
+ */
+export function LaborFactorInputCell({ getValue, row, table }: CellProps) {
+  const stored = (getValue() as string) ?? "";
+  return (
+    <TextCell
+      value={effectiveLaborFactor(stored)}
+      onCommit={(v) => {
+        const next = v.trim();
+        // Storing the default verbatim is wasteful — leave the row empty
+        // so a future change to `DEFAULT_LABOR_FACTOR` still flows through.
+        const persisted = next === DEFAULT_LABOR_FACTOR ? "" : next;
+        const newLaborHours = computeLaborHours(
+          row.original.quantity,
+          effectiveLaborFactor(persisted),
+        );
+        table.options.meta?.updateRow?.(row.index, {
+          laborFactor: persisted,
+          laborHours: newLaborHours,
+        });
+      }}
+    />
+  );
+}
+
+/**
+ * Quantity input that, beyond storing the typed value, recomputes the
+ * row's `laborHours` from the new quantity × the effective labor factor.
+ * Keeps `laborHours` authoritative so the read-only Labor Hours cell and
+ * the downstream Total Cost cell don't need to know about the factor.
+ */
+export function LaborFactorQuantityCell({ getValue, row, table }: CellProps) {
+  return (
+    <TextCell
+      value={getValue() as string}
+      onCommit={(v) => {
+        const newLaborHours = computeLaborHours(
+          v,
+          effectiveLaborFactor(row.original.laborFactor),
+        );
+        table.options.meta?.updateRow?.(row.index, {
+          quantity: v,
+          laborHours: newLaborHours,
+        });
+      }}
+    />
+  );
+}
+
+/**
+ * Read-only Labor Hours display for the dynamic disciplines. Recomputes
+ * on every render from `quantity × effective factor` so rows migrated in
+ * from before this column existed (stored `laborHours` may be stale)
+ * still display the right number.
+ */
+export function ComputedLaborHoursCell({ row }: CellProps) {
+  return (
+    <span className={readOnlyCellClass}>
+      {computeLaborHours(
+        row.original.quantity,
+        effectiveLaborFactor(row.original.laborFactor),
+      )}
+    </span>
+  );
+}
+
+/**
+ * Take Off row-selection checkbox. Disabled until the row can compute a
+ * Total Cost (i.e. has both labor hours and rate); a ticked checkbox marks
+ * the row for the "Duplicate Selected Rows" action.
+ */
+export function SelectionCheckboxCell({ row, table }: CellProps) {
+  const selectable = canComputeTotalCost(row.original);
+  const selectedSet = table.options.meta?.selectedRowIndices;
+  const checked = selectable && (selectedSet?.has(row.index) ?? false);
+  const onToggle = table.options.meta?.onToggleRowSelected;
+  return (
+    <div className="flex items-center justify-center">
+      <input
+        type="checkbox"
+        aria-label="Select row for duplication"
+        checked={checked}
+        disabled={!selectable}
+        onChange={() => onToggle?.(row.index)}
+        className={
+          selectable
+            ? "h-4 w-4 cursor-pointer accent-[#a63434]"
+            : "h-4 w-4 cursor-not-allowed accent-slate-400 opacity-50"
+        }
+      />
+    </div>
   );
 }
 
@@ -379,6 +502,11 @@ export type FefTableMeta = {
     { unit: string; values: Map<number, number> }
   >;
   areaOptions?: AreaSelectOption[];
+  selectedRowIndices?: Set<number>;
+  onToggleRowSelected?: (rowIndex: number) => void;
+  /** Optional override for the default delete behavior. Lets callers also
+   *  adjust ancillary state (e.g. selection sets) atomically with deletion. */
+  deleteRow?: (rowIndex: number) => void;
 };
 
 export type FefTableState = {
@@ -405,21 +533,33 @@ export type ServerPagination = {
  *
  * Trade-off: if `table.options.meta` legitimately changes (e.g. the
  * `cbsOptions` query finishes loading after the table has mounted), rows
- * already rendered with stale meta won't re-render until their underlying
- * data changes. In practice meta is prefetched in the route loader so it's
- * available by first paint; the brief inconsistency is acceptable for the
- * editing-speed win.
+ * already rendered with stale meta would otherwise keep their old dropdown
+ * contents until their underlying data changes. The `metaRev` prop is a
+ * memoized identity that flips whenever a query-derived meta array
+ * (roleOptions, cbsOptions, etc.) changes reference — including it in the
+ * comparator forces every row to re-render with fresh meta after a refetch,
+ * without giving up the per-keystroke memoization win for editing.
  */
 const FefTableRow = React.memo(
   function FefTableRow({
     row,
     rowIndex,
+    selected: _selected,
+    metaRev: _metaRev,
     getRowInvalid,
   }: {
     row: Row<FefRow>;
     rowIndex: number;
+    /** Participates in the memo comparator so a selection toggle re-renders
+     *  just this row. Cells read selection state from `table.options.meta`. */
+    selected: boolean;
+    /** Memo-only identity that flips when the meta arrays sourced from
+     *  queries (roleOptions, cbsOptions, etc.) change reference. */
+    metaRev: object;
     getRowInvalid?: (row: FefRow) => boolean;
   }) {
+    void _selected;
+    void _metaRev;
     const invalid = getRowInvalid?.(row.original) ?? false;
     // Invalid rows get a faint red wash + thicker red left border so they
     // stand out against the alternating zebra without obscuring the inputs.
@@ -453,8 +593,15 @@ const FefTableRow = React.memo(
     // setter does immutable updates: only the edited row gets a new object;
     // sibling rows keep the same reference. `getRowInvalid` is expected to
     // be a stable module-level function (e.g. `isTakeOffRowInvalid`).
+    // `selected` participates so a checkbox toggle re-renders just the
+    // affected row, not every row in the table. `metaRev` flips only when a
+    // query-derived meta array changes reference, so query refetches (e.g.
+    // an admin added a Role) re-render every row's dropdowns with fresh
+    // options without disturbing the editing-speed memoization.
     prev.row.original === next.row.original &&
     prev.rowIndex === next.rowIndex &&
+    prev.selected === next.selected &&
+    prev.metaRev === next.metaRev &&
     prev.getRowInvalid === next.getRowInvalid,
 );
 
@@ -524,6 +671,32 @@ export function FefTableContent({
   const { data, setData, columnFilters, setColumnFilters } = state;
   const [localPageIndex, setLocalPageIndex] = React.useState(0);
 
+  // Identity that flips when any non-row-data input that affects cell
+  // rendering changes reference: query-derived meta arrays (e.g. an admin
+  // added a Role and `roleOptions` was re-fetched) or `columnVisibility`
+  // (the Show/Hide Details toggle adds/removes whole columns). Threading
+  // this token through `FefTableRow`'s memo comparator makes every row
+  // re-render exactly when the visible cell list or dropdown contents
+  // could have changed, without re-rendering on keystrokes. Excludes
+  // `selectedRowIndices` on purpose — selection changes already propagate
+  // through each row's `selected` prop.
+  const metaRev = React.useMemo(
+    () => ({}),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      meta?.cbsOptions,
+      meta?.weldGroupOptions,
+      meta?.weldGroupMaterialMap,
+      meta?.roleOptions,
+      meta?.scheduleOptions,
+      meta?.roleRates,
+      meta?.taskCodeOptions,
+      meta?.pipingFactorLookup,
+      meta?.areaOptions,
+      columnVisibility,
+    ],
+  );
+
   const pagination: PaginationState = serverPagination
     ? {
         pageIndex: serverPagination.pageIndex,
@@ -563,6 +736,8 @@ export function FefTableContent({
       taskCodeOptions: meta?.taskCodeOptions ?? [],
       pipingFactorLookup: meta?.pipingFactorLookup,
       areaOptions: meta?.areaOptions ?? [],
+      selectedRowIndices: meta?.selectedRowIndices,
+      onToggleRowSelected: meta?.onToggleRowSelected,
       updateData: (rowIndex: number, columnId: string, value: string) => {
         debug("updateData", { rowIndex, columnId, value });
         setData((old) =>
@@ -579,9 +754,11 @@ export function FefTableContent({
           ),
         );
       },
-      deleteRow: (rowIndex: number) => {
-        setData((old) => old.filter((_, index) => index !== rowIndex));
-      },
+      deleteRow:
+        meta?.deleteRow ??
+        ((rowIndex: number) => {
+          setData((old) => old.filter((_, index) => index !== rowIndex));
+        }),
     } satisfies TableMeta<RowData>,
   });
 
@@ -595,10 +772,10 @@ export function FefTableContent({
                 <th
                   key={header.id}
                   style={{ minWidth: header.column.getSize() }}
-                  className="border border-gray-300 px-3 py-2 text-left font-semibold"
+                  className="border border-gray-300 px-2 py-2 text-left font-semibold align-bottom"
                 >
                   <div className="flex flex-col gap-1">
-                    <span className="whitespace-nowrap">
+                    <span className="leading-tight">
                       {flexRender(
                         header.column.columnDef.header,
                         header.getContext(),
@@ -617,6 +794,8 @@ export function FefTableContent({
               key={row.id}
               row={row}
               rowIndex={i}
+              selected={meta?.selectedRowIndices?.has(i) ?? false}
+              metaRev={metaRev}
               getRowInvalid={getRowInvalid}
             />
           ))}

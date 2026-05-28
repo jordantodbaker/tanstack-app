@@ -20,5 +20,7 @@ declare module "@tanstack/react-table" {
     taskCodeOptions?: { code: string; taskDefinition: string }[];
     pipingFactorLookup?: Map<string, { unit: string; values: Map<number, number> }>;
     areaOptions?: { value: string; label: string }[];
+    selectedRowIndices?: Set<number>;
+    onToggleRowSelected?: (rowIndex: number) => void;
   }
 }

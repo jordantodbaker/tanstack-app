@@ -4,6 +4,7 @@ import {
   FCO_PRIORITY_LABELS,
   FCO_STATUS_LABELS,
 } from "~/utils/fcoLogLabels";
+import { makeEnumBadge } from "~/components/ui/enum-badge";
 
 const STATUS_STYLES: Record<FcoStatus, string> = {
   DRAFT: "bg-slate-100 text-slate-700 border-slate-300",
@@ -17,16 +18,6 @@ const STATUS_STYLES: Record<FcoStatus, string> = {
   VOID: "bg-slate-50 text-slate-400 border-slate-200 line-through",
 };
 
-export function FcoStatusBadge({ status }: { status: FcoStatus }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[status]}`}
-    >
-      {FCO_STATUS_LABELS[status]}
-    </span>
-  );
-}
-
 const PRIORITY_STYLES: Record<FcoPriority, string> = {
   LOW: "bg-slate-100 text-slate-700",
   NORMAL: "bg-blue-100 text-blue-800",
@@ -34,14 +25,24 @@ const PRIORITY_STYLES: Record<FcoPriority, string> = {
   URGENT: "bg-red-100 text-red-800 animate-pulse",
 };
 
+const FcoStatusBadgeBase = makeEnumBadge({
+  labels: FCO_STATUS_LABELS,
+  styles: STATUS_STYLES,
+  shape: "pill",
+});
+
+const FcoPriorityBadgeBase = makeEnumBadge({
+  labels: FCO_PRIORITY_LABELS,
+  styles: PRIORITY_STYLES,
+  shape: "tag",
+});
+
+export function FcoStatusBadge({ status }: { status: FcoStatus }) {
+  return <FcoStatusBadgeBase value={status} />;
+}
+
 export function FcoPriorityBadge({ priority }: { priority: FcoPriority }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${PRIORITY_STYLES[priority]}`}
-    >
-      {FCO_PRIORITY_LABELS[priority]}
-    </span>
-  );
+  return <FcoPriorityBadgeBase value={priority} />;
 }
 
 export { FCO_STATUS_LABELS, FCO_PRIORITY_LABELS, FCO_ORIGIN_LABELS };

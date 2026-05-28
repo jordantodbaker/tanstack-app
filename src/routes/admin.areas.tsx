@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { MapPin, Plus } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { Th, TableEmptyState } from "~/components/ui/list-page";
 import { AreaDialog } from "~/components/Admin/AreaDialog";
-import { AdminPageHeader } from "~/components/Admin/AdminPageHeader";
-import { invalidateAdminEntity } from "~/lib/admin-invalidations";
+import {
+  AdminListPage,
+  useAdminMutations,
+} from "~/components/Admin/AdminListPage";
 import {
   areasQueryOptions,
   upsertArea,
@@ -28,28 +29,13 @@ export const Route = createFileRoute("/admin/areas")({
 });
 
 function AdminAreasPage() {
-  const queryClient = useQueryClient();
   const { data: areas = [] } = useQuery(areasQueryOptions());
   const { data: projects = [] } = useQuery(projectsQueryOptions());
-
-  const invalidate = () => invalidateAdminEntity(queryClient, "areas");
-
-  const upsert = useMutation({
-    mutationFn: (input: UpsertAreaInput) => upsertArea({ data: input }),
-    onSuccess: invalidate,
+  const { onSubmit, onDelete } = useAdminMutations<UpsertAreaInput>({
+    entity: "areas",
+    upsertFn: upsertArea,
+    deleteFn: deleteArea,
   });
-  const remove = useMutation({
-    mutationFn: (id: number) => deleteArea({ data: { id } }),
-    onSuccess: invalidate,
-  });
-
-  function handleSubmit(input: UpsertAreaInput) {
-    return upsert.mutateAsync(input);
-  }
-
-  function handleDelete(id: number) {
-    return remove.mutateAsync(id);
-  }
 
   const projectLabel = React.useMemo(() => {
     const map = new Map(
@@ -59,56 +45,41 @@ function AdminAreasPage() {
   }, [projects]);
 
   return (
-    <main className="p-4 max-w-5xl space-y-6">
-      <AdminPageHeader
-        icon={MapPin}
-        title="Areas"
-        subtitle="Physical locations on a project. Each area belongs to one project."
-        action={
-          <AreaDialog
-            projects={projects}
-            trigger={
-              <Button disabled={projects.length === 0}>
-                <Plus className="mr-1 size-4" />
-                New Area
-              </Button>
-            }
-            onSubmit={handleSubmit}
-          />
-        }
-      />
-
-      {projects.length === 0 ? (
-        <TableEmptyState message="Create a project first — areas must belong to one." />
-      ) : areas.length === 0 ? (
-        <TableEmptyState message="No areas yet. Create the first one." />
-      ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-          <table className="w-full border-collapse text-sm">
-            <thead className="bg-slate-50">
-              <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <Th>Area ID</Th>
-                <Th>Name</Th>
-                <Th>Description</Th>
-                <Th>Project</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {areas.map((area) => (
-                <AreaRow
-                  key={area.id}
-                  area={area}
-                  projectLabel={projectLabel(area.projectId)}
-                  projects={projects}
-                  onSubmit={handleSubmit}
-                  onDelete={handleDelete}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+    <AdminListPage
+      icon={MapPin}
+      title="Areas"
+      subtitle="Physical locations on a project. Each area belongs to one project."
+      action={
+        <AreaDialog
+          projects={projects}
+          trigger={
+            <Button disabled={projects.length === 0}>
+              <Plus className="mr-1 size-4" />
+              New Area
+            </Button>
+          }
+          onSubmit={onSubmit}
+        />
+      }
+      items={areas}
+      emptyMessage="No areas yet. Create the first one."
+      preconditionMessage={
+        projects.length === 0
+          ? "Create a project first — areas must belong to one."
+          : null
+      }
+      columns={["Area ID", "Name", "Description", "Project"]}
+      renderRow={(area) => (
+        <AreaRow
+          key={area.id}
+          area={area}
+          projectLabel={projectLabel(area.projectId)}
+          projects={projects}
+          onSubmit={onSubmit}
+          onDelete={onDelete!}
+        />
       )}
-    </main>
+    />
   );
 }
 

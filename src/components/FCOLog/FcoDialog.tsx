@@ -23,7 +23,9 @@ import {
   FCO_ORIGIN_TYPES,
   FCO_PRIORITIES,
   cvrOptionsQueryOptions,
+  fcoQueryOptions,
   type FcoItem,
+  type FcoListItem,
   type FcoOriginType,
   type FcoPriority,
   type UpsertFcoInput,
@@ -115,17 +117,12 @@ function fromItem(item: FcoItem): FormState {
   };
 }
 
-export function FcoDialog({
-  trigger,
-  initial,
-  projectId,
-  onSubmit,
-  onDelete,
-  onPromote,
-  onTransition,
-}: {
+type FcoDialogProps = {
   trigger: React.ReactNode;
-  initial?: FcoItem;
+  /** Slim list-item shape. The dialog fetches the full record (with
+   *  `description` / `reasonNarrative` / `resolution` / `notes` /
+   *  `photosUrl`) on open and gates the form body until it arrives. */
+  initial?: FcoListItem;
   projectId: number | null;
   onSubmit: (form: FormState) => Promise<unknown>;
   onDelete?: (id: number) => Promise<unknown>;
@@ -136,10 +133,77 @@ export function FcoDialog({
    * originator status. See `FCO_TRANSITIONS` in workflow.ts.
    */
   onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
+};
+
+/**
+ * Outer wrapper. Owns the Dialog open state and runs the lazy full-record
+ * fetch in edit mode. Inner `FcoDialogBody` only mounts once the full data
+ * is ready, so its `useFormDialog` seeds the form with complete data on the
+ * first render (avoids a flicker where heavy text fields would be blank
+ * for ~100ms before re-seeding from the network response).
+ */
+export function FcoDialog({
+  trigger,
+  initial: initialSlim,
+  projectId,
+  onSubmit,
+  onDelete,
+  onPromote,
+  onTransition,
+}: FcoDialogProps) {
+  const [open, setOpen] = React.useState(false);
+  const isEdit = initialSlim?.id !== undefined;
+  const { data: full } = useQuery({
+    ...fcoQueryOptions(isEdit ? (initialSlim?.id ?? null) : null),
+    enabled: open && isEdit,
+  });
+  const fullReady = !isEdit || !!full;
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,1100px)] max-h-[90vh] overflow-y-auto">
+        {!open ? null : !fullReady ? (
+          <div className="p-8 text-center text-sm text-slate-500">
+            Loading FCO…
+          </div>
+        ) : (
+          <FcoDialogBody
+            // Re-mount on id change so prior form state doesn't leak across
+            // edits of different rows.
+            key={initialSlim?.id ?? "new"}
+            initial={full ?? undefined}
+            projectId={projectId}
+            onSubmit={onSubmit}
+            onDelete={onDelete}
+            onPromote={onPromote}
+            onTransition={onTransition}
+            closeDialog={() => setOpen(false)}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function FcoDialogBody({
+  initial,
+  projectId,
+  onSubmit,
+  onDelete,
+  onPromote,
+  onTransition,
+  closeDialog,
+}: {
+  /** Full record (loaded by the outer) or undefined for new-mode. */
+  initial?: FcoItem;
+  projectId: number | null;
+  onSubmit: (form: FormState) => Promise<unknown>;
+  onDelete?: (id: number) => Promise<unknown>;
+  onPromote?: (id: number) => Promise<unknown>;
+  onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
+  closeDialog: () => void;
 }) {
   const {
-    open,
-    setOpen,
     form,
     busy,
     setBusy,
@@ -150,8 +214,16 @@ export function FcoDialog({
     initial,
     blank: blankForm,
     fromItem,
-    onSubmit,
-    onDelete,
+    onSubmit: async (formState) => {
+      await onSubmit(formState);
+      closeDialog();
+    },
+    onDelete: onDelete
+      ? async (id) => {
+          await onDelete(id);
+          closeDialog();
+        }
+      : undefined,
     deleteConfirm: (i) => `Delete FCO "${i.title}"? This cannot be undone.`,
   });
 
@@ -170,15 +242,14 @@ export function FcoDialog({
         )
       : [];
 
+  // `open` is implicitly true — this component only mounts when the outer
+  // dialog is open and the full record has loaded.
   const { data: cvrOptions = [] } = useQuery({
     ...cvrOptionsQueryOptions(projectId),
-    enabled: open && projectId !== null,
+    enabled: projectId !== null,
   });
 
-  const { data: cbsCodeOptions = [] } = useQuery({
-    ...cbsCodeOptionsQueryOptions(),
-    enabled: open,
-  });
+  const { data: cbsCodeOptions = [] } = useQuery(cbsCodeOptionsQueryOptions());
 
   // Areas for the selected project — populates the Area dropdown. We store
   // the area id as a string in `locationArea`, mirroring the FefRow.area
@@ -186,7 +257,7 @@ export function FcoDialog({
   // (and the user can re-pick on save).
   const { data: areas = [] } = useQuery({
     ...areasByProjectQueryOptions(projectId),
-    enabled: open && projectId !== null,
+    enabled: projectId !== null,
   });
 
   const cbsOptions: SearchableSelectOption[] = React.useMemo(
@@ -225,7 +296,7 @@ export function FcoDialog({
     setBusy(true);
     try {
       await onPromote(initial.id);
-      setOpen(false);
+      closeDialog();
     } finally {
       setBusy(false);
     }
@@ -235,10 +306,8 @@ export function FcoDialog({
     initial && !initial.linkedCvrId && onPromote && projectId !== null;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,1100px)] max-h-[90vh] overflow-y-auto">
-        <div className="space-y-4">
+    <>
+      <div className="space-y-4">
           <div className="flex items-start justify-between gap-2 pr-8">
             <div>
               <h2 className="text-lg font-semibold text-slate-800">
@@ -406,7 +475,7 @@ export function FcoDialog({
               onTransition={onTransition}
               entityId={initial.id}
               entityNoun="FCO"
-              onSuccess={() => setOpen(false)}
+              onSuccess={closeDialog}
             />
           )}
 
@@ -668,9 +737,8 @@ export function FcoDialog({
               {busy ? "Saving…" : initial ? "Save Changes" : "Create FCO"}
             </Button>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </>
   );
 }
 

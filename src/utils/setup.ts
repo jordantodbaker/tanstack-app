@@ -69,6 +69,10 @@ export const allowedCbsL1CodesQueryOptions = (projectId: number) =>
   queryOptions({
     queryKey: ["allowedCbsL1Codes", projectId],
     queryFn: () => fetchAllowedCbsL1Codes({ data: projectId }),
+    // Sidebar reads this on every page mount. `updateAllowedFefCbsItems`
+    // invalidates this key explicitly on save, so refetching on a timer
+    // would just re-ship the same payload on every navigation.
+    staleTime: Infinity,
   });
 
 /** Admin-only: edits a project's CBS allow-list. */

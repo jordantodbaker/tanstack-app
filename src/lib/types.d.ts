@@ -22,6 +22,11 @@ export type FefRow = {
   schedule: string;
   taskCode: string;
   laborHours: string;
+  /** Per-row labor factor (hours per quantity unit). Empty falls back to the
+   *  project's Basis page `estimateFactor` for display + labor-hours
+   *  derivation. Only the dynamic disciplines surface this as an input;
+   *  Piping computes its own factor from the taskCode/size lookup table. */
+  laborFactor: string;
   laborRate: string;
   materialCost: string;
   equipment: string;

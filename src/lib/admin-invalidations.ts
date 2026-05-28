@@ -11,9 +11,13 @@ import type { QueryClient } from "@tanstack/react-query";
  */
 const FAN_OUT = {
   // Projects save can change attached subs, areas, and user assignments.
-  projects: ["projects", "subcontractors", "areas", "adminUsers"],
+  projects: ["projects", "subcontractors", "areas", "areasByProject", "adminUsers"],
   subcontractors: ["subcontractors", "projects"],
-  areas: ["areas", "projects"],
+  // `areasByProject` is the per-project dropdown list; it's a separate cache
+  // key from `areas` (the admin list), so admin add/edit/delete has to bust
+  // both. Without this entry, a freshly added area wouldn't show in any
+  // Take Off / dialog dropdown until a hard refresh.
+  areas: ["areas", "areasByProject", "projects"],
   // User save can change project assignments — bust the projects list too
   // because non-admins' visible-project set may change.
   users: ["adminUsers", "projects"],

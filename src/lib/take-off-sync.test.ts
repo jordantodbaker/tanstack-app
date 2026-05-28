@@ -18,6 +18,7 @@ function row(overrides: Partial<FefRow>): FefRow {
     schedule: "",
     taskCode: "",
     laborHours: "",
+    laborFactor: "",
     laborRate: "",
     materialCost: "",
     equipment: "",

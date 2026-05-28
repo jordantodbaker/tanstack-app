@@ -15,6 +15,7 @@ import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
 import {
   trendListQueryOptions,
+  trendListFullQueryOptions,
   upsertTrend,
   deleteTrend,
   transitionTrend,
@@ -23,6 +24,7 @@ import {
   TREND_STATUSES,
   TREND_ACTIVE_STATUSES,
   type TrendItem,
+  type TrendListItem,
   type TrendStatus,
   type UpsertTrendInput,
 } from "~/utils/trends";
@@ -117,19 +119,27 @@ function TrendLogPage() {
   const [statusFilter, setStatusFilter] = React.useState<"" | TrendStatus>("");
   const [disciplineFilter, setDisciplineFilter] = React.useState("");
 
-  const filtered = React.useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return items.filter((it) => {
+  // Slim list payload drops `description` / `reasonNarrative` / `notes`;
+  // search by trend #, title, initiator, and area covers the common cases.
+  const matchesFilters = React.useCallback(
+    (it: TrendListItem): boolean => {
+      const q = search.trim().toLowerCase();
       if (statusFilter && it.status !== statusFilter) return false;
       if (disciplineFilter && it.discipline !== disciplineFilter) return false;
       if (q) {
         const haystack =
-          `${it.trendNumber} ${it.title} ${it.description} ${it.reasonNarrative} ${it.notes} ${it.initiatedBy} ${areaLabel(it.locationArea)}`.toLowerCase();
+          `${it.trendNumber} ${it.title} ${it.initiatedBy} ${areaLabel(it.locationArea)}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
-    });
-  }, [items, search, statusFilter, disciplineFilter, areaLabel]);
+    },
+    [search, statusFilter, disciplineFilter, areaLabel],
+  );
+
+  const filtered = React.useMemo(
+    () => items.filter(matchesFilters),
+    [items, matchesFilters],
+  );
 
   const stats = React.useMemo(() => {
     const now = new Date();
@@ -334,7 +344,7 @@ function TrendTable({
   onTransition,
   onPromote,
 }: {
-  items: TrendItem[];
+  items: TrendListItem[];
   projectId: number | null;
   areaLabel: (raw: string) => string;
   onSubmit: (input: Omit<UpsertTrendInput, "projectId">) => Promise<unknown>;
@@ -390,7 +400,7 @@ function TrendRow({
   onTransition,
   onPromote,
 }: {
-  item: TrendItem;
+  item: TrendListItem;
   projectId: number | null;
   areaLabel: (raw: string) => string;
   onSubmit: (input: Omit<UpsertTrendInput, "projectId">) => Promise<unknown>;

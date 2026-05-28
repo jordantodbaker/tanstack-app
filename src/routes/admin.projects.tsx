@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import * as React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Plus, Shield } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { Th, TableEmptyState } from "~/components/ui/list-page";
 import { ProjectDialog } from "~/components/Admin/ProjectDialog";
-import { AdminPageHeader } from "~/components/Admin/AdminPageHeader";
-import { invalidateAdminEntity } from "~/lib/admin-invalidations";
+import {
+  AdminListPage,
+  useAdminMutations,
+} from "~/components/Admin/AdminListPage";
 import {
   projectsQueryOptions,
   upsertProject,
@@ -24,93 +24,41 @@ export const Route = createFileRoute("/admin/projects")({
 });
 
 function AdminProjectsPage() {
-  const queryClient = useQueryClient();
   const { data: projects = [] } = useQuery(projectsQueryOptions());
-
-  const invalidate = () => invalidateAdminEntity(queryClient, "projects");
-
-  const upsert = useMutation({
-    mutationFn: (input: UpsertProjectInput) => upsertProject({ data: input }),
-    onSuccess: invalidate,
-  });
-  const remove = useMutation({
-    mutationFn: (id: number) => deleteProject({ data: { id } }),
-    onSuccess: invalidate,
+  const { onSubmit, onDelete } = useAdminMutations<UpsertProjectInput>({
+    entity: "projects",
+    upsertFn: upsertProject,
+    deleteFn: deleteProject,
   });
 
-  function handleSubmit(input: UpsertProjectInput) {
-    return upsert.mutateAsync(input);
-  }
-
-  function handleDelete(id: number) {
-    return remove.mutateAsync(id);
-  }
-
   return (
-    <main className="p-4 max-w-5xl space-y-6">
-      <AdminPageHeader
-        icon={Shield}
-        title="Projects"
-        subtitle="Add, edit, and remove the projects available across the platform."
-        action={
-          <ProjectDialog
-            trigger={
-              <Button>
-                <Plus className="mr-1 size-4" />
-                New Project
-              </Button>
-            }
-            onSubmit={handleSubmit}
-          />
-        }
-      />
-
-      <ProjectsTable
-        projects={projects}
-        onSubmit={handleSubmit}
-        onDelete={handleDelete}
-      />
-    </main>
-  );
-}
-
-function ProjectsTable({
-  projects,
-  onSubmit,
-  onDelete,
-}: {
-  projects: ProjectOption[];
-  onSubmit: (input: UpsertProjectInput) => Promise<unknown>;
-  onDelete: (id: number) => Promise<unknown>;
-}) {
-  if (projects.length === 0) {
-    return (
-      <TableEmptyState message="No projects yet. Create the first one." />
-    );
-  }
-
-  return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-      <table className="w-full border-collapse text-sm">
-        <thead className="bg-slate-50">
-          <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-            <Th>Display ID</Th>
-            <Th>Name</Th>
-            <Th>Description</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {projects.map((project) => (
-            <ProjectRow
-              key={project.id}
-              project={project}
-              onSubmit={onSubmit}
-              onDelete={onDelete}
-            />
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <AdminListPage
+      icon={Shield}
+      title="Projects"
+      subtitle="Add, edit, and remove the projects available across the platform."
+      action={
+        <ProjectDialog
+          trigger={
+            <Button>
+              <Plus className="mr-1 size-4" />
+              New Project
+            </Button>
+          }
+          onSubmit={onSubmit}
+        />
+      }
+      items={projects}
+      emptyMessage="No projects yet. Create the first one."
+      columns={["Display ID", "Name", "Description"]}
+      renderRow={(project) => (
+        <ProjectRow
+          key={project.id}
+          project={project}
+          onSubmit={onSubmit}
+          onDelete={onDelete!}
+        />
+      )}
+    />
   );
 }
 

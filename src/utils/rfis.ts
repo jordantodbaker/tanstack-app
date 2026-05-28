@@ -23,12 +23,17 @@ export const RFI_OPEN_STATUSES: RfiStatus[] = ["DRAFT", "OPEN", "ANSWERED"];
 export const RFI_PRIORITIES = ["LOW", "NORMAL", "HIGH", "URGENT"] as const;
 export type RfiPriority = (typeof RFI_PRIORITIES)[number];
 
-export type RfiItem = {
+/**
+ * Slim shape used by the list-page table and the dashboard rollups. Drops
+ * the two long-text fields (`question`, `response`) that only the edit
+ * dialog and the CSV export need. The dialog refetches the full record on
+ * open via `rfiQueryOptions(id)`.
+ */
+export type RfiListItem = {
   id: number;
   projectId: number;
   rfiNumber: string;
   subject: string;
-  question: string;
   status: RfiStatus;
   priority: RfiPriority;
   discipline: string;
@@ -42,7 +47,6 @@ export type RfiItem = {
   assignedTo: string;
   dueDate: string | null;
   initiatedAt: string;
-  response: string;
   answeredBy: string;
   answeredAt: string | null;
   closedAt: string | null;
@@ -51,6 +55,11 @@ export type RfiItem = {
   updatedAt: string;
   /** FCOs promoted from this RFI. Empty array when none. */
   linkedFcos: { id: number; fcoNumber: string; title: string; status: string }[];
+};
+
+export type RfiItem = RfiListItem & {
+  question: string;
+  response: string;
 };
 
 const serializeDate = (d: Date | null): string | null =>
@@ -84,7 +93,87 @@ const toItem = (r: RfiWithLinks): RfiItem => {
   };
 };
 
+/**
+ * Prisma `select` for the slim list shape — keep in sync with `RfiListItem`.
+ * Omits `question` and `response`, which only the edit dialog and CSV need.
+ */
+const LIST_SELECT = {
+  id: true,
+  projectId: true,
+  rfiNumber: true,
+  subject: true,
+  status: true,
+  priority: true,
+  discipline: true,
+  cbsCodes: true,
+  locationArea: true,
+  drawingRefs: true,
+  specRefs: true,
+  suspectsCostImpact: true,
+  suspectsScheduleImpact: true,
+  initiatedBy: true,
+  assignedTo: true,
+  dueDate: true,
+  initiatedAt: true,
+  answeredBy: true,
+  answeredAt: true,
+  closedAt: true,
+  createdById: true,
+  createdAt: true,
+  updatedAt: true,
+  linkedFcos: {
+    select: { id: true, fcoNumber: true, title: true, status: true },
+  },
+} as const;
+
+type RfiListRow = Awaited<
+  ReturnType<typeof prisma.rfi.findMany<{ select: typeof LIST_SELECT }>>
+>[number];
+
+const toListItem = (r: RfiListRow): RfiListItem => {
+  const { linkedFcos, ...rest } = r;
+  return {
+    ...rest,
+    status: rest.status as RfiStatus,
+    priority: rest.priority as RfiPriority,
+    dueDate: serializeDate(rest.dueDate),
+    initiatedAt: rest.initiatedAt.toISOString(),
+    answeredAt: serializeDate(rest.answeredAt),
+    closedAt: serializeDate(rest.closedAt),
+    createdAt: rest.createdAt.toISOString(),
+    updatedAt: rest.updatedAt.toISOString(),
+    linkedFcos,
+  };
+};
+
 export const fetchRfiList = createServerFn({ method: "GET" })
+  .inputValidator((projectId: number) => projectId)
+  .handler(async ({ data: projectId }): Promise<RfiListItem[]> => {
+    await requireProjectAccess(projectId);
+    const rows = await prisma.rfi.findMany({
+      where: { projectId },
+      select: LIST_SELECT,
+      orderBy: [{ initiatedAt: "desc" }],
+    });
+    return rows.map(toListItem);
+  });
+
+export const rfiListQueryOptions = (projectId: number | null) =>
+  queryOptions({
+    queryKey: ["rfis", projectId],
+    queryFn: (): Promise<RfiListItem[]> =>
+      projectId === null
+        ? Promise.resolve([])
+        : fetchRfiList({ data: projectId }),
+    enabled: projectId !== null,
+    staleTime: 30 * 1000,
+  });
+
+/**
+ * Full list — every column. Triggered by the CSV export button on click so
+ * the long-text columns only ship when the user actually needs them.
+ */
+export const fetchRfiListFull = createServerFn({ method: "GET" })
   .inputValidator((projectId: number) => projectId)
   .handler(async ({ data: projectId }): Promise<RfiItem[]> => {
     await requireProjectAccess(projectId);
@@ -96,13 +185,13 @@ export const fetchRfiList = createServerFn({ method: "GET" })
     return rows.map(toItem);
   });
 
-export const rfiListQueryOptions = (projectId: number | null) =>
+export const rfiListFullQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["rfis", projectId],
+    queryKey: ["rfis", "full", projectId],
     queryFn: (): Promise<RfiItem[]> =>
       projectId === null
         ? Promise.resolve([])
-        : fetchRfiList({ data: projectId }),
+        : fetchRfiListFull({ data: projectId }),
     enabled: projectId !== null,
     staleTime: 30 * 1000,
   });

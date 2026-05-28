@@ -3,6 +3,7 @@ import {
   TREND_PRIORITY_LABELS,
   TREND_STATUS_LABELS,
 } from "~/utils/trendLabels";
+import { makeEnumBadge } from "~/components/ui/enum-badge";
 
 const STATUS_STYLES: Record<TrendStatus, string> = {
   // IDENTIFIED is the "fresh hunch" state; soft so it doesn't shout from a
@@ -16,16 +17,6 @@ const STATUS_STYLES: Record<TrendStatus, string> = {
   VOID: "bg-slate-50 text-slate-400 border-slate-200 line-through",
 };
 
-export function TrendStatusBadge({ status }: { status: TrendStatus }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[status]}`}
-    >
-      {TREND_STATUS_LABELS[status]}
-    </span>
-  );
-}
-
 const PRIORITY_STYLES: Record<TrendPriority, string> = {
   LOW: "bg-slate-100 text-slate-700",
   NORMAL: "bg-blue-100 text-blue-800",
@@ -33,12 +24,22 @@ const PRIORITY_STYLES: Record<TrendPriority, string> = {
   URGENT: "bg-red-100 text-red-800 animate-pulse",
 };
 
+const TrendStatusBadgeBase = makeEnumBadge({
+  labels: TREND_STATUS_LABELS,
+  styles: STATUS_STYLES,
+  shape: "pill",
+});
+
+const TrendPriorityBadgeBase = makeEnumBadge({
+  labels: TREND_PRIORITY_LABELS,
+  styles: PRIORITY_STYLES,
+  shape: "tag",
+});
+
+export function TrendStatusBadge({ status }: { status: TrendStatus }) {
+  return <TrendStatusBadgeBase value={status} />;
+}
+
 export function TrendPriorityBadge({ priority }: { priority: TrendPriority }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${PRIORITY_STYLES[priority]}`}
-    >
-      {TREND_PRIORITY_LABELS[priority]}
-    </span>
-  );
+  return <TrendPriorityBadgeBase value={priority} />;
 }

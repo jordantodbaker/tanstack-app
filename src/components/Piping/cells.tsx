@@ -154,6 +154,28 @@ export function TotalCostCell({ row }: CellProps) {
   return <span className={readOnlyCellClass}>{total}</span>;
 }
 
+type RoleRate = { roleName: string; schedule: string; rate: number };
+
+/**
+ * Looks up the composite labor rate for the (role, schedule) pair on a Take
+ * Off row. Returns the updates to apply: the field the user just changed,
+ * plus the freshly resolved `laborRate` (or `""` when no matching rate row
+ * exists). Centralizes the lookup so the Role and Schedule cells stay in
+ * sync — change one, the rate snaps to the matching cell of the rate matrix.
+ */
+function applyRoleRate(
+  changed: { role?: string; schedule?: string },
+  current: { role: string; schedule: string },
+  roleRates: RoleRate[],
+): Record<string, string> {
+  const role = changed.role ?? current.role;
+  const schedule = changed.schedule ?? current.schedule;
+  const match = roleRates.find(
+    (r) => r.roleName === role && r.schedule === schedule,
+  );
+  return { ...changed, laborRate: match ? String(match.rate) : "" };
+}
+
 export function RoleSelectCell({ getValue, row, table }: CellProps) {
   const value = getValue() as string;
   const { roleOptions = [], roleRates = [] } = table.options.meta ?? {};
@@ -162,15 +184,11 @@ export function RoleSelectCell({ getValue, row, table }: CellProps) {
       className={editableCellClass}
       value={value}
       onChange={(e) => {
-        const newRole = e.target.value;
-        const schedule = table.getRowModel().rows[row.index].original.schedule;
-        const match = roleRates.find(
-          (r) => r.roleName === newRole && r.schedule === schedule,
+        const rowData = table.getRowModel().rows[row.index].original;
+        table.options.meta?.updateRow?.(
+          row.index,
+          applyRoleRate({ role: e.target.value }, rowData, roleRates),
         );
-        table.options.meta?.updateRow?.(row.index, {
-          role: newRole,
-          laborRate: match ? String(match.rate) : "",
-        });
       }}
     >
       <option value="">-- Select --</option>
@@ -364,15 +382,11 @@ export function ScheduleSelectCell({ getValue, row, table }: CellProps) {
       className={editableCellClass}
       value={value}
       onChange={(e) => {
-        const newSchedule = e.target.value;
-        const role = table.getRowModel().rows[row.index].original.role;
-        const match = roleRates.find(
-          (r) => r.roleName === role && r.schedule === newSchedule,
+        const rowData = table.getRowModel().rows[row.index].original;
+        table.options.meta?.updateRow?.(
+          row.index,
+          applyRoleRate({ schedule: e.target.value }, rowData, roleRates),
         );
-        table.options.meta?.updateRow?.(row.index, {
-          schedule: newSchedule,
-          laborRate: match ? String(match.rate) : "",
-        });
       }}
     >
       <option value="">-- Select --</option>

@@ -81,6 +81,9 @@ export const usersQueryOptions = () =>
   queryOptions({
     queryKey: ["adminUsers"],
     queryFn: () => fetchUsers(),
+    // User and project admin mutations invalidate this via
+    // `invalidateAdminEntity` — refetch timers are wasted work.
+    staleTime: Infinity,
   });
 
 /** Updates a user's role and project assignments. Admin-only (gated

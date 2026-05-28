@@ -1,8 +1,6 @@
 import type { RfiPriority, RfiStatus } from "~/utils/rfis";
-import {
-  RFI_PRIORITY_LABELS,
-  RFI_STATUS_LABELS,
-} from "~/utils/rfiLabels";
+import { RFI_PRIORITY_LABELS, RFI_STATUS_LABELS } from "~/utils/rfiLabels";
+import { makeEnumBadge } from "~/components/ui/enum-badge";
 
 const STATUS_STYLES: Record<RfiStatus, string> = {
   DRAFT: "bg-slate-100 text-slate-700 border-slate-300",
@@ -14,16 +12,6 @@ const STATUS_STYLES: Record<RfiStatus, string> = {
   VOID: "bg-slate-50 text-slate-400 border-slate-200 line-through",
 };
 
-export function RfiStatusBadge({ status }: { status: RfiStatus }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[status]}`}
-    >
-      {RFI_STATUS_LABELS[status]}
-    </span>
-  );
-}
-
 const PRIORITY_STYLES: Record<RfiPriority, string> = {
   LOW: "bg-slate-100 text-slate-700",
   NORMAL: "bg-blue-100 text-blue-800",
@@ -31,12 +19,22 @@ const PRIORITY_STYLES: Record<RfiPriority, string> = {
   URGENT: "bg-red-100 text-red-800 animate-pulse",
 };
 
+const RfiStatusBadgeBase = makeEnumBadge({
+  labels: RFI_STATUS_LABELS,
+  styles: STATUS_STYLES,
+  shape: "pill",
+});
+
+const RfiPriorityBadgeBase = makeEnumBadge({
+  labels: RFI_PRIORITY_LABELS,
+  styles: PRIORITY_STYLES,
+  shape: "tag",
+});
+
+export function RfiStatusBadge({ status }: { status: RfiStatus }) {
+  return <RfiStatusBadgeBase value={status} />;
+}
+
 export function RfiPriorityBadge({ priority }: { priority: RfiPriority }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${PRIORITY_STYLES[priority]}`}
-    >
-      {RFI_PRIORITY_LABELS[priority]}
-    </span>
-  );
+  return <RfiPriorityBadgeBase value={priority} />;
 }

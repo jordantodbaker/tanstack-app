@@ -63,13 +63,18 @@ export type PcoLinkedCvrSummary = {
   costImpact: number;
 };
 
-export type PcoItem = {
+/**
+ * Slim shape used by the list table and dashboard. Drops the three long-text
+ * fields (`description`, `reasonNarrative`, `notes`) that only the dialog
+ * and CSV export need. The dialog refetches the full record on open via
+ * `pcoQueryOptions(id)`.
+ */
+export type PcoListItem = {
   id: number;
   projectId: number;
   pcoNumber: string;
   ownerReference: string;
   title: string;
-  description: string;
   status: PcoStatus;
   priority: PcoPriority;
   requestedAmount: number;
@@ -77,8 +82,6 @@ export type PcoItem = {
   scheduleDaysImpact: number;
   ownerRepName: string;
   ownerRepEmail: string;
-  reasonNarrative: string;
-  notes: string;
   submittedAt: string | null;
   approvedAt: string | null;
   invoicedAt: string | null;
@@ -90,6 +93,12 @@ export type PcoItem = {
   createdAt: string;
   updatedAt: string;
   linkedCvrs: PcoLinkedCvrSummary[];
+};
+
+export type PcoItem = PcoListItem & {
+  description: string;
+  reasonNarrative: string;
+  notes: string;
 };
 
 type PcoScalarRow = Awaited<ReturnType<typeof prisma.pco.findMany>>[number];
@@ -127,7 +136,91 @@ const toItem = (r: PcoWithLinks): PcoItem => {
   };
 };
 
+/**
+ * Prisma `select` for the slim list shape — keep in sync with `PcoListItem`.
+ */
+const LIST_SELECT = {
+  id: true,
+  projectId: true,
+  pcoNumber: true,
+  ownerReference: true,
+  title: true,
+  status: true,
+  priority: true,
+  requestedAmount: true,
+  approvedAmount: true,
+  scheduleDaysImpact: true,
+  ownerRepName: true,
+  ownerRepEmail: true,
+  submittedAt: true,
+  approvedAt: true,
+  invoicedAt: true,
+  invoiceNumber: true,
+  paidAt: true,
+  closedAt: true,
+  initiatedBy: true,
+  createdById: true,
+  createdAt: true,
+  updatedAt: true,
+  linkedCvrs: {
+    select: {
+      id: true,
+      cvrNumber: true,
+      title: true,
+      status: true,
+      costImpact: true,
+    },
+  },
+} as const;
+
+type PcoListRow = Awaited<
+  ReturnType<typeof prisma.pco.findMany<{ select: typeof LIST_SELECT }>>
+>[number];
+
+const toListItem = (r: PcoListRow): PcoListItem => {
+  const { linkedCvrs, ...rest } = r;
+  return {
+    ...rest,
+    status: rest.status as PcoStatus,
+    priority: rest.priority as PcoPriority,
+    submittedAt: serializeDate(rest.submittedAt),
+    approvedAt: serializeDate(rest.approvedAt),
+    invoicedAt: serializeDate(rest.invoicedAt),
+    paidAt: serializeDate(rest.paidAt),
+    closedAt: serializeDate(rest.closedAt),
+    createdAt: rest.createdAt.toISOString(),
+    updatedAt: rest.updatedAt.toISOString(),
+    linkedCvrs,
+  };
+};
+
 export const fetchPcoList = createServerFn({ method: "GET" })
+  .inputValidator((projectId: number) => projectId)
+  .handler(async ({ data: projectId }): Promise<PcoListItem[]> => {
+    await requireProjectAccess(projectId);
+    const rows = await prisma.pco.findMany({
+      where: { projectId },
+      select: LIST_SELECT,
+      orderBy: [{ createdAt: "desc" }],
+    });
+    return rows.map(toListItem);
+  });
+
+export const pcoListQueryOptions = (projectId: number | null) =>
+  queryOptions({
+    queryKey: ["pcos", projectId],
+    queryFn: (): Promise<PcoListItem[]> =>
+      projectId === null
+        ? Promise.resolve([])
+        : fetchPcoList({ data: projectId }),
+    enabled: projectId !== null,
+    staleTime: 30 * 1000,
+  });
+
+/**
+ * Full list — every column. Triggered by the CSV export button on click.
+ */
+export const fetchPcoListFull = createServerFn({ method: "GET" })
   .inputValidator((projectId: number) => projectId)
   .handler(async ({ data: projectId }): Promise<PcoItem[]> => {
     await requireProjectAccess(projectId);
@@ -139,13 +232,13 @@ export const fetchPcoList = createServerFn({ method: "GET" })
     return rows.map(toItem);
   });
 
-export const pcoListQueryOptions = (projectId: number | null) =>
+export const pcoListFullQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["pcos", projectId],
+    queryKey: ["pcos", "full", projectId],
     queryFn: (): Promise<PcoItem[]> =>
       projectId === null
         ? Promise.resolve([])
-        : fetchPcoList({ data: projectId }),
+        : fetchPcoListFull({ data: projectId }),
     enabled: projectId !== null,
     staleTime: 30 * 1000,
   });

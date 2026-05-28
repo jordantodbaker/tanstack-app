@@ -48,6 +48,10 @@ export const projectsQueryOptions = () =>
   queryOptions({
     queryKey: ["projects"],
     queryFn: () => fetchProjects(),
+    // Admin mutations on projects/subcontractors/areas/users invalidate
+    // `["projects"]` via `invalidateAdminEntity`, so a refetch timer adds
+    // no value. Used by the project picker on every authenticated page.
+    staleTime: Infinity,
   });
 
 export type UpsertProjectInput = {

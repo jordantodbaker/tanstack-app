@@ -21,7 +21,9 @@ import { areasByProjectQueryOptions } from "~/utils/areas";
 import {
   TREND_PRIORITIES,
   trendForecastContribution,
+  trendQueryOptions,
   type TrendItem,
+  type TrendListItem,
   type TrendPriority,
   type UpsertTrendInput,
 } from "~/utils/trends";
@@ -105,17 +107,11 @@ function fromItem(item: TrendItem): FormState {
   };
 }
 
-export function TrendDialog({
-  trigger,
-  initial,
-  projectId,
-  onSubmit,
-  onDelete,
-  onTransition,
-  onPromote,
-}: {
+type TrendDialogProps = {
   trigger: React.ReactNode;
-  initial?: TrendItem;
+  /** Slim list-item shape. The dialog lazy-fetches the full record on open
+   *  so heavy text fields populate correctly. */
+  initial?: TrendListItem;
   projectId: number | null;
   onSubmit: (form: FormState) => Promise<unknown>;
   onDelete?: (id: number) => Promise<unknown>;
@@ -124,10 +120,67 @@ export function TrendDialog({
   /** Promote this trend to a CVR. Creates the CVR and moves the trend to
    *  CONVERTED in one transaction. APPROVER+ only on the server. */
   onPromote?: (id: number) => Promise<unknown>;
+};
+
+export function TrendDialog({
+  trigger,
+  initial: initialSlim,
+  projectId,
+  onSubmit,
+  onDelete,
+  onTransition,
+  onPromote,
+}: TrendDialogProps) {
+  const [open, setOpen] = React.useState(false);
+  const isEdit = initialSlim?.id !== undefined;
+  const { data: full } = useQuery({
+    ...trendQueryOptions(isEdit ? (initialSlim?.id ?? null) : null),
+    enabled: open && isEdit,
+  });
+  const fullReady = !isEdit || !!full;
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,1000px)] max-h-[90vh] overflow-y-auto">
+        {!open ? null : !fullReady ? (
+          <div className="p-8 text-center text-sm text-slate-500">
+            Loading Trend…
+          </div>
+        ) : (
+          <TrendDialogBody
+            key={initialSlim?.id ?? "new"}
+            initial={full ?? undefined}
+            projectId={projectId}
+            onSubmit={onSubmit}
+            onDelete={onDelete}
+            onTransition={onTransition}
+            onPromote={onPromote}
+            closeDialog={() => setOpen(false)}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TrendDialogBody({
+  initial,
+  projectId,
+  onSubmit,
+  onDelete,
+  onTransition,
+  onPromote,
+  closeDialog,
+}: {
+  initial?: TrendItem;
+  projectId: number | null;
+  onSubmit: (form: FormState) => Promise<unknown>;
+  onDelete?: (id: number) => Promise<unknown>;
+  onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
+  onPromote?: (id: number) => Promise<unknown>;
+  closeDialog: () => void;
 }) {
   const {
-    open,
-    setOpen,
     form,
     busy,
     setBusy,
@@ -138,8 +191,16 @@ export function TrendDialog({
     initial,
     blank: blankForm,
     fromItem,
-    onSubmit,
-    onDelete,
+    onSubmit: async (formState) => {
+      await onSubmit(formState);
+      closeDialog();
+    },
+    onDelete: onDelete
+      ? async (id) => {
+          await onDelete(id);
+          closeDialog();
+        }
+      : undefined,
     deleteConfirm: (i) =>
       `Delete trend "${i.title}"? This cannot be undone.`,
   });
@@ -180,29 +241,25 @@ export function TrendDialog({
     setBusy(true);
     try {
       await onPromote(initial.id);
-      setOpen(false);
+      closeDialog();
     } finally {
       setBusy(false);
     }
   }
 
-  const { data: cbsCodeOptions = [] } = useQuery({
-    ...cbsCodeOptionsQueryOptions(),
-    enabled: open,
-  });
+  // `open` is implicitly true — only mounted when outer is open + full loaded.
+  const { data: cbsCodeOptions = [] } = useQuery(cbsCodeOptionsQueryOptions());
   const { data: areas = [] } = useQuery({
     ...areasByProjectQueryOptions(projectId),
-    enabled: open && projectId !== null,
+    enabled: projectId !== null,
   });
-  // Linked RFI / FCO pickers — list-scoped to the same project so cross-
-  // project links are impossible at the UI layer (server also re-checks).
   const { data: rfiList = [] } = useQuery({
     ...rfiListQueryOptions(projectId),
-    enabled: open && projectId !== null,
+    enabled: projectId !== null,
   });
   const { data: fcoList = [] } = useQuery({
     ...fcoListQueryOptions(projectId),
-    enabled: open && projectId !== null,
+    enabled: projectId !== null,
   });
 
   const cbsOptions: SearchableSelectOption[] = React.useMemo(
@@ -219,18 +276,14 @@ export function TrendDialog({
   // the current draft. Surfaces immediately so a PM can dial probability
   // and see the forecast effect without saving + re-opening the EVM page.
   const previewContribution = trendForecastContribution({
-    // The preview shows what the trend WOULD contribute if it were active;
-    // pin status to IDENTIFIED for new trends so the math always runs.
     status: initial?.status ?? "IDENTIFIED",
     probability: form.probability,
     costLikely: form.costLikely,
   });
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,1000px)] max-h-[90vh] overflow-y-auto">
-        <div className="space-y-4">
+    <>
+      <div className="space-y-4">
           <div className="flex items-start justify-between gap-2 pr-8">
             <div>
               <h2 className="text-lg font-semibold text-slate-800">
@@ -369,7 +422,7 @@ export function TrendDialog({
                   onTransition={onTransition}
                   entityId={initial.id}
                   entityNoun="Trend"
-                  onSuccess={() => setOpen(false)}
+                  onSuccess={closeDialog}
                 />
               )}
 
@@ -633,8 +686,7 @@ export function TrendDialog({
               {busy ? "Saving…" : initial ? "Save" : "Create"}
             </Button>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </>
   );
 }

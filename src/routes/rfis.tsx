@@ -15,6 +15,7 @@ import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
 import {
   rfiListQueryOptions,
+  rfiListFullQueryOptions,
   upsertRfi,
   deleteRfi,
   transitionRfi,
@@ -22,6 +23,7 @@ import {
   RFI_STATUSES,
   RFI_OPEN_STATUSES,
   type RfiItem,
+  type RfiListItem,
   type RfiStatus,
   type UpsertRfiInput,
 } from "~/utils/rfis";
@@ -85,6 +87,9 @@ function RfiLogPage() {
     // Promotion creates an FCO row; refresh the FCO list cache too so the
     // new FCO appears immediately if the FCO log is open in another tab.
     queryClient.invalidateQueries({ queryKey: ["fcoLog", projectId] });
+    queryClient.invalidateQueries({
+      queryKey: ["dashboardSummary", projectId],
+    });
   };
 
   const upsert = useMutation({
@@ -109,19 +114,29 @@ function RfiLogPage() {
   const [statusFilter, setStatusFilter] = React.useState<"" | RfiStatus>("");
   const [disciplineFilter, setDisciplineFilter] = React.useState("");
 
-  const filtered = React.useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return items.filter((it) => {
+  // Closure over the active filter UI state. The slim list payload drops
+  // `question` and `response`; searching by RFI #, subject, originator,
+  // responder, drawings/specs, and area covers the common cases without
+  // pulling multi-paragraph text on every list visit.
+  const matchesFilters = React.useCallback(
+    (it: RfiListItem): boolean => {
+      const q = search.trim().toLowerCase();
       if (statusFilter && it.status !== statusFilter) return false;
       if (disciplineFilter && it.discipline !== disciplineFilter) return false;
       if (q) {
         const haystack =
-          `${it.rfiNumber} ${it.subject} ${it.question} ${it.response} ${it.initiatedBy} ${it.assignedTo} ${it.drawingRefs.join(" ")} ${it.specRefs.join(" ")} ${areaLabel(it.locationArea)}`.toLowerCase();
+          `${it.rfiNumber} ${it.subject} ${it.initiatedBy} ${it.assignedTo} ${it.drawingRefs.join(" ")} ${it.specRefs.join(" ")} ${areaLabel(it.locationArea)}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
-    });
-  }, [items, search, statusFilter, disciplineFilter, areaLabel]);
+    },
+    [search, statusFilter, disciplineFilter, areaLabel],
+  );
+
+  const filtered = React.useMemo(
+    () => items.filter(matchesFilters),
+    [items, matchesFilters],
+  );
 
   const stats = React.useMemo(() => {
     const now = new Date();
@@ -235,7 +250,13 @@ function RfiLogPage() {
           Showing {filtered.length} of {items.length}
         </span>
         <ExportCsvButton
-          items={filtered}
+          getItems={async () => {
+            const full = await queryClient.fetchQuery(
+              rfiListFullQueryOptions(projectId),
+            );
+            return full.filter(matchesFilters);
+          }}
+          disabled={filtered.length === 0}
           columns={rfiCsvColumns(areaLabel)}
           filenamePrefix="rfi-export"
         />
@@ -306,7 +327,7 @@ function RfiTable({
   onTransition,
   onPromote,
 }: {
-  items: RfiItem[];
+  items: RfiListItem[];
   projectId: number | null;
   areaLabel: (raw: string) => string;
   onSubmit: (input: Omit<UpsertRfiInput, "projectId">) => Promise<unknown>;
@@ -361,7 +382,7 @@ function RfiRow({
   onTransition,
   onPromote,
 }: {
-  item: RfiItem;
+  item: RfiListItem;
   projectId: number | null;
   areaLabel: (raw: string) => string;
   onSubmit: (input: Omit<UpsertRfiInput, "projectId">) => Promise<unknown>;

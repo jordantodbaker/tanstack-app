@@ -1,8 +1,25 @@
 import React from "react";
 import {
+  createColumnHelper,
   type ColumnDef,
   type VisibilityState,
 } from "@tanstack/react-table";
+
+/** Columns hidden by default on the Take Off sheet; toggled together by the
+ *  "Hide Details" / "Show Details" button. Hidden default keeps the wide
+ *  detail columns out of sight for the common take-off workflow.
+ *  `laborFactor` only exists on the Piping table — TanStack Table ignores
+ *  visibility entries for columns that aren't in the current `columns`
+ *  array, so listing it here is a no-op for the other disciplines. */
+const DETAILS_COL_IDS = [
+  "id",
+  "sub",
+  "unit",
+  "laborFactor",
+  "laborHours",
+  "laborRate",
+  "totalCost",
+] as const;
 import { LoadMask } from "~/components/LoadMask";
 import { canComputeTotalCost, tabTriggerClass } from "~/lib/fef-helpers";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
@@ -19,12 +36,22 @@ import {
   FIELD_ESTIMATE_INITIAL_ROWS,
   useFefTableState,
   FefTableContent,
+  SelectionCheckboxCell,
   type FefTableMeta,
   type ServerPagination,
 } from "~/lib/table-utils";
 import { isTakeOffRowInvalid } from "~/lib/fef-helpers";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useFefRowPersistence } from "~/lib/use-fef-row-persistence";
+
+const selectionColumnHelper = createColumnHelper<FefRow>();
+const takeOffSelectionColumn: ColumnDef<FefRow, string> =
+  selectionColumnHelper.display({
+    id: "__select",
+    header: () => null,
+    cell: SelectionCheckboxCell,
+    size: 36,
+  }) as ColumnDef<FefRow, string>;
 
 /**
  * Take Off row-level validator. The predicate accepts a full FefRow shape;
@@ -48,12 +75,6 @@ export type DisciplineTabsProps = {
   craftMeta?: FefTableMeta;
   supportLaborMeta?: FefTableMeta;
   supportLaborInitialRows?: FefRow[];
-  /** Slot rendered on the right side of the Take Off tab's toolbar. */
-  takeOffExtraControls?: React.ReactNode;
-  takeOffColumnVisibility?: VisibilityState;
-  onTakeOffColumnVisibilityChange?: React.Dispatch<
-    React.SetStateAction<VisibilityState>
-  >;
   serverPagination?: ServerPagination;
 };
 
@@ -68,9 +89,6 @@ export function DisciplineTabs({
   craftMeta,
   supportLaborMeta,
   supportLaborInitialRows,
-  takeOffExtraControls,
-  takeOffColumnVisibility,
-  onTakeOffColumnVisibilityChange,
   serverPagination,
 }: DisciplineTabsProps) {
   const nextBlankId = React.useRef(1);
@@ -111,20 +129,74 @@ export function DisciplineTabs({
     }
   }, [takeOffState.data, takeOffState.setData]);
 
+  const [selectedRowIndices, setSelectedRowIndices] = React.useState<
+    Set<number>
+  >(() => new Set());
+  const onToggleRowSelected = React.useCallback((rowIndex: number) => {
+    setSelectedRowIndices((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowIndex)) next.delete(rowIndex);
+      else next.add(rowIndex);
+      return next;
+    });
+  }, []);
+  // Wraps the default delete so the selection set stays consistent with the
+  // post-delete indices (rows below the deleted one shift up by one).
+  const handleDeleteTakeOffRow = React.useCallback(
+    (rowIndex: number) => {
+      takeOffState.setData((old) => old.filter((_, i) => i !== rowIndex));
+      setSelectedRowIndices((prev) => {
+        const next = new Set<number>();
+        prev.forEach((idx) => {
+          if (idx < rowIndex) next.add(idx);
+          else if (idx > rowIndex) next.add(idx - 1);
+        });
+        return next;
+      });
+    },
+    [takeOffState],
+  );
+
   const [duplicateTimes, setDuplicateTimes] = React.useState("");
-  const handleDuplicateTopRow = () => {
-    const topRow = takeOffState.data[0];
-    if (!topRow || topRow.id.startsWith("__fe-blank-")) return;
+  const handleDuplicateSelectedRows = () => {
+    if (selectedRowIndices.size === 0) return;
+    const indices = Array.from(selectedRowIndices).sort((a, b) => a - b);
     const times = Math.max(1, parseInt(duplicateTimes) || 1);
+    const insertAfter = indices[indices.length - 1];
     takeOffState.setData((prev) => {
-      let end = prev.length;
-      while (end > 0 && prev[end - 1].id.startsWith("__fe-blank-")) end--;
+      const rowsToDuplicate = indices
+        .map((i) => prev[i])
+        .filter((r): r is FefRow => !!r);
+      const duplicates: FefRow[] = [];
+      for (let t = 0; t < times; t++) {
+        for (const row of rowsToDuplicate) duplicates.push({ ...row });
+      }
       return [
-        ...prev.slice(0, end),
-        ...Array.from({ length: times }, () => ({ ...topRow })),
+        ...prev.slice(0, insertAfter + 1),
+        ...duplicates,
+        ...prev.slice(insertAfter + 1),
       ];
     });
+    setSelectedRowIndices(new Set());
   };
+
+  const takeOffColumnsWithSelection = React.useMemo(
+    () => [takeOffSelectionColumn, ...takeOffColumns],
+    [takeOffColumns],
+  );
+  const takeOffWithSelection: FefTableMeta = {
+    ...takeOffMeta,
+    selectedRowIndices,
+    onToggleRowSelected,
+    deleteRow: handleDeleteTakeOffRow,
+  };
+
+  const [detailsVisible, setDetailsVisible] = React.useState(false);
+  const takeOffColumnVisibility = React.useMemo<VisibilityState>(
+    () =>
+      Object.fromEntries(DETAILS_COL_IDS.map((c) => [c, detailsVisible])),
+    [detailsVisible],
+  );
 
   const [activeTab, setActiveTab] = React.useState("takeoff");
   const [isTabSwitching, startTabTransition] = React.useTransition();
@@ -159,32 +231,35 @@ export function DisciplineTabs({
           </TabsTrigger>
         </TabsList>
         <TabsContent value="takeoff" className="mt-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleDuplicateTopRow}
-                className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer"
-              >
-                Duplicate Top Row
-              </button>
-              <input
-                type="number"
-                min={1}
-                value={duplicateTimes}
-                onChange={(e) => setDuplicateTimes(e.target.value)}
-                placeholder="times"
-                className="w-20 px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-400"
-              />
-            </div>
-            {takeOffExtraControls}
+          <div className="flex items-center gap-2 mb-2">
+            <button
+              onClick={handleDuplicateSelectedRows}
+              disabled={selectedRowIndices.size === 0}
+              className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+            >
+              Duplicate Selected Rows
+            </button>
+            <input
+              type="number"
+              min={1}
+              value={duplicateTimes}
+              onChange={(e) => setDuplicateTimes(e.target.value)}
+              placeholder="times"
+              className="w-20 px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-400"
+            />
+            <button
+              onClick={() => setDetailsVisible((v) => !v)}
+              className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer"
+            >
+              {detailsVisible ? "Hide Details" : "Show Details"}
+            </button>
           </div>
           <FefTableContent
             state={takeOffState}
-            meta={takeOffMeta}
-            columns={takeOffColumns}
+            meta={takeOffWithSelection}
+            columns={takeOffColumnsWithSelection}
             serverPagination={serverPagination}
             columnVisibility={takeOffColumnVisibility}
-            onColumnVisibilityChange={onTakeOffColumnVisibilityChange}
             minRows={20}
             getRowInvalid={isTakeOffRowInvalidLive}
           />

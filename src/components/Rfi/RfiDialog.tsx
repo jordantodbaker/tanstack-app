@@ -21,7 +21,9 @@ import { useFormDialog } from "~/lib/use-form-dialog";
 import { areasByProjectQueryOptions } from "~/utils/areas";
 import {
   RFI_PRIORITIES,
+  rfiQueryOptions,
   type RfiItem,
+  type RfiListItem,
   type RfiPriority,
   type UpsertRfiInput,
 } from "~/utils/rfis";
@@ -97,17 +99,11 @@ function fromItem(item: RfiItem): FormState {
   };
 }
 
-export function RfiDialog({
-  trigger,
-  initial,
-  projectId,
-  onSubmit,
-  onDelete,
-  onTransition,
-  onPromote,
-}: {
+type RfiDialogProps = {
   trigger: React.ReactNode;
-  initial?: RfiItem;
+  /** Slim list-item shape. The dialog lazy-fetches the full record on open
+   *  so heavy text fields (`question`, `response`) populate correctly. */
+  initial?: RfiListItem;
   projectId: number | null;
   onSubmit: (form: FormState) => Promise<unknown>;
   onDelete?: (id: number) => Promise<unknown>;
@@ -121,10 +117,73 @@ export function RfiDialog({
    * discipline / area / drawings and links it back via `linkedRfiId`.
    */
   onPromote?: (id: number) => Promise<unknown>;
+};
+
+/**
+ * Outer wrapper. Owns the Dialog open state and runs the lazy full-record
+ * fetch in edit mode. Inner `RfiDialogBody` only mounts once the full data
+ * is ready, so its `useFormDialog` seeds the form with complete heavy-text
+ * fields on first render.
+ */
+export function RfiDialog({
+  trigger,
+  initial: initialSlim,
+  projectId,
+  onSubmit,
+  onDelete,
+  onTransition,
+  onPromote,
+}: RfiDialogProps) {
+  const [open, setOpen] = React.useState(false);
+  const isEdit = initialSlim?.id !== undefined;
+  const { data: full } = useQuery({
+    ...rfiQueryOptions(isEdit ? (initialSlim?.id ?? null) : null),
+    enabled: open && isEdit,
+  });
+  const fullReady = !isEdit || !!full;
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,1000px)] max-h-[90vh] overflow-y-auto">
+        {!open ? null : !fullReady ? (
+          <div className="p-8 text-center text-sm text-slate-500">
+            Loading RFI…
+          </div>
+        ) : (
+          <RfiDialogBody
+            key={initialSlim?.id ?? "new"}
+            initial={full ?? undefined}
+            projectId={projectId}
+            onSubmit={onSubmit}
+            onDelete={onDelete}
+            onTransition={onTransition}
+            onPromote={onPromote}
+            closeDialog={() => setOpen(false)}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RfiDialogBody({
+  initial,
+  projectId,
+  onSubmit,
+  onDelete,
+  onTransition,
+  onPromote,
+  closeDialog,
+}: {
+  initial?: RfiItem;
+  projectId: number | null;
+  onSubmit: (form: FormState) => Promise<unknown>;
+  onDelete?: (id: number) => Promise<unknown>;
+  onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
+  onPromote?: (id: number) => Promise<unknown>;
+  closeDialog: () => void;
 }) {
   const {
-    open,
-    setOpen,
     form,
     busy,
     setBusy,
@@ -135,8 +194,16 @@ export function RfiDialog({
     initial,
     blank: blankForm,
     fromItem,
-    onSubmit,
-    onDelete,
+    onSubmit: async (formState) => {
+      await onSubmit(formState);
+      closeDialog();
+    },
+    onDelete: onDelete
+      ? async (id) => {
+          await onDelete(id);
+          closeDialog();
+        }
+      : undefined,
     deleteConfirm: (i) => `Delete RFI "${i.subject}"? This cannot be undone.`,
   });
 
@@ -151,7 +218,7 @@ export function RfiDialog({
     setBusy(true);
     try {
       await onPromote(initial.id);
-      setOpen(false);
+      closeDialog();
     } finally {
       setBusy(false);
     }
@@ -177,13 +244,12 @@ export function RfiDialog({
         )
       : [];
 
-  const { data: cbsCodeOptions = [] } = useQuery({
-    ...cbsCodeOptionsQueryOptions(),
-    enabled: open,
-  });
+  // `open` is implicitly true — this component only mounts when the outer
+  // dialog is open and the full record has loaded.
+  const { data: cbsCodeOptions = [] } = useQuery(cbsCodeOptionsQueryOptions());
   const { data: areas = [] } = useQuery({
     ...areasByProjectQueryOptions(projectId),
-    enabled: open && projectId !== null,
+    enabled: projectId !== null,
   });
 
   const cbsOptions: SearchableSelectOption[] = React.useMemo(
@@ -214,10 +280,8 @@ export function RfiDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,1000px)] max-h-[90vh] overflow-y-auto">
-        <div className="space-y-4">
+    <>
+      <div className="space-y-4">
           <div className="flex items-start justify-between gap-2 pr-8">
             <div>
               <h2 className="text-lg font-semibold text-slate-800">
@@ -372,7 +436,7 @@ export function RfiDialog({
                   onTransition={onTransition}
                   entityId={initial.id}
                   entityNoun="RFI"
-                  onSuccess={() => setOpen(false)}
+                  onSuccess={closeDialog}
                 />
               )}
 
@@ -558,8 +622,7 @@ export function RfiDialog({
               {busy ? "Saving…" : initial ? "Save" : "Create"}
             </Button>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </>
   );
 }

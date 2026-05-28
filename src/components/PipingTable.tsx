@@ -1,5 +1,4 @@
 import React from "react";
-import { type VisibilityState } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 import type { CbsOption, FefRow } from "~/lib/types";
 import {
@@ -113,26 +112,6 @@ export function PipingDisciplinePage({
     [areas],
   );
 
-  const LABOR_DETAIL_COLS = [
-    "unit",
-    "laborFactor",
-    "laborHours",
-    "laborRate",
-  ] as const;
-  const [laborDetailsVisible, setLaborDetailsVisible] = React.useState(true);
-  const [takeOffColumnVisibility, setTakeOffColumnVisibility] =
-    React.useState<VisibilityState>(() =>
-      Object.fromEntries(LABOR_DETAIL_COLS.map((c) => [c, true])),
-    );
-
-  const toggleLaborDetails = () => {
-    const next = !laborDetailsVisible;
-    setLaborDetailsVisible(next);
-    setTakeOffColumnVisibility(
-      Object.fromEntries(LABOR_DETAIL_COLS.map((c) => [c, next])),
-    );
-  };
-
   const takeOffMeta: FefTableMeta = {
     cbsOptions,
     weldGroupOptions,
@@ -170,17 +149,7 @@ export function PipingDisciplinePage({
       craftMeta={craftMeta}
       supportLaborMeta={supportMeta}
       supportLaborInitialRows={supportLaborInitialRows}
-      takeOffColumnVisibility={takeOffColumnVisibility}
-      onTakeOffColumnVisibilityChange={setTakeOffColumnVisibility}
       serverPagination={serverPagination}
-      takeOffExtraControls={
-        <button
-          onClick={toggleLaborDetails}
-          className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer"
-        >
-          {laborDetailsVisible ? "Hide Labor Details" : "Show Labor Details"}
-        </button>
-      }
     />
   );
 }

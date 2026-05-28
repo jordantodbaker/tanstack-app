@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { HardHat, Plus } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { Th, TableEmptyState } from "~/components/ui/list-page";
 import { SubcontractorDialog } from "~/components/Admin/SubcontractorDialog";
-import { AdminPageHeader } from "~/components/Admin/AdminPageHeader";
-import { invalidateAdminEntity } from "~/lib/admin-invalidations";
+import {
+  AdminListPage,
+  useAdminMutations,
+} from "~/components/Admin/AdminListPage";
 import {
   subcontractorsQueryOptions,
   upsertSubcontractor,
@@ -24,91 +25,42 @@ export const Route = createFileRoute("/admin/subcontractors")({
 });
 
 function AdminSubcontractorsPage() {
-  const queryClient = useQueryClient();
   const { data: subs = [] } = useQuery(subcontractorsQueryOptions());
-
-  const invalidate = () =>
-    invalidateAdminEntity(queryClient, "subcontractors");
-
-  const upsert = useMutation({
-    mutationFn: (input: UpsertSubcontractorInput) =>
-      upsertSubcontractor({ data: input }),
-    onSuccess: invalidate,
-  });
-  const remove = useMutation({
-    mutationFn: (id: number) => deleteSubcontractor({ data: { id } }),
-    onSuccess: invalidate,
+  const { onSubmit, onDelete } = useAdminMutations<UpsertSubcontractorInput>({
+    entity: "subcontractors",
+    upsertFn: upsertSubcontractor,
+    deleteFn: deleteSubcontractor,
   });
 
-  const handleSubmit = (input: UpsertSubcontractorInput) =>
-    upsert.mutateAsync(input);
-  const handleDelete = (id: number) => remove.mutateAsync(id);
-
   return (
-    <main className="p-4 max-w-6xl space-y-6">
-      <AdminPageHeader
-        icon={HardHat}
-        title="Subcontractors"
-        subtitle="Manage subcontractor companies, the projects they're assigned to, and the disciplines they perform."
-        action={
-          <SubcontractorDialog
-            trigger={
-              <Button>
-                <Plus className="mr-1 size-4" />
-                New Subcontractor
-              </Button>
-            }
-            onSubmit={handleSubmit}
-          />
-        }
-      />
-
-      <SubcontractorsTable
-        subs={subs}
-        onSubmit={handleSubmit}
-        onDelete={handleDelete}
-      />
-    </main>
-  );
-}
-
-function SubcontractorsTable({
-  subs,
-  onSubmit,
-  onDelete,
-}: {
-  subs: SubcontractorItem[];
-  onSubmit: (input: UpsertSubcontractorInput) => Promise<unknown>;
-  onDelete: (id: number) => Promise<unknown>;
-}) {
-  if (subs.length === 0) {
-    return (
-      <TableEmptyState message="No subcontractors yet. Create the first one." />
-    );
-  }
-  return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-      <table className="w-full border-collapse text-sm">
-        <thead className="bg-slate-50">
-          <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-            <Th>ID</Th>
-            <Th>Name</Th>
-            <Th>Disciplines</Th>
-            <Th>Projects</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {subs.map((sub) => (
-            <SubcontractorRow
-              key={sub.id}
-              sub={sub}
-              onSubmit={onSubmit}
-              onDelete={onDelete}
-            />
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <AdminListPage
+      icon={HardHat}
+      title="Subcontractors"
+      subtitle="Manage subcontractor companies, the projects they're assigned to, and the disciplines they perform."
+      containerClass="max-w-6xl"
+      action={
+        <SubcontractorDialog
+          trigger={
+            <Button>
+              <Plus className="mr-1 size-4" />
+              New Subcontractor
+            </Button>
+          }
+          onSubmit={onSubmit}
+        />
+      }
+      items={subs}
+      emptyMessage="No subcontractors yet. Create the first one."
+      columns={["ID", "Name", "Disciplines", "Projects"]}
+      renderRow={(sub) => (
+        <SubcontractorRow
+          key={sub.id}
+          sub={sub}
+          onSubmit={onSubmit}
+          onDelete={onDelete!}
+        />
+      )}
+    />
   );
 }
 

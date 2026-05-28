@@ -28,6 +28,9 @@ export const areasQueryOptions = () =>
   queryOptions({
     queryKey: ["areas"],
     queryFn: () => fetchAreas(),
+    // Admin mutations on areas/projects invalidate this key via
+    // `invalidateAdminEntity`, so a refetch timer is redundant work.
+    staleTime: Infinity,
   });
 
 /** Lightweight area list for a single project, used to populate dropdowns. */
@@ -52,6 +55,12 @@ export const areasByProjectQueryOptions = (projectId: number | null) =>
           )
         : fetchAreasByProject({ data: projectId }),
     enabled: projectId !== null,
+    // Used on every Take Off page, every dialog (RFI/FCO/Trend/CVR), every
+    // list page, and the print views — so a per-mount refetch is the
+    // perceptible source of latency on cross-page navigation. The Areas
+    // admin entry in `FAN_OUT` invalidates `["areasByProject"]` (partial
+    // key match) so an admin add/edit/delete still propagates.
+    staleTime: Infinity,
   });
 
 export type UpsertAreaInput = {

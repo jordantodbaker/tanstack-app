@@ -25,6 +25,7 @@ type FefRowDb = {
   schedule: string;
   taskCode: string;
   laborHours: string;
+  laborFactor: string;
   laborRate: string;
   materialCost: string;
   equipment: string;
@@ -133,7 +134,7 @@ export const saveFefRows = createServerFn({ method: "POST" })
             ${p.projectId}, ${p.discipline}, ${p.section}::"FefSection", ${p.position},
             ${p.cbsCode}, ${p.name}, ${p.description}, ${p.shopField}, ${p.weldGroupDescription},
             ${p.quantity}, ${p.size}, ${p.unit}, ${p.metallurgyCode}, ${p.boreSize},
-            ${p.role}, ${p.schedule}, ${p.taskCode}, ${p.laborHours}, ${p.laborRate},
+            ${p.role}, ${p.schedule}, ${p.taskCode}, ${p.laborHours}, ${p.laborFactor}, ${p.laborRate},
             ${p.materialCost}, ${p.equipment}, ${p.notes}, ${p.sub}, ${p.area},
             NOW(), NOW()
           )`,
@@ -145,7 +146,7 @@ export const saveFefRows = createServerFn({ method: "POST" })
               "projectId", "discipline", "section", "position",
               "cbsCode", "name", "description", "shopField", "weldGroupDescription",
               "quantity", "size", "unit", "metallurgyCode", "boreSize",
-              "role", "schedule", "taskCode", "laborHours", "laborRate",
+              "role", "schedule", "taskCode", "laborHours", "laborFactor", "laborRate",
               "materialCost", "equipment", "notes", "sub", "area",
               "createdAt", "updatedAt"
             )
@@ -166,6 +167,7 @@ export const saveFefRows = createServerFn({ method: "POST" })
               "schedule" = EXCLUDED."schedule",
               "taskCode" = EXCLUDED."taskCode",
               "laborHours" = EXCLUDED."laborHours",
+              "laborFactor" = EXCLUDED."laborFactor",
               "laborRate" = EXCLUDED."laborRate",
               "materialCost" = EXCLUDED."materialCost",
               "equipment" = EXCLUDED."equipment",

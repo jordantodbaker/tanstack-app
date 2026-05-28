@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Users } from "lucide-react";
-import { Th, TableEmptyState } from "~/components/ui/list-page";
-import { AdminPageHeader } from "~/components/Admin/AdminPageHeader";
-import { invalidateAdminEntity } from "~/lib/admin-invalidations";
+import {
+  AdminListPage,
+  useAdminMutations,
+} from "~/components/Admin/AdminListPage";
 import {
   UserDialog,
   type UserFormState,
@@ -25,58 +26,31 @@ export const Route = createFileRoute("/admin/users")({
 });
 
 function AdminUsersPage() {
-  const queryClient = useQueryClient();
   const { data: users = [] } = useQuery(usersQueryOptions());
   const { data: currentUser } = useQuery(currentUserQueryOptions());
-
-  const save = useMutation({
-    mutationFn: (input: UserFormState) => updateUser({ data: input }),
-    onSuccess: () => invalidateAdminEntity(queryClient, "users"),
+  const { onSubmit, errorMessage } = useAdminMutations<UserFormState>({
+    entity: "users",
+    upsertFn: updateUser,
   });
 
-  const handleSubmit = (input: UserFormState) => save.mutateAsync(input);
-
   return (
-    <main className="p-4 max-w-5xl space-y-6">
-      <AdminPageHeader
-        icon={Users}
-        title="Users"
-        subtitle="Everyone who has signed in to the platform. Click a row to change a user's role or project assignments."
-      />
-
-      {save.isError && (
-        <p className="text-sm text-red-600">
-          {(save.error as Error).message}
-        </p>
+    <AdminListPage
+      icon={Users}
+      title="Users"
+      subtitle="Everyone who has signed in to the platform. Click a row to change a user's role or project assignments."
+      errorMessage={errorMessage}
+      items={users}
+      emptyMessage="No users yet. Users appear here after they first sign in."
+      columns={["Email", "Role", "Projects", "Joined"]}
+      renderRow={(user) => (
+        <UserRow
+          key={user.id}
+          user={user}
+          isSelf={user.id === currentUser?.id}
+          onSubmit={onSubmit}
+        />
       )}
-
-      {users.length === 0 ? (
-        <TableEmptyState message="No users yet. Users appear here after they first sign in." />
-      ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-          <table className="w-full border-collapse text-sm">
-            <thead className="bg-slate-50">
-              <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <Th>Email</Th>
-                <Th>Role</Th>
-                <Th>Projects</Th>
-                <Th>Joined</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((user) => (
-                <UserRow
-                  key={user.id}
-                  user={user}
-                  isSelf={user.id === currentUser?.id}
-                  onSubmit={handleSubmit}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </main>
+    />
   );
 }
 

@@ -1,5 +1,6 @@
 import type { PcoPriority, PcoStatus } from "~/utils/pco";
 import { PCO_PRIORITY_LABELS, PCO_STATUS_LABELS } from "~/utils/pcoLabels";
+import { makeEnumBadge } from "~/components/ui/enum-badge";
 
 const STATUS_STYLES: Record<PcoStatus, string> = {
   DRAFT: "bg-slate-100 text-slate-700 border-slate-300",
@@ -17,16 +18,6 @@ const STATUS_STYLES: Record<PcoStatus, string> = {
   VOID: "bg-slate-50 text-slate-400 border-slate-200 line-through",
 };
 
-export function PcoStatusBadge({ status }: { status: PcoStatus }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[status]}`}
-    >
-      {PCO_STATUS_LABELS[status]}
-    </span>
-  );
-}
-
 const PRIORITY_STYLES: Record<PcoPriority, string> = {
   LOW: "bg-slate-100 text-slate-700",
   NORMAL: "bg-blue-100 text-blue-800",
@@ -34,12 +25,22 @@ const PRIORITY_STYLES: Record<PcoPriority, string> = {
   URGENT: "bg-red-100 text-red-800 animate-pulse",
 };
 
+const PcoStatusBadgeBase = makeEnumBadge({
+  labels: PCO_STATUS_LABELS,
+  styles: STATUS_STYLES,
+  shape: "pill",
+});
+
+const PcoPriorityBadgeBase = makeEnumBadge({
+  labels: PCO_PRIORITY_LABELS,
+  styles: PRIORITY_STYLES,
+  shape: "tag",
+});
+
+export function PcoStatusBadge({ status }: { status: PcoStatus }) {
+  return <PcoStatusBadgeBase value={status} />;
+}
+
 export function PcoPriorityBadge({ priority }: { priority: PcoPriority }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${PRIORITY_STYLES[priority]}`}
-    >
-      {PCO_PRIORITY_LABELS[priority]}
-    </span>
-  );
+  return <PcoPriorityBadgeBase value={priority} />;
 }

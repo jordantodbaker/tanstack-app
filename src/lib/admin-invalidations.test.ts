@@ -25,9 +25,15 @@ const EXPECTED_ENTITIES: AdminEntity[] = [
  * adding/changing a fan-out requires a deliberate test update.
  */
 const EXPECTED_FAN_OUT: Record<AdminEntity, string[]> = {
-  projects: ["projects", "subcontractors", "areas", "adminUsers"],
+  projects: [
+    "projects",
+    "subcontractors",
+    "areas",
+    "areasByProject",
+    "adminUsers",
+  ],
   subcontractors: ["subcontractors", "projects"],
-  areas: ["areas", "projects"],
+  areas: ["areas", "areasByProject", "projects"],
   users: ["adminUsers", "projects"],
   roles: ["rolesAdmin", "roleData"],
 };

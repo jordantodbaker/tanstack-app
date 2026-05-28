@@ -41,12 +41,17 @@ export type TrendPriority = (typeof TREND_PRIORITIES)[number];
 /** Trends still affecting the forecast — drive AFC math and stats cards. */
 export const TREND_ACTIVE_STATUSES: TrendStatus[] = ["IDENTIFIED", "PROBABLE"];
 
-export type TrendItem = {
+/**
+ * Slim shape used by the list-page table and the dashboard rollups. Drops
+ * the three long-text fields (`description`, `reasonNarrative`, `notes`)
+ * that only the edit dialog and the CSV export need. The dialog refetches
+ * the full record on open via `trendQueryOptions(id)`.
+ */
+export type TrendListItem = {
   id: number;
   projectId: number;
   trendNumber: string;
   title: string;
-  description: string;
   status: TrendStatus;
   priority: TrendPriority;
   discipline: string;
@@ -57,8 +62,6 @@ export type TrendItem = {
   costLikely: number;
   costHigh: number;
   scheduleDaysImpact: number;
-  reasonNarrative: string;
-  notes: string;
   identifiedAt: string;
   neededBy: string | null;
   closedAt: string | null;
@@ -69,6 +72,12 @@ export type TrendItem = {
   createdById: number | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type TrendItem = TrendListItem & {
+  description: string;
+  reasonNarrative: string;
+  notes: string;
 };
 
 type TrendScalarRow = Awaited<ReturnType<typeof prisma.trend.findMany>>[number];
@@ -87,7 +96,78 @@ const toItem = (r: TrendScalarRow): TrendItem => ({
   updatedAt: r.updatedAt.toISOString(),
 });
 
+/**
+ * Prisma `select` for the slim list shape — keep in sync with `TrendListItem`.
+ */
+const LIST_SELECT = {
+  id: true,
+  projectId: true,
+  trendNumber: true,
+  title: true,
+  status: true,
+  priority: true,
+  discipline: true,
+  cbsCodes: true,
+  locationArea: true,
+  probability: true,
+  costLow: true,
+  costLikely: true,
+  costHigh: true,
+  scheduleDaysImpact: true,
+  identifiedAt: true,
+  neededBy: true,
+  closedAt: true,
+  linkedRfiId: true,
+  linkedFcoId: true,
+  linkedCvrId: true,
+  initiatedBy: true,
+  createdById: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+type TrendListRow = Awaited<
+  ReturnType<typeof prisma.trend.findMany<{ select: typeof LIST_SELECT }>>
+>[number];
+
+const toListItem = (r: TrendListRow): TrendListItem => ({
+  ...r,
+  status: r.status as TrendStatus,
+  priority: r.priority as TrendPriority,
+  identifiedAt: r.identifiedAt.toISOString(),
+  neededBy: serializeDate(r.neededBy),
+  closedAt: serializeDate(r.closedAt),
+  createdAt: r.createdAt.toISOString(),
+  updatedAt: r.updatedAt.toISOString(),
+});
+
 export const fetchTrendList = createServerFn({ method: "GET" })
+  .inputValidator((projectId: number) => projectId)
+  .handler(async ({ data: projectId }): Promise<TrendListItem[]> => {
+    await requireProjectAccess(projectId);
+    const rows = await prisma.trend.findMany({
+      where: { projectId },
+      select: LIST_SELECT,
+      orderBy: [{ identifiedAt: "desc" }],
+    });
+    return rows.map(toListItem);
+  });
+
+export const trendListQueryOptions = (projectId: number | null) =>
+  queryOptions({
+    queryKey: ["trends", projectId],
+    queryFn: (): Promise<TrendListItem[]> =>
+      projectId === null
+        ? Promise.resolve([])
+        : fetchTrendList({ data: projectId }),
+    enabled: projectId !== null,
+    staleTime: 30 * 1000,
+  });
+
+/**
+ * Full list — every column. Triggered by the CSV export button on click.
+ */
+export const fetchTrendListFull = createServerFn({ method: "GET" })
   .inputValidator((projectId: number) => projectId)
   .handler(async ({ data: projectId }): Promise<TrendItem[]> => {
     await requireProjectAccess(projectId);
@@ -98,13 +178,13 @@ export const fetchTrendList = createServerFn({ method: "GET" })
     return rows.map(toItem);
   });
 
-export const trendListQueryOptions = (projectId: number | null) =>
+export const trendListFullQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["trends", projectId],
+    queryKey: ["trends", "full", projectId],
     queryFn: (): Promise<TrendItem[]> =>
       projectId === null
         ? Promise.resolve([])
-        : fetchTrendList({ data: projectId }),
+        : fetchTrendListFull({ data: projectId }),
     enabled: projectId !== null,
     staleTime: 30 * 1000,
   });

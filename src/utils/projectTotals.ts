@@ -48,6 +48,7 @@ export const fetchProjectFefRowTotals = createServerFn({ method: "GET" })
         schedule: true,
         taskCode: true,
         laborHours: true,
+        laborFactor: true,
         laborRate: true,
         materialCost: true,
         equipment: true,

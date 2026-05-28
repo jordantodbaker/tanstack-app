@@ -20,6 +20,7 @@ export const FEF_ROW_STRING_FIELDS = [
   "schedule",
   "taskCode",
   "laborHours",
+  "laborFactor",
   "laborRate",
   "materialCost",
   "equipment",

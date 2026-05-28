@@ -71,12 +71,18 @@ export const FCO_OPEN_STATUSES: FcoStatus[] = [
   "LINKED_TO_CVR",
 ];
 
-export type FcoItem = {
+/**
+ * Slim shape used by the list-page table and the dashboard rollups. Drops
+ * the five long-text fields (`description`, `reasonNarrative`, `resolution`,
+ * `notes`, `photosUrl`) that only the edit dialog and the CSV export need.
+ * Per project visits that means ~10× less data over the wire for the table;
+ * the dialog refetches the full record on open via `fcoQueryOptions(id)`.
+ */
+export type FcoListItem = {
   id: number;
   projectId: number;
   fcoNumber: string;
   title: string;
-  description: string;
   status: FcoStatus;
   originType: FcoOriginType;
   priority: FcoPriority;
@@ -90,10 +96,6 @@ export type FcoItem = {
   estimatedCost: number;
   estimatedHours: number;
   workStopped: boolean;
-  photosUrl: string;
-  reasonNarrative: string;
-  resolution: string;
-  notes: string;
   initiatedAt: string;
   neededBy: string | null;
   closedAt: string | null;
@@ -108,6 +110,14 @@ export type FcoItem = {
   createdById: number | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type FcoItem = FcoListItem & {
+  description: string;
+  reasonNarrative: string;
+  resolution: string;
+  notes: string;
+  photosUrl: string;
 };
 
 const serializeDate = (d: Date | null): string | null =>
@@ -143,7 +153,83 @@ const toItem = (r: Row): FcoItem => {
   };
 };
 
+/**
+ * Prisma `select` for the slim list shape — keep in sync with `FcoListItem`.
+ * Omits the five long-text fields the list table and dashboard don't read.
+ */
+const LIST_SELECT = {
+  id: true,
+  projectId: true,
+  fcoNumber: true,
+  title: true,
+  status: true,
+  originType: true,
+  priority: true,
+  discipline: true,
+  cbsCodes: true,
+  locationArea: true,
+  drawingRefs: true,
+  rfiNumbers: true,
+  initiatedBy: true,
+  fieldContact: true,
+  estimatedCost: true,
+  estimatedHours: true,
+  workStopped: true,
+  initiatedAt: true,
+  neededBy: true,
+  closedAt: true,
+  linkedCvrId: true,
+  linkedCvr: { select: { id: true, cvrNumber: true, title: true } },
+  linkedRfiId: true,
+  linkedRfi: { select: { id: true, rfiNumber: true, subject: true } },
+  createdById: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+type FcoListRow = Awaited<
+  ReturnType<
+    typeof prisma.fieldChangeOrder.findMany<{ select: typeof LIST_SELECT }>
+  >
+>[number];
+
+const toListItem = (r: FcoListRow): FcoListItem => {
+  const { linkedCvr, linkedRfi, ...rest } = r;
+  return {
+    ...rest,
+    status: rest.status as FcoStatus,
+    originType: rest.originType as FcoOriginType,
+    priority: rest.priority as FcoPriority,
+    initiatedAt: rest.initiatedAt.toISOString(),
+    neededBy: serializeDate(rest.neededBy),
+    closedAt: serializeDate(rest.closedAt),
+    createdAt: rest.createdAt.toISOString(),
+    updatedAt: rest.updatedAt.toISOString(),
+    linkedCvrNumber: linkedCvr?.cvrNumber ?? null,
+    linkedCvrTitle: linkedCvr?.title ?? null,
+    linkedRfiNumber: linkedRfi?.rfiNumber ?? null,
+    linkedRfiSubject: linkedRfi?.subject ?? null,
+  };
+};
+
 export const fetchFcoList = createServerFn({ method: "GET" })
+  .inputValidator((projectId: number) => projectId)
+  .handler(async ({ data: projectId }): Promise<FcoListItem[]> => {
+    await requireProjectAccess(projectId);
+    const rows = await prisma.fieldChangeOrder.findMany({
+      where: { projectId },
+      select: LIST_SELECT,
+      orderBy: [{ initiatedAt: "desc" }],
+    });
+    return rows.map(toListItem);
+  });
+
+/**
+ * Full list — same rows as `fetchFcoList` but with every column. Used by the
+ * CSV export, which legitimately wants the narrative columns. Triggered by
+ * the user clicking "Export CSV" so the heavier payload only ships on demand.
+ */
+export const fetchFcoListFull = createServerFn({ method: "GET" })
   .inputValidator((projectId: number) => projectId)
   .handler(async ({ data: projectId }): Promise<FcoItem[]> => {
     await requireProjectAccess(projectId);
@@ -156,6 +242,18 @@ export const fetchFcoList = createServerFn({ method: "GET" })
       orderBy: [{ initiatedAt: "desc" }],
     });
     return rows.map(toItem);
+  });
+
+export const fcoListFullQueryOptions = (projectId: number | null) =>
+  queryOptions({
+    queryKey: ["fcoLog", "full", projectId],
+    queryFn: (): Promise<FcoItem[]> =>
+      projectId === null
+        ? Promise.resolve([])
+        : fetchFcoListFull({ data: projectId }),
+    enabled: projectId !== null,
+    // Don't auto-fetch; the CSV button triggers this via `fetchQuery`.
+    staleTime: 30 * 1000,
   });
 
 /**
@@ -188,7 +286,7 @@ export const fcoQueryOptions = (id: number | null) =>
 export const fcoListQueryOptions = (projectId: number | null) =>
   queryOptions({
     queryKey: ["fcoLog", projectId],
-    queryFn: (): Promise<FcoItem[]> =>
+    queryFn: (): Promise<FcoListItem[]> =>
       projectId === null
         ? Promise.resolve([])
         : fetchFcoList({ data: projectId }),

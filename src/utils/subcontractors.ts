@@ -51,6 +51,9 @@ export const subcontractorsQueryOptions = () =>
   queryOptions({
     queryKey: ["subcontractors"],
     queryFn: () => fetchSubcontractors(),
+    // Admin mutations on subcontractors/projects invalidate this key
+    // via `invalidateAdminEntity` — refetch timers are wasted work.
+    staleTime: Infinity,
   });
 
 export type UpsertSubcontractorInput = {

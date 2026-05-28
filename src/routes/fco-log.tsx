@@ -18,11 +18,13 @@ import {
   FCO_STATUSES,
   FCO_OPEN_STATUSES,
   fcoListQueryOptions,
+  fcoListFullQueryOptions,
   upsertFco,
   deleteFco,
   promoteFcoToCvr,
   transitionFco,
   type FcoItem,
+  type FcoListItem,
   type FcoStatus,
   type UpsertFcoInput,
 } from "~/utils/fcoLog";
@@ -82,6 +84,9 @@ function FcoLogPage() {
     queryClient.invalidateQueries({ queryKey: ["fcoLog", projectId] });
     queryClient.invalidateQueries({ queryKey: ["changeLog", projectId] });
     queryClient.invalidateQueries({ queryKey: ["cvrOptions", projectId] });
+    queryClient.invalidateQueries({
+      queryKey: ["dashboardSummary", projectId],
+    });
   };
 
   const upsert = useMutation({
@@ -109,21 +114,31 @@ function FcoLogPage() {
     "" | "linked" | "unlinked"
   >("");
 
-  const filtered = React.useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return items.filter((it) => {
+  // Closure over the active filter UI state. Defined once so the same
+  // predicate runs against the slim list (table render) and the freshly
+  // fetched full list (CSV export). Search intentionally omits the long-
+  // text columns — they're not in the slim list payload anyway.
+  const matchesFilters = React.useCallback(
+    (it: FcoListItem): boolean => {
+      const q = search.trim().toLowerCase();
       if (statusFilter && it.status !== statusFilter) return false;
       if (disciplineFilter && it.discipline !== disciplineFilter) return false;
       if (linkageFilter === "linked" && it.linkedCvrId === null) return false;
       if (linkageFilter === "unlinked" && it.linkedCvrId !== null) return false;
       if (q) {
         const haystack =
-          `${it.fcoNumber} ${it.title} ${it.description} ${areaLabel(it.locationArea)} ${it.initiatedBy} ${it.reasonNarrative} ${it.cbsCodes.join(" ")} ${it.drawingRefs.join(" ")} ${it.rfiNumbers.join(" ")} ${it.linkedCvrNumber ?? ""}`.toLowerCase();
+          `${it.fcoNumber} ${it.title} ${areaLabel(it.locationArea)} ${it.initiatedBy} ${it.cbsCodes.join(" ")} ${it.drawingRefs.join(" ")} ${it.rfiNumbers.join(" ")} ${it.linkedCvrNumber ?? ""}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
-    });
-  }, [items, search, statusFilter, disciplineFilter, linkageFilter, areaLabel]);
+    },
+    [search, statusFilter, disciplineFilter, linkageFilter, areaLabel],
+  );
+
+  const filtered = React.useMemo(
+    () => items.filter(matchesFilters),
+    [items, matchesFilters],
+  );
 
   const stats = React.useMemo(() => {
     const openCount = items.filter((i) =>
@@ -253,7 +268,17 @@ function FcoLogPage() {
           Showing {filtered.length} of {items.length}
         </span>
         <ExportCsvButton
-          items={filtered}
+          getItems={async () => {
+            // List payload is slim — narrative columns the CSV wants only
+            // ship via the full endpoint. Pull it on demand here, then
+            // re-apply the active filters so the export matches what the
+            // user sees in the table.
+            const full = await queryClient.fetchQuery(
+              fcoListFullQueryOptions(projectId),
+            );
+            return full.filter(matchesFilters);
+          }}
+          disabled={filtered.length === 0}
           columns={fcoCsvColumns(areaLabel)}
           filenamePrefix="fco-export"
         />
@@ -332,7 +357,7 @@ function FcoTable({
   onPromote,
   onTransition,
 }: {
-  items: FcoItem[];
+  items: FcoListItem[];
   projectId: number | null;
   areaLabel: (raw: string) => string;
   onSubmit: (input: Omit<UpsertFcoInput, "projectId">) => Promise<unknown>;
@@ -391,7 +416,7 @@ function FcoRow({
   onPromote,
   onTransition,
 }: {
-  item: FcoItem;
+  item: FcoListItem;
   projectId: number | null;
   areaLabel: (raw: string) => string;
   onSubmit: (input: Omit<UpsertFcoInput, "projectId">) => Promise<unknown>;

@@ -73,12 +73,16 @@ export type ChangeType = (typeof CHANGE_TYPES)[number];
 export const RISK_LEVELS = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
 export type RiskLevel = (typeof RISK_LEVELS)[number];
 
-export type ChangeLogItem = {
+/**
+ * Slim shape used by the list table and dashboard. Drops `description`,
+ * `notes`, `reasonCode` — only the dialog and CSV export need them. The
+ * dialog refetches the full record on open via `changeLogQueryOptions(id)`.
+ */
+export type ChangeLogListItem = {
   id: number;
   projectId: number;
   cvrNumber: string;
   title: string;
-  description: string;
   status: ChangeStatus;
   type: ChangeType;
   discipline: string;
@@ -88,18 +92,22 @@ export type ChangeLogItem = {
   scheduleDaysImpact: number;
   laborHoursImpact: number;
   riskLevel: RiskLevel;
-  reasonCode: string;
   requestedAt: string;
   dueDate: string | null;
   approvedAt: string | null;
   approver: string;
-  notes: string;
   /** Optional area scope — holds an Area.id as a string. "" = project-wide. */
   area: string;
   /** User.id of the creator, or null on rows predating the column. */
   createdById: number | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type ChangeLogItem = ChangeLogListItem & {
+  description: string;
+  notes: string;
+  reasonCode: string;
 };
 
 const serializeDate = (d: Date | null): string | null =>
@@ -122,7 +130,78 @@ const toItem = (r: ChangeLogRow): ChangeLogItem => ({
   updatedAt: r.updatedAt.toISOString(),
 });
 
+/**
+ * Prisma `select` for the slim list shape — keep in sync with
+ * `ChangeLogListItem`. Omits `description`, `notes`, `reasonCode` (heavy
+ * text only the dialog and CSV need).
+ */
+const LIST_SELECT = {
+  id: true,
+  projectId: true,
+  cvrNumber: true,
+  title: true,
+  status: true,
+  type: true,
+  discipline: true,
+  cbsCodes: true,
+  originator: true,
+  costImpact: true,
+  scheduleDaysImpact: true,
+  laborHoursImpact: true,
+  riskLevel: true,
+  requestedAt: true,
+  dueDate: true,
+  approvedAt: true,
+  approver: true,
+  area: true,
+  createdById: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+type ChangeLogListRow = Awaited<
+  ReturnType<typeof prisma.changeLog.findMany<{ select: typeof LIST_SELECT }>>
+>[number];
+
+const toListItem = (r: ChangeLogListRow): ChangeLogListItem => ({
+  ...r,
+  status: r.status as ChangeStatus,
+  type: r.type as ChangeType,
+  riskLevel: r.riskLevel as RiskLevel,
+  requestedAt: r.requestedAt.toISOString(),
+  dueDate: serializeDate(r.dueDate),
+  approvedAt: serializeDate(r.approvedAt),
+  createdAt: r.createdAt.toISOString(),
+  updatedAt: r.updatedAt.toISOString(),
+});
+
 export const fetchChangeLogList = createServerFn({ method: "GET" })
+  .inputValidator((projectId: number) => projectId)
+  .handler(async ({ data: projectId }): Promise<ChangeLogListItem[]> => {
+    await requireProjectAccess(projectId);
+    const rows = await prisma.changeLog.findMany({
+      where: { projectId },
+      select: LIST_SELECT,
+      orderBy: [{ requestedAt: "desc" }],
+    });
+    return rows.map(toListItem);
+  });
+
+export const changeLogListQueryOptions = (projectId: number | null) =>
+  queryOptions({
+    queryKey: ["changeLog", projectId],
+    queryFn: (): Promise<ChangeLogListItem[]> =>
+      projectId === null
+        ? Promise.resolve([])
+        : fetchChangeLogList({ data: projectId }),
+    enabled: projectId !== null,
+    staleTime: 30 * 1000,
+  });
+
+/**
+ * Full list — every column. Triggered by the CSV export button on click.
+ */
+export const fetchChangeLogListFull = createServerFn({ method: "GET" })
   .inputValidator((projectId: number) => projectId)
   .handler(async ({ data: projectId }): Promise<ChangeLogItem[]> => {
     await requireProjectAccess(projectId);
@@ -133,13 +212,13 @@ export const fetchChangeLogList = createServerFn({ method: "GET" })
     return rows.map(toItem);
   });
 
-export const changeLogListQueryOptions = (projectId: number | null) =>
+export const changeLogListFullQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["changeLog", projectId],
+    queryKey: ["changeLog", "full", projectId],
     queryFn: (): Promise<ChangeLogItem[]> =>
       projectId === null
         ? Promise.resolve([])
-        : fetchChangeLogList({ data: projectId }),
+        : fetchChangeLogListFull({ data: projectId }),
     enabled: projectId !== null,
     staleTime: 30 * 1000,
   });

@@ -84,6 +84,8 @@ export const rolesAdminQueryOptions = () =>
   queryOptions({
     queryKey: ["rolesAdmin"],
     queryFn: () => fetchRolesAdmin(),
+    // Admin role mutations invalidate this key via `invalidateAdminEntity`.
+    staleTime: Infinity,
   });
 
 export type UpsertRoleInput = {

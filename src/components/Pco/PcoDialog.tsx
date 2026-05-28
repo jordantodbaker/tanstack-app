@@ -16,7 +16,9 @@ import { useFormDialog } from "~/lib/use-form-dialog";
 import {
   PCO_PRIORITIES,
   pcoEligibleCvrsQueryOptions,
+  pcoQueryOptions,
   type PcoItem,
+  type PcoListItem,
   type PcoPriority,
   type UpsertPcoInput,
 } from "~/utils/pco";
@@ -79,24 +81,71 @@ function fromItem(item: PcoItem): FormState {
   };
 }
 
+type PcoDialogProps = {
+  trigger: React.ReactNode;
+  /** Slim list-item shape. Dialog lazy-fetches the full record on open. */
+  initial?: PcoListItem;
+  projectId: number | null;
+  onSubmit: (form: FormState) => Promise<unknown>;
+  onDelete?: (id: number) => Promise<unknown>;
+  onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
+};
+
 export function PcoDialog({
   trigger,
+  initial: initialSlim,
+  projectId,
+  onSubmit,
+  onDelete,
+  onTransition,
+}: PcoDialogProps) {
+  const [open, setOpen] = React.useState(false);
+  const isEdit = initialSlim?.id !== undefined;
+  const { data: full } = useQuery({
+    ...pcoQueryOptions(isEdit ? (initialSlim?.id ?? null) : null),
+    enabled: open && isEdit,
+  });
+  const fullReady = !isEdit || !!full;
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,1100px)] max-h-[90vh] overflow-y-auto">
+        {!open ? null : !fullReady ? (
+          <div className="p-8 text-center text-sm text-slate-500">
+            Loading PCO…
+          </div>
+        ) : (
+          <PcoDialogBody
+            key={initialSlim?.id ?? "new"}
+            initial={full ?? undefined}
+            projectId={projectId}
+            onSubmit={onSubmit}
+            onDelete={onDelete}
+            onTransition={onTransition}
+            closeDialog={() => setOpen(false)}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PcoDialogBody({
   initial,
   projectId,
   onSubmit,
   onDelete,
   onTransition,
+  closeDialog,
 }: {
-  trigger: React.ReactNode;
   initial?: PcoItem;
   projectId: number | null;
   onSubmit: (form: FormState) => Promise<unknown>;
   onDelete?: (id: number) => Promise<unknown>;
   onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
+  closeDialog: () => void;
 }) {
   const {
-    open,
-    setOpen,
     form,
     busy,
     setBusy,
@@ -107,8 +156,16 @@ export function PcoDialog({
     initial,
     blank: blankForm,
     fromItem,
-    onSubmit,
-    onDelete,
+    onSubmit: async (formState) => {
+      await onSubmit(formState);
+      closeDialog();
+    },
+    onDelete: onDelete
+      ? async (id) => {
+          await onDelete(id);
+          closeDialog();
+        }
+      : undefined,
     deleteConfirm: (i) =>
       `Delete PCO "${i.title}"? Linked CVRs will be detached (not deleted).`,
   });
@@ -130,7 +187,7 @@ export function PcoDialog({
 
   const { data: eligibleCvrs = [] } = useQuery({
     ...pcoEligibleCvrsQueryOptions(projectId, initial?.id ?? null),
-    enabled: open && projectId !== null,
+    enabled: projectId !== null,
   });
 
   // Sum of selected CVRs' costImpact. Used as a one-click "set requested
@@ -155,10 +212,8 @@ export function PcoDialog({
     selectedCvrTotal > 0 ? form.approvedAmount - selectedCvrTotal : 0;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,1100px)] max-h-[90vh] overflow-y-auto">
-        <div className="space-y-4">
+    <>
+      <div className="space-y-4">
           <div className="flex items-start justify-between gap-2 pr-8">
             <div>
               <h2 className="text-lg font-semibold text-slate-800">
@@ -280,7 +335,7 @@ export function PcoDialog({
                   onTransition={onTransition}
                   entityId={initial.id}
                   entityNoun="PCO"
-                  onSuccess={() => setOpen(false)}
+                  onSuccess={closeDialog}
                 />
               )}
 
@@ -578,8 +633,7 @@ export function PcoDialog({
               {busy ? "Saving…" : initial ? "Save" : "Create"}
             </Button>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </>
   );
 }

@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Users, Plus } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { Th, TableEmptyState } from "~/components/ui/list-page";
 import { RoleDialog } from "~/components/Admin/RoleDialog";
-import { AdminPageHeader } from "~/components/Admin/AdminPageHeader";
-import { invalidateAdminEntity } from "~/lib/admin-invalidations";
+import {
+  AdminListPage,
+  useAdminMutations,
+} from "~/components/Admin/AdminListPage";
 import {
   rolesAdminQueryOptions,
   upsertRole,
@@ -24,85 +25,41 @@ export const Route = createFileRoute("/admin/roles")({
 });
 
 function AdminRolesPage() {
-  const queryClient = useQueryClient();
   const { data: roles = [] } = useQuery(rolesAdminQueryOptions());
-
-  const invalidate = () => invalidateAdminEntity(queryClient, "roles");
-
-  const upsert = useMutation({
-    mutationFn: (input: UpsertRoleInput) => upsertRole({ data: input }),
-    onSuccess: invalidate,
-  });
-  const remove = useMutation({
-    mutationFn: (id: number) => deleteRole({ data: { id } }),
-    onSuccess: invalidate,
+  const { onSubmit, onDelete } = useAdminMutations<UpsertRoleInput>({
+    entity: "roles",
+    upsertFn: upsertRole,
+    deleteFn: deleteRole,
   });
 
-  const handleSubmit = (input: UpsertRoleInput) => upsert.mutateAsync(input);
-  const handleDelete = (id: number) => remove.mutateAsync(id);
-
   return (
-    <main className="p-4 max-w-5xl space-y-6">
-      <AdminPageHeader
-        icon={Users}
-        title="Roles"
-        subtitle="Construction discipline roles shown in the Take Off sheet's Role dropdown. A role only appears for the disciplines it's checked against."
-        action={
-          <RoleDialog
-            trigger={
-              <Button>
-                <Plus className="mr-1 size-4" />
-                New Role
-              </Button>
-            }
-            onSubmit={handleSubmit}
-          />
-        }
-      />
-
-      <RolesTable
-        roles={roles}
-        onSubmit={handleSubmit}
-        onDelete={handleDelete}
-      />
-    </main>
-  );
-}
-
-function RolesTable({
-  roles,
-  onSubmit,
-  onDelete,
-}: {
-  roles: RoleAdminItem[];
-  onSubmit: (input: UpsertRoleInput) => Promise<unknown>;
-  onDelete: (id: number) => Promise<unknown>;
-}) {
-  if (roles.length === 0) {
-    return <TableEmptyState message="No roles yet. Create the first one." />;
-  }
-  return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-      <table className="w-full border-collapse text-sm">
-        <thead className="bg-slate-50">
-          <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-            <Th>Name</Th>
-            <Th>Disciplines</Th>
-            <Th>Rates</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {roles.map((role) => (
-            <RoleRow
-              key={role.id}
-              role={role}
-              onSubmit={onSubmit}
-              onDelete={onDelete}
-            />
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <AdminListPage
+      icon={Users}
+      title="Roles"
+      subtitle="Construction discipline roles shown in the Take Off sheet's Role dropdown. A role only appears for the disciplines it's checked against."
+      action={
+        <RoleDialog
+          trigger={
+            <Button>
+              <Plus className="mr-1 size-4" />
+              New Role
+            </Button>
+          }
+          onSubmit={onSubmit}
+        />
+      }
+      items={roles}
+      emptyMessage="No roles yet. Create the first one."
+      columns={["Name", "Disciplines", "Rates"]}
+      renderRow={(role) => (
+        <RoleRow
+          key={role.id}
+          role={role}
+          onSubmit={onSubmit}
+          onDelete={onDelete!}
+        />
+      )}
+    />
   );
 }
 

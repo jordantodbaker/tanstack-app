@@ -9,7 +9,7 @@
     }
   ],
   "functions": {
-    "api/handler.mjs": {
+    "api/handler.js": {
       "includeFiles": "dist/server/**",
       "memory": 1024,
       "maxDuration": 30

@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import * as nodePath from "node:path";
 import { randomBytes } from "node:crypto";
+import { MAX_ATTACHMENT_BYTES } from "./attachments";
 
 /**
  * SERVER-ONLY local-filesystem storage for attachments. Two halves:
@@ -14,9 +15,15 @@ import { randomBytes } from "node:crypto";
  * `./uploads` relative to the working directory). Every FS operation resolves
  * the storage key against that root AND asserts the result stays inside it,
  * so a malformed key can't escape via `..`.
+ *
+ * NOTE: `MAX_ATTACHMENT_BYTES` is defined in `./attachments` (client-safe)
+ * and re-exported below so callers / tests that already pull it from here
+ * keep working. The constant has to live client-side too so the upload form
+ * can validate before sending, and TanStack Start's import-protection bans
+ * any client import of `*.server.*`.
  */
 
-export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+export { MAX_ATTACHMENT_BYTES };
 
 /**
  * Allow-list of mime types accepted on upload. Permissive on purpose — EPC

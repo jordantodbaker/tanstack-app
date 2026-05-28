@@ -11,8 +11,15 @@ import {
   readAttachmentFile,
   validateUpload,
   writeAttachmentFile,
-  MAX_ATTACHMENT_BYTES,
 } from "./attachments.server";
+
+/**
+ * Upload size cap, in bytes. Defined here (client-safe module) rather than in
+ * `attachments.server.ts` so the upload form can validate before sending — a
+ * `.server.*` import would be denied by the TanStack Start client bundle.
+ * `attachments.server.ts` imports this back from us for enforcement.
+ */
+export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
 /**
  * Attachments API — upload, list, download, delete files associated with a
@@ -279,5 +286,3 @@ export const deleteAttachment = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** Re-export for client-side hints (used by the upload form). */
-export { MAX_ATTACHMENT_BYTES };

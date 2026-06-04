@@ -2,12 +2,8 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogTrigger,
-} from "~/components/ui/dialog";
+import { DialogClose } from "~/components/ui/dialog";
+import { EntityDialogShell } from "~/components/EntityDialog/EntityDialogShell";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -93,40 +89,30 @@ type PcoDialogProps = {
 
 export function PcoDialog({
   trigger,
-  initial: initialSlim,
+  initial,
   projectId,
   onSubmit,
   onDelete,
   onTransition,
 }: PcoDialogProps) {
-  const [open, setOpen] = React.useState(false);
-  const isEdit = initialSlim?.id !== undefined;
-  const { data: full } = useQuery({
-    ...pcoQueryOptions(isEdit ? (initialSlim?.id ?? null) : null),
-    enabled: open && isEdit,
-  });
-  const fullReady = !isEdit || !!full;
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,1100px)] max-h-[90vh] overflow-y-auto">
-        {!open ? null : !fullReady ? (
-          <div className="p-8 text-center text-sm text-slate-500">
-            Loading PCO…
-          </div>
-        ) : (
-          <PcoDialogBody
-            key={initialSlim?.id ?? "new"}
-            initial={full ?? undefined}
-            projectId={projectId}
-            onSubmit={onSubmit}
-            onDelete={onDelete}
-            onTransition={onTransition}
-            closeDialog={() => setOpen(false)}
-          />
-        )}
-      </DialogContent>
-    </Dialog>
+    <EntityDialogShell
+      trigger={trigger}
+      initial={initial}
+      fullQueryOptions={pcoQueryOptions}
+      loadingLabel="Loading PCO…"
+    >
+      {(full, closeDialog) => (
+        <PcoDialogBody
+          initial={full}
+          projectId={projectId}
+          onSubmit={onSubmit}
+          onDelete={onDelete}
+          onTransition={onTransition}
+          closeDialog={closeDialog}
+        />
+      )}
+    </EntityDialogShell>
   );
 }
 

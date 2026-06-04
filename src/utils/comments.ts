@@ -1,8 +1,23 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
+import { z } from "zod";
 import { requireProjectAccess } from "./users.server";
 import { emitCommentNotification } from "./notifications.server";
+import { Id, ProjectId } from "~/lib/validators";
+
+const CommentsInputSchema = z.object({
+  entityType: z.string().min(1),
+  entityId: Id,
+  projectId: ProjectId,
+});
+
+const PostCommentSchema = z.object({
+  entityType: z.string().min(1),
+  entityId: Id,
+  projectId: ProjectId,
+  body: z.string(),
+});
 
 /**
  * Comments API — append-only discussion threads attached to a CVR / FCO /
@@ -122,13 +137,7 @@ async function readParentRecord(
 }
 
 export const fetchComments = createServerFn({ method: "GET" })
-  .inputValidator(
-    (input: {
-      entityType: string;
-      entityId: number;
-      projectId: number;
-    }) => input,
-  )
+  .inputValidator((input: unknown) => CommentsInputSchema.parse(input))
   .handler(async ({ data }): Promise<CommentItem[]> => {
     await requireProjectAccess(data.projectId);
     if (!isCommentEntityType(data.entityType)) return [];
@@ -174,7 +183,7 @@ export type PostCommentInput = {
 };
 
 export const postComment = createServerFn({ method: "POST" })
-  .inputValidator((input: PostCommentInput) => input)
+  .inputValidator((input: unknown) => PostCommentSchema.parse(input))
   .handler(async ({ data }): Promise<CommentItem> => {
     if (!isCommentEntityType(data.entityType)) {
       throw new Error(`Unknown entity type: ${data.entityType}.`);

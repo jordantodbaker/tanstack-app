@@ -1,5 +1,10 @@
-import type { CsvColumn } from "~/lib/csv-export";
-import { disciplineById } from "~/config/disciplines";
+import {
+  fmtBool,
+  fmtDate,
+  fmtDiscipline,
+  fmtList,
+  type CsvColumn,
+} from "~/lib/csv-export";
 import type { FcoItem } from "./fcoLog";
 import { FCO_ORIGIN_LABELS, FCO_STATUS_LABELS } from "./fcoLogLabels";
 
@@ -18,25 +23,22 @@ export function fcoCsvColumns(
     { header: "Status", get: (f) => FCO_STATUS_LABELS[f.status] },
     { header: "Origin", get: (f) => FCO_ORIGIN_LABELS[f.originType] },
     { header: "Priority", get: (f) => f.priority },
-    {
-      header: "Discipline",
-      get: (f) => disciplineById[f.discipline]?.label ?? f.discipline,
-    },
+    { header: "Discipline", get: (f) => fmtDiscipline(f.discipline) },
     {
       header: "Area",
       get: (f) => (f.locationArea ? areaLabel(f.locationArea) : ""),
     },
     { header: "Est. Cost ($)", get: (f) => f.estimatedCost },
     { header: "Est. Hours", get: (f) => f.estimatedHours },
-    { header: "Work Stopped", get: (f) => (f.workStopped ? "Yes" : "No") },
+    { header: "Work Stopped", get: (f) => fmtBool(f.workStopped) },
     { header: "Initiated By", get: (f) => f.initiatedBy },
     { header: "Field Contact", get: (f) => f.fieldContact },
-    { header: "CBS Codes", get: (f) => f.cbsCodes.join("; ") },
-    { header: "Drawing Refs", get: (f) => f.drawingRefs.join("; ") },
-    { header: "RFI Numbers", get: (f) => f.rfiNumbers.join("; ") },
-    { header: "Initiated Date", get: (f) => f.initiatedAt.slice(0, 10) },
-    { header: "Needed By", get: (f) => f.neededBy?.slice(0, 10) ?? "" },
-    { header: "Closed Date", get: (f) => f.closedAt?.slice(0, 10) ?? "" },
+    { header: "CBS Codes", get: (f) => fmtList(f.cbsCodes) },
+    { header: "Drawing Refs", get: (f) => fmtList(f.drawingRefs) },
+    { header: "RFI Numbers", get: (f) => fmtList(f.rfiNumbers) },
+    { header: "Initiated Date", get: (f) => fmtDate(f.initiatedAt) },
+    { header: "Needed By", get: (f) => fmtDate(f.neededBy) },
+    { header: "Closed Date", get: (f) => fmtDate(f.closedAt) },
     { header: "Linked CVR #", get: (f) => f.linkedCvrNumber ?? "" },
     { header: "Description", get: (f) => f.description },
     { header: "Reason Narrative", get: (f) => f.reasonNarrative },

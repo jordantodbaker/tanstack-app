@@ -4,7 +4,11 @@ import {
   FCO_PRIORITY_LABELS,
   FCO_STATUS_LABELS,
 } from "~/utils/fcoLogLabels";
-import { makeEnumBadge } from "~/components/ui/enum-badge";
+import {
+  makeEnumBadge,
+  SHARED_PRIORITY_STYLES,
+  VOID_PILL_STYLE,
+} from "~/components/ui/enum-badge";
 
 const STATUS_STYLES: Record<FcoStatus, string> = {
   DRAFT: "bg-slate-100 text-slate-700 border-slate-300",
@@ -15,15 +19,10 @@ const STATUS_STYLES: Record<FcoStatus, string> = {
   REJECTED: "bg-red-50 text-red-700 border-red-300",
   IMPLEMENTED: "bg-teal-50 text-teal-700 border-teal-300",
   CLOSED: "bg-slate-200 text-slate-700 border-slate-300",
-  VOID: "bg-slate-50 text-slate-400 border-slate-200 line-through",
+  VOID: VOID_PILL_STYLE,
 };
 
-const PRIORITY_STYLES: Record<FcoPriority, string> = {
-  LOW: "bg-slate-100 text-slate-700",
-  NORMAL: "bg-blue-100 text-blue-800",
-  HIGH: "bg-orange-100 text-orange-800",
-  URGENT: "bg-red-100 text-red-800 animate-pulse",
-};
+const PRIORITY_STYLES: Record<FcoPriority, string> = SHARED_PRIORITY_STYLES;
 
 const FcoStatusBadgeBase = makeEnumBadge({
   labels: FCO_STATUS_LABELS,

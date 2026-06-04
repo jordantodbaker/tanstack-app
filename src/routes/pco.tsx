@@ -20,6 +20,7 @@ import {
   upsertPco,
   deletePco,
   transitionPco,
+  invalidatePcoQueries,
   PCO_STATUSES,
   PCO_OPEN_STATUSES,
   type PcoItem,
@@ -63,12 +64,11 @@ function PcoLogPage() {
   const queryClient = useQueryClient();
   const { data: items = [] } = useQuery(pcoListQueryOptions(projectId));
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["pcos", projectId] });
-    // CVR list shows `linkedPcoId` indirectly via "in PCO X" markers;
-    // a PCO upsert can re-link CVRs so refresh the changelog cache too.
-    queryClient.invalidateQueries({ queryKey: ["changelog", projectId] });
-  };
+  // `invalidatePcoQueries` already busts the CVR list (a PCO upsert can
+  // re-link CVRs). Previously this route inlined `["changelog", …]`
+  // lowercase, which never matched the actual `["changeLog", …]` key, so
+  // the CVR list silently failed to refresh after a PCO save.
+  const invalidate = () => invalidatePcoQueries(queryClient, projectId);
 
   const upsert = useMutation({
     mutationFn: (input: UpsertPcoInput) => upsertPco({ data: input }),

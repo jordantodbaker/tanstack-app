@@ -25,6 +25,15 @@ const FAN_OUT = {
   // dropdown — bust every `roleData` cache (any disciplineId arg) as well
   // as the admin list itself.
   roles: ["rolesAdmin", "roleData"],
+  // Crew mix save changes which mixes appear in the Take Off "Use Crew Mix"
+  // dropdown — bust the shared `crewMixData` cache used by every discipline
+  // alongside the admin list.
+  crewMixes: ["crewMixesAdmin", "crewMixData"],
+  // CVR template save changes the picker payload the Change Log dialog
+  // reads — bust both the admin list and the slim picker cache. Same
+  // shape for FCO templates below.
+  cvrTemplates: ["cvrTemplatesAdmin", "cvrTemplatePicker"],
+  fcoTemplates: ["fcoTemplatesAdmin", "fcoTemplatePicker"],
 } as const;
 
 export type AdminEntity = keyof typeof FAN_OUT;

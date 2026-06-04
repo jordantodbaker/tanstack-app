@@ -2,6 +2,8 @@ import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { requireProjectAccess } from "./users.server";
+import { qk } from "../lib/query-keys";
+import { parseProjectIdInput } from "../lib/validators";
 import {
   CHANGE_STATUSES,
   CVR_OPEN_STATUSES,
@@ -82,7 +84,7 @@ export const EMPTY_DASHBOARD_SUMMARY: DashboardSummary = {
 };
 
 export const fetchDashboardSummary = createServerFn({ method: "GET" })
-  .inputValidator((projectId: number) => projectId)
+  .inputValidator(parseProjectIdInput)
   .handler(async ({ data: projectId }): Promise<DashboardSummary> => {
     await requireProjectAccess(projectId);
 
@@ -293,7 +295,7 @@ export const fetchDashboardSummary = createServerFn({ method: "GET" })
 
 export const dashboardSummaryQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["dashboardSummary", projectId],
+    queryKey: qk.dashboardSummary(projectId),
     queryFn: (): Promise<DashboardSummary> =>
       projectId === null
         ? Promise.resolve(EMPTY_DASHBOARD_SUMMARY)

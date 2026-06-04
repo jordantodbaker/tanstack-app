@@ -201,6 +201,55 @@ export function RoleSelectCell({ getValue, row, table }: CellProps) {
   );
 }
 
+/**
+ * "Use Crew Mix" mode of the labor-rate input. Stores the selected crew
+ * mix's id (as a string) on `crewMixId` and snapshots the average wage onto
+ * `laborRate`. Like `RoleSelectCell`, the rate is frozen at edit time —
+ * editing the crew mix's members later won't retroactively touch existing
+ * rows.
+ */
+export function CrewMixSelectCell({ row, table }: CellProps) {
+  const value = row.original.crewMixId;
+  const { crewMixOptions = [] } = table.options.meta ?? {};
+  return (
+    <select
+      className={editableCellClass}
+      value={value}
+      onChange={(e) => {
+        const id = e.target.value;
+        if (id === "") {
+          table.options.meta?.updateRow?.(row.index, {
+            crewMixId: "",
+            laborRate: "",
+          });
+          return;
+        }
+        const match = crewMixOptions.find((m) => String(m.id) === id);
+        const wages = match?.members ?? [];
+        const avg =
+          wages.length === 0
+            ? 0
+            : wages.reduce((acc, m) => acc + m.wage, 0) / wages.length;
+        table.options.meta?.updateRow?.(row.index, {
+          crewMixId: id,
+          laborRate: wages.length === 0 ? "" : avg.toFixed(2),
+          // Clear role + schedule so the row's mode is unambiguous and
+          // sidebar tooltips don't show stale picker values.
+          role: "",
+          schedule: "",
+        });
+      }}
+    >
+      <option value="">-- Select --</option>
+      {crewMixOptions.map((opt) => (
+        <option key={opt.id} value={String(opt.id)}>
+          {opt.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 type PipingFactorLookup = Map<
   string,
   { unit: string; values: Map<number, number> }

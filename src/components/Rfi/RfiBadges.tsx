@@ -1,6 +1,10 @@
 import type { RfiPriority, RfiStatus } from "~/utils/rfis";
 import { RFI_PRIORITY_LABELS, RFI_STATUS_LABELS } from "~/utils/rfiLabels";
-import { makeEnumBadge } from "~/components/ui/enum-badge";
+import {
+  makeEnumBadge,
+  SHARED_PRIORITY_STYLES,
+  VOID_PILL_STYLE,
+} from "~/components/ui/enum-badge";
 
 const STATUS_STYLES: Record<RfiStatus, string> = {
   DRAFT: "bg-slate-100 text-slate-700 border-slate-300",
@@ -9,15 +13,10 @@ const STATUS_STYLES: Record<RfiStatus, string> = {
   ANSWERED: "bg-indigo-50 text-indigo-700 border-indigo-300",
   CLOSED: "bg-emerald-50 text-emerald-800 border-emerald-300",
   SUPERSEDED: "bg-violet-50 text-violet-700 border-violet-300",
-  VOID: "bg-slate-50 text-slate-400 border-slate-200 line-through",
+  VOID: VOID_PILL_STYLE,
 };
 
-const PRIORITY_STYLES: Record<RfiPriority, string> = {
-  LOW: "bg-slate-100 text-slate-700",
-  NORMAL: "bg-blue-100 text-blue-800",
-  HIGH: "bg-orange-100 text-orange-800",
-  URGENT: "bg-red-100 text-red-800 animate-pulse",
-};
+const PRIORITY_STYLES: Record<RfiPriority, string> = SHARED_PRIORITY_STYLES;
 
 const RfiStatusBadgeBase = makeEnumBadge({
   labels: RFI_STATUS_LABELS,

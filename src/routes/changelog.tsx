@@ -11,6 +11,7 @@ import {
   upsertChangeLog,
   deleteChangeLog,
   transitionChangeLog,
+  invalidateChangeLogQueries,
   CHANGE_STATUSES,
   CVR_OPEN_STATUSES,
   type ChangeLogItem,
@@ -71,14 +72,7 @@ function ChangelogPage() {
     [areas],
   );
 
-  // Shared between upsert/delete/transition. Also busts the dashboard's
-  // server-aggregated summary so the StatCards refresh next visit.
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["changeLog", projectId] });
-    queryClient.invalidateQueries({
-      queryKey: ["dashboardSummary", projectId],
-    });
-  };
+  const invalidate = () => invalidateChangeLogQueries(queryClient, projectId);
 
   const upsert = useMutation({
     mutationFn: (input: UpsertChangeLogInput) =>

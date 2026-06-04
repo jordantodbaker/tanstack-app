@@ -311,6 +311,12 @@ model FefRow {
   metallurgyCode       String     @default("")
   boreSize             String     @default("")
   role                 String     @default("")
+  /// CrewMix.id as a string ("" when the row uses Role instead). Stored so
+  /// we can show which crew mix produced the snapshotted `laborRate`. Take
+  /// Off rows pick either Role+Schedule OR Crew Mix; the per-page "Use Crew
+  /// Mix" toggle only controls which input the table renders, not which is
+  /// persisted on existing rows.
+  crewMixId            String     @default("")
   schedule             String     @default("")
   taskCode             String     @default("")
   laborHours           String     @default("")
@@ -406,6 +412,66 @@ model RoleRate {
   rate     Float
 }
 
+// Crew Mix — an admin-defined bundle of job titles + their wages used as an
+// alternate way to set a Take Off row's labor rate. When the take-off's "Use
+// Crew Mix" toggle is on, the Role column is replaced by a Crew Mix dropdown
+// and the row's `laborRate` is set to the average of the selected crew mix's
+// member wages. Like `Role`, the rate is snapshotted onto the row at edit
+// time — later edits to the crew mix don't retroactively change existing
+// rows' labor rates.
+model CrewMix {
+  id          Int             @id @default(autoincrement())
+  name        String          @unique
+  description String          @default("")
+  members     CrewMixMember[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model CrewMixMember {
+  id        Int     @id @default(autoincrement())
+  crewMix   CrewMix @relation(fields: [crewMixId], references: [id], onDelete: Cascade)
+  crewMixId Int
+  jobTitle  String
+  wage      Float
+}
+
+// Reusable CVR scaffold — admin-managed, company-wide. The dialog's "Start
+// from template" picker (CREATE mode only) pre-populates the form with
+// these values; the user reviews and saves to mint a real ChangeLog row.
+// Templates intentionally store the same field set as ChangeLog minus
+// identity (id, projectId, cvrNumber), status (always starts at the schema
+// default REQUESTED), workflow stamps (approver/approvedAt), and timestamp
+// fields driven by the moment of creation (requestedAt, dueDate). If you
+// add a templatable field to ChangeLog, mirror it here and update the
+// drift-guard test in cvrTemplates.test.ts.
+model CvrTemplate {
+  id                 Int          @id @default(autoincrement())
+  /// Display name in the picker, e.g. "Weather Delay" or "Owner Directive". Unique.
+  name               String       @unique
+  /// Help text shown beside the picker so users know when to choose it.
+  templateDescription String      @default("")
+  title              String       @default("")
+  description        String       @default("")
+  type               ChangeType   @default(SCOPE)
+  discipline         String       @default("")
+  cbsCodes           String[]     @default([])
+  originator         String       @default("")
+  costImpact         Float        @default(0)
+  scheduleDaysImpact Int          @default(0)
+  laborHoursImpact   Float        @default(0)
+  riskLevel          RiskLevel    @default(MEDIUM)
+  reasonCode         String       @default("")
+  notes              String       @default("")
+  area               String       @default("")
+  /// Bump on every instantiation. Powers the per-discipline picker sort
+  /// (most-used first within a discipline) without paying for a separate
+  /// usage-events table.
+  usageCount         Int          @default(0)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+}
+
 enum ChangeStatus {
   REQUESTED
   IN_REVIEW
@@ -480,6 +546,36 @@ model ChangeLog {
 
   @@index([projectId, status])
   @@index([linkedPcoId])
+}
+
+// Reusable FCO scaffold. Mirrors `CvrTemplate` — admin-managed, company-
+// wide, pre-populates the FcoDialog in CREATE mode. Excludes identity,
+// status (always DRAFT on create), workflow stamps (resolution, closedAt,
+// linkedCvrId), and creation-time fields (initiatedAt, neededBy).
+model FcoTemplate {
+  id                  Int           @id @default(autoincrement())
+  name                String        @unique
+  templateDescription String        @default("")
+  title               String        @default("")
+  description         String        @default("")
+  originType          FcoOriginType @default(FIELD_CONDITION)
+  priority            FcoPriority   @default(NORMAL)
+  discipline          String        @default("")
+  cbsCodes            String[]      @default([])
+  locationArea        String        @default("")
+  drawingRefs         String[]      @default([])
+  rfiNumbers          String[]      @default([])
+  initiatedBy         String        @default("")
+  fieldContact        String        @default("")
+  estimatedCost       Float         @default(0)
+  estimatedHours      Float         @default(0)
+  workStopped         Boolean       @default(false)
+  photosUrl           String        @default("")
+  reasonNarrative     String        @default("")
+  notes               String        @default("")
+  usageCount          Int           @default(0)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
 }
 
 enum FcoStatus {

@@ -24,7 +24,7 @@ export type RunRemindersResult = {
  * `runScheduledRemindersFn({ data: {} })`.
  */
 export const runScheduledRemindersFn = createServerFn({ method: "POST" })
-  .inputValidator((input: Record<string, never>) => input)
+  .inputValidator(() => ({}))
   .handler(async (): Promise<RunRemindersResult> => {
     await requireAdmin();
     return runScheduledReminders();

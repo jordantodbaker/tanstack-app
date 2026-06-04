@@ -1,7 +1,12 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
+import { z } from "zod";
 import { adminHandler, adminHandlerNoInput } from "./users.server";
+import { parseIdInput, parseUpsertRole } from "~/lib/validators";
+
+/** `disciplineId` is a string id or null (return everything). */
+const DisciplineIdOrNull = z.string().nullable();
 
 export type RoleData = {
   roleOptions: string[];
@@ -16,7 +21,7 @@ export type RoleData = {
  * scoped yet, but production callers should always pass a discipline).
  */
 export const fetchRoleData = createServerFn({ method: "GET" })
-  .inputValidator((disciplineId: string | null) => disciplineId)
+  .inputValidator((input: unknown) => DisciplineIdOrNull.parse(input))
   .handler(async ({ data: disciplineId }): Promise<RoleData> => {
     const roleWhere =
       disciplineId === null ? {} : { disciplines: { has: disciplineId } };
@@ -96,7 +101,7 @@ export type UpsertRoleInput = {
 
 /** Create or update a construction discipline role. Admin-only. */
 export const upsertRole = createServerFn({ method: "POST" })
-  .inputValidator((input: UpsertRoleInput) => input)
+  .inputValidator(parseUpsertRole)
   .handler(
     adminHandler(async ({ data }): Promise<{ ok: true }> => {
       const payload = {
@@ -114,7 +119,7 @@ export const upsertRole = createServerFn({ method: "POST" })
 
 /** Delete a role. Cascades to its `RoleRate` rows. Admin-only. */
 export const deleteRole = createServerFn({ method: "POST" })
-  .inputValidator((input: { id: number }) => input)
+  .inputValidator(parseIdInput)
   .handler(
     adminHandler(async ({ data }): Promise<{ ok: true }> => {
       await prisma.role.delete({ where: { id: data.id } });

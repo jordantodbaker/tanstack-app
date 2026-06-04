@@ -17,6 +17,11 @@ declare module "@tanstack/react-table" {
     roleOptions?: string[];
     scheduleOptions?: string[];
     roleRates?: { roleName: string; schedule: string; rate: number }[];
+    crewMixOptions?: {
+      id: number;
+      name: string;
+      members: { jobTitle: string; wage: number }[];
+    }[];
     taskCodeOptions?: { code: string; taskDefinition: string }[];
     pipingFactorLookup?: Map<string, { unit: string; values: Map<number, number> }>;
     areaOptions?: { value: string; label: string }[];

@@ -7,6 +7,8 @@ import {
   type ProjectFefRowTotals,
 } from "../lib/project-totals";
 import { FEF_ROW_STRING_FIELDS } from "../lib/fef-helpers";
+import { qk } from "../lib/query-keys";
+import { parseProjectIdInput } from "../lib/validators";
 
 export type { ProjectFefRowTotals } from "../lib/project-totals";
 
@@ -22,7 +24,7 @@ const EMPTY_TOTALS: ProjectFefRowTotals = {
 };
 
 export const fetchProjectFefRowTotals = createServerFn({ method: "GET" })
-  .inputValidator((projectId: number) => projectId)
+  .inputValidator(parseProjectIdInput)
   .handler(async ({ data: projectId }): Promise<ProjectFefRowTotals> => {
     await requireProjectAccess(projectId);
     const rows = await prisma.fefRow.findMany({
@@ -45,6 +47,7 @@ export const fetchProjectFefRowTotals = createServerFn({ method: "GET" })
         metallurgyCode: true,
         boreSize: true,
         role: true,
+        crewMixId: true,
         schedule: true,
         taskCode: true,
         laborHours: true,
@@ -61,7 +64,7 @@ export const fetchProjectFefRowTotals = createServerFn({ method: "GET" })
 
 export const projectFefRowTotalsQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["projectFefRowTotals", projectId],
+    queryKey: qk.projectFefRowTotals(projectId),
     queryFn: (): Promise<ProjectFefRowTotals> =>
       projectId === null
         ? Promise.resolve(EMPTY_TOTALS)
@@ -85,7 +88,7 @@ export const projectFefRowTotalsQueryOptions = (projectId: number | null) =>
  *      the not-computable predicate actually evaluates.
  */
 export const fetchInvalidByDiscipline = createServerFn({ method: "GET" })
-  .inputValidator((projectId: number) => projectId)
+  .inputValidator(parseProjectIdInput)
   .handler(async ({ data: projectId }): Promise<Record<string, number>> => {
     await requireProjectAccess(projectId);
     const rows = await prisma.fefRow.findMany({
@@ -121,7 +124,7 @@ export const fetchInvalidByDiscipline = createServerFn({ method: "GET" })
 
 export const invalidByDisciplineQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["invalidByDiscipline", projectId],
+    queryKey: qk.invalidByDiscipline(projectId),
     queryFn: (): Promise<Record<string, number>> =>
       projectId === null
         ? Promise.resolve({})

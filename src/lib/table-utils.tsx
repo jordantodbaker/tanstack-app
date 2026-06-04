@@ -485,6 +485,11 @@ type RoleRate = { roleName: string; schedule: string; rate: number };
 
 export type TaskCodeOption = { code: string; taskDefinition: string };
 export type AreaSelectOption = { value: string; label: string };
+export type CrewMixOption = {
+  id: number;
+  name: string;
+  members: { jobTitle: string; wage: number }[];
+};
 
 export type FefTableMeta = {
   cbsOptions?: CbsOption[];
@@ -496,6 +501,7 @@ export type FefTableMeta = {
   roleOptions?: string[];
   scheduleOptions?: string[];
   roleRates?: RoleRate[];
+  crewMixOptions?: CrewMixOption[];
   taskCodeOptions?: TaskCodeOption[];
   pipingFactorLookup?: Map<
     string,
@@ -690,6 +696,7 @@ export function FefTableContent({
       meta?.roleOptions,
       meta?.scheduleOptions,
       meta?.roleRates,
+      meta?.crewMixOptions,
       meta?.taskCodeOptions,
       meta?.pipingFactorLookup,
       meta?.areaOptions,
@@ -733,6 +740,7 @@ export function FefTableContent({
       roleOptions: meta?.roleOptions ?? [],
       scheduleOptions: meta?.scheduleOptions ?? [],
       roleRates: meta?.roleRates ?? [],
+      crewMixOptions: meta?.crewMixOptions ?? [],
       taskCodeOptions: meta?.taskCodeOptions ?? [],
       pipingFactorLookup: meta?.pipingFactorLookup,
       areaOptions: meta?.areaOptions ?? [],

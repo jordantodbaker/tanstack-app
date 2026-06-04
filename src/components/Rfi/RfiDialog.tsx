@@ -2,12 +2,9 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, Link as LinkIcon, Printer, Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogTrigger,
-} from "~/components/ui/dialog";
+import { DialogClose } from "~/components/ui/dialog";
+import { EntityDialogShell } from "~/components/EntityDialog/EntityDialogShell";
+import { useCbsSearchableOptions } from "~/lib/use-cbs-searchable-options";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -37,7 +34,6 @@ import {
 import { RfiStatusBadge } from "~/components/Rfi/RfiBadges";
 import { SearchableMultiSelect } from "~/components/SearchableMultiSelect";
 import type { SearchableSelectOption } from "~/components/SearchableSelect";
-import { cbsCodeOptionsQueryOptions } from "~/utils/cbs";
 import {
   Tabs,
   TabsList,
@@ -127,42 +123,33 @@ type RfiDialogProps = {
  */
 export function RfiDialog({
   trigger,
-  initial: initialSlim,
+  initial,
   projectId,
   onSubmit,
   onDelete,
   onTransition,
   onPromote,
 }: RfiDialogProps) {
-  const [open, setOpen] = React.useState(false);
-  const isEdit = initialSlim?.id !== undefined;
-  const { data: full } = useQuery({
-    ...rfiQueryOptions(isEdit ? (initialSlim?.id ?? null) : null),
-    enabled: open && isEdit,
-  });
-  const fullReady = !isEdit || !!full;
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,1000px)] max-h-[90vh] overflow-y-auto">
-        {!open ? null : !fullReady ? (
-          <div className="p-8 text-center text-sm text-slate-500">
-            Loading RFI…
-          </div>
-        ) : (
-          <RfiDialogBody
-            key={initialSlim?.id ?? "new"}
-            initial={full ?? undefined}
-            projectId={projectId}
-            onSubmit={onSubmit}
-            onDelete={onDelete}
-            onTransition={onTransition}
-            onPromote={onPromote}
-            closeDialog={() => setOpen(false)}
-          />
-        )}
-      </DialogContent>
-    </Dialog>
+    <EntityDialogShell
+      trigger={trigger}
+      initial={initial}
+      fullQueryOptions={rfiQueryOptions}
+      loadingLabel="Loading RFI…"
+      contentClassName="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,1000px)] max-h-[90vh] overflow-y-auto"
+    >
+      {(full, closeDialog) => (
+        <RfiDialogBody
+          initial={full}
+          projectId={projectId}
+          onSubmit={onSubmit}
+          onDelete={onDelete}
+          onTransition={onTransition}
+          onPromote={onPromote}
+          closeDialog={closeDialog}
+        />
+      )}
+    </EntityDialogShell>
   );
 }
 
@@ -246,21 +233,11 @@ function RfiDialogBody({
 
   // `open` is implicitly true — this component only mounts when the outer
   // dialog is open and the full record has loaded.
-  const { data: cbsCodeOptions = [] } = useQuery(cbsCodeOptionsQueryOptions());
+  const cbsOptions: SearchableSelectOption[] = useCbsSearchableOptions();
   const { data: areas = [] } = useQuery({
     ...areasByProjectQueryOptions(projectId),
     enabled: projectId !== null,
   });
-
-  const cbsOptions: SearchableSelectOption[] = React.useMemo(
-    () =>
-      cbsCodeOptions.map((c) => ({
-        value: c.displayCode,
-        label: c.name ? `${c.displayCode} — ${c.name}` : c.displayCode,
-        searchText: `${c.displayCode} ${c.name ?? ""}`.toLowerCase(),
-      })),
-    [cbsCodeOptions],
-  );
 
   // Comma-separated text fields for the string-array columns. Commit on
   // blur so the user can type freely without per-keystroke parsing churn.

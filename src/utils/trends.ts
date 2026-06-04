@@ -1,6 +1,15 @@
-import { queryOptions } from "@tanstack/react-query";
+import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
+import { qk } from "~/lib/query-keys";
+import {
+  parseIdInput,
+  parseIdScalar,
+  parseProjectIdInput,
+  parsePromoteTrendInput,
+  parseTransitionInput,
+  parseUpsertTrend,
+} from "~/lib/validators";
 import {
   assertProjectAccess,
   requireProjectAccess,
@@ -142,7 +151,7 @@ const toListItem = (r: TrendListRow): TrendListItem => ({
 });
 
 export const fetchTrendList = createServerFn({ method: "GET" })
-  .inputValidator((projectId: number) => projectId)
+  .inputValidator(parseProjectIdInput)
   .handler(async ({ data: projectId }): Promise<TrendListItem[]> => {
     await requireProjectAccess(projectId);
     const rows = await prisma.trend.findMany({
@@ -155,7 +164,7 @@ export const fetchTrendList = createServerFn({ method: "GET" })
 
 export const trendListQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["trends", projectId],
+    queryKey: qk.trends.list(projectId),
     queryFn: (): Promise<TrendListItem[]> =>
       projectId === null
         ? Promise.resolve([])
@@ -168,7 +177,7 @@ export const trendListQueryOptions = (projectId: number | null) =>
  * Full list — every column. Triggered by the CSV export button on click.
  */
 export const fetchTrendListFull = createServerFn({ method: "GET" })
-  .inputValidator((projectId: number) => projectId)
+  .inputValidator(parseProjectIdInput)
   .handler(async ({ data: projectId }): Promise<TrendItem[]> => {
     await requireProjectAccess(projectId);
     const rows = await prisma.trend.findMany({
@@ -180,7 +189,7 @@ export const fetchTrendListFull = createServerFn({ method: "GET" })
 
 export const trendListFullQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["trends", "full", projectId],
+    queryKey: qk.trends.full(projectId),
     queryFn: (): Promise<TrendItem[]> =>
       projectId === null
         ? Promise.resolve([])
@@ -190,7 +199,7 @@ export const trendListFullQueryOptions = (projectId: number | null) =>
   });
 
 export const fetchTrend = createServerFn({ method: "GET" })
-  .inputValidator((id: number) => id)
+  .inputValidator(parseIdScalar)
   .handler(async ({ data: id }): Promise<TrendItem> => {
     const row = await prisma.trend.findUniqueOrThrow({ where: { id } });
     await requireProjectAccess(row.projectId);
@@ -199,7 +208,7 @@ export const fetchTrend = createServerFn({ method: "GET" })
 
 export const trendQueryOptions = (id: number | null) =>
   queryOptions({
-    queryKey: ["trends", "single", id],
+    queryKey: qk.trends.single(id),
     queryFn: (): Promise<TrendItem | null> =>
       id === null ? Promise.resolve(null) : fetchTrend({ data: id }),
     enabled: id !== null,
@@ -262,7 +271,7 @@ function clampProbability(p: number): number {
 }
 
 export const upsertTrend = createServerFn({ method: "POST" })
-  .inputValidator((input: UpsertTrendInput) => input)
+  .inputValidator(parseUpsertTrend)
   .handler(async ({ data }): Promise<TrendItem> => {
     const actor = await requireProjectAccess(data.projectId);
     // Cross-project trend links would let one project's trend point at
@@ -353,9 +362,7 @@ export const upsertTrend = createServerFn({ method: "POST" })
 const TREND_STATUSES_NEEDING_REVIEW: ReadonlySet<string> = new Set(["PROBABLE"]);
 
 export const transitionTrend = createServerFn({ method: "POST" })
-  .inputValidator(
-    (input: { id: number; action: string; comment?: string }) => input,
-  )
+  .inputValidator(parseTransitionInput)
   .handler(async ({ data }): Promise<TrendItem> => {
     const pre = await prisma.trend.findUniqueOrThrow({
       where: { id: data.id },
@@ -408,7 +415,7 @@ export const transitionTrend = createServerFn({ method: "POST" })
  * obligation; matches the role gate on `transitionTrend`'s PROBABLE step.
  */
 export const promoteTrendToCvr = createServerFn({ method: "POST" })
-  .inputValidator((input: { trendId: number }) => input)
+  .inputValidator(parsePromoteTrendInput)
   .handler(async ({ data }): Promise<{ cvrId: number }> => {
     const trend = await prisma.trend.findUniqueOrThrow({
       where: { id: data.trendId },
@@ -497,7 +504,7 @@ export const promoteTrendToCvr = createServerFn({ method: "POST" })
   });
 
 export const deleteTrend = createServerFn({ method: "POST" })
-  .inputValidator((input: { id: number }) => input)
+  .inputValidator(parseIdInput)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const row = await prisma.trend.findUniqueOrThrow({
       where: { id: data.id },
@@ -540,4 +547,30 @@ export function trendForecastContribution(trend: {
   const p = clampProbability(trend.probability);
   const cost = Number.isFinite(trend.costLikely) ? trend.costLikely : 0;
   return p * cost;
+}
+
+/**
+ * Cache-bust set fired after every Trend mutation. Trends drive AFC, so the
+ * EVM reporting caches also have to drop — they fold trend forecast
+ * contribution into their roll-ups. `promoteTrendToCvr` mints a CVR;
+ * for that case callers pair this with `invalidateChangeLogQueries`.
+ */
+export function invalidateTrendQueries(
+  queryClient: QueryClient,
+  projectId: number | null,
+): void {
+  queryClient.invalidateQueries({ queryKey: qk.trends.list(projectId) });
+  queryClient.invalidateQueries({ queryKey: qk.trends.full(projectId) });
+  // EVM caches fold trend forecast contribution into their roll-ups, so they
+  // must drop on every trend mutation. `periodWithEvm` is a prefix-match bust
+  // because we don't know which periodIds are cached for this project.
+  queryClient.invalidateQueries({
+    queryKey: qk.reporting.periodWithEvmAll(),
+  });
+  queryClient.invalidateQueries({
+    queryKey: qk.reporting.latestPeriodWithEvm(projectId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: qk.reporting.evmTimeSeries(projectId),
+  });
 }

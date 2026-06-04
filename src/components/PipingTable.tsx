@@ -46,6 +46,7 @@ export function PipingDisciplinePage({
   roleOptions,
   scheduleOptions,
   roleRates,
+  crewMixOptions,
   taskCodeOptions,
   pipingFactors,
 }: {
@@ -58,6 +59,7 @@ export function PipingDisciplinePage({
   roleOptions?: string[];
   scheduleOptions?: string[];
   roleRates?: RoleRate[];
+  crewMixOptions?: FefTableMeta["crewMixOptions"];
   taskCodeOptions?: { code: string; taskDefinition: string }[];
   pipingFactors?: {
     code: string;
@@ -119,6 +121,7 @@ export function PipingDisciplinePage({
     roleOptions,
     scheduleOptions,
     roleRates,
+    crewMixOptions,
     taskCodeOptions,
     pipingFactorLookup,
     areaOptions,

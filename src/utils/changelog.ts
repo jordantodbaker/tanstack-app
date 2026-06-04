@@ -1,6 +1,14 @@
-import { queryOptions } from "@tanstack/react-query";
+import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
+import { qk } from "~/lib/query-keys";
+import {
+  parseIdInput,
+  parseIdScalar,
+  parseProjectIdInput,
+  parseTransitionInput,
+  parseUpsertChangeLog,
+} from "~/lib/validators";
 import {
   assertProjectAccess,
   requireProjectAccess,
@@ -176,7 +184,7 @@ const toListItem = (r: ChangeLogListRow): ChangeLogListItem => ({
 });
 
 export const fetchChangeLogList = createServerFn({ method: "GET" })
-  .inputValidator((projectId: number) => projectId)
+  .inputValidator(parseProjectIdInput)
   .handler(async ({ data: projectId }): Promise<ChangeLogListItem[]> => {
     await requireProjectAccess(projectId);
     const rows = await prisma.changeLog.findMany({
@@ -189,7 +197,7 @@ export const fetchChangeLogList = createServerFn({ method: "GET" })
 
 export const changeLogListQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["changeLog", projectId],
+    queryKey: qk.changeLog.list(projectId),
     queryFn: (): Promise<ChangeLogListItem[]> =>
       projectId === null
         ? Promise.resolve([])
@@ -202,7 +210,7 @@ export const changeLogListQueryOptions = (projectId: number | null) =>
  * Full list — every column. Triggered by the CSV export button on click.
  */
 export const fetchChangeLogListFull = createServerFn({ method: "GET" })
-  .inputValidator((projectId: number) => projectId)
+  .inputValidator(parseProjectIdInput)
   .handler(async ({ data: projectId }): Promise<ChangeLogItem[]> => {
     await requireProjectAccess(projectId);
     const rows = await prisma.changeLog.findMany({
@@ -214,7 +222,7 @@ export const fetchChangeLogListFull = createServerFn({ method: "GET" })
 
 export const changeLogListFullQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["changeLog", "full", projectId],
+    queryKey: qk.changeLog.full(projectId),
     queryFn: (): Promise<ChangeLogItem[]> =>
       projectId === null
         ? Promise.resolve([])
@@ -230,7 +238,7 @@ export const changeLogListFullQueryOptions = (projectId: number | null) =>
  * React Query defaults.
  */
 export const fetchChangeLog = createServerFn({ method: "GET" })
-  .inputValidator((id: number) => id)
+  .inputValidator(parseIdScalar)
   .handler(async ({ data: id }): Promise<ChangeLogItem> => {
     const row = await prisma.changeLog.findUniqueOrThrow({
       where: { id },
@@ -241,7 +249,7 @@ export const fetchChangeLog = createServerFn({ method: "GET" })
 
 export const changeLogQueryOptions = (id: number | null) =>
   queryOptions({
-    queryKey: ["changeLog", "single", id],
+    queryKey: qk.changeLog.single(id),
     queryFn: (): Promise<ChangeLogItem | null> =>
       id === null ? Promise.resolve(null) : fetchChangeLog({ data: id }),
     enabled: id !== null,
@@ -296,7 +304,7 @@ const CHANGELOG_AUDIT_FIELDS = [
 ] as const satisfies readonly (keyof ChangeLogRow)[];
 
 export const upsertChangeLog = createServerFn({ method: "POST" })
-  .inputValidator((input: UpsertChangeLogInput) => input)
+  .inputValidator(parseUpsertChangeLog)
   .handler(async ({ data }): Promise<ChangeLogItem> => {
     // Resolve the actor once; authorize per-branch inside the transaction
     // against the *actual* project: for creates that's the claimed
@@ -387,9 +395,7 @@ export const upsertChangeLog = createServerFn({ method: "POST" })
  * An optional `comment` is stored on the audit event as its note.
  */
 export const transitionChangeLog = createServerFn({ method: "POST" })
-  .inputValidator(
-    (input: { id: number; action: string; comment?: string }) => input,
-  )
+  .inputValidator(parseTransitionInput)
   .handler(async ({ data }): Promise<ChangeLogItem> => {
     // Resolve the actor once up front; we read the row inside the
     // transaction (avoiding a pre-read round-trip just to discover its
@@ -416,7 +422,7 @@ export const transitionChangeLog = createServerFn({ method: "POST" })
   });
 
 export const deleteChangeLog = createServerFn({ method: "POST" })
-  .inputValidator((input: { id: number }) => input)
+  .inputValidator(parseIdInput)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const actor = await resolveCurrentUser();
     if (!actor) throw new Error("Unauthorized: not signed in");
@@ -440,3 +446,25 @@ export const deleteChangeLog = createServerFn({ method: "POST" })
     });
     return { ok: true };
   });
+
+/**
+ * Cache-bust set fired after every CVR mutation (upsert / delete / transition)
+ * AND after any cross-entity action that mints or modifies a CVR (e.g. FCO →
+ * CVR or Trend → CVR promotion). Co-located here so the CVR module owns the
+ * list of caches that depend on its data — callers shouldn't have to remember
+ * to also touch `dashboardSummary`.
+ *
+ * Safe to call with `projectId === null`; the keys end with the null and
+ * TanStack Query treats them as no-ops.
+ */
+export function invalidateChangeLogQueries(
+  queryClient: QueryClient,
+  projectId: number | null,
+): void {
+  queryClient.invalidateQueries({ queryKey: qk.changeLog.list(projectId) });
+  queryClient.invalidateQueries({ queryKey: qk.changeLog.full(projectId) });
+  // PCO and FCO dialogs read the CVR option list; both must drop on any CVR
+  // mutation so the dropdown picks up new/renamed CVRs without a hard refresh.
+  queryClient.invalidateQueries({ queryKey: qk.changeLog.cvrOptions(projectId) });
+  queryClient.invalidateQueries({ queryKey: qk.dashboardSummary(projectId) });
+}

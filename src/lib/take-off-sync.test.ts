@@ -15,6 +15,7 @@ function row(overrides: Partial<FefRow>): FefRow {
     metallurgyCode: "",
     boreSize: "",
     role: "",
+    crewMixId: "",
     schedule: "",
     taskCode: "",
     laborHours: "",

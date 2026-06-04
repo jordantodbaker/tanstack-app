@@ -39,3 +39,22 @@ export function makeEnumBadge<T extends string>(opts: {
     );
   };
 }
+
+/**
+ * Shared style fragments reused across the per-entity badge files. Every
+ * entity that exposes a `LOW/NORMAL/HIGH/URGENT` priority badge ended up
+ * with byte-for-byte identical Tailwind classes, and four of them also
+ * needed the same struck-through VOID terminal style. Pulling them here
+ * means a future palette tweak (e.g. soften the URGENT animation) changes
+ * one file.
+ */
+export const SHARED_PRIORITY_STYLES = {
+  LOW: "bg-slate-100 text-slate-700",
+  NORMAL: "bg-blue-100 text-blue-800",
+  HIGH: "bg-orange-100 text-orange-800",
+  URGENT: "bg-red-100 text-red-800 animate-pulse",
+} as const;
+
+/** Terminal "this enum value is void/cancelled" pill style. */
+export const VOID_PILL_STYLE =
+  "bg-slate-50 text-slate-400 border-slate-200 line-through";

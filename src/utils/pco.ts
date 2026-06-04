@@ -1,6 +1,17 @@
-import { queryOptions } from "@tanstack/react-query";
+import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
+import { qk } from "~/lib/query-keys";
+import { z } from "zod";
+import {
+  Id,
+  ProjectId,
+  parseIdInput,
+  parseIdScalar,
+  parseProjectIdInput,
+  parseTransitionInput,
+  parseUpsertPco,
+} from "~/lib/validators";
 import {
   assertProjectAccess,
   requireProjectAccess,
@@ -195,7 +206,7 @@ const toListItem = (r: PcoListRow): PcoListItem => {
 };
 
 export const fetchPcoList = createServerFn({ method: "GET" })
-  .inputValidator((projectId: number) => projectId)
+  .inputValidator(parseProjectIdInput)
   .handler(async ({ data: projectId }): Promise<PcoListItem[]> => {
     await requireProjectAccess(projectId);
     const rows = await prisma.pco.findMany({
@@ -208,7 +219,7 @@ export const fetchPcoList = createServerFn({ method: "GET" })
 
 export const pcoListQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["pcos", projectId],
+    queryKey: qk.pcos.list(projectId),
     queryFn: (): Promise<PcoListItem[]> =>
       projectId === null
         ? Promise.resolve([])
@@ -221,7 +232,7 @@ export const pcoListQueryOptions = (projectId: number | null) =>
  * Full list — every column. Triggered by the CSV export button on click.
  */
 export const fetchPcoListFull = createServerFn({ method: "GET" })
-  .inputValidator((projectId: number) => projectId)
+  .inputValidator(parseProjectIdInput)
   .handler(async ({ data: projectId }): Promise<PcoItem[]> => {
     await requireProjectAccess(projectId);
     const rows = await prisma.pco.findMany({
@@ -234,7 +245,7 @@ export const fetchPcoListFull = createServerFn({ method: "GET" })
 
 export const pcoListFullQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["pcos", "full", projectId],
+    queryKey: qk.pcos.full(projectId),
     queryFn: (): Promise<PcoItem[]> =>
       projectId === null
         ? Promise.resolve([])
@@ -244,7 +255,7 @@ export const pcoListFullQueryOptions = (projectId: number | null) =>
   });
 
 export const fetchPco = createServerFn({ method: "GET" })
-  .inputValidator((id: number) => id)
+  .inputValidator(parseIdScalar)
   .handler(async ({ data: id }): Promise<PcoItem> => {
     const row = await prisma.pco.findUniqueOrThrow({
       where: { id },
@@ -256,7 +267,7 @@ export const fetchPco = createServerFn({ method: "GET" })
 
 export const pcoQueryOptions = (id: number | null) =>
   queryOptions({
-    queryKey: ["pcos", "single", id],
+    queryKey: qk.pcos.single(id),
     queryFn: (): Promise<PcoItem | null> =>
       id === null ? Promise.resolve(null) : fetchPco({ data: id }),
     enabled: id !== null,
@@ -276,10 +287,12 @@ export type PcoEligibleCvr = {
   costImpact: number;
 };
 
+const PcoEligibleCvrsInputSchema = z.object({
+  projectId: ProjectId,
+  currentPcoId: Id.nullable(),
+});
 export const fetchPcoEligibleCvrs = createServerFn({ method: "GET" })
-  .inputValidator(
-    (input: { projectId: number; currentPcoId: number | null }) => input,
-  )
+  .inputValidator((input: unknown) => PcoEligibleCvrsInputSchema.parse(input))
   .handler(async ({ data }): Promise<PcoEligibleCvr[]> => {
     await requireProjectAccess(data.projectId);
     const rows = await prisma.changeLog.findMany({
@@ -310,7 +323,7 @@ export const pcoEligibleCvrsQueryOptions = (
   currentPcoId: number | null,
 ) =>
   queryOptions({
-    queryKey: ["pcos", "eligibleCvrs", projectId, currentPcoId],
+    queryKey: qk.pcos.eligibleCvrs(projectId, currentPcoId),
     queryFn: (): Promise<PcoEligibleCvr[]> =>
       projectId === null
         ? Promise.resolve([])
@@ -367,7 +380,7 @@ const PCO_AUDIT_FIELDS = [
 ] as const satisfies readonly (keyof PcoScalarRow)[];
 
 export const upsertPco = createServerFn({ method: "POST" })
-  .inputValidator((input: UpsertPcoInput) => input)
+  .inputValidator(parseUpsertPco)
   .handler(async ({ data }): Promise<PcoItem> => {
     const actor = await requireProjectAccess(data.projectId);
     // Validate every requested CVR link belongs to this project AND is in
@@ -427,7 +440,7 @@ export const upsertPco = createServerFn({ method: "POST" })
       initiatedBy: data.initiatedBy,
     };
 
-    const id = await prisma.$transaction(async (tx) => {
+    const row = await prisma.$transaction(async (tx) => {
       let pcoId: number;
       if (data.id) {
         const before = await tx.pco.findUniqueOrThrow({
@@ -522,13 +535,19 @@ export const upsertPco = createServerFn({ method: "POST" })
           );
         }
       }
-      return pcoId;
+      // Re-fetch the freshly-upserted PCO with the `linkedCvrs` relation
+      // INSIDE the transaction (instead of after it). Same number of reads
+      // as before, but the second read uses the same transaction's
+      // connection and sees the link-sync writes above without a separate
+      // round-trip to a fresh connection. The link sync is between the
+      // upsert and this read, so we can't fold the include into the upsert
+      // itself the way FCO/RFI do.
+      return tx.pco.findUniqueOrThrow({
+        where: { id: pcoId },
+        include: linkedCvrsInclude,
+      });
     });
 
-    const row = await prisma.pco.findUniqueOrThrow({
-      where: { id },
-      include: linkedCvrsInclude,
-    });
     return toItem(row);
   });
 
@@ -540,18 +559,22 @@ const PCO_STATUSES_NEEDING_REVIEW: ReadonlySet<string> = new Set([
 ]);
 
 export const transitionPco = createServerFn({ method: "POST" })
-  .inputValidator(
-    (input: { id: number; action: string; comment?: string }) => input,
-  )
+  .inputValidator(parseTransitionInput)
   .handler(async ({ data }): Promise<PcoItem> => {
     const pre = await prisma.pco.findUniqueOrThrow({
       where: { id: data.id },
       select: { projectId: true },
     });
     const actor = await requireProjectAccess(pre.projectId);
-    const id = await prisma.$transaction(async (tx) => {
-      const before = await tx.pco.findUniqueOrThrow({ where: { id: data.id } });
-      const updated = await applyWorkflowTransition({
+    // Apply the workflow transition with the `linkedCvrs` include on both
+    // before and update so the row exiting the transaction already carries
+    // the relation needed by toItem. Eliminates the post-tx re-fetch.
+    const row = await prisma.$transaction(async (tx) => {
+      const before = await tx.pco.findUniqueOrThrow({
+        where: { id: data.id },
+        include: linkedCvrsInclude,
+      });
+      return applyWorkflowTransition({
         tx,
         before,
         actor,
@@ -604,19 +627,18 @@ export const transitionPco = createServerFn({ method: "POST" })
           },
         },
         updateRow: (data) =>
-          tx.pco.update({ where: { id: before.id }, data }),
+          tx.pco.update({
+            where: { id: before.id },
+            data,
+            include: linkedCvrsInclude,
+          }),
       });
-      return updated.id;
-    });
-    const row = await prisma.pco.findUniqueOrThrow({
-      where: { id },
-      include: linkedCvrsInclude,
     });
     return toItem(row);
   });
 
 export const deletePco = createServerFn({ method: "POST" })
-  .inputValidator((input: { id: number }) => input)
+  .inputValidator(parseIdInput)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const row = await prisma.pco.findUniqueOrThrow({
       where: { id: data.id },
@@ -640,3 +662,27 @@ export const deletePco = createServerFn({ method: "POST" })
     });
     return { ok: true };
   });
+
+/**
+ * Cache-bust set fired after every PCO mutation. A PCO upsert can re-link
+ * CVRs (attach/detach via the dialog's CVR picker), so the CVR caches drop
+ * too — the changelog row's `linkedPcoId` is reflected in the list view.
+ * Previously the route inlined `["changelog", projectId]` (lowercase) which
+ * silently no-op'd against the actual `["changeLog", projectId]` cache key.
+ */
+export function invalidatePcoQueries(
+  queryClient: QueryClient,
+  projectId: number | null,
+): void {
+  queryClient.invalidateQueries({ queryKey: qk.pcos.list(projectId) });
+  queryClient.invalidateQueries({ queryKey: qk.pcos.full(projectId) });
+  queryClient.invalidateQueries({ queryKey: qk.changeLog.list(projectId) });
+  queryClient.invalidateQueries({ queryKey: qk.changeLog.full(projectId) });
+  // The "eligible CVRs" picker depends on which CVRs are unlinked vs.
+  // attached; a PCO upsert can change that, so drop every cached variant
+  // for this project. Prefix-match: `["pcos", "eligibleCvrs", projectId]`
+  // matches every cached `currentPcoId` for the project.
+  queryClient.invalidateQueries({
+    queryKey: ["pcos", "eligibleCvrs", projectId],
+  });
+}

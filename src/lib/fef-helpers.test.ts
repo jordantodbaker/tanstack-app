@@ -153,6 +153,7 @@ describe("makeFefRow", () => {
     "metallurgyCode",
     "boreSize",
     "role",
+    "crewMixId",
     "schedule",
     "taskCode",
     "laborHours",

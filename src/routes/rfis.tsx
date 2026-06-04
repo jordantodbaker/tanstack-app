@@ -20,6 +20,7 @@ import {
   deleteRfi,
   transitionRfi,
   promoteRfiToFco,
+  invalidateRfiQueries,
   RFI_STATUSES,
   RFI_OPEN_STATUSES,
   type RfiItem,
@@ -27,6 +28,7 @@ import {
   type RfiStatus,
   type UpsertRfiInput,
 } from "~/utils/rfis";
+import { invalidateFcoQueries } from "~/utils/fcoLog";
 import { RFI_STATUS_LABELS } from "~/utils/rfiLabels";
 import {
   RfiPriorityBadge,
@@ -82,14 +84,11 @@ function RfiLogPage() {
     [areas],
   );
 
+  // RFI promotion creates an FCO; the FCO list cache must drop too so the
+  // new FCO appears immediately if the FCO log is open in another tab.
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["rfis", projectId] });
-    // Promotion creates an FCO row; refresh the FCO list cache too so the
-    // new FCO appears immediately if the FCO log is open in another tab.
-    queryClient.invalidateQueries({ queryKey: ["fcoLog", projectId] });
-    queryClient.invalidateQueries({
-      queryKey: ["dashboardSummary", projectId],
-    });
+    invalidateRfiQueries(queryClient, projectId);
+    invalidateFcoQueries(queryClient, projectId);
   };
 
   const upsert = useMutation({

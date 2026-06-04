@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { adminHandler, getAccessibleProjectIds } from "./users.server";
+import { parseIdInput, parseUpsertProject } from "~/lib/validators";
 
 export type ProjectOption = {
   id: number;
@@ -84,7 +85,7 @@ export type UpsertProjectInput = {
  * from a project, delete it (it can't exist without one).
  */
 export const upsertProject = createServerFn({ method: "POST" })
-  .inputValidator((input: UpsertProjectInput) => input)
+  .inputValidator(parseUpsertProject)
   .handler(
     adminHandler(async ({ data }): Promise<{ ok: true }> => {
       const scalars = {
@@ -132,7 +133,7 @@ export const upsertProject = createServerFn({ method: "POST" })
  * log, field change orders, and basis inputs (see schema `onDelete: Cascade`).
  */
 export const deleteProject = createServerFn({ method: "POST" })
-  .inputValidator((input: { id: number }) => input)
+  .inputValidator(parseIdInput)
   .handler(
     adminHandler(async ({ data }): Promise<{ ok: true }> => {
       await prisma.project.delete({ where: { id: data.id } });

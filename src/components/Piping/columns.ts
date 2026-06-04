@@ -13,6 +13,7 @@ import {
   PipingQuantityCell,
   PipingSizeCell,
   SubCheckboxCell,
+  CrewMixSelectCell,
 } from "~/components/Piping/cells";
 
 const columnHelper = createColumnHelper<FefRow>();
@@ -23,6 +24,7 @@ export const takeOffColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("description", { header: "Description", cell: EditableCell, size: 180 }),
   columnHelper.accessor("area", { header: "Area", cell: AreaSelectCell, size: 140 }),
   columnHelper.accessor("role", { header: "Role", cell: RoleSelectCell, size: 130 }),
+  columnHelper.accessor("crewMixId", { header: "Crew Mix", cell: CrewMixSelectCell, size: 140 }),
   columnHelper.accessor("schedule", { header: "Schedule", cell: ScheduleSelectCell, size: 100 }),
   columnHelper.accessor("shopField", { header: "Shop / Field", cell: ShopFieldSelectCell, size: 90 }),
   columnHelper.accessor("weldGroupDescription", { header: "Weld Group Description", cell: WeldGroupSelectCell, size: 160 }),

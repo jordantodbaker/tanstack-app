@@ -1,5 +1,9 @@
-import type { CsvColumn } from "~/lib/csv-export";
-import { disciplineById } from "~/config/disciplines";
+import {
+  fmtDate,
+  fmtDiscipline,
+  fmtList,
+  type CsvColumn,
+} from "~/lib/csv-export";
 import type { ChangeLogItem } from "./changelog";
 import { STATUS_LABELS } from "./changelogLabels";
 
@@ -17,10 +21,7 @@ export function cvrCsvColumns(
     { header: "Title", get: (c) => c.title },
     { header: "Status", get: (c) => STATUS_LABELS[c.status] },
     { header: "Type", get: (c) => c.type },
-    {
-      header: "Discipline",
-      get: (c) => disciplineById[c.discipline]?.label ?? c.discipline,
-    },
+    { header: "Discipline", get: (c) => fmtDiscipline(c.discipline) },
     { header: "Area", get: (c) => (c.area ? areaLabel(c.area) : "") },
     { header: "Risk Level", get: (c) => c.riskLevel },
     { header: "Cost Impact ($)", get: (c) => c.costImpact },
@@ -29,10 +30,10 @@ export function cvrCsvColumns(
     { header: "Originator", get: (c) => c.originator },
     { header: "Approver", get: (c) => c.approver },
     { header: "Reason Code", get: (c) => c.reasonCode },
-    { header: "CBS Codes", get: (c) => c.cbsCodes.join("; ") },
-    { header: "Requested Date", get: (c) => c.requestedAt.slice(0, 10) },
-    { header: "Due Date", get: (c) => c.dueDate?.slice(0, 10) ?? "" },
-    { header: "Approved Date", get: (c) => c.approvedAt?.slice(0, 10) ?? "" },
+    { header: "CBS Codes", get: (c) => fmtList(c.cbsCodes) },
+    { header: "Requested Date", get: (c) => fmtDate(c.requestedAt) },
+    { header: "Due Date", get: (c) => fmtDate(c.dueDate) },
+    { header: "Approved Date", get: (c) => fmtDate(c.approvedAt) },
     { header: "Description", get: (c) => c.description },
     { header: "Notes", get: (c) => c.notes },
   ];

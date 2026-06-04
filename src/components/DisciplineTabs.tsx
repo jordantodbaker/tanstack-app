@@ -192,10 +192,20 @@ export function DisciplineTabs({
   };
 
   const [detailsVisible, setDetailsVisible] = React.useState(false);
+  // "Use Crew Mix" mode swaps the Role column for the Crew Mix column and
+  // hides Schedule (crew mixes already encode the rate). Toggle is local to
+  // this mount — not persisted per-row or per-discipline — because it
+  // controls input mode, not row data. Existing rows keep whichever
+  // input (role+schedule OR crewMixId) was last written to them.
+  const [useCrewMix, setUseCrewMix] = React.useState(false);
   const takeOffColumnVisibility = React.useMemo<VisibilityState>(
-    () =>
-      Object.fromEntries(DETAILS_COL_IDS.map((c) => [c, detailsVisible])),
-    [detailsVisible],
+    () => ({
+      ...Object.fromEntries(DETAILS_COL_IDS.map((c) => [c, detailsVisible])),
+      role: !useCrewMix,
+      crewMixId: useCrewMix,
+      schedule: !useCrewMix,
+    }),
+    [detailsVisible, useCrewMix],
   );
 
   const [activeTab, setActiveTab] = React.useState("takeoff");
@@ -252,6 +262,16 @@ export function DisciplineTabs({
               className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer"
             >
               {detailsVisible ? "Hide Details" : "Show Details"}
+            </button>
+            <button
+              onClick={() => setUseCrewMix((v) => !v)}
+              className={
+                useCrewMix
+                  ? "px-3 py-1 text-sm border border-[#a63434] bg-[#a63434] text-white rounded hover:bg-[#8d2a2a] cursor-pointer"
+                  : "px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer"
+              }
+            >
+              {useCrewMix ? "Use Role" : "Use Crew Mix"}
             </button>
           </div>
           <FefTableContent

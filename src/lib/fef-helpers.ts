@@ -1,7 +1,7 @@
 import type { CbsOption, FefRow } from "./types";
 
 /**
- * The 18 free-text fields of a FefRow — every key except `id`. All default to
+ * The free-text fields of a FefRow — every key except `id`. All default to
  * `""`. Keep this as the single source of truth: row factories, blank-row
  * detection, and DB serialization all iterate it, so adding a field to FefRow
  * only requires updating the type and this list.
@@ -17,6 +17,7 @@ export const FEF_ROW_STRING_FIELDS = [
   "metallurgyCode",
   "boreSize",
   "role",
+  "crewMixId",
   "schedule",
   "taskCode",
   "laborHours",

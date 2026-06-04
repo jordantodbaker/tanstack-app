@@ -21,6 +21,7 @@ import {
   transitionTrend,
   promoteTrendToCvr,
   trendForecastContribution,
+  invalidateTrendQueries,
   TREND_STATUSES,
   TREND_ACTIVE_STATUSES,
   type TrendItem,
@@ -28,6 +29,7 @@ import {
   type TrendStatus,
   type UpsertTrendInput,
 } from "~/utils/trends";
+import { invalidateChangeLogQueries } from "~/utils/changelog";
 import { TREND_STATUS_LABELS } from "~/utils/trendLabels";
 import {
   TrendPriorityBadge,
@@ -82,18 +84,15 @@ function TrendLogPage() {
     [areas],
   );
 
+  // Trend promotion creates a CVR. The CVR fan-out (dashboard + cvrOptions)
+  // is owned by `invalidateChangeLogQueries`; trend's own fan-out covers the
+  // EVM reporting caches that fold trend forecast into their roll-ups.
+  // (This call previously used `["changelog", …]` lowercase, which never
+  // matched the actual `["changeLog", …]` key — so the CVR list silently
+  // failed to refresh after a Trend → CVR promotion.)
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["trends", projectId] });
-    // Trend changes shift AFC; the reporting EVM caches must drop too so
-    // the page recomputes the next time it's visited.
-    queryClient.invalidateQueries({ queryKey: ["periodWithEvm"] });
-    queryClient.invalidateQueries({
-      queryKey: ["latestPeriodWithEvm", projectId],
-    });
-    queryClient.invalidateQueries({ queryKey: ["evmTimeSeries", projectId] });
-    // Promotion creates a CVR; refresh the changelog list cache too so the
-    // new CVR appears immediately if the CVR log is open in another tab.
-    queryClient.invalidateQueries({ queryKey: ["changelog", projectId] });
+    invalidateTrendQueries(queryClient, projectId);
+    invalidateChangeLogQueries(queryClient, projectId);
   };
 
   const upsert = useMutation({

@@ -74,6 +74,7 @@ export type ProjectTotalsRow = {
   metallurgyCode?: string;
   boreSize?: string;
   role?: string;
+  crewMixId?: string;
   schedule?: string;
   taskCode?: string;
   equipment?: string;

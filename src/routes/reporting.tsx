@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { LineChart, Plus, Trash2 } from "lucide-react";
+import { qk } from "~/lib/query-keys";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
@@ -208,10 +209,10 @@ function NewPeriodDialog({ projectId }: { projectId: number }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["reportingPeriods", projectId],
+        queryKey: qk.reporting.periods(projectId),
       });
       queryClient.invalidateQueries({
-        queryKey: ["evmTimeSeries", projectId],
+        queryKey: qk.reporting.evmTimeSeries(projectId),
       });
       setOpen(false);
       setLabel("");
@@ -349,13 +350,13 @@ function DeletePeriodButton({ period }: { period: PeriodWithEvm }) {
     mutationFn: () => deleteReportingPeriod({ data: { id: period.id } }),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["reportingPeriods", period.projectId],
+        queryKey: qk.reporting.periods(period.projectId),
       });
       queryClient.invalidateQueries({
-        queryKey: ["latestPeriodWithEvm", period.projectId],
+        queryKey: qk.reporting.latestPeriodWithEvm(period.projectId),
       });
       queryClient.invalidateQueries({
-        queryKey: ["evmTimeSeries", period.projectId],
+        queryKey: qk.reporting.evmTimeSeries(period.projectId),
       });
     },
   });
@@ -493,16 +494,16 @@ function BucketRow({
       // refetch every project the signed-in user had open in any tab on
       // every cell save — same shape as the setup.ts over-invalidation bug.
       queryClient.invalidateQueries({
-        queryKey: ["periodWithEvm", periodId],
+        queryKey: qk.reporting.periodWithEvm(periodId),
       });
       queryClient.invalidateQueries({
-        queryKey: ["reportingPeriods", projectId],
+        queryKey: qk.reporting.periods(projectId),
       });
       queryClient.invalidateQueries({
-        queryKey: ["latestPeriodWithEvm", projectId],
+        queryKey: qk.reporting.latestPeriodWithEvm(projectId),
       });
       queryClient.invalidateQueries({
-        queryKey: ["evmTimeSeries", projectId],
+        queryKey: qk.reporting.evmTimeSeries(projectId),
       });
     },
   });

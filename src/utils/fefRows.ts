@@ -2,10 +2,40 @@ import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { Prisma } from "../generated/prisma/client";
 import { prisma } from "../server/db";
+import { z } from "zod";
 import type { FefRow } from "~/lib/types";
-import { fefRowHasUserData } from "~/lib/fef-helpers";
+import { FEF_ROW_STRING_FIELDS, fefRowHasUserData } from "~/lib/fef-helpers";
 import { projectScopedHandler } from "./users.server";
 import { logger } from "~/lib/logger";
+import { ProjectId } from "~/lib/validators";
+
+const FefSectionSchema = z.enum(["TAKE_OFF", "SUPPORT_LABOR", "MATERIALS"]);
+
+const FefRowsInputSchema = z.object({
+  projectId: ProjectId,
+  discipline: z.string().min(1),
+  section: FefSectionSchema,
+});
+
+// Build a row schema from the same field list the rest of the code uses, so
+// a new FefRow field automatically extends validation. `id` is the synthetic
+// client id (may include the "__fe-blank-…" sentinel) or a real CBS code.
+// Cast via unknown: the dynamically-built shape is provably `Record<string,
+// string>` to TS but matches the FefRow shape at runtime (FEF_ROW_STRING_FIELDS
+// IS the FefRow key set minus `id`).
+const FefRowSchema = z.object(
+  Object.fromEntries([
+    ["id", z.string()],
+    ...FEF_ROW_STRING_FIELDS.map((f) => [f, z.string()] as const),
+  ]),
+) as unknown as z.ZodType<FefRow>;
+
+const SaveFefRowsSchema = z.object({
+  projectId: ProjectId,
+  discipline: z.string().min(1),
+  section: FefSectionSchema,
+  rows: z.array(FefRowSchema),
+});
 
 export type FefSectionKey = "TAKE_OFF" | "SUPPORT_LABOR" | "MATERIALS";
 
@@ -22,6 +52,7 @@ type FefRowDb = {
   metallurgyCode: string;
   boreSize: string;
   role: string;
+  crewMixId: string;
   schedule: string;
   taskCode: string;
   laborHours: string;
@@ -44,13 +75,7 @@ const toFefRow = (r: FefRowDb): FefRow => {
 };
 
 export const fetchFefRows = createServerFn({ method: "GET" })
-  .inputValidator(
-    (input: {
-      projectId: number;
-      discipline: string;
-      section: FefSectionKey;
-    }) => input,
-  )
+  .inputValidator((input: unknown) => FefRowsInputSchema.parse(input))
   .handler(
     projectScopedHandler(async ({ data }) => {
       const rows = await prisma.fefRow.findMany({
@@ -86,14 +111,7 @@ export const fefRowsQueryOptions = (input: {
   });
 
 export const saveFefRows = createServerFn({ method: "POST" })
-  .inputValidator(
-    (input: {
-      projectId: number;
-      discipline: string;
-      section: FefSectionKey;
-      rows: FefRow[];
-    }) => input,
-  )
+  .inputValidator((input: unknown) => SaveFefRowsSchema.parse(input))
   .handler(
     projectScopedHandler(async ({ data }) => {
       const { projectId, discipline, section, rows } = data;
@@ -134,7 +152,7 @@ export const saveFefRows = createServerFn({ method: "POST" })
             ${p.projectId}, ${p.discipline}, ${p.section}::"FefSection", ${p.position},
             ${p.cbsCode}, ${p.name}, ${p.description}, ${p.shopField}, ${p.weldGroupDescription},
             ${p.quantity}, ${p.size}, ${p.unit}, ${p.metallurgyCode}, ${p.boreSize},
-            ${p.role}, ${p.schedule}, ${p.taskCode}, ${p.laborHours}, ${p.laborFactor}, ${p.laborRate},
+            ${p.role}, ${p.crewMixId}, ${p.schedule}, ${p.taskCode}, ${p.laborHours}, ${p.laborFactor}, ${p.laborRate},
             ${p.materialCost}, ${p.equipment}, ${p.notes}, ${p.sub}, ${p.area},
             NOW(), NOW()
           )`,
@@ -146,7 +164,7 @@ export const saveFefRows = createServerFn({ method: "POST" })
               "projectId", "discipline", "section", "position",
               "cbsCode", "name", "description", "shopField", "weldGroupDescription",
               "quantity", "size", "unit", "metallurgyCode", "boreSize",
-              "role", "schedule", "taskCode", "laborHours", "laborFactor", "laborRate",
+              "role", "crewMixId", "schedule", "taskCode", "laborHours", "laborFactor", "laborRate",
               "materialCost", "equipment", "notes", "sub", "area",
               "createdAt", "updatedAt"
             )
@@ -164,6 +182,7 @@ export const saveFefRows = createServerFn({ method: "POST" })
               "metallurgyCode" = EXCLUDED."metallurgyCode",
               "boreSize" = EXCLUDED."boreSize",
               "role" = EXCLUDED."role",
+              "crewMixId" = EXCLUDED."crewMixId",
               "schedule" = EXCLUDED."schedule",
               "taskCode" = EXCLUDED."taskCode",
               "laborHours" = EXCLUDED."laborHours",

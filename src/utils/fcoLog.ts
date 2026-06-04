@@ -1,6 +1,15 @@
-import { queryOptions } from "@tanstack/react-query";
+import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
+import { qk } from "~/lib/query-keys";
+import {
+  parseIdInput,
+  parseIdScalar,
+  parseProjectIdInput,
+  parsePromoteFcoInput,
+  parseTransitionInput,
+  parseUpsertFco,
+} from "~/lib/validators";
 import {
   assertProjectAccess,
   requireProjectAccess,
@@ -213,7 +222,7 @@ const toListItem = (r: FcoListRow): FcoListItem => {
 };
 
 export const fetchFcoList = createServerFn({ method: "GET" })
-  .inputValidator((projectId: number) => projectId)
+  .inputValidator(parseProjectIdInput)
   .handler(async ({ data: projectId }): Promise<FcoListItem[]> => {
     await requireProjectAccess(projectId);
     const rows = await prisma.fieldChangeOrder.findMany({
@@ -230,7 +239,7 @@ export const fetchFcoList = createServerFn({ method: "GET" })
  * the user clicking "Export CSV" so the heavier payload only ships on demand.
  */
 export const fetchFcoListFull = createServerFn({ method: "GET" })
-  .inputValidator((projectId: number) => projectId)
+  .inputValidator(parseProjectIdInput)
   .handler(async ({ data: projectId }): Promise<FcoItem[]> => {
     await requireProjectAccess(projectId);
     const rows = await prisma.fieldChangeOrder.findMany({
@@ -246,7 +255,7 @@ export const fetchFcoListFull = createServerFn({ method: "GET" })
 
 export const fcoListFullQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["fcoLog", "full", projectId],
+    queryKey: qk.fcoLog.full(projectId),
     queryFn: (): Promise<FcoItem[]> =>
       projectId === null
         ? Promise.resolve([])
@@ -262,7 +271,7 @@ export const fcoListFullQueryOptions = (projectId: number | null) =>
  * directly). Mirrors `fetchChangeLog` over on the CVR side.
  */
 export const fetchFco = createServerFn({ method: "GET" })
-  .inputValidator((id: number) => id)
+  .inputValidator(parseIdScalar)
   .handler(async ({ data: id }): Promise<FcoItem> => {
     const row = await prisma.fieldChangeOrder.findUniqueOrThrow({
       where: { id },
@@ -277,7 +286,7 @@ export const fetchFco = createServerFn({ method: "GET" })
 
 export const fcoQueryOptions = (id: number | null) =>
   queryOptions({
-    queryKey: ["fcoLog", "single", id],
+    queryKey: qk.fcoLog.single(id),
     queryFn: (): Promise<FcoItem | null> =>
       id === null ? Promise.resolve(null) : fetchFco({ data: id }),
     enabled: id !== null,
@@ -285,7 +294,7 @@ export const fcoQueryOptions = (id: number | null) =>
 
 export const fcoListQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["fcoLog", projectId],
+    queryKey: qk.fcoLog.list(projectId),
     queryFn: (): Promise<FcoListItem[]> =>
       projectId === null
         ? Promise.resolve([])
@@ -358,7 +367,7 @@ const linkedRelationsInclude = {
 } as const;
 
 export const upsertFco = createServerFn({ method: "POST" })
-  .inputValidator((input: UpsertFcoInput) => input)
+  .inputValidator(parseUpsertFco)
   .handler(async ({ data }): Promise<FcoItem> => {
     // Resolve the actor once; authorize per-branch inside the transaction
     // against the *actual* project: for creates that's the claimed
@@ -397,7 +406,13 @@ export const upsertFco = createServerFn({ method: "POST" })
       closedAt: data.closedAt ? new Date(data.closedAt) : null,
       linkedCvrId: data.linkedCvrId,
     };
-    const id = await prisma.$transaction(async (tx) => {
+    // Run the upsert *with* the linked-relation include so the row that
+    // bubbles out of the transaction already carries `linkedCvr` /
+    // `linkedRfi`. Previously we returned just the id and re-fetched after
+    // the transaction — an extra round-trip per write that this avoids.
+    // `before` stays scalar (no include) since the audit diff only inspects
+    // FCO_AUDIT_FIELDS, which are all scalar columns.
+    const row = await prisma.$transaction(async (tx) => {
       if (data.id) {
         const before = await tx.fieldChangeOrder.findUniqueOrThrow({
           where: { id: data.id },
@@ -413,6 +428,7 @@ export const upsertFco = createServerFn({ method: "POST" })
         const updated = await tx.fieldChangeOrder.update({
           where: { id: data.id },
           data: editableFields,
+          include: linkedRelationsInclude,
         });
         await recordUpdate(
           tx,
@@ -422,9 +438,9 @@ export const upsertFco = createServerFn({ method: "POST" })
             projectId: updated.projectId,
             actor,
           },
-          diffFields(before, updated, FCO_AUDIT_FIELDS),
+          diffFields(before, updated as FcoScalarRow, FCO_AUDIT_FIELDS),
         );
-        return updated.id;
+        return updated;
       }
       await assertProjectAccess(actor, data.projectId);
       const created = await tx.fieldChangeOrder.create({
@@ -433,6 +449,7 @@ export const upsertFco = createServerFn({ method: "POST" })
           projectId: data.projectId,
           createdById: actor.id,
         },
+        include: linkedRelationsInclude,
       });
       await recordCreate(tx, {
         entityType: "FieldChangeOrder",
@@ -440,12 +457,7 @@ export const upsertFco = createServerFn({ method: "POST" })
         projectId: created.projectId,
         actor,
       });
-      return created.id;
-    });
-    // Re-fetch with the relation for the response shape.
-    const row = await prisma.fieldChangeOrder.findUniqueOrThrow({
-      where: { id },
-      include: linkedRelationsInclude,
+      return created;
     });
     return toItem(row);
   });
@@ -456,18 +468,23 @@ export const upsertFco = createServerFn({ method: "POST" })
  * originator block. An optional `comment` is stored on the audit event.
  */
 export const transitionFco = createServerFn({ method: "POST" })
-  .inputValidator(
-    (input: { id: number; action: string; comment?: string }) => input,
-  )
+  .inputValidator(parseTransitionInput)
   .handler(async ({ data }): Promise<FcoItem> => {
     const actor = await resolveCurrentUser();
     if (!actor) throw new Error("Unauthorized: not signed in");
-    const id = await prisma.$transaction(async (tx) => {
+    // Read `before` and write `updated` with the linked-relation include so
+    // both ends of the workflow transition carry the relations needed by
+    // toItem. Eliminates the post-tx re-fetch round-trip that previously
+    // followed this transaction. `applyWorkflowTransition`'s Row generic
+    // infers to the with-relations shape; the audit diff (config.auditFields)
+    // names scalar columns only, which are still valid keys on the wider row.
+    const row = await prisma.$transaction(async (tx) => {
       const before = await tx.fieldChangeOrder.findUniqueOrThrow({
         where: { id: data.id },
+        include: linkedRelationsInclude,
       });
       await assertProjectAccess(actor, before.projectId);
-      const updated = await applyWorkflowTransition({
+      return applyWorkflowTransition({
         tx,
         before,
         actor,
@@ -478,20 +495,15 @@ export const transitionFco = createServerFn({ method: "POST" })
           tx.fieldChangeOrder.update({
             where: { id: data.id },
             data: payload,
+            include: linkedRelationsInclude,
           }),
       });
-      return updated.id;
-    });
-    // Re-fetch with the relation for the response shape.
-    const row = await prisma.fieldChangeOrder.findUniqueOrThrow({
-      where: { id },
-      include: linkedRelationsInclude,
     });
     return toItem(row);
   });
 
 export const deleteFco = createServerFn({ method: "POST" })
-  .inputValidator((input: { id: number }) => input)
+  .inputValidator(parseIdInput)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const actor = await resolveCurrentUser();
     if (!actor) throw new Error("Unauthorized: not signed in");
@@ -518,7 +530,7 @@ export const deleteFco = createServerFn({ method: "POST" })
  * LINKED_TO_CVR. Returns the new CVR id so callers can navigate to it.
  */
 export const promoteFcoToCvr = createServerFn({ method: "POST" })
-  .inputValidator((input: { fcoId: number }) => input)
+  .inputValidator(parsePromoteFcoInput)
   .handler(async ({ data }): Promise<{ cvrId: number }> => {
     const actor = await resolveCurrentUser();
     if (!actor) throw new Error("Unauthorized: not signed in");
@@ -593,7 +605,7 @@ export const promoteFcoToCvr = createServerFn({ method: "POST" })
  * dialog. Returns id + label only so the dropdown stays cheap.
  */
 export const fetchCvrOptions = createServerFn({ method: "GET" })
-  .inputValidator((projectId: number) => projectId)
+  .inputValidator(parseProjectIdInput)
   .handler(
     async ({
       data: projectId,
@@ -610,7 +622,7 @@ export const fetchCvrOptions = createServerFn({ method: "GET" })
 
 export const cvrOptionsQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["cvrOptions", projectId],
+    queryKey: qk.changeLog.cvrOptions(projectId),
     queryFn: () =>
       projectId === null
         ? Promise.resolve([])
@@ -618,3 +630,18 @@ export const cvrOptionsQueryOptions = (projectId: number | null) =>
     enabled: projectId !== null,
     staleTime: 30 * 1000,
   });
+
+/**
+ * Cache-bust set fired after every FCO mutation. Lives here so the FCO
+ * module owns the fan-out — callers shouldn't have to remember the dashboard
+ * summary key. `promoteFcoToCvr` mints a CVR; for that case the caller pairs
+ * this with `invalidateChangeLogQueries`.
+ */
+export function invalidateFcoQueries(
+  queryClient: QueryClient,
+  projectId: number | null,
+): void {
+  queryClient.invalidateQueries({ queryKey: qk.fcoLog.list(projectId) });
+  queryClient.invalidateQueries({ queryKey: qk.fcoLog.full(projectId) });
+  queryClient.invalidateQueries({ queryKey: qk.dashboardSummary(projectId) });
+}

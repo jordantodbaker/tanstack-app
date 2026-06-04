@@ -1,7 +1,15 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { prisma } from "../server/db";
 import { adminHandler, requireProjectAccess } from "./users.server";
+import { Id, ProjectId, parseProjectIdInput } from "../lib/validators";
+
+const UpdateAllowedFefCbsItemsSchema = z.object({
+  projectId: ProjectId,
+  addIds: z.array(Id),
+  removeIds: z.array(Id),
+});
 
 export const fetchSetupCbsItems = createServerFn({ method: "GET" }).handler(
   () =>
@@ -34,7 +42,7 @@ export const setupCbsItemsQueryOptions = () =>
   });
 
 export const fetchAllowedFefCbsItemIds = createServerFn({ method: "GET" })
-  .inputValidator((projectId: number) => projectId)
+  .inputValidator(parseProjectIdInput)
   .handler(async ({ data: projectId }) => {
     await requireProjectAccess(projectId);
     const project = await prisma.project.findUnique({
@@ -52,7 +60,7 @@ export const allowedFefCbsItemIdsQueryOptions = (projectId: number) =>
   });
 
 export const fetchAllowedCbsL1Codes = createServerFn({ method: "GET" })
-  .inputValidator((projectId: number) => projectId)
+  .inputValidator(parseProjectIdInput)
   .handler(async ({ data: projectId }) => {
     await requireProjectAccess(projectId);
     const project = await prisma.project.findUnique({
@@ -77,9 +85,8 @@ export const allowedCbsL1CodesQueryOptions = (projectId: number) =>
 
 /** Admin-only: edits a project's CBS allow-list. */
 export const updateAllowedFefCbsItems = createServerFn({ method: "POST" })
-  .inputValidator(
-    (input: { projectId: number; addIds: number[]; removeIds: number[] }) =>
-      input,
+  .inputValidator((input: unknown) =>
+    UpdateAllowedFefCbsItemsSchema.parse(input),
   )
   .handler(
     adminHandler(async ({ data }) => {

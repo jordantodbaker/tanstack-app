@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { resolveCurrentUser } from "./users.server";
+import { parseIdInput } from "~/lib/validators";
 import {
   countUnread,
   listNotifications,
@@ -50,7 +51,7 @@ export const fetchUnreadNotificationCount = createServerFn({
 });
 
 export const markNotificationReadFn = createServerFn({ method: "POST" })
-  .inputValidator((input: { id: number }) => input)
+  .inputValidator(parseIdInput)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const userId = await requireUserId();
     if (userId === null) throw new Error("Unauthorized: not signed in");

@@ -1,13 +1,30 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
+import { z } from "zod";
+import { Id } from "~/lib/validators";
+
+const StringArr = z.array(z.string());
+const StringArrParser = (input: unknown) => StringArr.parse(input);
+
+const CbsItemsByL1PagedSchema = z.object({
+  l1Values: StringArr,
+  page: z.int().nonnegative(),
+  pageSize: z.int().positive(),
+  projectId: Id.nullable().optional(),
+});
+
+const CbsItemsByL1FilteredSchema = z.object({
+  l1Values: StringArr,
+  projectId: Id.nullable(),
+});
 
 export const fetchCbsItems = createServerFn({ method: "GET" }).handler(() => {
   return prisma.cbsItem.findMany({ orderBy: { id: "asc" } });
 });
 
 export const fetchCbsItemsByL1 = createServerFn({ method: "GET" })
-  .inputValidator((l1Values: string[]) => l1Values)
+  .inputValidator(StringArrParser)
   .handler(({ data }) => {
     return prisma.cbsItem.findMany({
       where: { l1: { in: data } },
@@ -32,14 +49,7 @@ export const cbsItemsByL1QueryOptions = (l1Values: string[]) =>
   });
 
 export const fetchCbsItemsByL1Paged = createServerFn({ method: "GET" })
-  .inputValidator(
-    (input: {
-      l1Values: string[];
-      page: number;
-      pageSize: number;
-      projectId?: number | null;
-    }) => input,
-  )
+  .inputValidator((input: unknown) => CbsItemsByL1PagedSchema.parse(input))
   .handler(async ({ data }) => {
     const { l1Values, page, pageSize, projectId } = data;
     const where =
@@ -86,9 +96,7 @@ export const cbsItemsByL1PagedQueryOptions = (input: {
   });
 
 export const fetchCbsItemsByL1Filtered = createServerFn({ method: "GET" })
-  .inputValidator(
-    (input: { l1Values: string[]; projectId: number | null }) => input,
-  )
+  .inputValidator((input: unknown) => CbsItemsByL1FilteredSchema.parse(input))
   .handler(({ data }) => {
     const { l1Values, projectId } = data;
     const where =
@@ -124,7 +132,7 @@ export const cbsItemsByL1FilteredQueryOptions = (input: {
   });
 
 export const fetchCbsItemsByL1EndsWith = createServerFn({ method: "GET" })
-  .inputValidator((suffixes: string[]) => suffixes)
+  .inputValidator(StringArrParser)
   .handler(({ data }) => {
     return prisma.cbsItem.findMany({
       where: { OR: data.map((suffix) => ({ l1: { endsWith: suffix } })) },

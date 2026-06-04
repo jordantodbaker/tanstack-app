@@ -4,6 +4,7 @@ import type { CbsOption, FefRow } from "~/lib/types";
 import { DisciplinePage } from "~/components/FefTable";
 import { disciplines } from "~/config/disciplines";
 import { roleDataQueryOptions } from "~/utils/roles";
+import { crewMixDataQueryOptions } from "~/utils/crewMixes";
 import { useSelectedProject } from "~/lib/selected-project";
 import { allowedFefCbsItemIdsQueryOptions } from "~/utils/setup";
 import { toCbsOption, makeFefRow } from "~/lib/fef-helpers";
@@ -45,6 +46,7 @@ export function DisciplineRoute({
   const roleOptions = roleData?.roleOptions;
   const scheduleOptions = roleData?.scheduleOptions;
   const roleRates = roleData?.roleRates;
+  const { data: crewMixOptions } = useQuery(crewMixDataQueryOptions());
   const { projectId } = useSelectedProject();
   const { data: allowedIds } = useQuery({
     ...allowedFefCbsItemIdsQueryOptions(projectId ?? 0),
@@ -92,6 +94,7 @@ export function DisciplineRoute({
       roleOptions={roleOptions}
       scheduleOptions={scheduleOptions}
       roleRates={roleRates}
+      crewMixOptions={crewMixOptions}
     />
   );
 }

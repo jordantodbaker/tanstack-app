@@ -1,7 +1,18 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
+import { z } from "zod";
 import { requireProjectAccess } from "./users.server";
+import { Id, ProjectId } from "~/lib/validators";
+
+const AuditEventsInputSchema = z.object({
+  // entityType is free-form across the audit module (used by attachments,
+  // comments, the entity modules themselves), so we keep it as `string`
+  // here rather than enumerating. Project-access is still enforced.
+  entityType: z.string().min(1),
+  entityId: Id,
+  projectId: ProjectId,
+});
 
 export type AuditEventAction = "CREATE" | "UPDATE" | "DELETE";
 
@@ -24,10 +35,7 @@ export type AuditEventItem = {
  * the caller passes the owning `projectId` and must have access to it.
  */
 export const fetchAuditEvents = createServerFn({ method: "GET" })
-  .inputValidator(
-    (input: { entityType: string; entityId: number; projectId: number }) =>
-      input,
-  )
+  .inputValidator((input: unknown) => AuditEventsInputSchema.parse(input))
   .handler(async ({ data }): Promise<AuditEventItem[]> => {
     await requireProjectAccess(data.projectId);
     const rows = await prisma.auditEvent.findMany({

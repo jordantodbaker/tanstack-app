@@ -3,7 +3,11 @@ import {
   TREND_PRIORITY_LABELS,
   TREND_STATUS_LABELS,
 } from "~/utils/trendLabels";
-import { makeEnumBadge } from "~/components/ui/enum-badge";
+import {
+  makeEnumBadge,
+  SHARED_PRIORITY_STYLES,
+  VOID_PILL_STYLE,
+} from "~/components/ui/enum-badge";
 
 const STATUS_STYLES: Record<TrendStatus, string> = {
   // IDENTIFIED is the "fresh hunch" state; soft so it doesn't shout from a
@@ -14,15 +18,10 @@ const STATUS_STYLES: Record<TrendStatus, string> = {
   // CONVERTED is terminal-good; the trend became a real CVR.
   CONVERTED: "bg-emerald-50 text-emerald-800 border-emerald-300",
   REJECTED: "bg-rose-50 text-rose-700 border-rose-300",
-  VOID: "bg-slate-50 text-slate-400 border-slate-200 line-through",
+  VOID: VOID_PILL_STYLE,
 };
 
-const PRIORITY_STYLES: Record<TrendPriority, string> = {
-  LOW: "bg-slate-100 text-slate-700",
-  NORMAL: "bg-blue-100 text-blue-800",
-  HIGH: "bg-orange-100 text-orange-800",
-  URGENT: "bg-red-100 text-red-800 animate-pulse",
-};
+const PRIORITY_STYLES: Record<TrendPriority, string> = SHARED_PRIORITY_STYLES;
 
 const TrendStatusBadgeBase = makeEnumBadge({
   labels: TREND_STATUS_LABELS,

@@ -2,6 +2,11 @@ import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { adminHandler, requireProjectAccess } from "./users.server";
+import {
+  parseIdInput,
+  parseProjectIdInput,
+  parseUpsertArea,
+} from "~/lib/validators";
 
 export type AreaOption = {
   id: number;
@@ -35,7 +40,7 @@ export const areasQueryOptions = () =>
 
 /** Lightweight area list for a single project, used to populate dropdowns. */
 export const fetchAreasByProject = createServerFn({ method: "GET" })
-  .inputValidator((projectId: number) => projectId)
+  .inputValidator(parseProjectIdInput)
   .handler(async ({ data: projectId }) => {
     await requireProjectAccess(projectId);
     return prisma.area.findMany({
@@ -73,7 +78,7 @@ export type UpsertAreaInput = {
 
 /** Create or update an area. Admin-only. */
 export const upsertArea = createServerFn({ method: "POST" })
-  .inputValidator((input: UpsertAreaInput) => input)
+  .inputValidator(parseUpsertArea)
   .handler(
     adminHandler(async ({ data }): Promise<{ ok: true }> => {
       const payload = {
@@ -93,7 +98,7 @@ export const upsertArea = createServerFn({ method: "POST" })
 
 /** Delete an area. Admin-only. */
 export const deleteArea = createServerFn({ method: "POST" })
-  .inputValidator((input: { id: number }) => input)
+  .inputValidator(parseIdInput)
   .handler(
     adminHandler(async ({ data }): Promise<{ ok: true }> => {
       await prisma.area.delete({ where: { id: data.id } });

@@ -19,6 +19,9 @@ export type FefRow = {
   metallurgyCode: string;
   boreSize: string;
   role: string;
+  /** Selected CrewMix.id (as a string) when the row's labor rate came from a
+   *  crew mix average; "" when the row uses Role + Schedule instead. */
+  crewMixId: string;
   schedule: string;
   taskCode: string;
   laborHours: string;

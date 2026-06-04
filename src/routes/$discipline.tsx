@@ -3,15 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { DisciplineRoute } from "~/components/DisciplineRoute";
 import { disciplineById } from "~/config/disciplines";
 import { cbsItemsByL1QueryOptions } from "~/utils/cbs";
-import { roleDataQueryOptions } from "~/utils/roles";
-import {
-  allowedFefCbsItemIdsQueryOptions,
-} from "~/utils/setup";
-import { fefRowsQueryOptions } from "~/utils/fefRows";
-import {
-  readProjectIdForLoader,
-  tryPrefetchProjectQuery,
-} from "~/utils/projectCookie";
+import { readProjectIdForLoader } from "~/utils/projectCookie";
+import { prefetchDisciplineLoaderData } from "~/utils/disciplineLoader";
 
 export const Route = createFileRoute("/$discipline")({
   loader: async ({ params, context }) => {
@@ -19,44 +12,15 @@ export const Route = createFileRoute("/$discipline")({
     if (!config?.l1Codes) throw notFound();
 
     const projectId = await readProjectIdForLoader();
-    // Project-scoped prefetches are best-effort: a stale cookie projectId
-    // the user no longer has access to throws server-side; the page still
-    // renders and ProjectGuard surfaces the not-assigned state.
-    const fefRowPrefetches =
-      projectId !== null
-        ? [
-            tryPrefetchProjectQuery(
-              context.queryClient.ensureQueryData(
-                fefRowsQueryOptions({
-                  projectId,
-                  discipline: config.id,
-                  section: "TAKE_OFF",
-                }),
-              ),
-            ),
-            tryPrefetchProjectQuery(
-              context.queryClient.ensureQueryData(
-                fefRowsQueryOptions({
-                  projectId,
-                  discipline: config.id,
-                  section: "SUPPORT_LABOR",
-                }),
-              ),
-            ),
-            tryPrefetchProjectQuery(
-              context.queryClient.ensureQueryData(
-                allowedFefCbsItemIdsQueryOptions(projectId),
-              ),
-            ),
-          ]
-        : [];
-
     await Promise.all([
       context.queryClient.ensureQueryData(
         cbsItemsByL1QueryOptions(config.l1Codes),
       ),
-      context.queryClient.ensureQueryData(roleDataQueryOptions(config.id)),
-      ...fefRowPrefetches,
+      prefetchDisciplineLoaderData(
+        context.queryClient,
+        config.id,
+        projectId,
+      ),
     ]);
 
     return {

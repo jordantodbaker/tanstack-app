@@ -12,6 +12,19 @@ import {
   type ProjectFefRowTotals,
   type ProjectTotalsRow,
 } from "~/lib/project-totals";
+import { z } from "zod";
+import {
+  ProjectId,
+  parseIdInput,
+  parseIdScalar,
+  parseProjectIdInput,
+} from "~/lib/validators";
+
+const CreateSnapshotSchema = z.object({
+  projectId: ProjectId,
+  label: z.string().trim().min(1),
+  notes: z.string().optional(),
+});
 
 /**
  * Same select-shape as `fetchProjectFefRowTotals` — the snapshot stores
@@ -85,9 +98,7 @@ export type EstimateSnapshotDetail = {
 };
 
 export const createSnapshot = createServerFn({ method: "POST" })
-  .inputValidator(
-    (input: { projectId: number; label: string; notes?: string }) => input,
-  )
+  .inputValidator((input: unknown) => CreateSnapshotSchema.parse(input))
   .handler(async ({ data }): Promise<EstimateSnapshotItem> => {
     const actor = await requireProjectAccess(data.projectId);
     const label = data.label.trim();
@@ -138,7 +149,7 @@ export const createSnapshot = createServerFn({ method: "POST" })
   });
 
 export const fetchSnapshots = createServerFn({ method: "GET" })
-  .inputValidator((projectId: number) => projectId)
+  .inputValidator(parseProjectIdInput)
   .handler(async ({ data: projectId }): Promise<EstimateSnapshotItem[]> => {
     await requireProjectAccess(projectId);
     const snaps = await prisma.estimateSnapshot.findMany({
@@ -182,7 +193,7 @@ export const fetchSnapshots = createServerFn({ method: "GET" })
   });
 
 export const fetchSnapshotDetail = createServerFn({ method: "GET" })
-  .inputValidator((id: number) => id)
+  .inputValidator(parseIdScalar)
   .handler(async ({ data: id }): Promise<EstimateSnapshotDetail> => {
     // Don't pull `fefRows` here — totals are cached on the row at create
     // time, so the heavy JSON blob is only needed for the legacy-snapshot
@@ -237,7 +248,7 @@ export const fetchSnapshotDetail = createServerFn({ method: "GET" })
   });
 
 export const deleteSnapshot = createServerFn({ method: "POST" })
-  .inputValidator((input: { id: number }) => input)
+  .inputValidator(parseIdInput)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const actor = await resolveCurrentUser();
     if (!actor) throw new Error("Unauthorized: not signed in");

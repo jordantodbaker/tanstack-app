@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { listUsers, resolveCurrentUser, setUser } from "./users.server";
+import { parseSetUser } from "~/lib/validators";
 
 /**
  * CLIENT-SAFE. This module is imported by client code (`use-current-user.ts`,
@@ -89,10 +90,7 @@ export const usersQueryOptions = () =>
 /** Updates a user's role and project assignments. Admin-only (gated
  *  server-side). `projectIds` replaces the full set. */
 export const updateUser = createServerFn({ method: "POST" })
-  .inputValidator(
-    (input: { userId: number; role: UserRole; projectIds: number[] }) =>
-      input,
-  )
+  .inputValidator(parseSetUser)
   .handler(({ data }): Promise<AdminUser> =>
     setUser(data.userId, data.role, data.projectIds),
   );

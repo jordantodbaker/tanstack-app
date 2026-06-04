@@ -2,12 +2,9 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, Link as LinkIcon, Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogTrigger,
-} from "~/components/ui/dialog";
+import { DialogClose } from "~/components/ui/dialog";
+import { EntityDialogShell } from "~/components/EntityDialog/EntityDialogShell";
+import { useCbsSearchableOptions } from "~/lib/use-cbs-searchable-options";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import {
@@ -36,7 +33,6 @@ import { TREND_PRIORITY_LABELS } from "~/utils/trendLabels";
 import { TrendStatusBadge } from "~/components/Trend/TrendBadges";
 import { SearchableMultiSelect } from "~/components/SearchableMultiSelect";
 import type { SearchableSelectOption } from "~/components/SearchableSelect";
-import { cbsCodeOptionsQueryOptions } from "~/utils/cbs";
 import { rfiListQueryOptions } from "~/utils/rfis";
 import { fcoListQueryOptions } from "~/utils/fcoLog";
 import { formatMoney } from "~/lib/formatting";
@@ -124,42 +120,33 @@ type TrendDialogProps = {
 
 export function TrendDialog({
   trigger,
-  initial: initialSlim,
+  initial,
   projectId,
   onSubmit,
   onDelete,
   onTransition,
   onPromote,
 }: TrendDialogProps) {
-  const [open, setOpen] = React.useState(false);
-  const isEdit = initialSlim?.id !== undefined;
-  const { data: full } = useQuery({
-    ...trendQueryOptions(isEdit ? (initialSlim?.id ?? null) : null),
-    enabled: open && isEdit,
-  });
-  const fullReady = !isEdit || !!full;
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,1000px)] max-h-[90vh] overflow-y-auto">
-        {!open ? null : !fullReady ? (
-          <div className="p-8 text-center text-sm text-slate-500">
-            Loading Trend…
-          </div>
-        ) : (
-          <TrendDialogBody
-            key={initialSlim?.id ?? "new"}
-            initial={full ?? undefined}
-            projectId={projectId}
-            onSubmit={onSubmit}
-            onDelete={onDelete}
-            onTransition={onTransition}
-            onPromote={onPromote}
-            closeDialog={() => setOpen(false)}
-          />
-        )}
-      </DialogContent>
-    </Dialog>
+    <EntityDialogShell
+      trigger={trigger}
+      initial={initial}
+      fullQueryOptions={trendQueryOptions}
+      loadingLabel="Loading Trend…"
+      contentClassName="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,1000px)] max-h-[90vh] overflow-y-auto"
+    >
+      {(full, closeDialog) => (
+        <TrendDialogBody
+          initial={full}
+          projectId={projectId}
+          onSubmit={onSubmit}
+          onDelete={onDelete}
+          onTransition={onTransition}
+          onPromote={onPromote}
+          closeDialog={closeDialog}
+        />
+      )}
+    </EntityDialogShell>
   );
 }
 
@@ -248,7 +235,7 @@ function TrendDialogBody({
   }
 
   // `open` is implicitly true — only mounted when outer is open + full loaded.
-  const { data: cbsCodeOptions = [] } = useQuery(cbsCodeOptionsQueryOptions());
+  const cbsOptions: SearchableSelectOption[] = useCbsSearchableOptions();
   const { data: areas = [] } = useQuery({
     ...areasByProjectQueryOptions(projectId),
     enabled: projectId !== null,
@@ -261,16 +248,6 @@ function TrendDialogBody({
     ...fcoListQueryOptions(projectId),
     enabled: projectId !== null,
   });
-
-  const cbsOptions: SearchableSelectOption[] = React.useMemo(
-    () =>
-      cbsCodeOptions.map((c) => ({
-        value: c.displayCode,
-        label: c.name ? `${c.displayCode} — ${c.name}` : c.displayCode,
-        searchText: `${c.displayCode} ${c.name ?? ""}`.toLowerCase(),
-      })),
-    [cbsCodeOptions],
-  );
 
   // Live AFC contribution preview — `probability × costLikely`, scoped to
   // the current draft. Surfaces immediately so a PM can dial probability

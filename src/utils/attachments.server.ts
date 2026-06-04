@@ -1,20 +1,22 @@
-import { promises as fs } from "node:fs";
-import * as nodePath from "node:path";
 import { randomBytes } from "node:crypto";
+import { del as blobDel, put as blobPut } from "@vercel/blob";
 import { MAX_ATTACHMENT_BYTES } from "./attachments";
 
 /**
- * SERVER-ONLY local-filesystem storage for attachments. Two halves:
+ * SERVER-ONLY storage layer for attachments. Two halves:
  *
  *   1. Pure helpers (`sanitizeFilename`, `buildStorageKey`, `validateUpload`,
- *      `randomFileId`) — no FS or DB dependency, directly unit-testable.
- *   2. FS-touching helpers (`writeAttachmentFile`, `readAttachmentFile`,
- *      `deleteAttachmentFile`) — read and write under the upload root.
+ *      `randomFileId`) — no IO, directly unit-testable.
+ *   2. Vercel-Blob-touching helpers (`writeAttachmentFile`,
+ *      `readAttachmentFile`, `deleteAttachmentFile`) — talk to the
+ *      `BLOB_READ_WRITE_TOKEN` store. The DB's `storageKey` column holds the
+ *      full Blob URL returned by upload, not a relative path.
  *
- * The upload root is resolved from `process.env.UPLOAD_DIR` (defaulting to
- * `./uploads` relative to the working directory). Every FS operation resolves
- * the storage key against that root AND asserts the result stays inside it,
- * so a malformed key can't escape via `..`.
+ * Auth model: uploads use `addRandomSuffix: true`, so URLs are
+ * unguessable. Downloads still flow through `downloadAttachment` (which
+ * runs `requireProjectAccess`), so the URL never escapes to the browser
+ * unless the caller is authorised — the random-suffix is just defence in
+ * depth in case a URL leaks.
  *
  * NOTE: `MAX_ATTACHMENT_BYTES` is defined in `./attachments` (client-safe)
  * and re-exported below so callers / tests that already pull it from here
@@ -116,48 +118,59 @@ export function validateUpload(args: {
   return null;
 }
 
-/** Absolute path to the configured upload root. */
-function getUploadRoot(): string {
-  return nodePath.resolve(process.env.UPLOAD_DIR ?? "./uploads");
+/**
+ * Uploads to Vercel Blob and returns the public URL — the caller stores
+ * this URL as the row's `storageKey`. `addRandomSuffix: true` makes URLs
+ * unguessable even when the pathname is predictable; combined with the
+ * `randomFileId()` already baked into the pathname, the effective entropy
+ * is high.
+ *
+ * Requires the `BLOB_READ_WRITE_TOKEN` env var (provided automatically when
+ * a Vercel Blob store is connected to the project).
+ */
+export async function writeAttachmentFile(
+  pathname: string,
+  content: Buffer,
+  contentType: string,
+): Promise<string> {
+  const result = await blobPut(pathname, content, {
+    access: "public",
+    addRandomSuffix: true,
+    contentType,
+  });
+  return result.url;
 }
 
 /**
- * Resolves a storage key to an absolute path, asserting the result is still
- * inside the upload root. Defends against `..` traversal in keys constructed
- * incorrectly.
+ * Fetches the blob via the URL stored as `storageKey`. We keep proxying
+ * downloads through the server fn (rather than handing URLs to the browser)
+ * so `requireProjectAccess` stays the single source of truth for
+ * authorisation — the random-suffix URL is defence in depth, not the
+ * primary control.
  */
-function resolveSafePath(storageKey: string): string {
-  const root = getUploadRoot();
-  const resolved = nodePath.resolve(root, storageKey);
-  const rel = nodePath.relative(root, resolved);
-  if (rel.startsWith("..") || nodePath.isAbsolute(rel)) {
-    throw new Error("Invalid storage key: path escapes upload root.");
-  }
-  return resolved;
-}
-
-export async function writeAttachmentFile(
-  storageKey: string,
-  content: Buffer,
-): Promise<void> {
-  const abs = resolveSafePath(storageKey);
-  await fs.mkdir(nodePath.dirname(abs), { recursive: true });
-  await fs.writeFile(abs, content);
-}
-
 export async function readAttachmentFile(storageKey: string): Promise<Buffer> {
-  const abs = resolveSafePath(storageKey);
-  return fs.readFile(abs);
+  const res = await fetch(storageKey);
+  if (!res.ok) {
+    throw new Error(
+      `Attachment fetch failed (${res.status} ${res.statusText}).`,
+    );
+  }
+  return Buffer.from(await res.arrayBuffer());
 }
 
+/**
+ * Removes the blob. A missing object isn't fatal — the DB row delete still
+ * proceeds. Any other error bubbles up so the caller surfaces it rather
+ * than silently leaking an object.
+ */
 export async function deleteAttachmentFile(storageKey: string): Promise<void> {
-  const abs = resolveSafePath(storageKey);
   try {
-    await fs.unlink(abs);
+    await blobDel(storageKey);
   } catch (err) {
-    // Missing file isn't fatal — the DB row deletion still proceeds. Any
-    // other error (permissions, locked file) should bubble up so the caller
-    // surfaces it rather than silently leaking a file on disk.
-    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    const msg = (err as Error)?.message ?? "";
+    // Vercel Blob throws a generic Error when the blob is already gone;
+    // detect "not found" by message rather than a status code.
+    if (/not\s+found/i.test(msg)) return;
+    throw err;
   }
 }

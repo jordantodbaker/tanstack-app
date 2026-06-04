@@ -17,6 +17,9 @@ const EXPECTED_ENTITIES: AdminEntity[] = [
   "areas",
   "users",
   "roles",
+  "crewMixes",
+  "cvrTemplates",
+  "fcoTemplates",
 ];
 
 /**
@@ -36,6 +39,9 @@ const EXPECTED_FAN_OUT: Record<AdminEntity, string[]> = {
   areas: ["areas", "areasByProject", "projects"],
   users: ["adminUsers", "projects"],
   roles: ["rolesAdmin", "roleData"],
+  crewMixes: ["crewMixesAdmin", "crewMixData"],
+  cvrTemplates: ["cvrTemplatesAdmin", "cvrTemplatePicker"],
+  fcoTemplates: ["fcoTemplatesAdmin", "fcoTemplatePicker"],
 };
 
 /**

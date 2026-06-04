@@ -26,6 +26,9 @@ const ADMIN_LINKS = [
   { to: "/admin/subcontractors", label: "Subcontractors" },
   { to: "/admin/areas", label: "Areas" },
   { to: "/admin/roles", label: "Roles" },
+  { to: "/admin/crew-mixes", label: "Crew Mixes" },
+  { to: "/admin/cvr-templates", label: "CVR Templates" },
+  { to: "/admin/fco-templates", label: "FCO Templates" },
   { to: "/admin/users", label: "Users" },
   { to: "/admin/system", label: "System" },
 ] as const;

@@ -13,6 +13,32 @@ import {
   type ProjectTotalsRow,
 } from "~/lib/project-totals";
 import type { EvmMetrics } from "~/lib/evm";
+import { qk } from "~/lib/query-keys";
+import { z } from "zod";
+import {
+  Id,
+  ProjectId,
+  parseIdInput,
+  parseIdScalar,
+  parseProjectIdInput,
+} from "~/lib/validators";
+
+const CreateReportingPeriodSchema = z.object({
+  projectId: ProjectId,
+  label: z.string().trim().min(1),
+  dataDate: z.string(),
+  baselineSnapshotId: Id,
+});
+
+const UpsertMeasurementSchema = z.object({
+  periodId: Id,
+  bucket: z.string(),
+  percentComplete: z.number().finite(),
+  actualCost: z.number().finite(),
+  actualHours: z.number().finite().nullable().optional(),
+  plannedValueOverride: z.number().finite().nullable().optional(),
+  notes: z.string().optional(),
+});
 import {
   computePeriodEvm,
   type PeriodBucketRow as PurePeriodBucketRow,
@@ -66,7 +92,7 @@ export type PeriodWithEvm = {
 };
 
 export const fetchReportingPeriods = createServerFn({ method: "GET" })
-  .inputValidator((projectId: number) => projectId)
+  .inputValidator(parseProjectIdInput)
   .handler(async ({ data: projectId }): Promise<ReportingPeriodItem[]> => {
     await requireProjectAccess(projectId);
     const periods = await prisma.reportingPeriod.findMany({
@@ -171,15 +197,7 @@ async function loadRevisionsByBucket(
 }
 
 export const createReportingPeriod = createServerFn({ method: "POST" })
-  .inputValidator(
-    (input: {
-      projectId: number;
-      label: string;
-      /** ISO date string. */
-      dataDate: string;
-      baselineSnapshotId: number;
-    }) => input,
-  )
+  .inputValidator((input: unknown) => CreateReportingPeriodSchema.parse(input))
   .handler(async ({ data }): Promise<ReportingPeriodItem> => {
     const actor = await requireProjectAccess(data.projectId);
     const label = data.label.trim();
@@ -215,17 +233,7 @@ export const createReportingPeriod = createServerFn({ method: "POST" })
   });
 
 export const upsertMeasurement = createServerFn({ method: "POST" })
-  .inputValidator(
-    (input: {
-      periodId: number;
-      bucket: string;
-      percentComplete: number;
-      actualCost: number;
-      actualHours?: number | null;
-      plannedValueOverride?: number | null;
-      notes?: string;
-    }) => input,
-  )
+  .inputValidator((input: unknown) => UpsertMeasurementSchema.parse(input))
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const actor = await resolveCurrentUser();
     if (!actor) throw new Error("Unauthorized: not signed in");
@@ -259,7 +267,7 @@ export const upsertMeasurement = createServerFn({ method: "POST" })
   });
 
 export const deleteReportingPeriod = createServerFn({ method: "POST" })
-  .inputValidator((input: { id: number }) => input)
+  .inputValidator(parseIdInput)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const actor = await resolveCurrentUser();
     if (!actor) throw new Error("Unauthorized: not signed in");
@@ -292,7 +300,7 @@ export const deleteReportingPeriod = createServerFn({ method: "POST" })
  * surfaces in the table rather than being silently dropped.
  */
 export const fetchPeriodWithEvm = createServerFn({ method: "GET" })
-  .inputValidator((id: number) => id)
+  .inputValidator(parseIdScalar)
   .handler(async ({ data: id }): Promise<PeriodWithEvm> => {
     const period = await prisma.reportingPeriod.findUniqueOrThrow({
       where: { id },
@@ -368,7 +376,7 @@ export const fetchPeriodWithEvm = createServerFn({ method: "GET" })
 
 export const reportingPeriodsQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["reportingPeriods", projectId],
+    queryKey: qk.reporting.periods(projectId),
     queryFn: (): Promise<ReportingPeriodItem[]> =>
       projectId === null
         ? Promise.resolve([])
@@ -378,7 +386,7 @@ export const reportingPeriodsQueryOptions = (projectId: number | null) =>
 
 export const periodWithEvmQueryOptions = (periodId: number | null) =>
   queryOptions({
-    queryKey: ["periodWithEvm", periodId],
+    queryKey: qk.reporting.periodWithEvm(periodId),
     queryFn: (): Promise<PeriodWithEvm | null> =>
       periodId === null
         ? Promise.resolve(null)
@@ -388,7 +396,7 @@ export const periodWithEvmQueryOptions = (periodId: number | null) =>
 
 /** Latest period for the project — used by the dashboard EVM card. */
 export const fetchLatestPeriodWithEvm = createServerFn({ method: "GET" })
-  .inputValidator((projectId: number) => projectId)
+  .inputValidator(parseProjectIdInput)
   .handler(async ({ data: projectId }): Promise<PeriodWithEvm | null> => {
     await requireProjectAccess(projectId);
     const latest = await prisma.reportingPeriod.findFirst({
@@ -402,7 +410,7 @@ export const fetchLatestPeriodWithEvm = createServerFn({ method: "GET" })
 
 export const latestPeriodWithEvmQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["latestPeriodWithEvm", projectId],
+    queryKey: qk.reporting.latestPeriodWithEvm(projectId),
     queryFn: (): Promise<PeriodWithEvm | null> =>
       projectId === null
         ? Promise.resolve(null)
@@ -435,7 +443,7 @@ export type EvmTimeSeriesPoint = {
  * historical CVR-at-date precision needs audit-log lookups and is a follow-up.
  */
 export const fetchEvmTimeSeries = createServerFn({ method: "GET" })
-  .inputValidator((projectId: number) => projectId)
+  .inputValidator(parseProjectIdInput)
   .handler(async ({ data: projectId }): Promise<EvmTimeSeriesPoint[]> => {
     await requireProjectAccess(projectId);
     const periods = await prisma.reportingPeriod.findMany({
@@ -518,7 +526,7 @@ const EMPTY_TOTALS: ProjectFefRowTotals = {
 
 export const evmTimeSeriesQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["evmTimeSeries", projectId],
+    queryKey: qk.reporting.evmTimeSeries(projectId),
     queryFn: (): Promise<EvmTimeSeriesPoint[]> =>
       projectId === null
         ? Promise.resolve([])

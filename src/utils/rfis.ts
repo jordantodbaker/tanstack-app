@@ -1,6 +1,15 @@
-import { queryOptions } from "@tanstack/react-query";
+import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
+import { qk } from "~/lib/query-keys";
+import {
+  parseIdInput,
+  parseIdScalar,
+  parseProjectIdInput,
+  parsePromoteRfiInput,
+  parseTransitionInput,
+  parseUpsertRfi,
+} from "~/lib/validators";
 import { requireProjectAccess } from "./users.server";
 import { diffFields, recordCreate, recordDelete, recordUpdate } from "./audit.server";
 import { applyWorkflowTransition } from "./workflow.server";
@@ -147,7 +156,7 @@ const toListItem = (r: RfiListRow): RfiListItem => {
 };
 
 export const fetchRfiList = createServerFn({ method: "GET" })
-  .inputValidator((projectId: number) => projectId)
+  .inputValidator(parseProjectIdInput)
   .handler(async ({ data: projectId }): Promise<RfiListItem[]> => {
     await requireProjectAccess(projectId);
     const rows = await prisma.rfi.findMany({
@@ -160,7 +169,7 @@ export const fetchRfiList = createServerFn({ method: "GET" })
 
 export const rfiListQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["rfis", projectId],
+    queryKey: qk.rfis.list(projectId),
     queryFn: (): Promise<RfiListItem[]> =>
       projectId === null
         ? Promise.resolve([])
@@ -174,7 +183,7 @@ export const rfiListQueryOptions = (projectId: number | null) =>
  * the long-text columns only ship when the user actually needs them.
  */
 export const fetchRfiListFull = createServerFn({ method: "GET" })
-  .inputValidator((projectId: number) => projectId)
+  .inputValidator(parseProjectIdInput)
   .handler(async ({ data: projectId }): Promise<RfiItem[]> => {
     await requireProjectAccess(projectId);
     const rows = await prisma.rfi.findMany({
@@ -187,7 +196,7 @@ export const fetchRfiListFull = createServerFn({ method: "GET" })
 
 export const rfiListFullQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["rfis", "full", projectId],
+    queryKey: qk.rfis.full(projectId),
     queryFn: (): Promise<RfiItem[]> =>
       projectId === null
         ? Promise.resolve([])
@@ -202,7 +211,7 @@ export const rfiListFullQueryOptions = (projectId: number | null) =>
  * `fetchFco` / `fetchChangeLog`.
  */
 export const fetchRfi = createServerFn({ method: "GET" })
-  .inputValidator((id: number) => id)
+  .inputValidator(parseIdScalar)
   .handler(async ({ data: id }): Promise<RfiItem> => {
     const row = await prisma.rfi.findUniqueOrThrow({
       where: { id },
@@ -214,7 +223,7 @@ export const fetchRfi = createServerFn({ method: "GET" })
 
 export const rfiQueryOptions = (id: number | null) =>
   queryOptions({
-    queryKey: ["rfis", "single", id],
+    queryKey: qk.rfis.single(id),
     queryFn: (): Promise<RfiItem | null> =>
       id === null ? Promise.resolve(null) : fetchRfi({ data: id }),
     enabled: id !== null,
@@ -269,7 +278,7 @@ const RFI_AUDIT_FIELDS = [
 ] as const satisfies readonly (keyof RfiScalarRow)[];
 
 export const upsertRfi = createServerFn({ method: "POST" })
-  .inputValidator((input: UpsertRfiInput) => input)
+  .inputValidator(parseUpsertRfi)
   .handler(async ({ data }): Promise<RfiItem> => {
     const actor = await requireProjectAccess(data.projectId);
     // `status` is intentionally omitted from the payload: lifecycle changes
@@ -295,7 +304,11 @@ export const upsertRfi = createServerFn({ method: "POST" })
       response: data.response,
       answeredBy: data.answeredBy,
     };
-    const id = await prisma.$transaction(async (tx) => {
+    // Run the upsert with the `linkedFcos` include so the row exiting the
+    // transaction already carries the relation needed by toItem. Saves the
+    // post-tx re-fetch round-trip per write. RFI_AUDIT_FIELDS only names
+    // scalar columns, so the audit diff still works on the wider type.
+    const row = await prisma.$transaction(async (tx) => {
       if (data.id) {
         const before = await tx.rfi.findUniqueOrThrow({
           where: { id: data.id },
@@ -303,6 +316,7 @@ export const upsertRfi = createServerFn({ method: "POST" })
         const updated = await tx.rfi.update({
           where: { id: data.id },
           data: payload,
+          include: linkedFcosInclude,
         });
         await recordUpdate(
           tx,
@@ -312,12 +326,13 @@ export const upsertRfi = createServerFn({ method: "POST" })
             projectId: updated.projectId,
             actor,
           },
-          diffFields(before, updated, RFI_AUDIT_FIELDS),
+          diffFields(before, updated as RfiScalarRow, RFI_AUDIT_FIELDS),
         );
-        return updated.id;
+        return updated;
       }
       const created = await tx.rfi.create({
         data: { ...payload, createdById: actor.id },
+        include: linkedFcosInclude,
       });
       await recordCreate(tx, {
         entityType: "Rfi",
@@ -325,12 +340,7 @@ export const upsertRfi = createServerFn({ method: "POST" })
         projectId: created.projectId,
         actor,
       });
-      return created.id;
-    });
-    // Re-fetch with the include so the response carries `linkedFcos`.
-    const row = await prisma.rfi.findUniqueOrThrow({
-      where: { id },
-      include: linkedFcosInclude,
+      return created;
     });
     return toItem(row);
   });
@@ -341,18 +351,23 @@ export const upsertRfi = createServerFn({ method: "POST" })
 const RFI_STATUSES_NEEDING_REVIEW: ReadonlySet<string> = new Set();
 
 export const transitionRfi = createServerFn({ method: "POST" })
-  .inputValidator(
-    (input: { id: number; action: string; comment?: string }) => input,
-  )
+  .inputValidator(parseTransitionInput)
   .handler(async ({ data }): Promise<RfiItem> => {
     const pre = await prisma.rfi.findUniqueOrThrow({
       where: { id: data.id },
       select: { projectId: true },
     });
     const actor = await requireProjectAccess(pre.projectId);
-    const id = await prisma.$transaction(async (tx) => {
-      const before = await tx.rfi.findUniqueOrThrow({ where: { id: data.id } });
-      const updated = await applyWorkflowTransition({
+    // Apply the workflow transition with the `linkedFcos` include on both
+    // the before-read and the update so the row exiting the transaction
+    // already has the relation needed by toItem. Eliminates the post-tx
+    // re-fetch round-trip that previously followed this transaction.
+    const row = await prisma.$transaction(async (tx) => {
+      const before = await tx.rfi.findUniqueOrThrow({
+        where: { id: data.id },
+        include: linkedFcosInclude,
+      });
+      return applyWorkflowTransition({
         tx,
         before,
         actor,
@@ -376,14 +391,12 @@ export const transitionRfi = createServerFn({ method: "POST" })
                 : {},
         },
         updateRow: (data) =>
-          tx.rfi.update({ where: { id: before.id }, data }),
+          tx.rfi.update({
+            where: { id: before.id },
+            data,
+            include: linkedFcosInclude,
+          }),
       });
-      return updated.id;
-    });
-    // Re-fetch with the include so the response carries `linkedFcos`.
-    const row = await prisma.rfi.findUniqueOrThrow({
-      where: { id },
-      include: linkedFcosInclude,
     });
     return toItem(row);
   });
@@ -400,7 +413,7 @@ export const transitionRfi = createServerFn({ method: "POST" })
  * constraint blocks a second promotion.
  */
 export const promoteRfiToFco = createServerFn({ method: "POST" })
-  .inputValidator((input: { rfiId: number }) => input)
+  .inputValidator(parsePromoteRfiInput)
   .handler(async ({ data }): Promise<{ fcoId: number }> => {
     const rfi = await prisma.rfi.findUniqueOrThrow({
       where: { id: data.rfiId },
@@ -476,7 +489,7 @@ export const promoteRfiToFco = createServerFn({ method: "POST" })
   });
 
 export const deleteRfi = createServerFn({ method: "POST" })
-  .inputValidator((input: { id: number }) => input)
+  .inputValidator(parseIdInput)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const row = await prisma.rfi.findUniqueOrThrow({
       where: { id: data.id },
@@ -494,3 +507,16 @@ export const deleteRfi = createServerFn({ method: "POST" })
     });
     return { ok: true };
   });
+
+/**
+ * Cache-bust set fired after every RFI mutation. `promoteRfiToFco` mints
+ * an FCO; for that case callers pair this with `invalidateFcoQueries`.
+ */
+export function invalidateRfiQueries(
+  queryClient: QueryClient,
+  projectId: number | null,
+): void {
+  queryClient.invalidateQueries({ queryKey: qk.rfis.list(projectId) });
+  queryClient.invalidateQueries({ queryKey: qk.rfis.full(projectId) });
+  queryClient.invalidateQueries({ queryKey: qk.dashboardSummary(projectId) });
+}

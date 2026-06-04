@@ -1,8 +1,28 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
+import { z } from "zod";
 import { hasAtLeastRole } from "./users";
 import { requireProjectAccess } from "./users.server";
+import { Id, ProjectId, parseIdInput } from "~/lib/validators";
+
+const AttachmentsInputSchema = z.object({
+  entityType: z.string().min(1),
+  entityId: Id,
+  projectId: ProjectId,
+});
+
+const UploadAttachmentSchema = z.object({
+  entityType: z.string().min(1),
+  entityId: Id,
+  projectId: ProjectId,
+  filename: z.string().min(1),
+  mimeType: z.string().min(1),
+  // Raw bytes are base64-encoded. The handler enforces the size cap via
+  // `validateUpload` after decoding — checking byte length here would
+  // require decoding twice.
+  base64: z.string(),
+});
 import { recordUpdate } from "./audit.server";
 import {
   buildStorageKey,
@@ -104,13 +124,7 @@ async function assertEntityInProject(
 }
 
 export const fetchAttachments = createServerFn({ method: "GET" })
-  .inputValidator(
-    (input: {
-      entityType: string;
-      entityId: number;
-      projectId: number;
-    }) => input,
-  )
+  .inputValidator((input: unknown) => AttachmentsInputSchema.parse(input))
   .handler(async ({ data }): Promise<AttachmentItem[]> => {
     await requireProjectAccess(data.projectId);
     if (!isAttachmentEntityType(data.entityType)) return [];
@@ -157,7 +171,7 @@ export type UploadAttachmentInput = {
 };
 
 export const uploadAttachment = createServerFn({ method: "POST" })
-  .inputValidator((input: UploadAttachmentInput) => input)
+  .inputValidator((input: unknown) => UploadAttachmentSchema.parse(input))
   .handler(async ({ data }): Promise<AttachmentItem> => {
     if (!isAttachmentEntityType(data.entityType)) {
       throw new Error(`Unknown entity type: ${data.entityType}.`);
@@ -170,7 +184,7 @@ export const uploadAttachment = createServerFn({ method: "POST" })
     const reason = validateUpload({ mimeType: data.mimeType, sizeBytes });
     if (reason !== null) throw new Error(reason);
 
-    const storageKey = buildStorageKey({
+    const pathname = buildStorageKey({
       projectId: data.projectId,
       entityType: data.entityType,
       entityId: data.entityId,
@@ -178,10 +192,15 @@ export const uploadAttachment = createServerFn({ method: "POST" })
       randomId: randomFileId(),
     });
 
-    // Write the file first so it's on disk before the DB row references it.
-    // If the DB write fails below, best-effort delete the orphan file. The
-    // reverse order (DB row first, then write) would leave a dangling row.
-    await writeAttachmentFile(storageKey, buf);
+    // Upload to Vercel Blob first so the object exists before the DB row
+    // references it. If the DB write fails below, best-effort delete the
+    // orphan blob. The reverse order (DB row first, then upload) would
+    // leave a dangling row pointing at a missing object.
+    //
+    // `writeAttachmentFile` returns the public URL — that's what we store
+    // as `storageKey`, since `addRandomSuffix: true` means we can't
+    // reconstruct the URL from the pathname alone.
+    const storageKey = await writeAttachmentFile(pathname, buf, data.mimeType);
 
     try {
       const row = await prisma.$transaction(async (tx) => {
@@ -232,7 +251,7 @@ export type DownloadAttachmentResult = {
 };
 
 export const downloadAttachment = createServerFn({ method: "GET" })
-  .inputValidator((input: { id: number }) => input)
+  .inputValidator(parseIdInput)
   .handler(async ({ data }): Promise<DownloadAttachmentResult> => {
     const row = await prisma.attachment.findUniqueOrThrow({
       where: { id: data.id },
@@ -249,7 +268,7 @@ export const downloadAttachment = createServerFn({ method: "GET" })
   });
 
 export const deleteAttachment = createServerFn({ method: "POST" })
-  .inputValidator((input: { id: number }) => input)
+  .inputValidator(parseIdInput)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const row = await prisma.attachment.findUniqueOrThrow({
       where: { id: data.id },

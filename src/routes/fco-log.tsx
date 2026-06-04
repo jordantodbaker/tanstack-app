@@ -23,11 +23,13 @@ import {
   deleteFco,
   promoteFcoToCvr,
   transitionFco,
+  invalidateFcoQueries,
   type FcoItem,
   type FcoListItem,
   type FcoStatus,
   type UpsertFcoInput,
 } from "~/utils/fcoLog";
+import { invalidateChangeLogQueries } from "~/utils/changelog";
 import {
   FCO_ORIGIN_LABELS,
   FCO_STATUS_LABELS,
@@ -80,13 +82,11 @@ function FcoLogPage() {
     [areas],
   );
 
+  // FCO can promote to a CVR — invalidate both worlds. The CVR helper
+  // also busts cvrOptions (the FCO dialog's CVR picker) for us.
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["fcoLog", projectId] });
-    queryClient.invalidateQueries({ queryKey: ["changeLog", projectId] });
-    queryClient.invalidateQueries({ queryKey: ["cvrOptions", projectId] });
-    queryClient.invalidateQueries({
-      queryKey: ["dashboardSummary", projectId],
-    });
+    invalidateFcoQueries(queryClient, projectId);
+    invalidateChangeLogQueries(queryClient, projectId);
   };
 
   const upsert = useMutation({

@@ -1,31 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import {
-  changeLogQueryOptions,
-  type ChangeLogItem,
-} from "~/utils/changelog";
-import { projectsQueryOptions } from "~/utils/projects";
-import { STATUS_LABELS, TYPE_LABELS } from "~/utils/changelogLabels";
-import { QueryError } from "~/components/ui/list-page";
-import {
-  PrintablePageShell,
-  Section,
-  KvGrid,
-  SignatureBlock,
-  formatDate,
-} from "~/components/PrintablePageShell";
-import { formatCurrency } from "~/lib/formatting";
-import { disciplineById } from "~/config/disciplines";
+import { changeLogQueryOptions } from "~/utils/changelog";
 
 /**
- * Printable single-CVR detail view. The user lands here from the dialog's
- * "Print / Save as PDF" link, opens the browser print dialog (button at
- * top, or Ctrl/Cmd+P), and saves the result as a PDF for owner signoff.
+ * Printable single-CVR detail view. Reached via the dialog's "Print / Save as
+ * PDF" link (`target=_blank`). The actual component lives in the sibling
+ * `.lazy.tsx` file so the print UI + its `PrintablePageShell` dependency tree
+ * only ships when a user actually clicks through to a print URL — never as
+ * part of the initial bundle for users who just want the live dialog view.
  *
- * On-screen we show the CVR inside the regular app chrome with a "Print"
- * button and a back link; the `@media print` rules in `app.css` hide the
- * header / sidebar / toolbar so the printed PDF contains only the document
- * itself with company-letterhead-style framing.
+ * The `loader` stays here because TanStack Router needs to resolve it during
+ * the route match phase (before the lazy chunk arrives), so the data is
+ * already in the cache when the lazy component mounts.
  */
 export const Route = createFileRoute("/cvr-print/$id")({
   loader: async ({ context, params }) => {
@@ -36,150 +21,4 @@ export const Route = createFileRoute("/cvr-print/$id")({
         .catch(() => null);
     }
   },
-  component: PrintableCvrPage,
 });
-
-function PrintableCvrPage() {
-  const params = Route.useParams();
-  const id = Number.parseInt(params.id, 10);
-  const {
-    data: cvr,
-    isPending,
-    isError,
-    error,
-  } = useQuery(changeLogQueryOptions(Number.isFinite(id) ? id : null));
-  const { data: projects = [] } = useQuery(projectsQueryOptions());
-
-  if (!Number.isFinite(id)) {
-    return (
-      <main className="max-w-4xl mx-auto p-8">
-        <p className="text-sm text-red-700">Invalid CVR id.</p>
-      </main>
-    );
-  }
-  if (isError) {
-    return (
-      <main className="max-w-4xl mx-auto p-8">
-        <QueryError error={error} label="CVR" />
-      </main>
-    );
-  }
-  if (isPending || !cvr) {
-    return (
-      <main className="max-w-4xl mx-auto p-8">
-        <p className="text-sm text-slate-500">Loading CVR…</p>
-      </main>
-    );
-  }
-  const project = projects.find((p) => p.id === cvr.projectId);
-
-  return (
-    <PrintablePageShell
-      recordTitle="Change Variation Request"
-      recordNumber={cvr.cvrNumber || `CVR #${cvr.id}`}
-      statusLabel={STATUS_LABELS[cvr.status]}
-      project={project}
-      backTo="/changelog"
-      backLabel="Back to Change Log"
-      footerKind="CVR"
-      footerId={cvr.id}
-    >
-      <PrintableCvrBody cvr={cvr} />
-    </PrintablePageShell>
-  );
-}
-
-function PrintableCvrBody({ cvr }: { cvr: ChangeLogItem }) {
-  const disciplineLabel =
-    disciplineById[cvr.discipline]?.label ?? cvr.discipline ?? "—";
-
-  return (
-    <>
-      <section className="mb-5">
-        <h1 className="text-lg font-bold text-slate-800 mb-1">{cvr.title}</h1>
-        {cvr.description && (
-          <p className="whitespace-pre-wrap text-slate-700">
-            {cvr.description}
-          </p>
-        )}
-      </section>
-
-      <Section title="Commercial impact">
-        <KvGrid
-          items={[
-            [
-              "Cost impact",
-              <span
-                className={cvr.costImpact < 0 ? "text-red-700" : undefined}
-                key="cost"
-              >
-                {formatCurrency(cvr.costImpact)}
-              </span>,
-            ],
-            [
-              "Schedule impact",
-              cvr.scheduleDaysImpact !== 0
-                ? `${cvr.scheduleDaysImpact > 0 ? "+" : ""}${cvr.scheduleDaysImpact} days`
-                : "—",
-            ],
-            [
-              "Labor hours",
-              cvr.laborHoursImpact !== 0
-                ? `${cvr.laborHoursImpact} hrs`
-                : "—",
-            ],
-          ]}
-        />
-      </Section>
-
-      <Section title="Classification">
-        <KvGrid
-          items={[
-            ["Type", TYPE_LABELS[cvr.type]],
-            ["Discipline", disciplineLabel],
-            ["Risk level", cvr.riskLevel],
-            ["Reason code", cvr.reasonCode || "—"],
-          ]}
-        />
-      </Section>
-
-      {cvr.cbsCodes.length > 0 && (
-        <Section title="Affected CBS codes">
-          <p className="font-mono text-sm text-slate-700">
-            {cvr.cbsCodes.join(", ")}
-          </p>
-        </Section>
-      )}
-
-      <Section title="Dates">
-        <KvGrid
-          items={[
-            ["Requested", formatDate(cvr.requestedAt)],
-            ["Due", formatDate(cvr.dueDate)],
-            ["Approved", formatDate(cvr.approvedAt)],
-          ]}
-        />
-      </Section>
-
-      {cvr.notes && (
-        <Section title="Notes">
-          <p className="whitespace-pre-wrap text-slate-700 text-sm">
-            {cvr.notes}
-          </p>
-        </Section>
-      )}
-
-      <Section title="Signatures">
-        <div className="grid grid-cols-3 gap-6 mt-2">
-          <SignatureBlock label="Originator" name={cvr.originator} />
-          <SignatureBlock
-            label="Internal approver"
-            name={cvr.approver}
-            date={cvr.approvedAt}
-          />
-          <SignatureBlock label="Owner representative" name="" />
-        </div>
-      </Section>
-    </>
-  );
-}

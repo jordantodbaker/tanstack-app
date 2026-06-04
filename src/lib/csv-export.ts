@@ -71,3 +71,26 @@ export function downloadCsv(filename: string, csv: string): void {
 export function todayStamp(): string {
   return new Date().toISOString().slice(0, 10);
 }
+
+/**
+ * Cell-value formatters shared by every per-entity CSV column module
+ * (changelogCsv, fcoLogCsv, rfisCsv, …). The same four patterns repeated
+ * once per file: take the YYYY-MM-DD prefix of an ISO date, join an array
+ * with a stable separator, render a boolean as Yes/No, and resolve a
+ * discipline id to its display label.
+ */
+import { disciplineById } from "~/config/disciplines";
+
+/** YYYY-MM-DD prefix; "" for null/undefined/empty. */
+export const fmtDate = (iso: string | null | undefined): string =>
+  iso?.slice(0, 10) ?? "";
+
+/** Joins a string array with "; " (semicolons survive CSV's comma escaping). */
+export const fmtList = (arr: readonly string[]): string => arr.join("; ");
+
+/** "Yes" / "No" — the rendering used in every CSV export today. */
+export const fmtBool = (b: boolean): string => (b ? "Yes" : "No");
+
+/** Discipline id → label; falls back to the raw id when unknown. */
+export const fmtDiscipline = (id: string): string =>
+  disciplineById[id]?.label ?? id;

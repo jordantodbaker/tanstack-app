@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { adminHandler, adminHandlerNoInput } from "./users.server";
+import { parseIdInput, parseUpsertSubcontractor } from "~/lib/validators";
 
 /**
  * A subcontractor row, with each project it's assigned to flattened to the
@@ -67,7 +68,7 @@ export type UpsertSubcontractorInput = {
 
 /** Create or update a subcontractor and its project assignments. Admin-only. */
 export const upsertSubcontractor = createServerFn({ method: "POST" })
-  .inputValidator((input: UpsertSubcontractorInput) => input)
+  .inputValidator(parseUpsertSubcontractor)
   .handler(
     adminHandler(async ({ data }): Promise<{ ok: true }> => {
       const base = {
@@ -94,7 +95,7 @@ export const upsertSubcontractor = createServerFn({ method: "POST" })
   );
 
 export const deleteSubcontractor = createServerFn({ method: "POST" })
-  .inputValidator((input: { id: number }) => input)
+  .inputValidator(parseIdInput)
   .handler(
     adminHandler(async ({ data }): Promise<{ ok: true }> => {
       await prisma.subcontractor.delete({ where: { id: data.id } });

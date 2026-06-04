@@ -33,6 +33,9 @@ import { Route as AdminSystemRouteImport } from './routes/admin.system'
 import { Route as AdminSubcontractorsRouteImport } from './routes/admin.subcontractors'
 import { Route as AdminRolesRouteImport } from './routes/admin.roles'
 import { Route as AdminProjectsRouteImport } from './routes/admin.projects'
+import { Route as AdminFcoTemplatesRouteImport } from './routes/admin.fco-templates'
+import { Route as AdminCvrTemplatesRouteImport } from './routes/admin.cvr-templates'
+import { Route as AdminCrewMixesRouteImport } from './routes/admin.crew-mixes'
 import { Route as AdminAreasRouteImport } from './routes/admin.areas'
 
 const ValidationRoute = ValidationRouteImport.update({
@@ -119,17 +122,17 @@ const RfiPrintIdRoute = RfiPrintIdRouteImport.update({
   id: '/rfi-print/$id',
   path: '/rfi-print/$id',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/rfi-print.$id.lazy').then((d) => d.Route))
 const FcoPrintIdRoute = FcoPrintIdRouteImport.update({
   id: '/fco-print/$id',
   path: '/fco-print/$id',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/fco-print.$id.lazy').then((d) => d.Route))
 const CvrPrintIdRoute = CvrPrintIdRouteImport.update({
   id: '/cvr-print/$id',
   path: '/cvr-print/$id',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/cvr-print.$id.lazy').then((d) => d.Route))
 const AdminUsersRoute = AdminUsersRouteImport.update({
   id: '/users',
   path: '/users',
@@ -153,6 +156,21 @@ const AdminRolesRoute = AdminRolesRouteImport.update({
 const AdminProjectsRoute = AdminProjectsRouteImport.update({
   id: '/projects',
   path: '/projects',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminFcoTemplatesRoute = AdminFcoTemplatesRouteImport.update({
+  id: '/fco-templates',
+  path: '/fco-templates',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminCvrTemplatesRoute = AdminCvrTemplatesRouteImport.update({
+  id: '/cvr-templates',
+  path: '/cvr-templates',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminCrewMixesRoute = AdminCrewMixesRouteImport.update({
+  id: '/crew-mixes',
+  path: '/crew-mixes',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminAreasRoute = AdminAreasRouteImport.update({
@@ -179,6 +197,9 @@ export interface FileRoutesByFullPath {
   '/trends': typeof TrendsRoute
   '/validation': typeof ValidationRoute
   '/admin/areas': typeof AdminAreasRoute
+  '/admin/crew-mixes': typeof AdminCrewMixesRoute
+  '/admin/cvr-templates': typeof AdminCvrTemplatesRoute
+  '/admin/fco-templates': typeof AdminFcoTemplatesRoute
   '/admin/projects': typeof AdminProjectsRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/subcontractors': typeof AdminSubcontractorsRoute
@@ -206,6 +227,9 @@ export interface FileRoutesByTo {
   '/trends': typeof TrendsRoute
   '/validation': typeof ValidationRoute
   '/admin/areas': typeof AdminAreasRoute
+  '/admin/crew-mixes': typeof AdminCrewMixesRoute
+  '/admin/cvr-templates': typeof AdminCvrTemplatesRoute
+  '/admin/fco-templates': typeof AdminFcoTemplatesRoute
   '/admin/projects': typeof AdminProjectsRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/subcontractors': typeof AdminSubcontractorsRoute
@@ -234,6 +258,9 @@ export interface FileRoutesById {
   '/trends': typeof TrendsRoute
   '/validation': typeof ValidationRoute
   '/admin/areas': typeof AdminAreasRoute
+  '/admin/crew-mixes': typeof AdminCrewMixesRoute
+  '/admin/cvr-templates': typeof AdminCvrTemplatesRoute
+  '/admin/fco-templates': typeof AdminFcoTemplatesRoute
   '/admin/projects': typeof AdminProjectsRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/subcontractors': typeof AdminSubcontractorsRoute
@@ -263,6 +290,9 @@ export interface FileRouteTypes {
     | '/trends'
     | '/validation'
     | '/admin/areas'
+    | '/admin/crew-mixes'
+    | '/admin/cvr-templates'
+    | '/admin/fco-templates'
     | '/admin/projects'
     | '/admin/roles'
     | '/admin/subcontractors'
@@ -290,6 +320,9 @@ export interface FileRouteTypes {
     | '/trends'
     | '/validation'
     | '/admin/areas'
+    | '/admin/crew-mixes'
+    | '/admin/cvr-templates'
+    | '/admin/fco-templates'
     | '/admin/projects'
     | '/admin/roles'
     | '/admin/subcontractors'
@@ -317,6 +350,9 @@ export interface FileRouteTypes {
     | '/trends'
     | '/validation'
     | '/admin/areas'
+    | '/admin/crew-mixes'
+    | '/admin/cvr-templates'
+    | '/admin/fco-templates'
     | '/admin/projects'
     | '/admin/roles'
     | '/admin/subcontractors'
@@ -519,6 +555,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminProjectsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/fco-templates': {
+      id: '/admin/fco-templates'
+      path: '/fco-templates'
+      fullPath: '/admin/fco-templates'
+      preLoaderRoute: typeof AdminFcoTemplatesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/cvr-templates': {
+      id: '/admin/cvr-templates'
+      path: '/cvr-templates'
+      fullPath: '/admin/cvr-templates'
+      preLoaderRoute: typeof AdminCvrTemplatesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/crew-mixes': {
+      id: '/admin/crew-mixes'
+      path: '/crew-mixes'
+      fullPath: '/admin/crew-mixes'
+      preLoaderRoute: typeof AdminCrewMixesRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/areas': {
       id: '/admin/areas'
       path: '/areas'
@@ -531,6 +588,9 @@ declare module '@tanstack/react-router' {
 
 interface AdminRouteChildren {
   AdminAreasRoute: typeof AdminAreasRoute
+  AdminCrewMixesRoute: typeof AdminCrewMixesRoute
+  AdminCvrTemplatesRoute: typeof AdminCvrTemplatesRoute
+  AdminFcoTemplatesRoute: typeof AdminFcoTemplatesRoute
   AdminProjectsRoute: typeof AdminProjectsRoute
   AdminRolesRoute: typeof AdminRolesRoute
   AdminSubcontractorsRoute: typeof AdminSubcontractorsRoute
@@ -540,6 +600,9 @@ interface AdminRouteChildren {
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAreasRoute: AdminAreasRoute,
+  AdminCrewMixesRoute: AdminCrewMixesRoute,
+  AdminCvrTemplatesRoute: AdminCvrTemplatesRoute,
+  AdminFcoTemplatesRoute: AdminFcoTemplatesRoute,
   AdminProjectsRoute: AdminProjectsRoute,
   AdminRolesRoute: AdminRolesRoute,
   AdminSubcontractorsRoute: AdminSubcontractorsRoute,

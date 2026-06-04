@@ -25,6 +25,7 @@ import {
   ScheduleSelectCell,
   SubCheckboxCell,
   TotalCostCell,
+  CrewMixSelectCell,
 } from "~/components/Piping/cells";
 import { supportLaborColumns } from "~/components/Piping/columns";
 import { useSelectedProject } from "~/lib/selected-project";
@@ -79,6 +80,7 @@ const takeOffColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("description", { header: "Description", cell: EditableCell, size: 250 }),
   columnHelper.accessor("area", { header: "Area", cell: AreaSelectCell, size: 200 }),
   columnHelper.accessor("role", { header: "Role", cell: RoleSelectCell, size: 180 }),
+  columnHelper.accessor("crewMixId", { header: "Crew Mix", cell: CrewMixSelectCell, size: 180 }),
   columnHelper.accessor("schedule", { header: "Schedule", cell: ScheduleSelectCell, size: 150 }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: LaborFactorQuantityCell }),
   columnHelper.accessor("laborFactor", { header: "Labor Factor", cell: LaborFactorInputCell, size: 110 }),
@@ -146,6 +148,7 @@ export function DisciplinePage({
   roleOptions,
   scheduleOptions,
   roleRates,
+  crewMixOptions,
 }: {
   title?: string;
   disciplineId?: string;
@@ -158,6 +161,7 @@ export function DisciplinePage({
   roleOptions?: string[];
   scheduleOptions?: string[];
   roleRates?: { roleName: string; schedule: string; rate: number }[];
+  crewMixOptions?: FefTableMeta["crewMixOptions"];
 }) {
   // Areas for the Take Off "Area" dropdown. Called unconditionally so it
   // sits above the materials early-return per the rules of hooks.
@@ -189,8 +193,13 @@ export function DisciplinePage({
     scheduleOptions,
     roleRates,
   };
-  // Take Off gets areaOptions; craft & support don't render an area column.
-  const takeOffMeta: FefTableMeta = { ...laborMeta, areaOptions };
+  // Take Off gets areaOptions + crewMixOptions; craft & support don't render
+  // those columns.
+  const takeOffMeta: FefTableMeta = {
+    ...laborMeta,
+    areaOptions,
+    crewMixOptions,
+  };
   const supportMeta: FefTableMeta = { roleOptions, scheduleOptions, roleRates };
 
   return (

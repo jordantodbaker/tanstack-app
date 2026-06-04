@@ -1,13 +1,10 @@
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Printer, Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogTrigger,
-} from "~/components/ui/dialog";
+import { DialogClose } from "~/components/ui/dialog";
+import { EntityDialogShell } from "~/components/EntityDialog/EntityDialogShell";
+import { useCbsSearchableOptions } from "~/lib/use-cbs-searchable-options";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import {
@@ -48,8 +45,16 @@ import { Attachments } from "~/components/Attachments";
 import { Comments } from "~/components/Comments";
 import { useFormDialog } from "~/lib/use-form-dialog";
 import { useSelectedProject } from "~/lib/selected-project";
-import { cbsCodeOptionsQueryOptions } from "~/utils/cbs";
 import { areasByProjectQueryOptions } from "~/utils/areas";
+import { TemplatePicker } from "~/components/EntityDialog/TemplatePicker";
+import {
+  cvrTemplatePickerQueryOptions,
+  instantiateCvrTemplate,
+  saveAsCvrTemplate,
+  type CvrTemplateFieldSet,
+} from "~/utils/cvrTemplates";
+import { useIsAdmin } from "~/lib/use-current-user";
+import { invalidateAdminEntity } from "~/lib/admin-invalidations";
 
 const DISCIPLINE_OPTIONS = disciplines
   .filter((d) => d.l1Codes && d.l1Codes.length > 0)
@@ -122,38 +127,28 @@ type ChangelogDialogProps = {
 
 export function ChangelogDialog({
   trigger,
-  initial: initialSlim,
+  initial,
   onSubmit,
   onDelete,
   onTransition,
 }: ChangelogDialogProps) {
-  const [open, setOpen] = React.useState(false);
-  const isEdit = initialSlim?.id !== undefined;
-  const { data: full } = useQuery({
-    ...changeLogQueryOptions(isEdit ? (initialSlim?.id ?? null) : null),
-    enabled: open && isEdit,
-  });
-  const fullReady = !isEdit || !!full;
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,1100px)] max-h-[90vh] overflow-y-auto">
-        {!open ? null : !fullReady ? (
-          <div className="p-8 text-center text-sm text-slate-500">
-            Loading change item…
-          </div>
-        ) : (
-          <ChangelogDialogBody
-            key={initialSlim?.id ?? "new"}
-            initial={full ?? undefined}
-            onSubmit={onSubmit}
-            onDelete={onDelete}
-            onTransition={onTransition}
-            closeDialog={() => setOpen(false)}
-          />
-        )}
-      </DialogContent>
-    </Dialog>
+    <EntityDialogShell
+      trigger={trigger}
+      initial={initial}
+      fullQueryOptions={changeLogQueryOptions}
+      loadingLabel="Loading change item…"
+    >
+      {(full, closeDialog) => (
+        <ChangelogDialogBody
+          initial={full}
+          onSubmit={onSubmit}
+          onDelete={onDelete}
+          onTransition={onTransition}
+          closeDialog={closeDialog}
+        />
+      )}
+    </EntityDialogShell>
   );
 }
 
@@ -170,24 +165,93 @@ function ChangelogDialogBody({
   onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
   closeDialog: () => void;
 }) {
-  const { form, busy, setBusy, update, handleSubmit, handleDelete } =
-    useFormDialog<ChangeLogItem, FormState>({
-      initial,
-      blank: blankForm,
-      fromItem,
-      onSubmit: async (formState) => {
-        await onSubmit(formState);
-        closeDialog();
-      },
-      onDelete: onDelete
-        ? async (id) => {
-            await onDelete(id);
-            closeDialog();
-          }
-        : undefined,
-      deleteConfirm: (i) =>
-        `Delete change item "${i.title}"? This cannot be undone.`,
-    });
+  const {
+    form,
+    setForm,
+    busy,
+    setBusy,
+    update,
+    handleSubmit,
+    handleDelete,
+  } = useFormDialog<ChangeLogItem, FormState>({
+    initial,
+    blank: blankForm,
+    fromItem,
+    onSubmit: async (formState) => {
+      await onSubmit(formState);
+      closeDialog();
+    },
+    onDelete: onDelete
+      ? async (id) => {
+          await onDelete(id);
+          closeDialog();
+        }
+      : undefined,
+    deleteConfirm: (i) =>
+      `Delete change item "${i.title}"? This cannot be undone.`,
+  });
+
+  const isAdmin = useIsAdmin();
+  const queryClient = useQueryClient();
+
+  /** Fold a template's field set into the current draft. Status/dates and
+   *  identity (id, cvrNumber) stay on whatever the user already entered —
+   *  the template only knows the 13 templatable columns. */
+  function applyTemplate(t: CvrTemplateFieldSet) {
+    setForm((f) => ({
+      ...f,
+      title: t.title || f.title,
+      description: t.description || f.description,
+      type: t.type,
+      discipline: t.discipline || f.discipline,
+      cbsCodes: t.cbsCodes.length > 0 ? t.cbsCodes : f.cbsCodes,
+      originator: t.originator || f.originator,
+      costImpact: t.costImpact,
+      scheduleDaysImpact: t.scheduleDaysImpact,
+      laborHoursImpact: t.laborHoursImpact,
+      riskLevel: t.riskLevel,
+      reasonCode: t.reasonCode || f.reasonCode,
+      notes: t.notes || f.notes,
+      area: t.area || f.area,
+    }));
+  }
+
+  async function handleSaveAsTemplate() {
+    const name = window.prompt(
+      "Name this template (shown in the picker — e.g. 'Weather Delay'):",
+    );
+    if (!name || !name.trim()) return;
+    const templateDescription =
+      window.prompt(
+        "Optional description shown beside the name in the picker:",
+        "",
+      ) ?? "";
+    setBusy(true);
+    try {
+      await saveAsCvrTemplate({
+        data: {
+          name: name.trim(),
+          templateDescription,
+          title: form.title,
+          description: form.description,
+          type: form.type,
+          discipline: form.discipline,
+          cbsCodes: form.cbsCodes,
+          originator: form.originator,
+          costImpact: form.costImpact,
+          scheduleDaysImpact: form.scheduleDaysImpact,
+          laborHoursImpact: form.laborHoursImpact,
+          riskLevel: form.riskLevel,
+          reasonCode: form.reasonCode,
+          notes: form.notes,
+          area: form.area,
+        },
+      });
+      invalidateAdminEntity(queryClient, "cvrTemplates");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const { data: currentUser } = useCurrentUser();
   const isOriginator =
@@ -205,7 +269,7 @@ function ChangelogDialogBody({
       : [];
 
   // `open` is implicitly true — only mounted when outer is open + full loaded.
-  const { data: cbsCodeOptions = [] } = useQuery(cbsCodeOptionsQueryOptions());
+  const cbsOptions: SearchableSelectOption[] = useCbsSearchableOptions();
 
   // Areas for the selected project — populates the Area dropdown. CVRs may
   // be project-wide, so "— None —" is the default. Legacy rows that pre-date
@@ -215,16 +279,6 @@ function ChangelogDialogBody({
     ...areasByProjectQueryOptions(projectId),
     enabled: projectId !== null,
   });
-
-  const cbsOptions: SearchableSelectOption[] = React.useMemo(
-    () =>
-      cbsCodeOptions.map((c) => ({
-        value: c.displayCode,
-        label: c.name ? `${c.displayCode} — ${c.name}` : c.displayCode,
-        searchText: `${c.displayCode} ${c.name ?? ""}`.toLowerCase(),
-      })),
-    [cbsCodeOptions],
-  );
   // `busy` doesn't reset when the outer toggles open; that's fine because
   // mutation completion already sets it back to false in useFormDialog.
   void setBusy;
@@ -254,6 +308,18 @@ function ChangelogDialogBody({
                   Print / PDF
                 </a>
               )}
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSaveAsTemplate}
+                  disabled={busy || !form.title.trim()}
+                  title="Snapshot the current form as a new CVR template"
+                  className="text-violet-700 hover:bg-violet-50"
+                >
+                  Save as Template
+                </Button>
+              )}
               {initial && onDelete && (
                 <Button
                   variant="outline"
@@ -277,6 +343,16 @@ function ChangelogDialogBody({
               <TabsTrigger value="history">History</TabsTrigger>
             </TabsList>
             <TabsContent value="details" className="space-y-4 mt-3">
+
+          {!initial && (
+            <TemplatePicker<CvrTemplateFieldSet>
+              pickerQueryOptions={cvrTemplatePickerQueryOptions}
+              instantiate={instantiateCvrTemplate}
+              currentDiscipline={form.discipline}
+              onSelect={applyTemplate}
+              noun="CVR"
+            />
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Labeled label="CVR Number">

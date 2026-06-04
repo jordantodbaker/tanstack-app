@@ -9,6 +9,7 @@ import {
   type FefSectionKey,
 } from "~/utils/fefRows";
 import { logger } from "~/lib/logger";
+import { qk } from "~/lib/query-keys";
 
 const SAVE_DEBOUNCE_MS = 500;
 
@@ -115,10 +116,10 @@ export function useFefRowPersistence({
             saved,
           );
           queryClient.invalidateQueries({
-            queryKey: ["projectFefRowTotals", projectId],
+            queryKey: qk.projectFefRowTotals(projectId),
           });
           queryClient.invalidateQueries({
-            queryKey: ["invalidByDiscipline", projectId],
+            queryKey: qk.invalidByDiscipline(projectId),
           });
         })
         .catch((err) => {

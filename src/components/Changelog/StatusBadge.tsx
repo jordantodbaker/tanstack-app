@@ -4,7 +4,7 @@ import {
   STATUS_LABELS,
   TYPE_LABELS,
 } from "~/utils/changelogLabels";
-import { makeEnumBadge } from "~/components/ui/enum-badge";
+import { makeEnumBadge, VOID_PILL_STYLE } from "~/components/ui/enum-badge";
 
 const STATUS_STYLES: Record<ChangeStatus, string> = {
   REQUESTED: "bg-slate-100 text-slate-700 border-slate-300",
@@ -13,7 +13,7 @@ const STATUS_STYLES: Record<ChangeStatus, string> = {
   APPROVED: "bg-emerald-50 text-emerald-800 border-emerald-300",
   REJECTED: "bg-red-50 text-red-700 border-red-300",
   EXECUTED: "bg-violet-50 text-violet-700 border-violet-300",
-  VOID: "bg-slate-50 text-slate-400 border-slate-200 line-through",
+  VOID: VOID_PILL_STYLE,
 };
 
 const RISK_STYLES: Record<RiskLevel, string> = {

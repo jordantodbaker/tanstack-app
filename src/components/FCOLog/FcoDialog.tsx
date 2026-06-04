@@ -1,13 +1,19 @@
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, Printer, Trash2, ArrowUpRight } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { DialogClose } from "~/components/ui/dialog";
+import { EntityDialogShell } from "~/components/EntityDialog/EntityDialogShell";
+import { useCbsSearchableOptions } from "~/lib/use-cbs-searchable-options";
+import { TemplatePicker } from "~/components/EntityDialog/TemplatePicker";
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogTrigger,
-} from "~/components/ui/dialog";
+  fcoTemplatePickerQueryOptions,
+  instantiateFcoTemplate,
+  saveAsFcoTemplate,
+  type FcoTemplateFieldSet,
+} from "~/utils/fcoTemplates";
+import { useIsAdmin } from "~/lib/use-current-user";
+import { invalidateAdminEntity } from "~/lib/admin-invalidations";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -41,7 +47,6 @@ import {
 } from "~/components/FCOLog/FcoBadges";
 import { SearchableMultiSelect } from "~/components/SearchableMultiSelect";
 import type { SearchableSelectOption } from "~/components/SearchableSelect";
-import { cbsCodeOptionsQueryOptions } from "~/utils/cbs";
 import {
   Tabs,
   TabsList,
@@ -136,52 +141,40 @@ type FcoDialogProps = {
 };
 
 /**
- * Outer wrapper. Owns the Dialog open state and runs the lazy full-record
- * fetch in edit mode. Inner `FcoDialogBody` only mounts once the full data
- * is ready, so its `useFormDialog` seeds the form with complete data on the
+ * Outer wrapper. Delegates dialog state + lazy-fetch boilerplate to
+ * `EntityDialogShell`; `FcoDialogBody` only mounts once the full record is
+ * ready, so its `useFormDialog` seeds the form with complete data on the
  * first render (avoids a flicker where heavy text fields would be blank
  * for ~100ms before re-seeding from the network response).
  */
 export function FcoDialog({
   trigger,
-  initial: initialSlim,
+  initial,
   projectId,
   onSubmit,
   onDelete,
   onPromote,
   onTransition,
 }: FcoDialogProps) {
-  const [open, setOpen] = React.useState(false);
-  const isEdit = initialSlim?.id !== undefined;
-  const { data: full } = useQuery({
-    ...fcoQueryOptions(isEdit ? (initialSlim?.id ?? null) : null),
-    enabled: open && isEdit,
-  });
-  const fullReady = !isEdit || !!full;
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,1100px)] max-h-[90vh] overflow-y-auto">
-        {!open ? null : !fullReady ? (
-          <div className="p-8 text-center text-sm text-slate-500">
-            Loading FCO…
-          </div>
-        ) : (
-          <FcoDialogBody
-            // Re-mount on id change so prior form state doesn't leak across
-            // edits of different rows.
-            key={initialSlim?.id ?? "new"}
-            initial={full ?? undefined}
-            projectId={projectId}
-            onSubmit={onSubmit}
-            onDelete={onDelete}
-            onPromote={onPromote}
-            onTransition={onTransition}
-            closeDialog={() => setOpen(false)}
-          />
-        )}
-      </DialogContent>
-    </Dialog>
+    <EntityDialogShell
+      trigger={trigger}
+      initial={initial}
+      fullQueryOptions={fcoQueryOptions}
+      loadingLabel="Loading FCO…"
+    >
+      {(full, closeDialog) => (
+        <FcoDialogBody
+          initial={full}
+          projectId={projectId}
+          onSubmit={onSubmit}
+          onDelete={onDelete}
+          onPromote={onPromote}
+          onTransition={onTransition}
+          closeDialog={closeDialog}
+        />
+      )}
+    </EntityDialogShell>
   );
 }
 
@@ -205,6 +198,7 @@ function FcoDialogBody({
 }) {
   const {
     form,
+    setForm,
     busy,
     setBusy,
     update,
@@ -226,6 +220,75 @@ function FcoDialogBody({
       : undefined,
     deleteConfirm: (i) => `Delete FCO "${i.title}"? This cannot be undone.`,
   });
+
+  const isAdmin = useIsAdmin();
+  const queryClient = useQueryClient();
+
+  /** Fold a template's field set into the current draft. Identity (id,
+   *  fcoNumber) and status/dates stay on whatever the user entered. */
+  function applyTemplate(t: FcoTemplateFieldSet) {
+    setForm((f) => ({
+      ...f,
+      title: t.title || f.title,
+      description: t.description || f.description,
+      originType: t.originType,
+      priority: t.priority,
+      discipline: t.discipline || f.discipline,
+      cbsCodes: t.cbsCodes.length > 0 ? t.cbsCodes : f.cbsCodes,
+      locationArea: t.locationArea || f.locationArea,
+      drawingRefs: t.drawingRefs.length > 0 ? t.drawingRefs : f.drawingRefs,
+      rfiNumbers: t.rfiNumbers.length > 0 ? t.rfiNumbers : f.rfiNumbers,
+      initiatedBy: t.initiatedBy || f.initiatedBy,
+      fieldContact: t.fieldContact || f.fieldContact,
+      estimatedCost: t.estimatedCost,
+      estimatedHours: t.estimatedHours,
+      workStopped: t.workStopped,
+      photosUrl: t.photosUrl || f.photosUrl,
+      reasonNarrative: t.reasonNarrative || f.reasonNarrative,
+      notes: t.notes || f.notes,
+    }));
+  }
+
+  async function handleSaveAsTemplate() {
+    const name = window.prompt(
+      "Name this template (shown in the picker — e.g. 'RFI-driven rework'):",
+    );
+    if (!name || !name.trim()) return;
+    const templateDescription =
+      window.prompt(
+        "Optional description shown beside the name in the picker:",
+        "",
+      ) ?? "";
+    setBusy(true);
+    try {
+      await saveAsFcoTemplate({
+        data: {
+          name: name.trim(),
+          templateDescription,
+          title: form.title,
+          description: form.description,
+          originType: form.originType,
+          priority: form.priority,
+          discipline: form.discipline,
+          cbsCodes: form.cbsCodes,
+          locationArea: form.locationArea,
+          drawingRefs: form.drawingRefs,
+          rfiNumbers: form.rfiNumbers,
+          initiatedBy: form.initiatedBy,
+          fieldContact: form.fieldContact,
+          estimatedCost: form.estimatedCost,
+          estimatedHours: form.estimatedHours,
+          workStopped: form.workStopped,
+          photosUrl: form.photosUrl,
+          reasonNarrative: form.reasonNarrative,
+          notes: form.notes,
+        },
+      });
+      invalidateAdminEntity(queryClient, "fcoTemplates");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const { data: currentUser } = useCurrentUser();
   const isOriginator =
@@ -249,7 +312,7 @@ function FcoDialogBody({
     enabled: projectId !== null,
   });
 
-  const { data: cbsCodeOptions = [] } = useQuery(cbsCodeOptionsQueryOptions());
+  const cbsOptions: SearchableSelectOption[] = useCbsSearchableOptions();
 
   // Areas for the selected project — populates the Area dropdown. We store
   // the area id as a string in `locationArea`, mirroring the FefRow.area
@@ -259,16 +322,6 @@ function FcoDialogBody({
     ...areasByProjectQueryOptions(projectId),
     enabled: projectId !== null,
   });
-
-  const cbsOptions: SearchableSelectOption[] = React.useMemo(
-    () =>
-      cbsCodeOptions.map((c) => ({
-        value: c.displayCode,
-        label: c.name ? `${c.displayCode} — ${c.name}` : c.displayCode,
-        searchText: `${c.displayCode} ${c.name ?? ""}`.toLowerCase(),
-      })),
-    [cbsCodeOptions],
-  );
 
   const [drawingRefsText, setDrawingRefsText] = React.useState("");
   const [rfiNumbersText, setRfiNumbersText] = React.useState("");
@@ -343,6 +396,18 @@ function FcoDialogBody({
                   Promote to CVR
                 </Button>
               )}
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSaveAsTemplate}
+                  disabled={busy || !form.title.trim()}
+                  title="Snapshot the current form as a new FCO template"
+                  className="text-violet-700 hover:bg-violet-50"
+                >
+                  Save as Template
+                </Button>
+              )}
               {initial && onDelete && (
                 <Button
                   variant="outline"
@@ -399,6 +464,16 @@ function FcoDialogBody({
               <TabsTrigger value="history">History</TabsTrigger>
             </TabsList>
             <TabsContent value="details" className="space-y-4 mt-3">
+
+          {!initial && (
+            <TemplatePicker<FcoTemplateFieldSet>
+              pickerQueryOptions={fcoTemplatePickerQueryOptions}
+              instantiate={instantiateFcoTemplate}
+              currentDiscipline={form.discipline}
+              onSelect={applyTemplate}
+              noun="FCO"
+            />
+          )}
 
           {/* Identity */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

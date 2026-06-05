@@ -4,12 +4,25 @@
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  // `postgresqlExtensions` enables the `extensions = [...]` declaration on
+  // `datasource db` below, and unlocks the per-column `ops` modifier on
+  // `@@index(..., type: Gin, ...)` that the trigram indexes use.
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  // `pg_trgm` powers leading-wildcard ILIKE search via GIN trigram indexes.
+  // The global command palette runs `WHERE col ILIKE '%q%'` across five
+  // entity tables, which can't use a B-tree index — sequential scans get
+  // ugly past a few thousand rows per table. The per-column trigram indexes
+  // declared on ChangeLog/FieldChangeOrder/Rfi/Pco/Trend turn those scans
+  // into index-only lookups. `map: "pg_trgm"` tells Prisma the actual
+  // Postgres extension name (its default camelCase rendering would emit
+  // CREATE EXTENSION "pgTrgm" which fails Neon's allow-list check).
+  extensions = [pgTrgm(map: "pg_trgm")]
 }
 
 model Post {
@@ -179,6 +192,10 @@ model Rfi {
   linkedTrends           Trend[]
 
   @@index([projectId, initiatedAt])
+  // Trigram GIN indexes for the global search.
+  @@index([rfiNumber(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([subject(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([question(ops: raw("gin_trgm_ops"))], type: Gin)
 }
 
 // Privilege levels, extensible: add a value here and a rank in ROLE_RANK
@@ -546,6 +563,14 @@ model ChangeLog {
 
   @@index([projectId, status])
   @@index([linkedPcoId])
+  // Trigram GIN indexes back the global command palette's leading-wildcard
+  // ILIKE search. One index per column (multicolumn GIN works for ORs, but
+  // separate indexes give Postgres more freedom to bitmap-OR them and let a
+  // single column be dropped/rebuilt independently).
+  @@index([cvrNumber(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([description(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([notes(ops: raw("gin_trgm_ops"))], type: Gin)
 }
 
 // Reusable FCO scaffold. Mirrors `CvrTemplate` — admin-managed, company-
@@ -659,6 +684,12 @@ model FieldChangeOrder {
 
   @@index([projectId, status])
   @@index([linkedCvrId])
+  // Trigram GIN indexes for the global search — see ChangeLog for rationale.
+  @@index([fcoNumber(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([description(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([reasonNarrative(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([notes(ops: raw("gin_trgm_ops"))], type: Gin)
 }
 
 // PCO (Prime / Owner Change Order) — the EPC's billable ask to the owner,
@@ -733,6 +764,11 @@ model Pco {
 
   @@index([projectId, status])
   @@index([projectId, submittedAt])
+  // Trigram GIN indexes for the global search.
+  @@index([pcoNumber(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([ownerReference(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([description(ops: raw("gin_trgm_ops"))], type: Gin)
 }
 
 // Trend — anticipated cost impact that hasn't (yet) been approved as a CVR.
@@ -814,6 +850,11 @@ model Trend {
   @@index([linkedCvrId])
   @@index([linkedFcoId])
   @@index([linkedRfiId])
+  // Trigram GIN indexes for the global search.
+  @@index([trendNumber(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([description(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([reasonNarrative(ops: raw("gin_trgm_ops"))], type: Gin)
 }
 
 // Frozen copy of a project's estimate at a point in time. Captures every

@@ -4,7 +4,7 @@
   "outputDirectory": "dist/client",
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!api/healthcheck).*)",
       "destination": "/api/handler"
     }
   ],
@@ -13,6 +13,10 @@
       "includeFiles": "dist/server/**",
       "memory": 1024,
       "maxDuration": 30
+    },
+    "api/healthcheck.js": {
+      "memory": 256,
+      "maxDuration": 10
     }
   }
 }

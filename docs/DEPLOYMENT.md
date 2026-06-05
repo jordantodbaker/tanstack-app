@@ -278,8 +278,31 @@ Per-request latency and error rate are exposed by the hosting platform.
 Vercel and Cloudflare both surface these in their dashboards.
 
 ### Healthcheck
-**Not currently wired up.** Add a `GET /api/healthcheck` endpoint as a
-follow-up; recommended for uptime monitoring.
+`GET /api/healthcheck` — implemented in [api/healthcheck.js](../api/healthcheck.js).
+Pings the database via `pg` (intentionally not Prisma — keeps the endpoint
+working even if the application bundle is broken) and returns JSON:
+
+```json
+{
+  "status": "ok",
+  "uptimeSeconds": 0,
+  "checks": { "db": { "ok": true, "latencyMs": 12 } },
+  "timestamp": "2026-06-05T10:00:00.000Z",
+  "durationMs": 14
+}
+```
+
+- HTTP **200** when every check passes
+- HTTP **503** when any check fails (uptime monitors should alert on the
+  status code, not parse the body)
+- Cache-Control: `no-store` so no CDN ever caches a stale OK
+- Vercel routing: `vercel.json` uses a negative-lookahead in its catch-all
+  rewrite (`/((?!api/healthcheck).*)` → `/api/handler`) so the function is
+  served directly without loading the TanStack Start SSR bundle. Memory
+  capped at 256 MB and timeout at 10 s — keeps each ping cheap.
+
+Recommended monitor cadence: every 1–5 minutes. Alert on two consecutive
+non-200 responses to avoid paging on a single transient DB blip.
 
 ### Recommended (not yet implemented)
 - **Sentry** or equivalent for error tracking and stack traces. The

@@ -48,6 +48,9 @@ export const qk = {
   },
   dashboardSummary: (projectId: number | null) =>
     ["dashboardSummary", projectId] as const,
+  /** Cross-entity command-palette search, keyed by project + query string. */
+  search: (projectId: number | null, query: string) =>
+    ["search", projectId, query] as const,
   projectFefRowTotals: (projectId: number | null) =>
     ["projectFefRowTotals", projectId] as const,
   invalidByDiscipline: (projectId: number | null) =>

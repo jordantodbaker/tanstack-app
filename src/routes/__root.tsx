@@ -41,6 +41,7 @@ import { ProjectGuard } from "~/components/ProjectGuard";
 import { useCurrentUser, useIsAdmin } from "~/lib/use-current-user";
 import { Button } from "~/components/ui/button";
 import { NotificationBell } from "~/components/NotificationBell";
+import { GlobalSearch } from "~/components/GlobalSearch";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -210,6 +211,9 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
                 placeholder="Select project…"
                 className="h-9 min-w-50"
               />
+            </div>
+            <div className="shrink-0">
+              <GlobalSearch />
             </div>
             <nav className="hidden sm:flex items-center gap-1 flex-1">
               <Link

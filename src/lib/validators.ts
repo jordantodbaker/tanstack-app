@@ -258,6 +258,16 @@ export const UpsertPcoSchema = z.object({
 });
 export const parseUpsertPco = (input: unknown) => UpsertPcoSchema.parse(input);
 
+// ── Global search ────────────────────────────────────────────────────────────
+
+/** Cross-entity project search input. `query` is trimmed; a <2-char term is
+ *  rejected here (the palette also gates on length client-side). */
+export const SearchInputSchema = z.object({
+  projectId: ProjectId,
+  query: z.string().trim().min(2).max(100),
+});
+export const parseSearchInput = (input: unknown) => SearchInputSchema.parse(input);
+
 // ── Promotion / cross-entity action inputs ──────────────────────────────────
 
 export const PromoteFcoInputSchema = z.object({ fcoId: Id });

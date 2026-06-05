@@ -64,6 +64,10 @@ export const Route = createFileRoute("/fco-log")({
       );
     }
   },
+  // `?q` lets the global search palette deep-link here with a record's number
+  // pre-seeded into the page search box.
+  validateSearch: (s: Record<string, unknown>): { q?: string } =>
+    typeof s.q === "string" ? { q: s.q } : {},
   component: FcoLogPage,
 });
 
@@ -107,7 +111,13 @@ function FcoLogPage() {
     onSuccess: invalidate,
   });
 
-  const [search, setSearch] = React.useState("");
+  const { q } = Route.useSearch();
+  const [search, setSearch] = React.useState(q ?? "");
+  // Re-seed when navigated here with a new `q` (cross-entity nav remounts, so
+  // the initializer covers that; this covers same-route re-navigation).
+  React.useEffect(() => {
+    if (q !== undefined) setSearch(q);
+  }, [q]);
   const [statusFilter, setStatusFilter] = React.useState<"" | FcoStatus>("");
   const [disciplineFilter, setDisciplineFilter] = React.useState("");
   const [linkageFilter, setLinkageFilter] = React.useState<

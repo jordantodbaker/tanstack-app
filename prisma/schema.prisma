@@ -558,6 +558,10 @@ model ChangeLog {
   /// — the internal cost record outlives any owner negotiation.
   linkedPco          Pco?               @relation(fields: [linkedPcoId], references: [id], onDelete: SetNull)
   linkedPcoId        Int?
+  /// Optional cost buildup. When present, `costImpact` is the cached sum of
+  /// these lines (quantity × unitRate); when empty, `costImpact` is entered by
+  /// hand. Cascade-deleted with the CVR.
+  lineItems          CvrLineItem[]
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
@@ -571,6 +575,38 @@ model ChangeLog {
   @@index([title(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([description(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([notes(ops: raw("gin_trgm_ops"))], type: Gin)
+}
+
+// Cost category for a CVR cost-buildup line. Mirrors the usual EPC split so a
+// change order's price can be defended by labor / material / equipment / sub.
+enum CvrCostType {
+  LABOR
+  MATERIAL
+  EQUIPMENT
+  SUBCONTRACT
+  OTHER
+}
+
+// One line of a CVR's optional cost buildup. Line total is `quantity ×
+// unitRate` (no markup in v1 — that lands later in the shared FEF indirect
+// stack). The parent ChangeLog's `costImpact` caches the sum of its lines, so
+// every downstream reader (dashboard, CSV, PCO, print) keeps using a single
+// number. `position` orders the rows; the upsert re-sequences on every save.
+model CvrLineItem {
+  id          Int         @id @default(autoincrement())
+  changeLog   ChangeLog   @relation(fields: [changeLogId], references: [id], onDelete: Cascade)
+  changeLogId Int
+  position    Int
+  description String      @default("")
+  costType    CvrCostType @default(LABOR)
+  quantity    Float       @default(0)
+  unit        String      @default("")
+  unitRate    Float       @default(0)
+  notes       String      @default("")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([changeLogId, position])
 }
 
 // Reusable FCO scaffold. Mirrors `CvrTemplate` — admin-managed, company-

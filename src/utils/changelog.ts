@@ -26,6 +26,11 @@ import {
   applyWorkflowTransition,
   type WorkflowTransitionConfig,
 } from "./workflow.server";
+import {
+  sumLineItems,
+  type CvrCostType,
+  type CvrLineItemDto,
+} from "./cvrLineItems";
 
 const CVR_STATUSES_NEEDING_REVIEW = new Set<string>([
   "IN_REVIEW",
@@ -118,8 +123,39 @@ export type ChangeLogItem = ChangeLogListItem & {
   reasonCode: string;
 };
 
+/**
+ * Full single-record shape returned by `fetchChangeLog` (dialog + print). Adds
+ * the cost-buildup lines on top of `ChangeLogItem`. The list/CSV paths keep
+ * returning the lighter `ChangeLogItem` (no per-line join) since they only read
+ * the cached `costImpact`.
+ */
+export type ChangeLogDetail = ChangeLogItem & {
+  lineItems: CvrLineItemDto[];
+};
+
 const serializeDate = (d: Date | null): string | null =>
   d === null ? null : d.toISOString();
+
+/** Prisma row → serialized DTO for a cost-buildup line. */
+const toLineItemDto = (r: {
+  id: number;
+  position: number;
+  description: string;
+  costType: string;
+  quantity: number;
+  unit: string;
+  unitRate: number;
+  notes: string;
+}): CvrLineItemDto => ({
+  id: r.id,
+  position: r.position,
+  description: r.description,
+  costType: r.costType as CvrCostType,
+  quantity: r.quantity,
+  unit: r.unit,
+  unitRate: r.unitRate,
+  notes: r.notes,
+});
 
 /** Prisma row shape, derived from the client so it tracks schema changes. */
 type ChangeLogRow = Awaited<
@@ -239,18 +275,20 @@ export const changeLogListFullQueryOptions = (projectId: number | null) =>
  */
 export const fetchChangeLog = createServerFn({ method: "GET" })
   .inputValidator(parseIdScalar)
-  .handler(async ({ data: id }): Promise<ChangeLogItem> => {
+  .handler(async ({ data: id }): Promise<ChangeLogDetail> => {
     const row = await prisma.changeLog.findUniqueOrThrow({
       where: { id },
+      include: { lineItems: { orderBy: { position: "asc" } } },
     });
     await requireProjectAccess(row.projectId);
-    return toItem(row);
+    const { lineItems, ...scalar } = row;
+    return { ...toItem(scalar), lineItems: lineItems.map(toLineItemDto) };
   });
 
 export const changeLogQueryOptions = (id: number | null) =>
   queryOptions({
     queryKey: qk.changeLog.single(id),
-    queryFn: (): Promise<ChangeLogItem | null> =>
+    queryFn: (): Promise<ChangeLogDetail | null> =>
       id === null ? Promise.resolve(null) : fetchChangeLog({ data: id }),
     enabled: id !== null,
   });
@@ -277,6 +315,9 @@ export type UpsertChangeLogInput = {
   approver: string;
   notes: string;
   area: string;
+  /** Optional cost buildup. When non-empty, the server derives `costImpact`
+   *  as the sum of line totals and ignores the manual `costImpact` field. */
+  lineItems: CvrLineItemDto[];
 };
 
 // User-meaningful columns tracked by the audit log. Excludes id, projectId,
@@ -305,7 +346,7 @@ const CHANGELOG_AUDIT_FIELDS = [
 
 export const upsertChangeLog = createServerFn({ method: "POST" })
   .inputValidator(parseUpsertChangeLog)
-  .handler(async ({ data }): Promise<ChangeLogItem> => {
+  .handler(async ({ data }): Promise<ChangeLogDetail> => {
     // Resolve the actor once; authorize per-branch inside the transaction
     // against the *actual* project: for creates that's the claimed
     // `data.projectId`; for updates it's the row's existing `projectId`.
@@ -313,6 +354,27 @@ export const upsertChangeLog = createServerFn({ method: "POST" })
     // to project A modify (and reassign) a row that belongs to project B.
     const actor = await resolveCurrentUser();
     if (!actor) throw new Error("Unauthorized: not signed in");
+
+    // When a cost buildup is present the server is authoritative for
+    // `costImpact` — it's the sum of the line totals, never the (possibly
+    // stale) manual number the client sent. With no lines, the manual field
+    // stands (legacy + quick-entry path).
+    const costImpact =
+      data.lineItems.length > 0
+        ? sumLineItems(data.lineItems)
+        : data.costImpact;
+
+    // Re-sequence positions so they're always contiguous 0..n-1 regardless of
+    // how the client ordered/removed rows.
+    const lineCreateData = data.lineItems.map((li, position) => ({
+      position,
+      description: li.description,
+      costType: li.costType,
+      quantity: li.quantity,
+      unit: li.unit,
+      unitRate: li.unitRate,
+      notes: li.notes,
+    }));
 
     // `status` is intentionally omitted: lifecycle changes go through
     // `transitionChangeLog`, never the generic upsert. Create falls back to
@@ -326,7 +388,7 @@ export const upsertChangeLog = createServerFn({ method: "POST" })
       discipline: data.discipline,
       cbsCodes: data.cbsCodes,
       originator: data.originator,
-      costImpact: data.costImpact,
+      costImpact,
       scheduleDaysImpact: data.scheduleDaysImpact,
       laborHoursImpact: data.laborHoursImpact,
       riskLevel: data.riskLevel,
@@ -339,6 +401,7 @@ export const upsertChangeLog = createServerFn({ method: "POST" })
       area: data.area,
     };
     const row = await prisma.$transaction(async (tx) => {
+      let id: number;
       if (data.id) {
         const before = await tx.changeLog.findUniqueOrThrow({
           where: { id: data.id },
@@ -367,25 +430,41 @@ export const upsertChangeLog = createServerFn({ method: "POST" })
           },
           diffFields(before, updated, CHANGELOG_AUDIT_FIELDS),
         );
-        return updated;
+        id = updated.id;
+      } else {
+        await assertProjectAccess(actor, data.projectId);
+        const created = await tx.changeLog.create({
+          data: {
+            ...editableFields,
+            projectId: data.projectId,
+            createdById: actor.id,
+          },
+        });
+        await recordCreate(tx, {
+          entityType: "ChangeLog",
+          entityId: created.id,
+          projectId: created.projectId,
+          actor,
+        });
+        id = created.id;
       }
-      await assertProjectAccess(actor, data.projectId);
-      const created = await tx.changeLog.create({
-        data: {
-          ...editableFields,
-          projectId: data.projectId,
-          createdById: actor.id,
-        },
+
+      // Replace the buildup wholesale — small line counts make delete+recreate
+      // simpler and safer than a per-row diff, and it keeps positions clean.
+      await tx.cvrLineItem.deleteMany({ where: { changeLogId: id } });
+      if (lineCreateData.length > 0) {
+        await tx.cvrLineItem.createMany({
+          data: lineCreateData.map((l) => ({ ...l, changeLogId: id })),
+        });
+      }
+
+      return tx.changeLog.findUniqueOrThrow({
+        where: { id },
+        include: { lineItems: { orderBy: { position: "asc" } } },
       });
-      await recordCreate(tx, {
-        entityType: "ChangeLog",
-        entityId: created.id,
-        projectId: created.projectId,
-        actor,
-      });
-      return created;
     });
-    return toItem(row);
+    const { lineItems, ...scalar } = row;
+    return { ...toItem(scalar), lineItems: lineItems.map(toLineItemDto) };
   });
 
 /**

@@ -56,6 +56,13 @@ const CHANGE_TYPES = [
   "OTHER",
 ] as const;
 const RISK_LEVELS = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
+const CVR_COST_TYPES = [
+  "LABOR",
+  "MATERIAL",
+  "EQUIPMENT",
+  "SUBCONTRACT",
+  "OTHER",
+] as const;
 const FCO_STATUSES = [
   "DRAFT",
   "SUBMITTED",
@@ -129,6 +136,20 @@ export const parseTransitionInput = (input: unknown) =>
 
 // ── Entity upsert schemas ────────────────────────────────────────────────────
 
+/** One CVR cost-buildup line. `quantity`/`unitRate` are finite numbers and may
+ *  be negative (a credit line). `id` is optional — the upsert recreates lines,
+ *  so it's only meaningful as a client React key. */
+export const CvrLineItemSchema = z.object({
+  id: OptionalId,
+  position: Int,
+  description: Text,
+  costType: z.enum(CVR_COST_TYPES),
+  quantity: Money,
+  unit: Text,
+  unitRate: Money,
+  notes: Text,
+});
+
 export const UpsertChangeLogSchema = z.object({
   id: OptionalId,
   projectId: ProjectId,
@@ -151,6 +172,8 @@ export const UpsertChangeLogSchema = z.object({
   approver: Text,
   notes: Text,
   area: Text,
+  // Optional cost buildup. `.default([])` keeps payloads that omit it valid.
+  lineItems: z.array(CvrLineItemSchema).default([]),
 });
 export const parseUpsertChangeLog = (input: unknown) =>
   UpsertChangeLogSchema.parse(input);

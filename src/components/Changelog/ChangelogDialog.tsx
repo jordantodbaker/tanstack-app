@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Printer, Trash2 } from "lucide-react";
+import { Plus, Printer, Trash2, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { DialogClose } from "~/components/ui/dialog";
 import { EntityDialogShell } from "~/components/EntityDialog/EntityDialogShell";
@@ -17,12 +17,22 @@ import {
   CHANGE_TYPES,
   RISK_LEVELS,
   changeLogQueryOptions,
-  type ChangeLogItem,
+  type ChangeLogDetail,
   type ChangeLogListItem,
   type ChangeType,
   type RiskLevel,
   type UpsertChangeLogInput,
 } from "~/utils/changelog";
+import {
+  CVR_COST_TYPES,
+  CVR_COST_TYPE_LABELS,
+  lineItemTotal,
+  makeBlankLineItem,
+  sumLineItems,
+  type CvrCostType,
+  type CvrLineItemDto,
+} from "~/utils/cvrLineItems";
+import { formatMoney } from "~/lib/formatting";
 import { CVR_TRANSITIONS, availableTransitions } from "~/utils/workflow";
 import { useCurrentUser } from "~/lib/use-current-user";
 import { disciplines } from "~/config/disciplines";
@@ -83,10 +93,11 @@ function blankForm(): FormState {
     approver: "",
     notes: "",
     area: "",
+    lineItems: [],
   };
 }
 
-function fromItem(item: ChangeLogItem): FormState {
+function fromItem(item: ChangeLogDetail): FormState {
   return {
     id: item.id,
     cvrNumber: item.cvrNumber,
@@ -108,6 +119,7 @@ function fromItem(item: ChangeLogItem): FormState {
     approver: item.approver,
     notes: item.notes,
     area: item.area,
+    lineItems: item.lineItems,
   };
 }
 
@@ -159,7 +171,7 @@ function ChangelogDialogBody({
   onTransition,
   closeDialog,
 }: {
-  initial?: ChangeLogItem;
+  initial?: ChangeLogDetail;
   onSubmit: (form: FormState) => Promise<unknown>;
   onDelete?: (id: number) => Promise<unknown>;
   onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
@@ -173,7 +185,7 @@ function ChangelogDialogBody({
     update,
     handleSubmit,
     handleDelete,
-  } = useFormDialog<ChangeLogItem, FormState>({
+  } = useFormDialog<ChangeLogDetail, FormState>({
     initial,
     blank: blankForm,
     fromItem,
@@ -283,6 +295,40 @@ function ChangelogDialogBody({
   // mutation completion already sets it back to false in useFormDialog.
   void setBusy;
 
+  // Cost buildup. With ≥1 line, `costImpact` is the sum of line totals and the
+  // manual Cost Impact field goes read-only. Keep `form.costImpact` synced so
+  // template-save and the submit payload carry the rolled-up number (the
+  // server recomputes it authoritatively regardless).
+  const hasLineItems = form.lineItems.length > 0;
+  const derivedCost = React.useMemo(
+    () => sumLineItems(form.lineItems),
+    [form.lineItems],
+  );
+  React.useEffect(() => {
+    if (!hasLineItems) return;
+    setForm((f) =>
+      f.costImpact === derivedCost ? f : { ...f, costImpact: derivedCost },
+    );
+  }, [hasLineItems, derivedCost, setForm]);
+
+  const addLine = () =>
+    setForm((f) => ({
+      ...f,
+      lineItems: [...f.lineItems, makeBlankLineItem(f.lineItems.length)],
+    }));
+  const updateLine = (index: number, patch: Partial<CvrLineItemDto>) =>
+    setForm((f) => ({
+      ...f,
+      lineItems: f.lineItems.map((li, i) =>
+        i === index ? { ...li, ...patch } : li,
+      ),
+    }));
+  const removeLine = (index: number) =>
+    setForm((f) => ({
+      ...f,
+      lineItems: f.lineItems.filter((_, i) => i !== index),
+    }));
+
   return (
     <>
       <div className="space-y-4">
@@ -338,6 +384,10 @@ function ChangelogDialogBody({
           <Tabs defaultValue="details" className="w-full">
             <TabsList>
               <TabsTrigger value="details">Details</TabsTrigger>
+              <TabsTrigger value="buildup">
+                Cost Buildup
+                {hasLineItems ? ` (${form.lineItems.length})` : ""}
+              </TabsTrigger>
               <TabsTrigger value="attachments">Attachments</TabsTrigger>
               <TabsTrigger value="comments">Comments</TabsTrigger>
               <TabsTrigger value="history">History</TabsTrigger>
@@ -476,15 +526,32 @@ function ChangelogDialogBody({
           </Labeled>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Labeled label="Cost Impact ($)">
-              <Input
-                type="number"
-                step="0.01"
-                value={form.costImpact}
-                onChange={(e) =>
-                  update("costImpact", parseFloat(e.target.value) || 0)
-                }
-              />
+            <Labeled
+              label="Cost Impact ($)"
+              help={
+                hasLineItems
+                  ? "Derived from the Cost Buildup tab."
+                  : undefined
+              }
+            >
+              {hasLineItems ? (
+                <Input
+                  type="text"
+                  readOnly
+                  value={`$${formatMoney(derivedCost)}`}
+                  className="bg-slate-50 text-slate-600"
+                  title="Edit the Cost Buildup tab to change this."
+                />
+              ) : (
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={form.costImpact}
+                  onChange={(e) =>
+                    update("costImpact", parseFloat(e.target.value) || 0)
+                  }
+                />
+              )}
             </Labeled>
             <Labeled label="Schedule Impact (days)">
               <Input
@@ -579,6 +646,15 @@ function ChangelogDialogBody({
           </Labeled>
 
             </TabsContent>
+            <TabsContent value="buildup" className="mt-3">
+              <CostBuildupEditor
+                lines={form.lineItems}
+                derivedCost={derivedCost}
+                onAdd={addLine}
+                onUpdate={updateLine}
+                onRemove={removeLine}
+              />
+            </TabsContent>
             <TabsContent value="attachments" className="mt-3">
               <Attachments
                 entityType="ChangeLog"
@@ -618,6 +694,144 @@ function ChangelogDialogBody({
           </div>
       </div>
     </>
+  );
+}
+
+function CostBuildupEditor({
+  lines,
+  derivedCost,
+  onAdd,
+  onUpdate,
+  onRemove,
+}: {
+  lines: CvrLineItemDto[];
+  derivedCost: number;
+  onAdd: () => void;
+  onUpdate: (index: number, patch: Partial<CvrLineItemDto>) => void;
+  onRemove: (index: number) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-slate-500">
+        Build the cost impact from labor, material, equipment and sub lines —
+        each is quantity × unit rate. The subtotal becomes the CVR's Cost
+        Impact. Leave empty to enter Cost Impact by hand on the Details tab.
+      </p>
+
+      {lines.length === 0 ? (
+        <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+          No cost lines yet.
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-slate-200">
+          <table className="w-full border-collapse text-sm">
+            <thead className="bg-slate-50">
+              <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-2 py-2">Description</th>
+                <th className="px-2 py-2 w-32">Cost Type</th>
+                <th className="px-2 py-2 w-20 text-right">Qty</th>
+                <th className="px-2 py-2 w-20">Unit</th>
+                <th className="px-2 py-2 w-28 text-right">Unit Rate</th>
+                <th className="px-2 py-2 w-28 text-right">Line Total</th>
+                <th className="px-2 py-2 w-10"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((li, i) => (
+                <tr
+                  key={li.id ?? `new-${i}`}
+                  className="border-t border-slate-100"
+                >
+                  <td className="px-2 py-1.5">
+                    <Input
+                      value={li.description}
+                      placeholder="What this covers"
+                      onChange={(e) =>
+                        onUpdate(i, { description: e.target.value })
+                      }
+                    />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <NativeSelect
+                      value={li.costType}
+                      onChange={(v) =>
+                        onUpdate(i, { costType: v as CvrCostType })
+                      }
+                      options={CVR_COST_TYPES.map((c) => ({
+                        value: c,
+                        label: CVR_COST_TYPE_LABELS[c],
+                      }))}
+                    />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <Input
+                      type="number"
+                      step="any"
+                      className="text-right"
+                      value={li.quantity}
+                      onChange={(e) =>
+                        onUpdate(i, {
+                          quantity: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <Input
+                      value={li.unit}
+                      placeholder="hr, ea, ls"
+                      onChange={(e) => onUpdate(i, { unit: e.target.value })}
+                    />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <Input
+                      type="number"
+                      step="any"
+                      className="text-right"
+                      value={li.unitRate}
+                      onChange={(e) =>
+                        onUpdate(i, {
+                          unitRate: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </td>
+                  <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">
+                    ${formatMoney(lineItemTotal(li))}
+                  </td>
+                  <td className="px-2 py-1.5 text-center">
+                    <button
+                      type="button"
+                      onClick={() => onRemove(i)}
+                      aria-label="Remove line"
+                      className="text-slate-400 hover:text-red-600"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-slate-200 bg-slate-50 font-medium">
+                <td className="px-2 py-2 text-slate-600" colSpan={5}>
+                  Subtotal — Cost Impact
+                </td>
+                <td className="px-2 py-2 text-right tabular-nums text-slate-900">
+                  ${formatMoney(derivedCost)}
+                </td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+
+      <Button type="button" variant="outline" size="sm" onClick={onAdd}>
+        <Plus className="size-4 mr-1" />
+        Add line
+      </Button>
+    </div>
   );
 }
 

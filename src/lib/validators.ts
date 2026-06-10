@@ -143,6 +143,7 @@ export const CvrLineItemSchema = z.object({
   id: OptionalId,
   position: Int,
   description: Text,
+  cbsCode: Text,
   costType: z.enum(CVR_COST_TYPES),
   quantity: Money,
   unit: Text,

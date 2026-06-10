@@ -28,6 +28,7 @@ import {
   CVR_COST_TYPE_LABELS,
   lineItemTotal,
   makeBlankLineItem,
+  mergeAffectedCbsCodes,
   sumLineItems,
   type CvrCostType,
   type CvrLineItemDto,
@@ -43,7 +44,10 @@ import {
 } from "~/components/Changelog/StatusBadge";
 import { WorkflowActions } from "~/components/WorkflowActions";
 import { SearchableMultiSelect } from "~/components/SearchableMultiSelect";
-import type { SearchableSelectOption } from "~/components/SearchableSelect";
+import {
+  SearchableSelect,
+  type SearchableSelectOption,
+} from "~/components/SearchableSelect";
 import {
   Tabs,
   TabsList,
@@ -150,6 +154,9 @@ export function ChangelogDialog({
       initial={initial}
       fullQueryOptions={changeLogQueryOptions}
       loadingLabel="Loading change item…"
+      // Fixed-height flex column so the dialog stays the same size on every
+      // tab — only the tab panel scrolls; the header and footer are pinned.
+      contentClassName="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,1100px)] h-[85vh] flex flex-col overflow-hidden"
     >
       {(full, closeDialog) => (
         <ChangelogDialogBody
@@ -311,6 +318,20 @@ function ChangelogDialogBody({
     );
   }, [hasLineItems, derivedCost, setForm]);
 
+  // Live-merge buildup CBS codes into Affected CBS Codes so the chips appear as
+  // the user assigns a code on a line. Additive only — the merge never removes
+  // a manually-chosen code, and the length guard avoids a render loop (merge
+  // only ever grows the list). Depends on `form.lineItems`; the resulting
+  // `cbsCodes` update doesn't retrigger it.
+  React.useEffect(() => {
+    setForm((f) => {
+      const merged = mergeAffectedCbsCodes(f.cbsCodes, f.lineItems);
+      return merged.length === f.cbsCodes.length
+        ? f
+        : { ...f, cbsCodes: merged };
+    });
+  }, [form.lineItems, setForm]);
+
   const addLine = () =>
     setForm((f) => ({
       ...f,
@@ -331,8 +352,8 @@ function ChangelogDialogBody({
 
   return (
     <>
-      <div className="space-y-4">
-          <div className="flex items-start justify-between gap-2 pr-8">
+      <div className="flex min-h-0 flex-1 flex-col gap-4">
+          <div className="flex items-start justify-between gap-2 pr-8 shrink-0">
             <div>
               <h2 className="text-lg font-semibold text-slate-800">
                 {initial ? "Edit Change Item" : "New Change Item"}
@@ -381,8 +402,11 @@ function ChangelogDialogBody({
             </div>
           </div>
 
-          <Tabs defaultValue="details" className="w-full">
-            <TabsList>
+          <Tabs
+            defaultValue="details"
+            className="w-full flex-1 flex flex-col min-h-0"
+          >
+            <TabsList className="shrink-0">
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="buildup">
                 Cost Buildup
@@ -392,6 +416,9 @@ function ChangelogDialogBody({
               <TabsTrigger value="comments">Comments</TabsTrigger>
               <TabsTrigger value="history">History</TabsTrigger>
             </TabsList>
+            {/* Single scroll region shared by every panel — its fixed flex
+                height is what keeps the dialog from resizing per tab. */}
+            <div className="flex-1 min-h-0 overflow-y-auto">
             <TabsContent value="details" className="space-y-4 mt-3">
 
           {!initial && (
@@ -650,6 +677,7 @@ function ChangelogDialogBody({
               <CostBuildupEditor
                 lines={form.lineItems}
                 derivedCost={derivedCost}
+                cbsOptions={cbsOptions}
                 onAdd={addLine}
                 onUpdate={updateLine}
                 onRemove={removeLine}
@@ -676,9 +704,10 @@ function ChangelogDialogBody({
                 projectId={initial?.projectId ?? null}
               />
             </TabsContent>
+            </div>
           </Tabs>
 
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 shrink-0">
             <DialogClose asChild>
               <Button variant="outline" type="button" disabled={busy}>
                 Cancel
@@ -700,12 +729,14 @@ function ChangelogDialogBody({
 function CostBuildupEditor({
   lines,
   derivedCost,
+  cbsOptions,
   onAdd,
   onUpdate,
   onRemove,
 }: {
   lines: CvrLineItemDto[];
   derivedCost: number;
+  cbsOptions: SearchableSelectOption[];
   onAdd: () => void;
   onUpdate: (index: number, patch: Partial<CvrLineItemDto>) => void;
   onRemove: (index: number) => void;
@@ -723,11 +754,15 @@ function CostBuildupEditor({
           No cost lines yet.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-200">
+        // No overflow wrapper: the per-row CBS SearchableSelect opens an
+        // absolutely-positioned dropdown that an `overflow` ancestor would
+        // clip. The dialog itself is wide enough for the columns.
+        <div className="rounded-lg border border-slate-200">
           <table className="w-full border-collapse text-sm">
             <thead className="bg-slate-50">
               <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <th className="px-2 py-2">Description</th>
+                <th className="px-2 py-2 w-56">CBS Item</th>
                 <th className="px-2 py-2 w-32">Cost Type</th>
                 <th className="px-2 py-2 w-20 text-right">Qty</th>
                 <th className="px-2 py-2 w-20">Unit</th>
@@ -749,6 +784,14 @@ function CostBuildupEditor({
                       onChange={(e) =>
                         onUpdate(i, { description: e.target.value })
                       }
+                    />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <SearchableSelect
+                      value={li.cbsCode}
+                      options={cbsOptions}
+                      placeholder="— CBS item —"
+                      onSelect={(v) => onUpdate(i, { cbsCode: v })}
                     />
                   </td>
                   <td className="px-2 py-1.5">
@@ -814,7 +857,7 @@ function CostBuildupEditor({
             </tbody>
             <tfoot>
               <tr className="border-t border-slate-200 bg-slate-50 font-medium">
-                <td className="px-2 py-2 text-slate-600" colSpan={5}>
+                <td className="px-2 py-2 text-slate-600" colSpan={6}>
                   Subtotal — Cost Impact
                 </td>
                 <td className="px-2 py-2 text-right tabular-nums text-slate-900">

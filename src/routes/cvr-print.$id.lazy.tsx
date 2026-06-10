@@ -121,6 +121,7 @@ function PrintableCvrBody({ cvr }: { cvr: ChangeLogDetail }) {
             <thead>
               <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500 border-b border-slate-300">
                 <th className="py-1 pr-2">Description</th>
+                <th className="py-1 px-2">CBS item</th>
                 <th className="py-1 px-2">Cost type</th>
                 <th className="py-1 px-2 text-right">Qty</th>
                 <th className="py-1 px-2">Unit</th>
@@ -133,6 +134,9 @@ function PrintableCvrBody({ cvr }: { cvr: ChangeLogDetail }) {
                 <tr key={li.id ?? li.position} className="border-b border-slate-100">
                   <td className="py-1 pr-2 text-slate-700">
                     {li.description || "—"}
+                  </td>
+                  <td className="py-1 px-2 font-mono text-xs text-slate-700">
+                    {li.cbsCode || "—"}
                   </td>
                   <td className="py-1 px-2 text-slate-700">
                     {CVR_COST_TYPE_LABELS[li.costType]}
@@ -152,7 +156,7 @@ function PrintableCvrBody({ cvr }: { cvr: ChangeLogDetail }) {
             </tbody>
             <tfoot>
               <tr className="font-semibold border-t border-slate-300">
-                <td className="py-1 pr-2 text-slate-700" colSpan={5}>
+                <td className="py-1 pr-2 text-slate-700" colSpan={6}>
                   Total cost impact
                 </td>
                 <td className="py-1 pl-2 text-right tabular-nums text-slate-900">

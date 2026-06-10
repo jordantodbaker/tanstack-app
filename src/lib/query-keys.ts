@@ -18,6 +18,10 @@ export const qk = {
     full: (projectId: number | null) =>
       ["changeLog", "full", projectId] as const,
     single: (id: number | null) => ["changeLog", "single", id] as const,
+    /** Prefix match — busts every cached single-CVR record regardless of id.
+     *  Used after a mutation so a reopened dialog refetches the fresh record
+     *  (e.g. newly-added cost-buildup lines) instead of serving a stale cache. */
+    singleAll: () => ["changeLog", "single"] as const,
     /** CVR-picker dropdown used by the FCO dialog's "link existing CVR". */
     cvrOptions: (projectId: number | null) =>
       ["cvrOptions", projectId] as const,

@@ -27,6 +27,7 @@ import {
   type WorkflowTransitionConfig,
 } from "./workflow.server";
 import {
+  mergeAffectedCbsCodes,
   sumLineItems,
   type CvrCostType,
   type CvrLineItemDto,
@@ -141,6 +142,7 @@ const toLineItemDto = (r: {
   id: number;
   position: number;
   description: string;
+  cbsCode: string;
   costType: string;
   quantity: number;
   unit: string;
@@ -150,6 +152,7 @@ const toLineItemDto = (r: {
   id: r.id,
   position: r.position,
   description: r.description,
+  cbsCode: r.cbsCode,
   costType: r.costType as CvrCostType,
   quantity: r.quantity,
   unit: r.unit,
@@ -369,6 +372,7 @@ export const upsertChangeLog = createServerFn({ method: "POST" })
     const lineCreateData = data.lineItems.map((li, position) => ({
       position,
       description: li.description,
+      cbsCode: li.cbsCode,
       costType: li.costType,
       quantity: li.quantity,
       unit: li.unit,
@@ -386,7 +390,11 @@ export const upsertChangeLog = createServerFn({ method: "POST" })
       description: data.description,
       type: data.type,
       discipline: data.discipline,
-      cbsCodes: data.cbsCodes,
+      // Every CBS code used in the cost buildup is, by definition, affected —
+      // union them into the CVR's Affected CBS Codes (additive; never drops a
+      // manually-entered code). Belt-and-suspenders alongside the dialog's
+      // live merge, so API/other callers stay consistent too.
+      cbsCodes: mergeAffectedCbsCodes(data.cbsCodes, data.lineItems),
       originator: data.originator,
       costImpact,
       scheduleDaysImpact: data.scheduleDaysImpact,
@@ -542,6 +550,10 @@ export function invalidateChangeLogQueries(
 ): void {
   queryClient.invalidateQueries({ queryKey: qk.changeLog.list(projectId) });
   queryClient.invalidateQueries({ queryKey: qk.changeLog.full(projectId) });
+  // Single-record cache the edit dialog fills its form from. Without this, a
+  // reopened dialog serves the pre-save record (e.g. missing the cost-buildup
+  // line you just added) until a hard refresh. Prefix-matches every cached id.
+  queryClient.invalidateQueries({ queryKey: qk.changeLog.singleAll() });
   // PCO and FCO dialogs read the CVR option list; both must drop on any CVR
   // mutation so the dropdown picks up new/renamed CVRs without a hard refresh.
   queryClient.invalidateQueries({ queryKey: qk.changeLog.cvrOptions(projectId) });

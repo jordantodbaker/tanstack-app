@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildupCbsCodes,
   lineItemTotal,
   makeBlankLineItem,
+  mergeAffectedCbsCodes,
   sumLineItems,
   type CvrLineItemDto,
 } from "./cvrLineItems";
@@ -31,6 +33,31 @@ describe("cvr line item math", () => {
 
   it("sums an empty buildup to zero", () => {
     expect(sumLineItems([])).toBe(0);
+  });
+
+  it("buildupCbsCodes returns distinct non-empty codes in first-seen order", () => {
+    const codes = buildupCbsCodes([
+      line({ cbsCode: "07-100" }),
+      line({ cbsCode: "" }),
+      line({ cbsCode: "03-200" }),
+      line({ cbsCode: "07-100" }),
+    ]);
+    expect(codes).toEqual(["07-100", "03-200"]);
+  });
+
+  it("mergeAffectedCbsCodes adds buildup codes without removing existing ones", () => {
+    const merged = mergeAffectedCbsCodes(
+      ["09-500"],
+      [line({ cbsCode: "07-100" }), line({ cbsCode: "09-500" })],
+    );
+    // existing kept first, only the genuinely-new code appended once
+    expect(merged).toEqual(["09-500", "07-100"]);
+  });
+
+  it("mergeAffectedCbsCodes is a no-op when every buildup code is already present", () => {
+    const existing = ["07-100", "09-500"];
+    const merged = mergeAffectedCbsCodes(existing, [line({ cbsCode: "07-100" })]);
+    expect(merged).toEqual(existing);
   });
 
   it("makeBlankLineItem starts at zero on the LABOR type", () => {

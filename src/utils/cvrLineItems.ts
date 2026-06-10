@@ -34,6 +34,8 @@ export type CvrLineItemDto = {
   id?: number;
   position: number;
   description: string;
+  /** Optional CBS item this line rolls up to — a CbsItem.displayCode, or "". */
+  cbsCode: string;
   costType: CvrCostType;
   quantity: number;
   unit: string;
@@ -54,11 +56,40 @@ export function sumLineItems(
   return items.reduce((acc, li) => acc + lineItemTotal(li), 0);
 }
 
+/** Distinct, non-empty CBS codes used across the buildup lines, in first-seen
+ *  order. These are the codes the change is provably spending against. */
+export function buildupCbsCodes(
+  items: ReadonlyArray<Pick<CvrLineItemDto, "cbsCode">>,
+): string[] {
+  return [
+    ...new Set(items.map((li) => li.cbsCode).filter((c) => c !== "")),
+  ];
+}
+
+/**
+ * Union the CVR's Affected CBS codes with the codes used in its cost buildup.
+ * Additive and order-preserving (existing codes first, then any new buildup
+ * codes) — a costed CBS code is by definition "affected", but Affected may also
+ * carry codes with no cost line, so this never removes anything. Returns a new
+ * array only when there's something to add.
+ */
+export function mergeAffectedCbsCodes(
+  existing: ReadonlyArray<string>,
+  items: ReadonlyArray<Pick<CvrLineItemDto, "cbsCode">>,
+): string[] {
+  const have = new Set(existing);
+  const additions = buildupCbsCodes(items).filter((c) => !have.has(c));
+  return additions.length === 0
+    ? [...existing]
+    : [...existing, ...additions];
+}
+
 /** A blank line at the given position, defaulting to the LABOR cost type. */
 export function makeBlankLineItem(position: number): CvrLineItemDto {
   return {
     position,
     description: "",
+    cbsCode: "",
     costType: "LABOR",
     quantity: 0,
     unit: "",

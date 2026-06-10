@@ -60,6 +60,10 @@ export function TemplatePicker<TFields>({
 }) {
   const { data: items = [] } = useQuery(pickerQueryOptions());
   const [busy, setBusy] = React.useState(false);
+  // Tracks the chosen template so the dropdown keeps showing it as selected
+  // after instantiation (it pre-fills the form, but the user should still see
+  // which template they started from). "" = none chosen yet.
+  const [selectedId, setSelectedId] = React.useState("");
 
   const sorted = React.useMemo(() => {
     if (currentDiscipline === "") return items;
@@ -86,12 +90,18 @@ export function TemplatePicker<TFields>({
           Start from template
         </span>
         <NativeSelect
-          value=""
+          value={selectedId}
           onChange={async (v) => {
             if (busy) return;
-            if (v === "") return;
+            if (v === "") {
+              setSelectedId("");
+              return;
+            }
             const id = Number(v);
             if (!Number.isFinite(id)) return;
+            // Reflect the choice immediately so the dropdown shows it while the
+            // instantiate fetch is in flight.
+            setSelectedId(v);
             setBusy(true);
             try {
               const fields = await instantiate({ data: { id } });

@@ -598,6 +598,9 @@ model CvrLineItem {
   changeLogId Int
   position    Int
   description String      @default("")
+  /// Optional CBS item this line rolls up to — holds a CbsItem.displayCode,
+  /// the same convention as ChangeLog.cbsCodes[]. "" = unassigned.
+  cbsCode     String      @default("")
   costType    CvrCostType @default(LABOR)
   quantity    Float       @default(0)
   unit        String      @default("")

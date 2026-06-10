@@ -1,9 +1,17 @@
-import { queryOptions, type QueryClient } from "@tanstack/react-query";
+import { type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { qk } from "~/lib/query-keys";
 import { serializeDate } from "~/lib/serialize";
 import { invalidateEntityRecordQueries } from "~/lib/invalidate";
+import {
+  fetchProjectScopedList,
+  fetchRecordById,
+} from "./entity-reads.server";
+import {
+  projectScopedListQueryOptions,
+  recordQueryOptions,
+} from "~/lib/query-options";
 import {
   parseIdInput,
   parseIdScalar,
@@ -151,67 +159,48 @@ const toListItem = (r: TrendListRow): TrendListItem => ({
 
 export const fetchTrendList = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
-  .handler(async ({ data: projectId }): Promise<TrendListItem[]> => {
-    await requireProjectAccess(projectId);
-    const rows = await prisma.trend.findMany({
-      where: { projectId },
+  .handler(({ data }): Promise<TrendListItem[]> =>
+    fetchProjectScopedList(prisma.trend, data, {
       select: LIST_SELECT,
       orderBy: [{ identifiedAt: "desc" }],
-    });
-    return rows.map(toListItem);
-  });
+      map: toListItem,
+    }),
+  );
 
 export const trendListQueryOptions = (projectId: number | null) =>
-  queryOptions({
-    queryKey: qk.trends.list(projectId),
-    queryFn: (): Promise<TrendListItem[]> =>
-      projectId === null
-        ? Promise.resolve([])
-        : fetchTrendList({ data: projectId }),
-    enabled: projectId !== null,
-    staleTime: 30 * 1000,
-  });
+  projectScopedListQueryOptions(
+    qk.trends.list(projectId),
+    projectId,
+    fetchTrendList,
+  );
 
 /**
  * Full list — every column. Triggered by the CSV export button on click.
  */
 export const fetchTrendListFull = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
-  .handler(async ({ data: projectId }): Promise<TrendItem[]> => {
-    await requireProjectAccess(projectId);
-    const rows = await prisma.trend.findMany({
-      where: { projectId },
+  .handler(({ data }): Promise<TrendItem[]> =>
+    fetchProjectScopedList(prisma.trend, data, {
       orderBy: [{ identifiedAt: "desc" }],
-    });
-    return rows.map(toItem);
-  });
+      map: toItem,
+    }),
+  );
 
 export const trendListFullQueryOptions = (projectId: number | null) =>
-  queryOptions({
-    queryKey: qk.trends.full(projectId),
-    queryFn: (): Promise<TrendItem[]> =>
-      projectId === null
-        ? Promise.resolve([])
-        : fetchTrendListFull({ data: projectId }),
-    enabled: projectId !== null,
-    staleTime: 30 * 1000,
-  });
+  projectScopedListQueryOptions(
+    qk.trends.full(projectId),
+    projectId,
+    fetchTrendListFull,
+  );
 
 export const fetchTrend = createServerFn({ method: "GET" })
   .inputValidator(parseIdScalar)
-  .handler(async ({ data: id }): Promise<TrendItem> => {
-    const row = await prisma.trend.findUniqueOrThrow({ where: { id } });
-    await requireProjectAccess(row.projectId);
-    return toItem(row);
-  });
+  .handler(({ data }): Promise<TrendItem> =>
+    fetchRecordById(prisma.trend, data, { map: toItem }),
+  );
 
 export const trendQueryOptions = (id: number | null) =>
-  queryOptions({
-    queryKey: qk.trends.single(id),
-    queryFn: (): Promise<TrendItem | null> =>
-      id === null ? Promise.resolve(null) : fetchTrend({ data: id }),
-    enabled: id !== null,
-  });
+  recordQueryOptions(qk.trends.single(id), id, fetchTrend);
 
 export type UpsertTrendInput = {
   id?: number;

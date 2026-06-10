@@ -3,6 +3,14 @@ import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { serializeDate } from "~/lib/serialize";
 import { invalidateEntityRecordQueries } from "~/lib/invalidate";
+import {
+  fetchProjectScopedList,
+  fetchRecordById,
+} from "./entity-reads.server";
+import {
+  projectScopedListQueryOptions,
+  recordQueryOptions,
+} from "~/lib/query-options";
 import { qk } from "~/lib/query-keys";
 import {
   parseIdInput,
@@ -222,15 +230,13 @@ const toListItem = (r: FcoListRow): FcoListItem => {
 
 export const fetchFcoList = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
-  .handler(async ({ data: projectId }): Promise<FcoListItem[]> => {
-    await requireProjectAccess(projectId);
-    const rows = await prisma.fieldChangeOrder.findMany({
-      where: { projectId },
+  .handler(({ data }): Promise<FcoListItem[]> =>
+    fetchProjectScopedList(prisma.fieldChangeOrder, data, {
       select: LIST_SELECT,
       orderBy: [{ initiatedAt: "desc" }],
-    });
-    return rows.map(toListItem);
-  });
+      map: toListItem,
+    }),
+  );
 
 /**
  * Full list — same rows as `fetchFcoList` but with every column. Used by the
@@ -239,30 +245,24 @@ export const fetchFcoList = createServerFn({ method: "GET" })
  */
 export const fetchFcoListFull = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
-  .handler(async ({ data: projectId }): Promise<FcoItem[]> => {
-    await requireProjectAccess(projectId);
-    const rows = await prisma.fieldChangeOrder.findMany({
-      where: { projectId },
+  .handler(({ data }): Promise<FcoItem[]> =>
+    fetchProjectScopedList(prisma.fieldChangeOrder, data, {
       include: {
         linkedCvr: { select: { id: true, cvrNumber: true, title: true } },
         linkedRfi: { select: { id: true, rfiNumber: true, subject: true } },
       },
       orderBy: [{ initiatedAt: "desc" }],
-    });
-    return rows.map(toItem);
-  });
+      map: toItem,
+    }),
+  );
 
+// Not auto-fetched; the CSV button triggers this via `fetchQuery`.
 export const fcoListFullQueryOptions = (projectId: number | null) =>
-  queryOptions({
-    queryKey: qk.fcoLog.full(projectId),
-    queryFn: (): Promise<FcoItem[]> =>
-      projectId === null
-        ? Promise.resolve([])
-        : fetchFcoListFull({ data: projectId }),
-    enabled: projectId !== null,
-    // Don't auto-fetch; the CSV button triggers this via `fetchQuery`.
-    staleTime: 30 * 1000,
-  });
+  projectScopedListQueryOptions(
+    qk.fcoLog.full(projectId),
+    projectId,
+    fetchFcoListFull,
+  );
 
 /**
  * Single-record fetch — used by the print route, where the caller knows the
@@ -271,36 +271,25 @@ export const fcoListFullQueryOptions = (projectId: number | null) =>
  */
 export const fetchFco = createServerFn({ method: "GET" })
   .inputValidator(parseIdScalar)
-  .handler(async ({ data: id }): Promise<FcoItem> => {
-    const row = await prisma.fieldChangeOrder.findUniqueOrThrow({
-      where: { id },
+  .handler(({ data }): Promise<FcoItem> =>
+    fetchRecordById(prisma.fieldChangeOrder, data, {
       include: {
         linkedCvr: { select: { id: true, cvrNumber: true, title: true } },
         linkedRfi: { select: { id: true, rfiNumber: true, subject: true } },
       },
-    });
-    await requireProjectAccess(row.projectId);
-    return toItem(row);
-  });
+      map: toItem,
+    }),
+  );
 
 export const fcoQueryOptions = (id: number | null) =>
-  queryOptions({
-    queryKey: qk.fcoLog.single(id),
-    queryFn: (): Promise<FcoItem | null> =>
-      id === null ? Promise.resolve(null) : fetchFco({ data: id }),
-    enabled: id !== null,
-  });
+  recordQueryOptions(qk.fcoLog.single(id), id, fetchFco);
 
 export const fcoListQueryOptions = (projectId: number | null) =>
-  queryOptions({
-    queryKey: qk.fcoLog.list(projectId),
-    queryFn: (): Promise<FcoListItem[]> =>
-      projectId === null
-        ? Promise.resolve([])
-        : fetchFcoList({ data: projectId }),
-    enabled: projectId !== null,
-    staleTime: 30 * 1000,
-  });
+  projectScopedListQueryOptions(
+    qk.fcoLog.list(projectId),
+    projectId,
+    fetchFcoList,
+  );
 
 export type UpsertFcoInput = {
   id?: number;

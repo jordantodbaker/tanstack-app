@@ -1,9 +1,17 @@
-import { queryOptions, type QueryClient } from "@tanstack/react-query";
+import { type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { qk } from "~/lib/query-keys";
 import { serializeDate } from "~/lib/serialize";
 import { invalidateEntityRecordQueries } from "~/lib/invalidate";
+import {
+  fetchProjectScopedList,
+  fetchRecordById,
+} from "./entity-reads.server";
+import {
+  projectScopedListQueryOptions,
+  recordQueryOptions,
+} from "~/lib/query-options";
 import {
   parseIdInput,
   parseIdScalar,
@@ -156,26 +164,20 @@ const toListItem = (r: RfiListRow): RfiListItem => {
 
 export const fetchRfiList = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
-  .handler(async ({ data: projectId }): Promise<RfiListItem[]> => {
-    await requireProjectAccess(projectId);
-    const rows = await prisma.rfi.findMany({
-      where: { projectId },
+  .handler(({ data }): Promise<RfiListItem[]> =>
+    fetchProjectScopedList(prisma.rfi, data, {
       select: LIST_SELECT,
       orderBy: [{ initiatedAt: "desc" }],
-    });
-    return rows.map(toListItem);
-  });
+      map: toListItem,
+    }),
+  );
 
 export const rfiListQueryOptions = (projectId: number | null) =>
-  queryOptions({
-    queryKey: qk.rfis.list(projectId),
-    queryFn: (): Promise<RfiListItem[]> =>
-      projectId === null
-        ? Promise.resolve([])
-        : fetchRfiList({ data: projectId }),
-    enabled: projectId !== null,
-    staleTime: 30 * 1000,
-  });
+  projectScopedListQueryOptions(
+    qk.rfis.list(projectId),
+    projectId,
+    fetchRfiList,
+  );
 
 /**
  * Full list — every column. Triggered by the CSV export button on click so
@@ -183,26 +185,20 @@ export const rfiListQueryOptions = (projectId: number | null) =>
  */
 export const fetchRfiListFull = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
-  .handler(async ({ data: projectId }): Promise<RfiItem[]> => {
-    await requireProjectAccess(projectId);
-    const rows = await prisma.rfi.findMany({
-      where: { projectId },
+  .handler(({ data }): Promise<RfiItem[]> =>
+    fetchProjectScopedList(prisma.rfi, data, {
       include: linkedFcosInclude,
       orderBy: [{ initiatedAt: "desc" }],
-    });
-    return rows.map(toItem);
-  });
+      map: toItem,
+    }),
+  );
 
 export const rfiListFullQueryOptions = (projectId: number | null) =>
-  queryOptions({
-    queryKey: qk.rfis.full(projectId),
-    queryFn: (): Promise<RfiItem[]> =>
-      projectId === null
-        ? Promise.resolve([])
-        : fetchRfiListFull({ data: projectId }),
-    enabled: projectId !== null,
-    staleTime: 30 * 1000,
-  });
+  projectScopedListQueryOptions(
+    qk.rfis.full(projectId),
+    projectId,
+    fetchRfiListFull,
+  );
 
 /**
  * Single-record fetch — used by the print route (a follow-up phase) and any
@@ -211,22 +207,15 @@ export const rfiListFullQueryOptions = (projectId: number | null) =>
  */
 export const fetchRfi = createServerFn({ method: "GET" })
   .inputValidator(parseIdScalar)
-  .handler(async ({ data: id }): Promise<RfiItem> => {
-    const row = await prisma.rfi.findUniqueOrThrow({
-      where: { id },
+  .handler(({ data }): Promise<RfiItem> =>
+    fetchRecordById(prisma.rfi, data, {
       include: linkedFcosInclude,
-    });
-    await requireProjectAccess(row.projectId);
-    return toItem(row);
-  });
+      map: toItem,
+    }),
+  );
 
 export const rfiQueryOptions = (id: number | null) =>
-  queryOptions({
-    queryKey: qk.rfis.single(id),
-    queryFn: (): Promise<RfiItem | null> =>
-      id === null ? Promise.resolve(null) : fetchRfi({ data: id }),
-    enabled: id !== null,
-  });
+  recordQueryOptions(qk.rfis.single(id), id, fetchRfi);
 
 export type UpsertRfiInput = {
   id?: number;

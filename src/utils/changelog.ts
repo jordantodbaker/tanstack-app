@@ -1,9 +1,17 @@
-import { queryOptions, type QueryClient } from "@tanstack/react-query";
+import { type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { qk } from "~/lib/query-keys";
 import { serializeDate } from "~/lib/serialize";
 import { invalidateEntityRecordQueries } from "~/lib/invalidate";
+import {
+  fetchProjectScopedList,
+  fetchRecordById,
+} from "./entity-reads.server";
+import {
+  projectScopedListQueryOptions,
+  recordQueryOptions,
+} from "~/lib/query-options";
 import {
   parseIdInput,
   parseIdScalar,
@@ -11,11 +19,7 @@ import {
   parseTransitionInput,
   parseUpsertChangeLog,
 } from "~/lib/validators";
-import {
-  assertProjectAccess,
-  requireProjectAccess,
-  resolveCurrentUser,
-} from "./users.server";
+import { assertProjectAccess, resolveCurrentUser } from "./users.server";
 import {
   diffFields,
   recordCreate,
@@ -223,51 +227,39 @@ const toListItem = (r: ChangeLogListRow): ChangeLogListItem => ({
 
 export const fetchChangeLogList = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
-  .handler(async ({ data: projectId }): Promise<ChangeLogListItem[]> => {
-    await requireProjectAccess(projectId);
-    const rows = await prisma.changeLog.findMany({
-      where: { projectId },
+  .handler(({ data }): Promise<ChangeLogListItem[]> =>
+    fetchProjectScopedList(prisma.changeLog, data, {
       select: LIST_SELECT,
       orderBy: [{ requestedAt: "desc" }],
-    });
-    return rows.map(toListItem);
-  });
+      map: toListItem,
+    }),
+  );
 
 export const changeLogListQueryOptions = (projectId: number | null) =>
-  queryOptions({
-    queryKey: qk.changeLog.list(projectId),
-    queryFn: (): Promise<ChangeLogListItem[]> =>
-      projectId === null
-        ? Promise.resolve([])
-        : fetchChangeLogList({ data: projectId }),
-    enabled: projectId !== null,
-    staleTime: 30 * 1000,
-  });
+  projectScopedListQueryOptions(
+    qk.changeLog.list(projectId),
+    projectId,
+    fetchChangeLogList,
+  );
 
 /**
  * Full list — every column. Triggered by the CSV export button on click.
  */
 export const fetchChangeLogListFull = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
-  .handler(async ({ data: projectId }): Promise<ChangeLogItem[]> => {
-    await requireProjectAccess(projectId);
-    const rows = await prisma.changeLog.findMany({
-      where: { projectId },
+  .handler(({ data }): Promise<ChangeLogItem[]> =>
+    fetchProjectScopedList(prisma.changeLog, data, {
       orderBy: [{ requestedAt: "desc" }],
-    });
-    return rows.map(toItem);
-  });
+      map: toItem,
+    }),
+  );
 
 export const changeLogListFullQueryOptions = (projectId: number | null) =>
-  queryOptions({
-    queryKey: qk.changeLog.full(projectId),
-    queryFn: (): Promise<ChangeLogItem[]> =>
-      projectId === null
-        ? Promise.resolve([])
-        : fetchChangeLogListFull({ data: projectId }),
-    enabled: projectId !== null,
-    staleTime: 30 * 1000,
-  });
+  projectScopedListQueryOptions(
+    qk.changeLog.full(projectId),
+    projectId,
+    fetchChangeLogListFull,
+  );
 
 /**
  * Single-CVR fetcher used by the printable detail view (`/changelog/print/$id`).
@@ -275,25 +267,28 @@ export const changeLogListFullQueryOptions = (projectId: number | null) =>
  * print URL directly (bookmarked, emailed, etc.) so it has no caching beyond
  * React Query defaults.
  */
+/** Single-record row → `ChangeLogDetail`: the scalar `toItem` shape plus the
+ *  cost-buildup lines. CVR's single fetch is the one entity whose record shape
+ *  differs from its full-list shape. */
+type ChangeLogDetailRow = ChangeLogRow & {
+  lineItems: Parameters<typeof toLineItemDto>[0][];
+};
+const toDetail = (row: ChangeLogDetailRow): ChangeLogDetail => {
+  const { lineItems, ...scalar } = row;
+  return { ...toItem(scalar), lineItems: lineItems.map(toLineItemDto) };
+};
+
 export const fetchChangeLog = createServerFn({ method: "GET" })
   .inputValidator(parseIdScalar)
-  .handler(async ({ data: id }): Promise<ChangeLogDetail> => {
-    const row = await prisma.changeLog.findUniqueOrThrow({
-      where: { id },
+  .handler(({ data }): Promise<ChangeLogDetail> =>
+    fetchRecordById(prisma.changeLog, data, {
       include: { lineItems: { orderBy: { position: "asc" } } },
-    });
-    await requireProjectAccess(row.projectId);
-    const { lineItems, ...scalar } = row;
-    return { ...toItem(scalar), lineItems: lineItems.map(toLineItemDto) };
-  });
+      map: toDetail,
+    }),
+  );
 
 export const changeLogQueryOptions = (id: number | null) =>
-  queryOptions({
-    queryKey: qk.changeLog.single(id),
-    queryFn: (): Promise<ChangeLogDetail | null> =>
-      id === null ? Promise.resolve(null) : fetchChangeLog({ data: id }),
-    enabled: id !== null,
-  });
+  recordQueryOptions(qk.changeLog.single(id), id, fetchChangeLog);
 
 export type UpsertChangeLogInput = {
   id?: number;

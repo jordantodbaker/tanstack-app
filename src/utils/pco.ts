@@ -4,6 +4,14 @@ import { prisma } from "../server/db";
 import { qk } from "~/lib/query-keys";
 import { serializeDate } from "~/lib/serialize";
 import { invalidateEntityRecordQueries } from "~/lib/invalidate";
+import {
+  fetchProjectScopedList,
+  fetchRecordById,
+} from "./entity-reads.server";
+import {
+  projectScopedListQueryOptions,
+  recordQueryOptions,
+} from "~/lib/query-options";
 import { z } from "zod";
 import {
   Id,
@@ -206,71 +214,52 @@ const toListItem = (r: PcoListRow): PcoListItem => {
 
 export const fetchPcoList = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
-  .handler(async ({ data: projectId }): Promise<PcoListItem[]> => {
-    await requireProjectAccess(projectId);
-    const rows = await prisma.pco.findMany({
-      where: { projectId },
+  .handler(({ data }): Promise<PcoListItem[]> =>
+    fetchProjectScopedList(prisma.pco, data, {
       select: LIST_SELECT,
       orderBy: [{ createdAt: "desc" }],
-    });
-    return rows.map(toListItem);
-  });
+      map: toListItem,
+    }),
+  );
 
 export const pcoListQueryOptions = (projectId: number | null) =>
-  queryOptions({
-    queryKey: qk.pcos.list(projectId),
-    queryFn: (): Promise<PcoListItem[]> =>
-      projectId === null
-        ? Promise.resolve([])
-        : fetchPcoList({ data: projectId }),
-    enabled: projectId !== null,
-    staleTime: 30 * 1000,
-  });
+  projectScopedListQueryOptions(
+    qk.pcos.list(projectId),
+    projectId,
+    fetchPcoList,
+  );
 
 /**
  * Full list — every column. Triggered by the CSV export button on click.
  */
 export const fetchPcoListFull = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
-  .handler(async ({ data: projectId }): Promise<PcoItem[]> => {
-    await requireProjectAccess(projectId);
-    const rows = await prisma.pco.findMany({
-      where: { projectId },
+  .handler(({ data }): Promise<PcoItem[]> =>
+    fetchProjectScopedList(prisma.pco, data, {
       include: linkedCvrsInclude,
       orderBy: [{ createdAt: "desc" }],
-    });
-    return rows.map(toItem);
-  });
+      map: toItem,
+    }),
+  );
 
 export const pcoListFullQueryOptions = (projectId: number | null) =>
-  queryOptions({
-    queryKey: qk.pcos.full(projectId),
-    queryFn: (): Promise<PcoItem[]> =>
-      projectId === null
-        ? Promise.resolve([])
-        : fetchPcoListFull({ data: projectId }),
-    enabled: projectId !== null,
-    staleTime: 30 * 1000,
-  });
+  projectScopedListQueryOptions(
+    qk.pcos.full(projectId),
+    projectId,
+    fetchPcoListFull,
+  );
 
 export const fetchPco = createServerFn({ method: "GET" })
   .inputValidator(parseIdScalar)
-  .handler(async ({ data: id }): Promise<PcoItem> => {
-    const row = await prisma.pco.findUniqueOrThrow({
-      where: { id },
+  .handler(({ data }): Promise<PcoItem> =>
+    fetchRecordById(prisma.pco, data, {
       include: linkedCvrsInclude,
-    });
-    await requireProjectAccess(row.projectId);
-    return toItem(row);
-  });
+      map: toItem,
+    }),
+  );
 
 export const pcoQueryOptions = (id: number | null) =>
-  queryOptions({
-    queryKey: qk.pcos.single(id),
-    queryFn: (): Promise<PcoItem | null> =>
-      id === null ? Promise.resolve(null) : fetchPco({ data: id }),
-    enabled: id !== null,
-  });
+  recordQueryOptions(qk.pcos.single(id), id, fetchPco);
 
 /**
  * CVRs eligible to be attached to a PCO — APPROVED or EXECUTED status,

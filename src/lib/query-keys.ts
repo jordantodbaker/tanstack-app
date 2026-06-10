@@ -30,21 +30,29 @@ export const qk = {
     list: (projectId: number | null) => ["fcoLog", projectId] as const,
     full: (projectId: number | null) => ["fcoLog", "full", projectId] as const,
     single: (id: number | null) => ["fcoLog", "single", id] as const,
+    /** Prefix match — busts every cached single-FCO record regardless of id. */
+    singleAll: () => ["fcoLog", "single"] as const,
   },
   rfis: {
     list: (projectId: number | null) => ["rfis", projectId] as const,
     full: (projectId: number | null) => ["rfis", "full", projectId] as const,
     single: (id: number | null) => ["rfis", "single", id] as const,
+    /** Prefix match — busts every cached single-RFI record regardless of id. */
+    singleAll: () => ["rfis", "single"] as const,
   },
   trends: {
     list: (projectId: number | null) => ["trends", projectId] as const,
     full: (projectId: number | null) => ["trends", "full", projectId] as const,
     single: (id: number | null) => ["trends", "single", id] as const,
+    /** Prefix match — busts every cached single-Trend record regardless of id. */
+    singleAll: () => ["trends", "single"] as const,
   },
   pcos: {
     list: (projectId: number | null) => ["pcos", projectId] as const,
     full: (projectId: number | null) => ["pcos", "full", projectId] as const,
     single: (id: number | null) => ["pcos", "single", id] as const,
+    /** Prefix match — busts every cached single-PCO record regardless of id. */
+    singleAll: () => ["pcos", "single"] as const,
     eligibleCvrs: (
       projectId: number | null,
       currentPcoId: number | null,

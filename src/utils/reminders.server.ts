@@ -1,4 +1,5 @@
 import { prisma } from "../server/db";
+import { serializeDate } from "~/lib/serialize";
 import {
   type ChangeStatus,
   type ChangeLogItem,
@@ -42,9 +43,6 @@ type FcoScalarRow = Awaited<
   ReturnType<typeof prisma.fieldChangeOrder.findMany>
 >[number];
 type RfiScalarRow = Awaited<ReturnType<typeof prisma.rfi.findMany>>[number];
-
-const serializeDate = (d: Date | null): string | null =>
-  d === null ? null : d.toISOString();
 
 // Mirrors the private `toItem` in `changelog.ts`. Duplicated here to keep the
 // cron path independent of the (auth-gated) server-fn surface.

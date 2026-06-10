@@ -13,6 +13,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
+import { useListFilters } from "~/lib/use-list-filters";
 import {
   trendListQueryOptions,
   trendListFullQueryOptions,
@@ -119,14 +120,14 @@ function TrendLogPage() {
   });
 
   const { q } = Route.useSearch();
-  const [search, setSearch] = React.useState(q ?? "");
-  // Re-seed when navigated here with a new `q` (cross-entity nav remounts, so
-  // the initializer covers that; this covers same-route re-navigation).
-  React.useEffect(() => {
-    if (q !== undefined) setSearch(q);
-  }, [q]);
-  const [statusFilter, setStatusFilter] = React.useState<"" | TrendStatus>("");
-  const [disciplineFilter, setDisciplineFilter] = React.useState("");
+  const {
+    search,
+    setSearch,
+    statusFilter,
+    setStatusFilter,
+    disciplineFilter,
+    setDisciplineFilter,
+  } = useListFilters<TrendStatus>(q);
 
   // Slim list payload drops `description` / `reasonNarrative` / `notes`;
   // search by trend #, title, initiator, and area covers the common cases.

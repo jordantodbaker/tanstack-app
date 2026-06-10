@@ -54,9 +54,10 @@ import {
   TabsTrigger,
   TabsContent,
 } from "~/components/ui/tabs";
-import { AuditTimeline } from "~/components/AuditTimeline";
-import { Attachments } from "~/components/Attachments";
-import { Comments } from "~/components/Comments";
+import {
+  EntityAuxTabTriggers,
+  EntityAuxTabPanels,
+} from "~/components/EntityDialog/EntityAuxTabs";
 import { useFormDialog } from "~/lib/use-form-dialog";
 import { useSelectedProject } from "~/lib/selected-project";
 import { areasByProjectQueryOptions } from "~/utils/areas";
@@ -412,9 +413,7 @@ function ChangelogDialogBody({
                 Cost Buildup
                 {hasLineItems ? ` (${form.lineItems.length})` : ""}
               </TabsTrigger>
-              <TabsTrigger value="attachments">Attachments</TabsTrigger>
-              <TabsTrigger value="comments">Comments</TabsTrigger>
-              <TabsTrigger value="history">History</TabsTrigger>
+              <EntityAuxTabTriggers />
             </TabsList>
             {/* Single scroll region shared by every panel — its fixed flex
                 height is what keeps the dialog from resizing per tab. */}
@@ -683,27 +682,11 @@ function ChangelogDialogBody({
                 onRemove={removeLine}
               />
             </TabsContent>
-            <TabsContent value="attachments" className="mt-3">
-              <Attachments
-                entityType="ChangeLog"
-                entityId={initial?.id ?? null}
-                projectId={initial?.projectId ?? null}
-              />
-            </TabsContent>
-            <TabsContent value="comments" className="mt-3">
-              <Comments
-                entityType="ChangeLog"
-                entityId={initial?.id ?? null}
-                projectId={initial?.projectId ?? null}
-              />
-            </TabsContent>
-            <TabsContent value="history" className="mt-3">
-              <AuditTimeline
-                entityType="ChangeLog"
-                entityId={initial?.id ?? null}
-                projectId={initial?.projectId ?? null}
-              />
-            </TabsContent>
+            <EntityAuxTabPanels
+              entityType="ChangeLog"
+              entityId={initial?.id ?? null}
+              projectId={initial?.projectId ?? null}
+            />
             </div>
           </Tabs>
 

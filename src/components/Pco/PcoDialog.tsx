@@ -30,9 +30,10 @@ import {
   TabsTrigger,
   TabsContent,
 } from "~/components/ui/tabs";
-import { AuditTimeline } from "~/components/AuditTimeline";
-import { Attachments } from "~/components/Attachments";
-import { Comments } from "~/components/Comments";
+import {
+  EntityAuxTabTriggers,
+  EntityAuxTabPanels,
+} from "~/components/EntityDialog/EntityAuxTabs";
 
 type FormState = Omit<UpsertPcoInput, "projectId">;
 
@@ -233,9 +234,7 @@ function PcoDialogBody({
               <TabsTrigger value="cvrs">
                 CVRs ({form.linkedCvrIds.length})
               </TabsTrigger>
-              <TabsTrigger value="attachments">Attachments</TabsTrigger>
-              <TabsTrigger value="comments">Comments</TabsTrigger>
-              <TabsTrigger value="history">History</TabsTrigger>
+              <EntityAuxTabTriggers />
             </TabsList>
 
             <TabsContent value="details" className="space-y-4 mt-3">
@@ -582,27 +581,11 @@ function PcoDialogBody({
               )}
             </TabsContent>
 
-            <TabsContent value="attachments" className="mt-3">
-              <Attachments
-                entityType="Pco"
-                entityId={initial?.id ?? null}
-                projectId={initial?.projectId ?? null}
-              />
-            </TabsContent>
-            <TabsContent value="comments" className="mt-3">
-              <Comments
-                entityType="Pco"
-                entityId={initial?.id ?? null}
-                projectId={initial?.projectId ?? null}
-              />
-            </TabsContent>
-            <TabsContent value="history" className="mt-3">
-              <AuditTimeline
-                entityType="Pco"
-                entityId={initial?.id ?? null}
-                projectId={initial?.projectId ?? null}
-              />
-            </TabsContent>
+            <EntityAuxTabPanels
+              entityType="Pco"
+              entityId={initial?.id ?? null}
+              projectId={initial?.projectId ?? null}
+            />
           </Tabs>
 
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">

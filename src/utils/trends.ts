@@ -2,6 +2,8 @@ import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { qk } from "~/lib/query-keys";
+import { serializeDate } from "~/lib/serialize";
+import { invalidateEntityRecordQueries } from "~/lib/invalidate";
 import {
   parseIdInput,
   parseIdScalar,
@@ -90,9 +92,6 @@ export type TrendItem = TrendListItem & {
 };
 
 type TrendScalarRow = Awaited<ReturnType<typeof prisma.trend.findMany>>[number];
-
-const serializeDate = (d: Date | null): string | null =>
-  d === null ? null : d.toISOString();
 
 const toItem = (r: TrendScalarRow): TrendItem => ({
   ...r,
@@ -559,8 +558,11 @@ export function invalidateTrendQueries(
   queryClient: QueryClient,
   projectId: number | null,
 ): void {
-  queryClient.invalidateQueries({ queryKey: qk.trends.list(projectId) });
-  queryClient.invalidateQueries({ queryKey: qk.trends.full(projectId) });
+  invalidateEntityRecordQueries(queryClient, {
+    list: qk.trends.list(projectId),
+    full: qk.trends.full(projectId),
+    singleAll: qk.trends.singleAll(),
+  });
   // EVM caches fold trend forecast contribution into their roll-ups, so they
   // must drop on every trend mutation. `periodWithEvm` is a prefix-match bust
   // because we don't know which periodIds are cached for this project.

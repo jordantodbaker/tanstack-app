@@ -5,6 +5,7 @@ import { Plus, Search } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
+import { useListFilters } from "~/lib/use-list-filters";
 import {
   changeLogListQueryOptions,
   changeLogListFullQueryOptions,
@@ -94,16 +95,14 @@ function ChangelogPage() {
   });
 
   const { q } = Route.useSearch();
-  const [search, setSearch] = React.useState(q ?? "");
-  // Re-seed when navigated here with a new `q` (cross-entity nav remounts, so
-  // the initializer covers that; this covers same-route re-navigation).
-  React.useEffect(() => {
-    if (q !== undefined) setSearch(q);
-  }, [q]);
-  const [statusFilter, setStatusFilter] = React.useState<"" | ChangeStatus>(
-    "",
-  );
-  const [disciplineFilter, setDisciplineFilter] = React.useState("");
+  const {
+    search,
+    setSearch,
+    statusFilter,
+    setStatusFilter,
+    disciplineFilter,
+    setDisciplineFilter,
+  } = useListFilters<ChangeStatus>(q);
 
   // Slim list payload drops `description` / `notes` / `reasonCode`;
   // search by CVR #, title, originator, approver, CBS, area covers the

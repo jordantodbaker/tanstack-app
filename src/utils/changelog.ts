@@ -2,6 +2,8 @@ import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { qk } from "~/lib/query-keys";
+import { serializeDate } from "~/lib/serialize";
+import { invalidateEntityRecordQueries } from "~/lib/invalidate";
 import {
   parseIdInput,
   parseIdScalar,
@@ -133,9 +135,6 @@ export type ChangeLogItem = ChangeLogListItem & {
 export type ChangeLogDetail = ChangeLogItem & {
   lineItems: CvrLineItemDto[];
 };
-
-const serializeDate = (d: Date | null): string | null =>
-  d === null ? null : d.toISOString();
 
 /** Prisma row → serialized DTO for a cost-buildup line. */
 const toLineItemDto = (r: {
@@ -548,12 +547,11 @@ export function invalidateChangeLogQueries(
   queryClient: QueryClient,
   projectId: number | null,
 ): void {
-  queryClient.invalidateQueries({ queryKey: qk.changeLog.list(projectId) });
-  queryClient.invalidateQueries({ queryKey: qk.changeLog.full(projectId) });
-  // Single-record cache the edit dialog fills its form from. Without this, a
-  // reopened dialog serves the pre-save record (e.g. missing the cost-buildup
-  // line you just added) until a hard refresh. Prefix-matches every cached id.
-  queryClient.invalidateQueries({ queryKey: qk.changeLog.singleAll() });
+  invalidateEntityRecordQueries(queryClient, {
+    list: qk.changeLog.list(projectId),
+    full: qk.changeLog.full(projectId),
+    singleAll: qk.changeLog.singleAll(),
+  });
   // PCO and FCO dialogs read the CVR option list; both must drop on any CVR
   // mutation so the dropdown picks up new/renamed CVRs without a hard refresh.
   queryClient.invalidateQueries({ queryKey: qk.changeLog.cvrOptions(projectId) });

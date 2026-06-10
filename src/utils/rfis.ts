@@ -2,6 +2,8 @@ import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { qk } from "~/lib/query-keys";
+import { serializeDate } from "~/lib/serialize";
+import { invalidateEntityRecordQueries } from "~/lib/invalidate";
 import {
   parseIdInput,
   parseIdScalar,
@@ -70,9 +72,6 @@ export type RfiItem = RfiListItem & {
   question: string;
   response: string;
 };
-
-const serializeDate = (d: Date | null): string | null =>
-  d === null ? null : d.toISOString();
 
 /** Include used by both list and single-record fetches to populate `linkedFcos`. */
 const linkedFcosInclude = {
@@ -516,7 +515,10 @@ export function invalidateRfiQueries(
   queryClient: QueryClient,
   projectId: number | null,
 ): void {
-  queryClient.invalidateQueries({ queryKey: qk.rfis.list(projectId) });
-  queryClient.invalidateQueries({ queryKey: qk.rfis.full(projectId) });
+  invalidateEntityRecordQueries(queryClient, {
+    list: qk.rfis.list(projectId),
+    full: qk.rfis.full(projectId),
+    singleAll: qk.rfis.singleAll(),
+  });
   queryClient.invalidateQueries({ queryKey: qk.dashboardSummary(projectId) });
 }

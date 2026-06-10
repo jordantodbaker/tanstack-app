@@ -53,9 +53,10 @@ import {
   TabsTrigger,
   TabsContent,
 } from "~/components/ui/tabs";
-import { AuditTimeline } from "~/components/AuditTimeline";
-import { Attachments } from "~/components/Attachments";
-import { Comments } from "~/components/Comments";
+import {
+  EntityAuxTabTriggers,
+  EntityAuxTabPanels,
+} from "~/components/EntityDialog/EntityAuxTabs";
 
 const DISCIPLINE_OPTIONS = disciplines
   .filter((d) => d.l1Codes && d.l1Codes.length > 0)
@@ -459,9 +460,7 @@ function FcoDialogBody({
           <Tabs defaultValue="details" className="w-full">
             <TabsList>
               <TabsTrigger value="details">Details</TabsTrigger>
-              <TabsTrigger value="attachments">Attachments</TabsTrigger>
-              <TabsTrigger value="comments">Comments</TabsTrigger>
-              <TabsTrigger value="history">History</TabsTrigger>
+              <EntityAuxTabTriggers />
             </TabsList>
             <TabsContent value="details" className="space-y-4 mt-3">
 
@@ -765,37 +764,23 @@ function FcoDialogBody({
           </Labeled>
 
             </TabsContent>
-            <TabsContent value="attachments" className="mt-3 space-y-4">
-              <Labeled
-                label="External link"
-                help="Optional — link to an external doc store (Procore, SharePoint, etc.) when the source of truth lives outside this app."
-              >
-                <Input
-                  value={form.photosUrl}
-                  placeholder="https://..."
-                  onChange={(e) => update("photosUrl", e.target.value)}
-                />
-              </Labeled>
-              <Attachments
-                entityType="FieldChangeOrder"
-                entityId={initial?.id ?? null}
-                projectId={initial?.projectId ?? null}
-              />
-            </TabsContent>
-            <TabsContent value="comments" className="mt-3">
-              <Comments
-                entityType="FieldChangeOrder"
-                entityId={initial?.id ?? null}
-                projectId={initial?.projectId ?? null}
-              />
-            </TabsContent>
-            <TabsContent value="history" className="mt-3">
-              <AuditTimeline
-                entityType="FieldChangeOrder"
-                entityId={initial?.id ?? null}
-                projectId={initial?.projectId ?? null}
-              />
-            </TabsContent>
+            <EntityAuxTabPanels
+              entityType="FieldChangeOrder"
+              entityId={initial?.id ?? null}
+              projectId={initial?.projectId ?? null}
+              attachmentsExtra={
+                <Labeled
+                  label="External link"
+                  help="Optional — link to an external doc store (Procore, SharePoint, etc.) when the source of truth lives outside this app."
+                >
+                  <Input
+                    value={form.photosUrl}
+                    placeholder="https://..."
+                    onChange={(e) => update("photosUrl", e.target.value)}
+                  />
+                </Labeled>
+              }
+            />
           </Tabs>
 
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">

@@ -40,9 +40,10 @@ import {
   TabsTrigger,
   TabsContent,
 } from "~/components/ui/tabs";
-import { AuditTimeline } from "~/components/AuditTimeline";
-import { Attachments } from "~/components/Attachments";
-import { Comments } from "~/components/Comments";
+import {
+  EntityAuxTabTriggers,
+  EntityAuxTabPanels,
+} from "~/components/EntityDialog/EntityAuxTabs";
 
 const DISCIPLINE_OPTIONS = disciplines
   .filter((d) => d.l1Codes && d.l1Codes.length > 0)
@@ -334,9 +335,7 @@ function RfiDialogBody({
           <Tabs defaultValue="details" className="w-full">
             <TabsList>
               <TabsTrigger value="details">Details</TabsTrigger>
-              <TabsTrigger value="attachments">Attachments</TabsTrigger>
-              <TabsTrigger value="comments">Comments</TabsTrigger>
-              <TabsTrigger value="history">History</TabsTrigger>
+              <EntityAuxTabTriggers />
             </TabsList>
             <TabsContent value="details" className="space-y-4 mt-3">
               {/* Identity */}
@@ -562,27 +561,11 @@ function RfiDialogBody({
                 </Labeled>
               </fieldset>
             </TabsContent>
-            <TabsContent value="attachments" className="mt-3">
-              <Attachments
-                entityType="Rfi"
-                entityId={initial?.id ?? null}
-                projectId={initial?.projectId ?? null}
-              />
-            </TabsContent>
-            <TabsContent value="comments" className="mt-3">
-              <Comments
-                entityType="Rfi"
-                entityId={initial?.id ?? null}
-                projectId={initial?.projectId ?? null}
-              />
-            </TabsContent>
-            <TabsContent value="history" className="mt-3">
-              <AuditTimeline
-                entityType="Rfi"
-                entityId={initial?.id ?? null}
-                projectId={initial?.projectId ?? null}
-              />
-            </TabsContent>
+            <EntityAuxTabPanels
+              entityType="Rfi"
+              entityId={initial?.id ?? null}
+              projectId={initial?.projectId ?? null}
+            />
           </Tabs>
 
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">

@@ -1,6 +1,8 @@
 import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
+import { serializeDate } from "~/lib/serialize";
+import { invalidateEntityRecordQueries } from "~/lib/invalidate";
 import { qk } from "~/lib/query-keys";
 import {
   parseIdInput,
@@ -128,9 +130,6 @@ export type FcoItem = FcoListItem & {
   notes: string;
   photosUrl: string;
 };
-
-const serializeDate = (d: Date | null): string | null =>
-  d === null ? null : d.toISOString();
 
 /** Prisma scalar row, derived from the client so it tracks schema changes. */
 type FcoScalarRow = Awaited<
@@ -641,7 +640,10 @@ export function invalidateFcoQueries(
   queryClient: QueryClient,
   projectId: number | null,
 ): void {
-  queryClient.invalidateQueries({ queryKey: qk.fcoLog.list(projectId) });
-  queryClient.invalidateQueries({ queryKey: qk.fcoLog.full(projectId) });
+  invalidateEntityRecordQueries(queryClient, {
+    list: qk.fcoLog.list(projectId),
+    full: qk.fcoLog.full(projectId),
+    singleAll: qk.fcoLog.singleAll(),
+  });
   queryClient.invalidateQueries({ queryKey: qk.dashboardSummary(projectId) });
 }

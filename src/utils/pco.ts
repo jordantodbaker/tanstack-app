@@ -2,6 +2,8 @@ import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { qk } from "~/lib/query-keys";
+import { serializeDate } from "~/lib/serialize";
+import { invalidateEntityRecordQueries } from "~/lib/invalidate";
 import { z } from "zod";
 import {
   Id,
@@ -114,9 +116,6 @@ export type PcoItem = PcoListItem & {
 
 type PcoScalarRow = Awaited<ReturnType<typeof prisma.pco.findMany>>[number];
 type PcoWithLinks = PcoScalarRow & { linkedCvrs: PcoLinkedCvrSummary[] };
-
-const serializeDate = (d: Date | null): string | null =>
-  d === null ? null : d.toISOString();
 
 const linkedCvrsInclude = {
   linkedCvrs: {
@@ -674,8 +673,11 @@ export function invalidatePcoQueries(
   queryClient: QueryClient,
   projectId: number | null,
 ): void {
-  queryClient.invalidateQueries({ queryKey: qk.pcos.list(projectId) });
-  queryClient.invalidateQueries({ queryKey: qk.pcos.full(projectId) });
+  invalidateEntityRecordQueries(queryClient, {
+    list: qk.pcos.list(projectId),
+    full: qk.pcos.full(projectId),
+    singleAll: qk.pcos.singleAll(),
+  });
   queryClient.invalidateQueries({ queryKey: qk.changeLog.list(projectId) });
   queryClient.invalidateQueries({ queryKey: qk.changeLog.full(projectId) });
   // The "eligible CVRs" picker depends on which CVRs are unlinked vs.

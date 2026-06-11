@@ -572,6 +572,10 @@ const EMPTY_TOTALS: ProjectFefRowTotals = {
   laborHoursByL1: {},
   quantityByL1: {},
   materialsByL1: {},
+  laborByL1L2: {},
+  laborHoursByL1L2: {},
+  quantityByL1L2: {},
+  materialsByL1L2: {},
   byArea: [],
   invalidByDiscipline: {},
 };

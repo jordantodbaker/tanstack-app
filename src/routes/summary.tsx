@@ -86,6 +86,27 @@ const INDIRECTS = [
   "Other Services",
 ];
 
+// Administration & Home Office rows. "Home Office Construction Support" sums
+// all of L1 012 (via the `byL1` bucket). The remaining rows are the L2 sub-
+// accounts of L1 013 ("Project Costs") and sum at that level + their children
+// (via the `byL1L2` bucket, keyed by the de-dashed 5-char L1+L2 prefix).
+const SUMMARY_ADMIN_HOME_OFFICE: {
+  label: string;
+  uom: string;
+  /** Sum the whole L1 division (3-char). */
+  l1?: string;
+  /** Sum one L2 sub-account (5-char de-dashed L1+L2, e.g. "01310"). */
+  l1l2?: string;
+}[] = [
+  { label: "Home Office Construction Support", uom: "HR", l1: "012" },
+  { label: "Bonds", uom: "LS", l1l2: "01310" },
+  { label: "Insurance", uom: "LS", l1l2: "01320" },
+  { label: "Finance Charges", uom: "LS", l1l2: "01330" },
+  { label: "Taxes", uom: "LS", l1l2: "01340" },
+  { label: "Permitting", uom: "LS", l1l2: "01350" },
+  { label: "Licenses", uom: "LS", l1l2: "01360" },
+];
+
 // Each Engineering & Design row is a parent CBS item (L1 code) under the
 // Engineering discipline. Values are summarized from the Engineering Field
 // Estimate by L1 bucket (`…ByL1`), the same way the Disciplines section rolls
@@ -365,6 +386,24 @@ function SummaryPage() {
       };
     },
   );
+  const adminHomeOfficeRows: SummaryRow[] = SUMMARY_ADMIN_HOME_OFFICE.map(
+    ({ label, uom, l1, l1l2 }) => {
+      const totals = l1
+        ? {
+            material: dbTotals?.materialsByL1[l1] ?? 0,
+            labor: dbTotals?.laborByL1[l1] ?? 0,
+            hours: dbTotals?.laborHoursByL1[l1] ?? 0,
+            quantity: dbTotals?.quantityByL1[l1] ?? 0,
+          }
+        : {
+            material: dbTotals?.materialsByL1L2[l1l2 ?? ""] ?? 0,
+            labor: dbTotals?.laborByL1L2[l1l2 ?? ""] ?? 0,
+            hours: dbTotals?.laborHoursByL1L2[l1l2 ?? ""] ?? 0,
+            quantity: dbTotals?.quantityByL1L2[l1l2 ?? ""] ?? 0,
+          };
+      return buildSummaryRow(label, uom, totals);
+    },
+  );
   const ticRows = makeRows(TIC_BEFORE_CONTINGENCY);
 
   return (
@@ -375,6 +414,7 @@ function SummaryPage() {
         defaultValue={[
           "disciplines",
           "indirects",
+          "admin-home-office",
           "engineering-design",
           "tic-before-contingency",
         ]}
@@ -392,6 +432,12 @@ function SummaryPage() {
           <AccordionTrigger>Indirects</AccordionTrigger>
           <AccordionContent>
             <SummaryTable rows={indirectRows} />
+          </AccordionContent>
+        </AccordionItem>
+        <AccordionItem value="admin-home-office">
+          <AccordionTrigger>Administration &amp; Home Office</AccordionTrigger>
+          <AccordionContent>
+            <SummaryTable rows={adminHomeOfficeRows} />
           </AccordionContent>
         </AccordionItem>
         <AccordionItem value="engineering-design">

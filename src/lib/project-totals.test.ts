@@ -533,4 +533,41 @@ describe("accumulateProjectTotals", () => {
       expect(totals.materialsByL1).toEqual({ "024": 100 });
     });
   });
+
+  describe("L1+L2 (sub-account) buckets", () => {
+    it("buckets TAKE_OFF by the de-dashed 5-char L1+L2 prefix", () => {
+      const totals = accumulateProjectTotals([
+        row({
+          section: "TAKE_OFF",
+          discipline: "administration",
+          cbsCode: "013-10-2000-00-O",
+          laborHours: "8",
+          laborRate: "100",
+        }),
+        row({
+          section: "TAKE_OFF",
+          discipline: "administration",
+          cbsCode: "013-20-0000-00-O",
+          laborHours: "5",
+          laborRate: "100",
+        }),
+      ]);
+      expect(totals.laborByL1L2).toEqual({ "01310": 800, "01320": 500 });
+      // The L1 bucket still rolls both L2s up under "013".
+      expect(totals.laborByL1).toEqual({ "013": 1300 });
+    });
+
+    it("buckets MATERIALS by L1+L2", () => {
+      const totals = accumulateProjectTotals([
+        row({
+          section: "MATERIALS",
+          discipline: "012",
+          cbsCode: "012-80-3000-00-O",
+          quantity: "2",
+          materialCost: "50",
+        }),
+      ]);
+      expect(totals.materialsByL1L2).toEqual({ "01280": 100 });
+    });
+  });
 });

@@ -29,6 +29,16 @@ export type ProjectFefRowTotals = {
   laborHoursByL1: Record<string, number>;
   quantityByL1: Record<string, number>;
   materialsByL1: Record<string, number>;
+  /**
+   * Finer than `…ByL1`: keyed by the de-dashed L1+L2 prefix (5 chars, e.g.
+   * "01310" = L1 013 / L2 10). Lets the Summary break an L1 division into its
+   * L2 sub-accounts — used by the Administration & Home Office section to split
+   * L1 013 into Bonds / Insurance / Taxes / etc.
+   */
+  laborByL1L2: Record<string, number>;
+  laborHoursByL1L2: Record<string, number>;
+  quantityByL1L2: Record<string, number>;
+  materialsByL1L2: Record<string, number>;
   byArea: AreaTotals[];
   /**
    * Count of Take Off rows per discipline that have user-entered data but
@@ -109,6 +119,10 @@ export function accumulateProjectTotals(
   const laborHoursByL1: Record<string, number> = {};
   const quantityByL1: Record<string, number> = {};
   const materialsByL1: Record<string, number> = {};
+  const laborByL1L2: Record<string, number> = {};
+  const laborHoursByL1L2: Record<string, number> = {};
+  const quantityByL1L2: Record<string, number> = {};
+  const materialsByL1L2: Record<string, number> = {};
   const invalidByDiscipline: Record<string, number> = {};
   // Area roll-up — mutable Maps during accumulation, serialized to a stable
   // array at the end.
@@ -155,6 +169,11 @@ export function accumulateProjectTotals(
     const l1 =
       (r.cbsCode && r.cbsCode.length >= 3 ? r.cbsCode.slice(0, 3) : "") ||
       (/^\d{3}/.test(r.discipline) ? r.discipline.slice(0, 3) : "");
+    // L1+L2 bucket: the de-dashed 5-char prefix, e.g. "013-10-0000-00-O" →
+    // "01310". Used by the Summary to split an L1 division into its L2
+    // sub-accounts; requires a cbsCode (no discipline fallback at L2 level).
+    const deDashedCode = r.cbsCode ? r.cbsCode.replace(/-/g, "") : "";
+    const l1l2 = deDashedCode.length >= 5 ? deDashedCode.slice(0, 5) : "";
     const areaId = r.area ?? "";
 
     if (r.section === "TAKE_OFF") {
@@ -165,6 +184,9 @@ export function accumulateProjectTotals(
       if (l1 && labor > 0) {
         laborByL1[l1] = (laborByL1[l1] ?? 0) + labor;
       }
+      if (l1l2 && labor > 0) {
+        laborByL1L2[l1l2] = (laborByL1L2[l1l2] ?? 0) + labor;
+      }
       if (digit && Number.isFinite(hours) && hours > 0) {
         laborHoursByDigit[digit] =
           (laborHoursByDigit[digit] ?? 0) + hours;
@@ -172,11 +194,17 @@ export function accumulateProjectTotals(
       if (l1 && Number.isFinite(hours) && hours > 0) {
         laborHoursByL1[l1] = (laborHoursByL1[l1] ?? 0) + hours;
       }
+      if (l1l2 && Number.isFinite(hours) && hours > 0) {
+        laborHoursByL1L2[l1l2] = (laborHoursByL1L2[l1l2] ?? 0) + hours;
+      }
       if (digit && Number.isFinite(qty) && qty > 0) {
         quantityByDigit[digit] = (quantityByDigit[digit] ?? 0) + qty;
       }
       if (l1 && Number.isFinite(qty) && qty > 0) {
         quantityByL1[l1] = (quantityByL1[l1] ?? 0) + qty;
+      }
+      if (l1l2 && Number.isFinite(qty) && qty > 0) {
+        quantityByL1L2[l1l2] = (quantityByL1L2[l1l2] ?? 0) + qty;
       }
       // Invalid = the user started the row but the Total Cost isn't computable.
       // Hand the whole row through — the predicate iterates every free-text
@@ -200,6 +228,9 @@ export function accumulateProjectTotals(
         const matValue = qty * matCost;
         materialsByDigit[digit] = (materialsByDigit[digit] ?? 0) + matValue;
         if (l1) materialsByL1[l1] = (materialsByL1[l1] ?? 0) + matValue;
+        if (l1l2) {
+          materialsByL1L2[l1l2] = (materialsByL1L2[l1l2] ?? 0) + matValue;
+        }
         if (matValue > 0) bumpAreaDirect(areaId, digit, matValue);
       }
     }
@@ -224,6 +255,10 @@ export function accumulateProjectTotals(
     laborHoursByL1,
     quantityByL1,
     materialsByL1,
+    laborByL1L2,
+    laborHoursByL1L2,
+    quantityByL1L2,
+    materialsByL1L2,
     byArea,
     invalidByDiscipline,
   };

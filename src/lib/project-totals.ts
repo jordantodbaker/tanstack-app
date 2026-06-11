@@ -19,6 +19,16 @@ export type ProjectFefRowTotals = {
   craftSupportLabor: number;
   craftSupportLaborHours: number;
   materialsByDigit: Record<string, number>;
+  /**
+   * Same four direct-cost metrics as the `*ByDigit` maps, but keyed by the full
+   * 3-char L1 (parent CBS) code, e.g. "022". Lets a single digit-bucket (all of
+   * digit "0", say) be broken down by its parent CBS items — the Summary page's
+   * Engineering & Design section reads `…ByL1["022".."028"]`.
+   */
+  laborByL1: Record<string, number>;
+  laborHoursByL1: Record<string, number>;
+  quantityByL1: Record<string, number>;
+  materialsByL1: Record<string, number>;
   byArea: AreaTotals[];
   /**
    * Count of Take Off rows per discipline that have user-entered data but
@@ -91,6 +101,10 @@ export function accumulateProjectTotals(
   let craftSupportLabor = 0;
   let craftSupportLaborHours = 0;
   const materialsByDigit: Record<string, number> = {};
+  const laborByL1: Record<string, number> = {};
+  const laborHoursByL1: Record<string, number> = {};
+  const quantityByL1: Record<string, number> = {};
+  const materialsByL1: Record<string, number> = {};
   const invalidByDiscipline: Record<string, number> = {};
   // Area roll-up — mutable Maps during accumulation, serialized to a stable
   // array at the end.
@@ -131,6 +145,12 @@ export function accumulateProjectTotals(
       DISCIPLINE_TO_DIGIT[r.discipline] ||
       (r.discipline && /^\d/.test(r.discipline) ? r.discipline[0] : "");
     const digit = (r.cbsCode && r.cbsCode[0]) || disciplineFallback || "";
+    // Parent CBS (L1) bucket: the first 3 chars of the cbsCode, e.g.
+    // "022-05-1000-00-L" → "022". MATERIALS rows store the L1 code directly in
+    // `discipline`, so fall back to that when it's a 3-digit code.
+    const l1 =
+      (r.cbsCode && r.cbsCode.length >= 3 ? r.cbsCode.slice(0, 3) : "") ||
+      (/^\d{3}/.test(r.discipline) ? r.discipline.slice(0, 3) : "");
     const areaId = r.area ?? "";
 
     if (r.section === "TAKE_OFF") {
@@ -138,12 +158,21 @@ export function accumulateProjectTotals(
         laborByDigit[digit] = (laborByDigit[digit] ?? 0) + labor;
         bumpAreaDirect(areaId, digit, labor);
       }
+      if (l1 && labor > 0) {
+        laborByL1[l1] = (laborByL1[l1] ?? 0) + labor;
+      }
       if (digit && Number.isFinite(hours) && hours > 0) {
         laborHoursByDigit[digit] =
           (laborHoursByDigit[digit] ?? 0) + hours;
       }
+      if (l1 && Number.isFinite(hours) && hours > 0) {
+        laborHoursByL1[l1] = (laborHoursByL1[l1] ?? 0) + hours;
+      }
       if (digit && Number.isFinite(qty) && qty > 0) {
         quantityByDigit[digit] = (quantityByDigit[digit] ?? 0) + qty;
+      }
+      if (l1 && Number.isFinite(qty) && qty > 0) {
+        quantityByL1[l1] = (quantityByL1[l1] ?? 0) + qty;
       }
       // Invalid = the user started the row but the Total Cost isn't computable.
       // Hand the whole row through — the predicate iterates every free-text
@@ -166,6 +195,7 @@ export function accumulateProjectTotals(
       if (Number.isFinite(qty) && Number.isFinite(matCost) && digit) {
         const matValue = qty * matCost;
         materialsByDigit[digit] = (materialsByDigit[digit] ?? 0) + matValue;
+        if (l1) materialsByL1[l1] = (materialsByL1[l1] ?? 0) + matValue;
         if (matValue > 0) bumpAreaDirect(areaId, digit, matValue);
       }
     }
@@ -186,6 +216,10 @@ export function accumulateProjectTotals(
     craftSupportLabor,
     craftSupportLaborHours,
     materialsByDigit,
+    laborByL1,
+    laborHoursByL1,
+    quantityByL1,
+    materialsByL1,
     byArea,
     invalidByDiscipline,
   };

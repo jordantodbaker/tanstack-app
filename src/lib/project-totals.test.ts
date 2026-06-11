@@ -471,4 +471,66 @@ describe("accumulateProjectTotals", () => {
       expect(totals.invalidByDiscipline).toEqual({ piping: 1 });
     });
   });
+
+  describe("L1 (parent CBS) buckets", () => {
+    it("buckets TAKE_OFF labor/hours/quantity by the 3-char L1 of the cbsCode", () => {
+      const totals = accumulateProjectTotals([
+        row({
+          section: "TAKE_OFF",
+          discipline: "engineering",
+          cbsCode: "022-10-1000-00-L",
+          quantity: "5",
+          laborHours: "10",
+          laborRate: "100",
+        }),
+        row({
+          section: "TAKE_OFF",
+          discipline: "engineering",
+          cbsCode: "024-05-0000-00-L",
+          quantity: "2",
+          laborHours: "4",
+          laborRate: "150",
+        }),
+      ]);
+      expect(totals.laborByL1).toEqual({ "022": 1000, "024": 600 });
+      expect(totals.laborHoursByL1).toEqual({ "022": 10, "024": 4 });
+      expect(totals.quantityByL1).toEqual({ "022": 5, "024": 2 });
+    });
+
+    it("separates parent CBS items that share a leading digit", () => {
+      // 022 and 024 are both digit "0" — the coarse digit bucket lumps them,
+      // but the L1 buckets keep them distinct (what the Engineering section needs).
+      const totals = accumulateProjectTotals([
+        row({
+          section: "TAKE_OFF",
+          discipline: "engineering",
+          cbsCode: "022-10-1000-00-L",
+          laborHours: "10",
+          laborRate: "100",
+        }),
+        row({
+          section: "TAKE_OFF",
+          discipline: "engineering",
+          cbsCode: "024-05-0000-00-L",
+          laborHours: "4",
+          laborRate: "150",
+        }),
+      ]);
+      expect(totals.laborByDigit).toEqual({ "0": 1600 });
+      expect(totals.laborByL1).toEqual({ "022": 1000, "024": 600 });
+    });
+
+    it("buckets MATERIALS by L1 using the discipline code when cbsCode is empty", () => {
+      const totals = accumulateProjectTotals([
+        row({
+          section: "MATERIALS",
+          discipline: "024",
+          cbsCode: "",
+          quantity: "2",
+          materialCost: "50",
+        }),
+      ]);
+      expect(totals.materialsByL1).toEqual({ "024": 100 });
+    });
+  });
 });

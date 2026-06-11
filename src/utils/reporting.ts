@@ -520,6 +520,10 @@ const EMPTY_TOTALS: ProjectFefRowTotals = {
   craftSupportLabor: 0,
   craftSupportLaborHours: 0,
   materialsByDigit: {},
+  laborByL1: {},
+  laborHoursByL1: {},
+  quantityByL1: {},
+  materialsByL1: {},
   byArea: [],
   invalidByDiscipline: {},
 };

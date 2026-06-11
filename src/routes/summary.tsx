@@ -85,14 +85,18 @@ const INDIRECTS = [
   "Other Services",
 ];
 
-const ENGINEERING_DESIGN = [
-  "Engineering Support",
-  "Engineering (Combined / Cross Phase)",
-  "Concept Design / Feasibility (Class 5-4)",
-  "Preliminary Design - FEED (Class 4-3)",
-  "Detailed Engineering (Class 2-1)",
-  "Construction Support",
-  "Commissioning & Startup Support",
+// Each Engineering & Design row is a parent CBS item (L1 code) under the
+// Engineering discipline. Values are summarized from the Engineering Field
+// Estimate by L1 bucket (`…ByL1`), the same way the Disciplines section rolls
+// up by digit. `020` is the section parent itself, so it isn't a row.
+const SUMMARY_ENGINEERING: { label: string; uom: string; l1: string }[] = [
+  { label: "Engineering Support", uom: "HR", l1: "022" },
+  { label: "Engineering (Combined / Cross Phase)", uom: "HR", l1: "023" },
+  { label: "Concept Design / Feasibility (Class 5-4)", uom: "HR", l1: "024" },
+  { label: "Preliminary Design - FEED (Class 4-3)", uom: "HR", l1: "025" },
+  { label: "Detailed Engineering (Class 2-1)", uom: "HR", l1: "026" },
+  { label: "Construction Support", uom: "HR", l1: "027" },
+  { label: "Commissioning & Startup Support", uom: "HR", l1: "028" },
 ];
 
 const TIC_BEFORE_CONTINGENCY = ["Bond", "Insurance", "B&O Tax", "Contingency"];
@@ -295,7 +299,29 @@ function SummaryPage() {
     return row;
   });
 
-  const engineeringRows = makeRows(ENGINEERING_DESIGN);
+  const engineeringRows: SummaryRow[] = SUMMARY_ENGINEERING.map(
+    ({ label, uom, l1 }) => {
+      const materialTotal = dbTotals?.materialsByL1[l1] ?? 0;
+      const laborTotal = dbTotals?.laborByL1[l1] ?? 0;
+      const laborHours = dbTotals?.laborHoursByL1[l1] ?? 0;
+      const quantity = dbTotals?.quantityByL1[l1] ?? 0;
+      const unitRate =
+        quantity > 0 && laborHours > 0 ? laborHours / quantity : 0;
+      const rate =
+        laborHours > 0 && laborTotal > 0 ? laborTotal / laborHours : 0;
+      return {
+        description: label,
+        ...emptyRow(),
+        uom,
+        qty: quantity > 0 ? formatMoney(quantity) : "",
+        unitRate: unitRate > 0 ? formatMoney(unitRate) : "",
+        hrs: laborHours > 0 ? formatMoney(laborHours) : "",
+        rate: rate > 0 ? formatMoney(rate) : "",
+        material: materialTotal > 0 ? formatMoney(materialTotal) : "",
+        totalLabor: laborTotal > 0 ? formatMoney(laborTotal) : "",
+      };
+    },
+  );
   const ticRows = makeRows(TIC_BEFORE_CONTINGENCY);
 
   return (

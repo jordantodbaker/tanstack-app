@@ -14,6 +14,7 @@ import {
 } from "~/lib/project-totals";
 import { z } from "zod";
 import {
+  Id,
   ProjectId,
   parseIdInput,
   parseIdScalar,
@@ -22,6 +23,14 @@ import {
 
 const CreateSnapshotSchema = z.object({
   projectId: ProjectId,
+  label: z.string().trim().min(1),
+  notes: z.string().optional(),
+});
+
+// Only the metadata is editable — the frozen `fefRows` / `basisInputs` / `totals`
+// stay immutable, so this never touches the captured estimate itself.
+const UpdateSnapshotSchema = z.object({
+  id: Id,
   label: z.string().trim().min(1),
   notes: z.string().optional(),
 });
@@ -269,6 +278,55 @@ export const deleteSnapshot = createServerFn({ method: "POST" })
     }
     await prisma.estimateSnapshot.delete({ where: { id: data.id } });
     return { ok: true };
+  });
+
+export const updateSnapshot = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => UpdateSnapshotSchema.parse(input))
+  .handler(async ({ data }): Promise<EstimateSnapshotItem> => {
+    const actor = await resolveCurrentUser();
+    if (!actor) throw new Error("Unauthorized: not signed in");
+    const snap = await prisma.estimateSnapshot.findUniqueOrThrow({
+      where: { id: data.id },
+      select: { projectId: true, createdById: true },
+    });
+    await assertProjectAccess(actor, snap.projectId);
+    // Same rule as delete: project access lets you view a snapshot, but only
+    // the creator or an administrator can change its label / notes.
+    const isAdmin = hasAtLeastRole(actor.role, "ADMINISTRATOR");
+    const isCreator =
+      snap.createdById !== null && snap.createdById === actor.id;
+    if (!isAdmin && !isCreator) {
+      throw new Error(
+        "Only the snapshot creator or an administrator can edit this snapshot.",
+      );
+    }
+    const updated = await prisma.estimateSnapshot.update({
+      where: { id: data.id },
+      data: { label: data.label.trim(), notes: data.notes?.trim() ?? "" },
+      select: {
+        id: true,
+        label: true,
+        notes: true,
+        rowCount: true,
+        createdById: true,
+        createdAt: true,
+      },
+    });
+    const creator =
+      updated.createdById !== null
+        ? await prisma.user.findUnique({
+            where: { id: updated.createdById },
+            select: { email: true },
+          })
+        : null;
+    return {
+      id: updated.id,
+      label: updated.label,
+      notes: updated.notes,
+      rowCount: updated.rowCount,
+      createdByEmail: creator?.email ?? null,
+      createdAt: updated.createdAt.toISOString(),
+    };
   });
 
 export const snapshotsQueryOptions = (projectId: number | null) =>

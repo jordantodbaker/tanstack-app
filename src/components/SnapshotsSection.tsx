@@ -4,13 +4,14 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Camera, Trash2 } from "lucide-react";
+import { Camera, Pencil, Trash2 } from "lucide-react";
 import { useSelectedProject } from "~/lib/selected-project";
 import {
   createSnapshot,
   deleteSnapshot,
   snapshotDetailQueryOptions,
   snapshotsQueryOptions,
+  updateSnapshot,
   type EstimateSnapshotItem,
 } from "~/utils/snapshots";
 import { projectFefRowTotalsQueryOptions } from "~/utils/projectTotals";
@@ -121,7 +122,7 @@ function SnapshotRow({
   const { data: currentUser } = useCurrentUser();
   const isAdmin = useIsAdmin();
   const isCreator = currentUser?.email === snapshot.createdByEmail;
-  const canDelete = isAdmin || isCreator;
+  const canManage = isAdmin || isCreator;
 
   const remove = useMutation({
     mutationFn: (id: number) => deleteSnapshot({ data: { id } }),
@@ -157,16 +158,19 @@ function SnapshotRow({
           {new Date(snapshot.createdAt).toLocaleString()}
         </td>
         <td className="px-3 py-2 text-right">
-          {canDelete && (
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={remove.isPending}
-              title="Delete snapshot"
-              className="text-red-600 hover:bg-red-50 hover:text-red-700 inline-flex h-7 w-7 items-center justify-center rounded-md"
-            >
-              <Trash2 className="size-3.5" />
-            </button>
+          {canManage && (
+            <div className="flex items-center justify-end gap-1">
+              <EditSnapshotDialog snapshot={snapshot} />
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={remove.isPending}
+                title="Delete snapshot"
+                className="text-red-600 hover:bg-red-50 hover:text-red-700 inline-flex h-7 w-7 items-center justify-center rounded-md"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </div>
           )}
         </td>
       </tr>
@@ -253,6 +257,123 @@ function CreateSnapshotDialog({ projectId }: { projectId: number }) {
               disabled={create.isPending || !label.trim()}
             >
               {create.isPending ? "Saving…" : "Create"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditSnapshotDialog({ snapshot }: { snapshot: EstimateSnapshotItem }) {
+  const [open, setOpen] = React.useState(false);
+  const [label, setLabel] = React.useState(snapshot.label);
+  const [notes, setNotes] = React.useState(snapshot.notes);
+  const queryClient = useQueryClient();
+  const { projectId } = useSelectedProject();
+
+  // Re-seed from the latest snapshot each time the dialog opens, so a stale
+  // draft from a prior open doesn't linger.
+  React.useEffect(() => {
+    if (open) {
+      setLabel(snapshot.label);
+      setNotes(snapshot.notes);
+    }
+  }, [open, snapshot.label, snapshot.notes]);
+
+  const update = useMutation({
+    mutationFn: () =>
+      updateSnapshot({
+        data: { id: snapshot.id, label: label.trim(), notes: notes.trim() },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["snapshots", projectId] });
+      // Detail cache has `staleTime: Infinity`, so it must be busted explicitly
+      // or a reopened detail dialog would show the old label/notes.
+      queryClient.invalidateQueries({ queryKey: ["snapshot", snapshot.id] });
+      setOpen(false);
+    },
+  });
+
+  function handleSave() {
+    if (!label.trim()) return;
+    update.mutate();
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          // Stop the click bubbling to the row, which is itself the trigger for
+          // the snapshot detail dialog.
+          onClick={(e) => e.stopPropagation()}
+          title="Edit label & notes"
+          className="text-slate-500 hover:bg-slate-100 hover:text-slate-700 inline-flex h-7 w-7 items-center justify-center rounded-md"
+        >
+          <Pencil className="size-3.5" />
+        </button>
+      </DialogTrigger>
+      <DialogContent
+        className="sm:max-w-md"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="space-y-4">
+          <div className="pr-8">
+            <h2 className="text-lg font-semibold text-slate-800">
+              Edit snapshot
+            </h2>
+            <p className="text-xs text-slate-500">
+              Update the label and notes. The captured estimate (FEF rows +
+              Basis) stays frozen.
+            </p>
+          </div>
+          <Labeled
+            label="Label"
+            help='e.g. "As-bid 2026-04-15" or "Rev 2 after RFI-042"'
+          >
+            <Input
+              autoFocus
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="As-bid"
+              maxLength={120}
+            />
+          </Labeled>
+          <Labeled
+            label="Notes"
+            help="Optional. Context for why this snapshot was taken."
+          >
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+              placeholder="Submitted to owner for review…"
+            />
+          </Labeled>
+          {update.isError && (
+            <p className="text-xs text-red-600">
+              {update.error instanceof Error
+                ? update.error.message
+                : "Could not update snapshot."}
+            </p>
+          )}
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+            <DialogClose asChild>
+              <Button
+                variant="outline"
+                type="button"
+                disabled={update.isPending}
+              >
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button
+              type="button"
+              onClick={handleSave}
+              disabled={update.isPending || !label.trim()}
+            >
+              {update.isPending ? "Saving…" : "Save"}
             </Button>
           </div>
         </div>

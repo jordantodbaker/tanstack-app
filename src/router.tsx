@@ -6,6 +6,14 @@ import { DefaultCatchBoundary } from './components/DefaultCatchBoundary'
 import { NotFound } from './components/NotFound'
 
 export function getRouter() {
+  // Initialize the browser Sentry SDK once, on the client only. `import.meta.env.SSR`
+  // is statically replaced by Vite, so the server build eliminates this whole branch —
+  // and with it the dynamic import, which keeps the `*.client.*` module out of the
+  // server graph (the framework's import-protection plugin forbids it there).
+  if (!import.meta.env.SSR) {
+    void import('./instrument.client').then((m) => m.initSentryClient())
+  }
+
   const queryClient = new QueryClient()
 
   const router = createRouter({

@@ -225,11 +225,26 @@ should be committed to the repo. The `.env` file is gitignored.
 | `BLOB_READ_WRITE_TOKEN` | Blob provider | File attachment R/W |
 | `NODE_ENV` | Platform | Must be `production` |
 
+### Optional — Sentry error tracking (wired up)
+
+Error tracking is integrated via `@sentry/tanstackstart-react`. It is a **no-op
+until a DSN is set**, so these are optional; set them to turn it on. Session
+Replay and performance tracing are intentionally **disabled** — Replay would
+record the on-screen contractor names / cost figures (see §10 data
+classification), so the integration captures errors only, with request bodies
+and server-fn inputs scrubbed before send ([sentry-options.ts](../src/lib/sentry-options.ts)).
+
+| Variable | Scope | Purpose |
+|---|---|---|
+| `SENTRY_DSN` | Server runtime | Server-side error capture (server functions, SSR) |
+| `VITE_SENTRY_DSN` | Client (build-time, public) | Browser error capture. Same DSN value; DSNs are not secrets |
+| `SENTRY_AUTH_TOKEN` | **Build only** | Enables source-map upload. Omit and you still get errors, just minified stack traces |
+| `SENTRY_ORG` / `SENTRY_PROJECT` | Build only | Org + project slugs for the source-map plugin |
+
 ### Optional / future
 
 | Variable | Purpose |
 |---|---|
-| `SENTRY_DSN` | Error tracking (not yet wired up; see §10) |
 | Email service credentials | Out-of-app notifications (not yet wired up) |
 
 ### Secret management

@@ -85,6 +85,18 @@ const INDIRECTS = [
   "Other Services",
 ];
 
+const ENGINEERING_DESIGN = [
+  "Engineering Support",
+  "Engineering (Combined / Cross Phase)",
+  "Concept Design / Feasibility (Class 5-4)",
+  "Preliminary Design - FEED (Class 4-3)",
+  "Detailed Engineering (Class 2-1)",
+  "Construction Support",
+  "Commissioning & Startup Support",
+];
+
+const TIC_BEFORE_CONTINGENCY = ["Bond", "Insurance", "B&O Tax", "Contingency"];
+
 const emptyRow = (): Omit<SummaryRow, "description"> => ({
   qty: "",
   uom: "",
@@ -283,10 +295,21 @@ function SummaryPage() {
     return row;
   });
 
+  const engineeringRows = makeRows(ENGINEERING_DESIGN);
+  const ticRows = makeRows(TIC_BEFORE_CONTINGENCY);
+
   return (
     <main className="p-4 space-y-4">
       <h1 className="text-2xl font-bold mb-4">Summary</h1>
-      <Accordion type="multiple" defaultValue={["disciplines", "indirects"]}>
+      <Accordion
+        type="multiple"
+        defaultValue={[
+          "disciplines",
+          "indirects",
+          "engineering-design",
+          "tic-before-contingency",
+        ]}
+      >
         <AccordionItem value="disciplines">
           <AccordionTrigger>Disciplines</AccordionTrigger>
           <AccordionContent>
@@ -300,6 +323,18 @@ function SummaryPage() {
           <AccordionTrigger>Indirects</AccordionTrigger>
           <AccordionContent>
             <SummaryTable rows={indirectRows} />
+          </AccordionContent>
+        </AccordionItem>
+        <AccordionItem value="engineering-design">
+          <AccordionTrigger>Engineering & Design</AccordionTrigger>
+          <AccordionContent>
+            <SummaryTable rows={engineeringRows} />
+          </AccordionContent>
+        </AccordionItem>
+        <AccordionItem value="tic-before-contingency">
+          <AccordionTrigger>TIC Before Contingency</AccordionTrigger>
+          <AccordionContent>
+            <SummaryTable rows={ticRows} />
           </AccordionContent>
         </AccordionItem>
       </Accordion>

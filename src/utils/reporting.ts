@@ -12,6 +12,11 @@ import {
   type ProjectFefRowTotals,
   type ProjectTotalsRow,
 } from "~/lib/project-totals";
+import {
+  DIGIT_TO_DISCIPLINE,
+  L1_TO_DISCIPLINE,
+  disciplinesData,
+} from "~/config/disciplines-data";
 import type { EvmMetrics } from "~/lib/evm";
 import { qk } from "~/lib/query-keys";
 import { z } from "zod";
@@ -76,6 +81,42 @@ export type ReportingPeriodItem = {
 // Re-export the pure type so existing consumers (route, dashboard card)
 // keep their `~/utils/reporting` import path unchanged.
 export type PeriodBucketRow = PurePeriodBucketRow;
+
+/** Discipline id → display label, for naming EVM buckets. */
+const disciplineLabelById: Record<string, string> = Object.fromEntries(
+  disciplinesData.map((d) => [d.id, d.summaryLabel ?? d.label]),
+);
+
+/**
+ * Aggregate a snapshot's L1 buckets into BAC per **discipline** — the EVM
+ * bucket scheme. Walks every L1 bucket and attributes its labor + materials to
+ * the owning discipline (`L1_TO_DISCIPLINE`), falling back to the digit's
+ * canonical discipline for any L1 not explicitly listed (so no cost is dropped).
+ * Using L1 (not the leading digit) is what lets Grout (29X) carry its own EVM
+ * bucket instead of folding into Concrete's digit "2".
+ */
+function bacByDiscipline(totals: ProjectFefRowTotals): Record<string, number> {
+  const out: Record<string, number> = {};
+  const add = (l1: string, amount: number) => {
+    if (amount === 0) return;
+    const disc = L1_TO_DISCIPLINE[l1] ?? DIGIT_TO_DISCIPLINE[l1[0]];
+    if (!disc) return;
+    out[disc] = (out[disc] ?? 0) + amount;
+  };
+  for (const [l1, v] of Object.entries(totals.laborByL1)) add(l1, v);
+  for (const [l1, v] of Object.entries(totals.materialsByL1)) add(l1, v);
+  return out;
+}
+
+/** A cached snapshot total is usable only if it carries the L1 buckets the
+ *  discipline aggregation needs; pre-`byL1` caches fall back to a recompute. */
+function hasL1Buckets(totals: unknown): totals is ProjectFefRowTotals {
+  return (
+    totals !== null &&
+    typeof totals === "object" &&
+    "laborByL1" in (totals as Record<string, unknown>)
+  );
+}
 
 export type PeriodWithEvm = {
   id: number;
@@ -321,10 +362,11 @@ export const fetchPeriodWithEvm = createServerFn({ method: "GET" })
     // (created before the `totals` column existed) fall through to the
     // recompute path. New snapshots never hit it.
     let baselineTotals: ProjectFefRowTotals;
-    if (period.baselineSnapshot.totals !== null) {
-      baselineTotals =
-        period.baselineSnapshot.totals as unknown as ProjectFefRowTotals;
+    if (hasL1Buckets(period.baselineSnapshot.totals)) {
+      baselineTotals = period.baselineSnapshot.totals;
     } else {
+      // Legacy (no cached totals) OR a pre-`byL1` cache — recompute from the
+      // frozen fefRows so the L1 buckets the discipline aggregation needs exist.
       const legacy = await prisma.estimateSnapshot.findUniqueOrThrow({
         where: { id: period.baselineSnapshot.id },
         select: { fefRows: true },
@@ -347,7 +389,7 @@ export const fetchPeriodWithEvm = createServerFn({ method: "GET" })
     // 4. Hand the loaded data to the pure helper for the per-bucket math.
     const dataDateIso = period.dataDate.toISOString();
     const { buckets: rows, total } = computePeriodEvm({
-      baselineTotals,
+      bacByBucket: bacByDiscipline(baselineTotals),
       revisionsByBucket,
       trendForecastByBucket,
       measurements: period.measurements,
@@ -355,6 +397,11 @@ export const fetchPeriodWithEvm = createServerFn({ method: "GET" })
       projectEndDate: period.project.endDate,
       dataDate: dataDateIso,
     });
+    // Name each discipline bucket for the UI (the pure layer leaves it blank).
+    const buckets = rows.map((r) => ({
+      ...r,
+      disciplineLabel: disciplineLabelById[r.bucket] ?? "",
+    }));
 
     return {
       id: period.id,
@@ -369,7 +416,7 @@ export const fetchPeriodWithEvm = createServerFn({ method: "GET" })
       projectEndDate: period.project.endDate
         ? period.project.endDate.toISOString()
         : null,
-      buckets: rows,
+      buckets,
       total,
     };
   });
@@ -470,7 +517,7 @@ export const fetchEvmTimeSeries = createServerFn({ method: "GET" })
     const missingTotalsIds = Array.from(
       new Set(
         periods
-          .filter((p) => p.baselineSnapshot.totals === null)
+          .filter((p) => !hasL1Buckets(p.baselineSnapshot.totals))
           .map((p) => p.baselineSnapshot.id),
       ),
     );
@@ -487,12 +534,13 @@ export const fetchEvmTimeSeries = createServerFn({ method: "GET" })
     }
 
     return periods.map((p) => {
-      const baselineTotals: ProjectFefRowTotals =
-        p.baselineSnapshot.totals !== null
-          ? (p.baselineSnapshot.totals as unknown as ProjectFefRowTotals)
-          : (legacyTotalsById.get(p.baselineSnapshot.id) ?? EMPTY_TOTALS);
+      const baselineTotals: ProjectFefRowTotals = hasL1Buckets(
+        p.baselineSnapshot.totals,
+      )
+        ? p.baselineSnapshot.totals
+        : (legacyTotalsById.get(p.baselineSnapshot.id) ?? EMPTY_TOTALS);
       const { total } = computePeriodEvm({
-        baselineTotals,
+        bacByBucket: bacByDiscipline(baselineTotals),
         revisionsByBucket,
         trendForecastByBucket,
         measurements: p.measurements,

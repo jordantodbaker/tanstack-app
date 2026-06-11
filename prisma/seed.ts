@@ -189,7 +189,7 @@ function loadCompositeRates() {
   return roles;
 }
 
-function loadCbsItems() {
+export function loadCbsItems() {
   const csvPath = join(__dirname, "data", "cbs.csv");
   const lines = readFileSync(csvPath, "utf-8").split(/\r?\n/);
 

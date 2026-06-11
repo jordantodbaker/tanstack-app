@@ -50,6 +50,10 @@ export const DISCIPLINE_TO_DIGIT: Record<string, string> = {
   demolition: "0",
   civil: "1",
   concrete: "2",
+  // Grout (29X) shares the leading digit with Concrete; this is only the
+  // cbsCode-less fallback — grout rows resolve their digit via their 29X
+  // cbsCode, and EVM buckets grout separately by L1 (see L1_TO_DISCIPLINE).
+  grout: "2",
   steel: "3",
   buildings: "4",
   equipment: "5",

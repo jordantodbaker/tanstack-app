@@ -511,7 +511,9 @@ function BucketRow({
   const m = row.metrics;
   return (
     <tr className="border-t border-slate-100">
-      <td className="px-2 py-1 font-mono text-slate-700">{row.bucket}</td>
+      <td className="px-2 py-1 font-medium text-slate-700">
+        {row.disciplineLabel || row.bucket}
+      </td>
       <td className="px-2 py-1 text-right tabular-nums">
         {formatCurrency(m.bac)}
       </td>

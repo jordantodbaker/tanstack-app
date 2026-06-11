@@ -20,7 +20,6 @@ import {
   timeLinearPv,
   type EvmMetrics,
 } from "./evm";
-import type { ProjectFefRowTotals } from "./project-totals";
 
 /** Subset of `PeriodMeasurement` the calc actually needs. */
 export type PeriodMeasurementInput = {
@@ -49,7 +48,10 @@ export type PeriodBucketRow = {
 };
 
 export type ComputePeriodEvmInput = {
-  baselineTotals: ProjectFefRowTotals;
+  /** Baseline BAC per bucket. The caller picks the bucket scheme (discipline
+   *  id today) and pre-aggregates the snapshot's totals into it — this pure
+   *  layer stays agnostic to both the totals shape and the bucket key. */
+  bacByBucket: Record<string, number>;
   /** Sum of APPROVED/EXECUTED CVR cost impacts attributed to each bucket. */
   revisionsByBucket: Record<string, number>;
   /** Probability-weighted pending-trend forecast attributed to each bucket
@@ -73,8 +75,7 @@ export function computePeriodEvm(input: ComputePeriodEvmInput): {
   const trendForecastByBucket = input.trendForecastByBucket ?? {};
   const buckets = Array.from(
     new Set<string>([
-      ...Object.keys(input.baselineTotals.laborByDigit),
-      ...Object.keys(input.baselineTotals.materialsByDigit),
+      ...Object.keys(input.bacByBucket),
       ...Object.keys(input.revisionsByBucket),
       ...Object.keys(trendForecastByBucket),
       ...measByBucket.keys(),
@@ -82,9 +83,7 @@ export function computePeriodEvm(input: ComputePeriodEvmInput): {
   ).sort();
 
   const rows: PeriodBucketRow[] = buckets.map((bucket) => {
-    const bac =
-      (input.baselineTotals.laborByDigit[bucket] ?? 0) +
-      (input.baselineTotals.materialsByDigit[bucket] ?? 0);
+    const bac = input.bacByBucket[bucket] ?? 0;
     const meas = measByBucket.get(bucket);
 
     // PV resolution: explicit override beats time-linear; time-linear

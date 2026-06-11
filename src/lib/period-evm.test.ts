@@ -4,28 +4,6 @@ import {
   type ComputePeriodEvmInput,
   type PeriodMeasurementInput,
 } from "./period-evm";
-import type { ProjectFefRowTotals } from "./project-totals";
-
-function totals(
-  overrides: Partial<ProjectFefRowTotals> = {},
-): ProjectFefRowTotals {
-  return {
-    laborByDigit: {},
-    laborHoursByDigit: {},
-    quantityByDigit: {},
-    craftSupportLabor: 0,
-    craftSupportLaborHours: 0,
-    materialsByDigit: {},
-    laborByL1: {},
-    laborHoursByL1: {},
-    quantityByL1: {},
-    materialsByL1: {},
-    byArea: [],
-    invalidByDiscipline: {},
-    ...overrides,
-  };
-}
-
 function meas(
   bucket: string,
   overrides: Partial<PeriodMeasurementInput> = {},
@@ -45,7 +23,7 @@ function input(
   overrides: Partial<ComputePeriodEvmInput> = {},
 ): ComputePeriodEvmInput {
   return {
-    baselineTotals: totals(),
+    bacByBucket: {},
     revisionsByBucket: {},
     measurements: [],
     projectStartDate: null,
@@ -62,7 +40,7 @@ describe("computePeriodEvm", () => {
       // The bucket should still surface with zero EV / AC.
       const { buckets } = computePeriodEvm(
         input({
-          baselineTotals: totals({ laborByDigit: { "6": 1000 } }),
+          bacByBucket: { "6": 1000 },
         }),
       );
       expect(buckets.map((b) => b.bucket)).toEqual(["6"]);
@@ -94,9 +72,7 @@ describe("computePeriodEvm", () => {
     it("sorts buckets alphabetically for stable output", () => {
       const { buckets } = computePeriodEvm(
         input({
-          baselineTotals: totals({
-            laborByDigit: { "7": 100, "1": 100, "6": 100 },
-          }),
+          bacByBucket: { "7": 100, "1": 100, "6": 100 },
         }),
       );
       expect(buckets.map((b) => b.bucket)).toEqual(["1", "6", "7"]);
@@ -104,14 +80,11 @@ describe("computePeriodEvm", () => {
   });
 
   describe("BAC composition", () => {
-    it("sums labor and materials per bucket for the BAC", () => {
+    it("uses the supplied per-bucket BAC verbatim", () => {
+      // Labor+materials summing now happens in the caller (bacByDiscipline);
+      // this layer just consumes the pre-aggregated BAC.
       const { buckets } = computePeriodEvm(
-        input({
-          baselineTotals: totals({
-            laborByDigit: { "6": 600 },
-            materialsByDigit: { "6": 400 },
-          }),
-        }),
+        input({ bacByBucket: { "6": 1000 } }),
       );
       expect(buckets[0].metrics.bac).toBe(1000);
     });
@@ -121,7 +94,7 @@ describe("computePeriodEvm", () => {
     it("uses plannedValueOverride when set (wins over time-linear)", () => {
       const { buckets } = computePeriodEvm(
         input({
-          baselineTotals: totals({ laborByDigit: { "6": 1000 } }),
+          bacByBucket: { "6": 1000 },
           measurements: [meas("6", { plannedValueOverride: 250 })],
           projectStartDate: "2026-01-01",
           projectEndDate: "2026-12-31",
@@ -136,7 +109,7 @@ describe("computePeriodEvm", () => {
       // Midpoint of 2026 → ~50% of $1000 BAC.
       const { buckets } = computePeriodEvm(
         input({
-          baselineTotals: totals({ laborByDigit: { "6": 1000 } }),
+          bacByBucket: { "6": 1000 },
           projectStartDate: "2026-01-01",
           projectEndDate: "2026-12-31",
           dataDate: "2026-07-02",
@@ -150,7 +123,7 @@ describe("computePeriodEvm", () => {
     it("uses pvSource='none' when no override and missing project dates", () => {
       const { buckets } = computePeriodEvm(
         input({
-          baselineTotals: totals({ laborByDigit: { "6": 1000 } }),
+          bacByBucket: { "6": 1000 },
           measurements: [meas("6", { percentComplete: 0.5 })],
           projectStartDate: null,
           projectEndDate: "2026-12-31",
@@ -167,7 +140,7 @@ describe("computePeriodEvm", () => {
       // We treat that as no signal rather than a real "zero plan."
       const { buckets } = computePeriodEvm(
         input({
-          baselineTotals: totals({ laborByDigit: { "6": 1000 } }),
+          bacByBucket: { "6": 1000 },
           projectStartDate: "2026-06-01",
           projectEndDate: "2026-12-31",
           dataDate: "2026-01-15",
@@ -182,7 +155,7 @@ describe("computePeriodEvm", () => {
     it("defaults to zero percent complete / zero AC when no measurement exists", () => {
       const { buckets } = computePeriodEvm(
         input({
-          baselineTotals: totals({ laborByDigit: { "6": 1000 } }),
+          bacByBucket: { "6": 1000 },
         }),
       );
       expect(buckets[0].percentComplete).toBe(0);
@@ -197,9 +170,7 @@ describe("computePeriodEvm", () => {
       // reflect the cost-weighted reality, not the average of bucket CPIs.
       const { total } = computePeriodEvm(
         input({
-          baselineTotals: totals({
-            laborByDigit: { "1": 100, "6": 900 },
-          }),
+          bacByBucket: { "1": 100, "6": 900 },
           measurements: [
             meas("1", { percentComplete: 1, actualCost: 150 }), // 50% over a $100 BAC
             meas("6", { percentComplete: 1, actualCost: 700 }), // 22% under a $900 BAC

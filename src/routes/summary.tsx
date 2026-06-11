@@ -9,6 +9,7 @@ import {
 } from "~/components/ui/accordion";
 import {
   disciplines,
+  disciplineById,
   SUMMARY_DISCIPLINES,
   type DisciplineConfig,
 } from "~/config/disciplines";
@@ -117,6 +118,40 @@ const emptyRow = (): Omit<SummaryRow, "description"> => ({
 function makeRows(descriptions: string[]): SummaryRow[] {
   return descriptions.map((d) => ({ description: d, ...emptyRow() }));
 }
+
+/** Build one Disciplines-section row from raw aggregate totals (digit- or L1-
+ *  sourced). Derives the unit-rate and rate the same way for every row. */
+function buildSummaryRow(
+  label: string,
+  uom: string,
+  totals: { material: number; labor: number; hours: number; quantity: number },
+  matched?: { id?: string; to?: string },
+): SummaryRow {
+  const { material, labor, hours, quantity } = totals;
+  const unitRate = quantity > 0 && hours > 0 ? hours / quantity : 0;
+  const rate = hours > 0 && labor > 0 ? labor / hours : 0;
+  return {
+    description: label,
+    ...emptyRow(),
+    uom,
+    qty: quantity > 0 ? formatMoney(quantity) : "",
+    unitRate: unitRate > 0 ? formatMoney(unitRate) : "",
+    hrs: hours > 0 ? formatMoney(hours) : "",
+    rate: rate > 0 ? formatMoney(rate) : "",
+    material: material > 0 ? formatMoney(material) : "",
+    totalLabor: labor > 0 ? formatMoney(labor) : "",
+    disciplineId: matched?.id,
+    disciplineTo: matched?.to,
+  };
+}
+
+/** Grout's L1 (parent CBS) codes — digit "2", broken out from Concrete. */
+const GROUT_L1_CODES = ["290", "291", "292", "293"];
+
+const sumL1 = (
+  map: Record<string, number> | undefined,
+  codes: string[],
+): number => codes.reduce((acc, c) => acc + (map?.[c] ?? 0), 0);
 
 function parseMoney(s: string): number {
   return parseFloat(s.replace(/,/g, ""));
@@ -245,37 +280,45 @@ function SummaryPage() {
     projectFefRowTotalsQueryOptions(projectId),
   );
 
-  const disciplineRows: SummaryRow[] = SUMMARY_DISCIPLINES.map(
-    ({ label, uom, digit }) => {
-      const materialTotal =
-        digit !== null ? (dbTotals?.materialsByDigit[digit] ?? 0) : 0;
-      const laborTotal =
-        digit !== null ? (dbTotals?.laborByDigit[digit] ?? 0) : 0;
-      const laborHours =
-        digit !== null ? (dbTotals?.laborHoursByDigit[digit] ?? 0) : 0;
-      const quantity =
-        digit !== null ? (dbTotals?.quantityByDigit[digit] ?? 0) : 0;
-      const unitRate =
-        quantity > 0 && laborHours > 0 ? laborHours / quantity : 0;
-      const rate = laborHours > 0 && laborTotal > 0 ? laborTotal / laborHours : 0;
-      // Rows like "Structural Steel Shop" / "Piping Shop" have no underlying
-      // discipline, so neither id nor route are set and no link renders.
-      const matched = disciplineBySummaryLabel[label];
-      return {
-        description: label,
-        ...emptyRow(),
+  // Grout (29X) shares leading digit "2" with Concrete, so it can't be a digit
+  // bucket — roll it up from the L1 buckets instead and carve it out of the
+  // Concrete digit-2 totals so it isn't double-counted.
+  const groutTotals = {
+    material: sumL1(dbTotals?.materialsByL1, GROUT_L1_CODES),
+    labor: sumL1(dbTotals?.laborByL1, GROUT_L1_CODES),
+    hours: sumL1(dbTotals?.laborHoursByL1, GROUT_L1_CODES),
+    quantity: sumL1(dbTotals?.quantityByL1, GROUT_L1_CODES),
+  };
+
+  const disciplineRows: SummaryRow[] = [];
+  for (const { label, uom, digit } of SUMMARY_DISCIPLINES) {
+    let material = digit !== null ? (dbTotals?.materialsByDigit[digit] ?? 0) : 0;
+    let labor = digit !== null ? (dbTotals?.laborByDigit[digit] ?? 0) : 0;
+    let hours = digit !== null ? (dbTotals?.laborHoursByDigit[digit] ?? 0) : 0;
+    let quantity = digit !== null ? (dbTotals?.quantityByDigit[digit] ?? 0) : 0;
+    if (digit === "2") {
+      material -= groutTotals.material;
+      labor -= groutTotals.labor;
+      hours -= groutTotals.hours;
+      quantity -= groutTotals.quantity;
+    }
+    // Rows like "Structural Steel Shop" / "Piping Shop" have no underlying
+    // discipline, so neither id nor route are set and no link renders.
+    disciplineRows.push(
+      buildSummaryRow(
+        label,
         uom,
-        qty: quantity > 0 ? formatMoney(quantity) : "",
-        unitRate: unitRate > 0 ? formatMoney(unitRate) : "",
-        hrs: laborHours > 0 ? formatMoney(laborHours) : "",
-        rate: rate > 0 ? formatMoney(rate) : "",
-        material: materialTotal > 0 ? formatMoney(materialTotal) : "",
-        totalLabor: laborTotal > 0 ? formatMoney(laborTotal) : "",
-        disciplineId: matched?.id,
-        disciplineTo: matched?.to,
-      };
-    },
-  );
+        { material, labor, hours, quantity },
+        disciplineBySummaryLabel[label],
+      ),
+    );
+    // Insert the Grout row immediately after Concrete.
+    if (digit === "2") {
+      disciplineRows.push(
+        buildSummaryRow("Grout", "HR", groutTotals, disciplineById["grout"]),
+      );
+    }
+  }
 
   const craftSupportTotal = dbTotals?.craftSupportLabor ?? 0;
   const craftSupportHours = dbTotals?.craftSupportLaborHours ?? 0;

@@ -43,7 +43,12 @@ export const disciplinesData: DisciplineData[] = [
     id: "administration",
     label: "Administration & Home Office",
     to: "/administration",
-    l1Codes: ["010", "012"],
+    // 013 ("Project Costs") covers Bonds / Insurance / Finance Charges /
+    // Taxes / Permitting / Licenses — surfaced as L2 sub-account rows on
+    // the Summary page. Listed here so its CBS items also show in the
+    // discipline's Take Off picker and roll back up under "administration"
+    // via the auto-derived `L1_TO_DISCIPLINE` reverse map.
+    l1Codes: ["010", "012", "013"],
   },
   {
     id: "engineering",

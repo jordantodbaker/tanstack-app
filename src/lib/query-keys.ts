@@ -12,47 +12,42 @@
  * stays predictable. Don't add untyped string keys here — if you need a new
  * key, give it a proper function.
  */
+
+/**
+ * The four list/full/single/singleAll keys every change-pipeline entity
+ * (CVR / FCO / RFI / Trend / PCO) shares. Generic over a literal `entity`
+ * string so each entity's `qk.<entity>.single(id)` keeps the precise tuple
+ * type `readonly ["fcoLog", "single", number | null]` (and so on) — narrower
+ * than `readonly [string, "single", number | null]`, which `useQuery` and
+ * `invalidateQueries` callers rely on for type-safe key matching.
+ *
+ * Per-entity extras (CVR's `cvrOptions`, PCO's `eligibleCvrs`) are spread
+ * alongside this at the callsite.
+ */
+function entityKeys<const E extends string>(entity: E) {
+  return {
+    list: (projectId: number | null) => [entity, projectId] as const,
+    full: (projectId: number | null) => [entity, "full", projectId] as const,
+    single: (id: number | null) => [entity, "single", id] as const,
+    /** Prefix match — busts every cached single-record entry regardless of id.
+     *  Used after a mutation so a reopened dialog refetches the fresh record
+     *  instead of serving a stale cache. */
+    singleAll: () => [entity, "single"] as const,
+  };
+}
+
 export const qk = {
   changeLog: {
-    list: (projectId: number | null) => ["changeLog", projectId] as const,
-    full: (projectId: number | null) =>
-      ["changeLog", "full", projectId] as const,
-    single: (id: number | null) => ["changeLog", "single", id] as const,
-    /** Prefix match — busts every cached single-CVR record regardless of id.
-     *  Used after a mutation so a reopened dialog refetches the fresh record
-     *  (e.g. newly-added cost-buildup lines) instead of serving a stale cache. */
-    singleAll: () => ["changeLog", "single"] as const,
+    ...entityKeys("changeLog"),
     /** CVR-picker dropdown used by the FCO dialog's "link existing CVR". */
     cvrOptions: (projectId: number | null) =>
       ["cvrOptions", projectId] as const,
   },
-  fcoLog: {
-    list: (projectId: number | null) => ["fcoLog", projectId] as const,
-    full: (projectId: number | null) => ["fcoLog", "full", projectId] as const,
-    single: (id: number | null) => ["fcoLog", "single", id] as const,
-    /** Prefix match — busts every cached single-FCO record regardless of id. */
-    singleAll: () => ["fcoLog", "single"] as const,
-  },
-  rfis: {
-    list: (projectId: number | null) => ["rfis", projectId] as const,
-    full: (projectId: number | null) => ["rfis", "full", projectId] as const,
-    single: (id: number | null) => ["rfis", "single", id] as const,
-    /** Prefix match — busts every cached single-RFI record regardless of id. */
-    singleAll: () => ["rfis", "single"] as const,
-  },
-  trends: {
-    list: (projectId: number | null) => ["trends", projectId] as const,
-    full: (projectId: number | null) => ["trends", "full", projectId] as const,
-    single: (id: number | null) => ["trends", "single", id] as const,
-    /** Prefix match — busts every cached single-Trend record regardless of id. */
-    singleAll: () => ["trends", "single"] as const,
-  },
+  fcoLog: entityKeys("fcoLog"),
+  rfis: entityKeys("rfis"),
+  trends: entityKeys("trends"),
   pcos: {
-    list: (projectId: number | null) => ["pcos", projectId] as const,
-    full: (projectId: number | null) => ["pcos", "full", projectId] as const,
-    single: (id: number | null) => ["pcos", "single", id] as const,
-    /** Prefix match — busts every cached single-PCO record regardless of id. */
-    singleAll: () => ["pcos", "single"] as const,
+    ...entityKeys("pcos"),
     eligibleCvrs: (
       projectId: number | null,
       currentPcoId: number | null,

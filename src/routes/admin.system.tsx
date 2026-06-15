@@ -7,7 +7,11 @@ import {
   runScheduledRemindersFn,
   type RunRemindersResult,
 } from "~/utils/reminders";
-import { triggerServerSentrySmoke } from "~/utils/sentry-smoke";
+import {
+  getServerSentryStatus,
+  triggerServerSentrySmoke,
+  type SentryServerStatus,
+} from "~/utils/sentry-smoke";
 import { logger } from "~/lib/logger";
 
 /**
@@ -120,11 +124,19 @@ function SentrySmokeTestCard() {
   const [lastFired, setLastFired] = React.useState<"server" | "client" | null>(
     null,
   );
+  const [serverStatus, setServerStatus] = React.useState<
+    SentryServerStatus | null
+  >(null);
 
   const serverSmoke = useMutation({
     mutationFn: () => triggerServerSentrySmoke({ data: {} }),
     // onError is expected — the server fn throws by design.
     onSettled: () => setLastFired("server"),
+  });
+
+  const checkStatus = useMutation({
+    mutationFn: () => getServerSentryStatus(),
+    onSuccess: (status) => setServerStatus(status),
   });
 
   function fireClientSmoke() {
@@ -161,6 +173,16 @@ function SentrySmokeTestCard() {
           <Button
             size="sm"
             variant="outline"
+            onClick={() => checkStatus.mutate()}
+            disabled={checkStatus.isPending}
+          >
+            {checkStatus.isPending
+              ? "Checking…"
+              : "Check server Sentry status"}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
             onClick={() => serverSmoke.mutate()}
             disabled={serverSmoke.isPending}
           >
@@ -172,6 +194,50 @@ function SentrySmokeTestCard() {
             Throw client-side error
           </Button>
         </div>
+
+        {serverStatus && (
+          <div
+            className={`rounded border px-3 py-2 ${
+              serverStatus.dsnEnvSet && serverStatus.clientEnabled
+                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                : "border-amber-200 bg-amber-50 text-amber-900"
+            }`}
+          >
+            <div className="font-medium mb-1">Server Sentry status</div>
+            <ul className="space-y-0.5 text-xs">
+              <li>
+                <span className="font-mono">SENTRY_DSN</span> env var set:{" "}
+                <strong>{serverStatus.dsnEnvSet ? "yes" : "NO"}</strong>
+                {serverStatus.dsnTail
+                  ? ` (ends in ${serverStatus.dsnTail})`
+                  : ""}
+              </li>
+              <li>
+                <span className="font-mono">Sentry.init()</span> attached a
+                client:{" "}
+                <strong>
+                  {serverStatus.clientInitialized ? "yes" : "NO"}
+                </strong>
+              </li>
+              <li>
+                Client <span className="font-mono">enabled</span> flag:{" "}
+                <strong>{serverStatus.clientEnabled ? "yes" : "NO"}</strong>
+              </li>
+            </ul>
+            {!serverStatus.dsnEnvSet && (
+              <p className="mt-2 text-xs">
+                <strong>Likely cause of missing server events:</strong>{" "}
+                <span className="font-mono">SENTRY_DSN</span> isn't in the
+                server runtime environment. Set it on the host (Vercel
+                Environment Variables, or your local{" "}
+                <span className="font-mono">.env</span>) and redeploy. The
+                client side reads <span className="font-mono">VITE_SENTRY_DSN</span>{" "}
+                — that's a separate variable baked into the bundle at build
+                time, so it can work without the server DSN being set.
+              </p>
+            )}
+          </div>
+        )}
 
         {lastFired && (
           <div className="rounded border border-sky-200 bg-sky-50 px-3 py-2 text-sky-900">

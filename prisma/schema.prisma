@@ -211,16 +211,33 @@ enum UserRole {
 // App user, lazily synced from Clerk on first authenticated request.
 // `clerkId` is the Clerk user id; `role` drives role-based access control.
 model User {
-  id            Int            @id @default(autoincrement())
-  clerkId       String         @unique
-  email         String         @unique
-  role          UserRole       @default(USER)
+  id            Int             @id @default(autoincrement())
+  clerkId       String          @unique
+  email         String          @unique
+  role          UserRole        @default(USER)
   // Projects this user is granted access to. Administrators ignore this set
   // and can access every project; see `requireProjectAccess` in users.server.
-  projects      Project[]      @relation("UserProjects")
+  projects      Project[]       @relation("UserProjects")
   notifications Notification[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  preference    UserPreference?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}
+
+// Per-user preferences blob — dashboard customization today, future home for
+// theme / density / default project. Stored as JSON so adding a new pref key
+// doesn't need a migration; the shape is validated via Zod at the server-fn
+// boundary. One row per user; the relation is `@unique` on `userId` so the
+// upsert in `updateUserDashboardPrefs` has a deterministic conflict key.
+model UserPreference {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int      @unique
+  /// JSON shape: `{ dashboard?: { hiddenWidgets?: string[] } }`. Keys can be
+  /// added freely; reading code defaults missing branches to a sensible
+  /// empty value, so older rows don't need a backfill.
+  prefs     Json     @default("{}")
+  updatedAt DateTime @updatedAt
 }
 
 // Per-user inbox entry, emitted on workflow transitions (and, later, comments

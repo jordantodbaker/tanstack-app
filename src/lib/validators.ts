@@ -437,3 +437,24 @@ export const parseInstantiateFcoTemplate = (input: unknown) =>
 export type StatusFilter<T extends string> = T | "";
 export const StatusFilterSchema = <T extends string>(values: readonly T[]) =>
   z.union([z.literal(""), z.enum(values)]);
+
+// ── User preferences ────────────────────────────────────────────────────────
+
+/**
+ * `hiddenWidgets` is just `string[]` — not constrained to the catalog enum —
+ * because (a) the catalog is the source of truth and the read path filters
+ * stale ids out, (b) a user who customized their dashboard before a widget
+ * was removed shouldn't get a 400 on save. The dashboard catalog is the
+ * runtime authority; this schema only stops obvious malformed payloads.
+ */
+export const UpdateDashboardPrefsSchema = z.object({
+  hiddenWidgets: z.array(z.string()),
+  /** Ordered widget ids — the order they should render top-to-bottom. Ids
+   *  not in this list fall back to the catalog's declared order, appended
+   *  after the user-ordered ones (so a newly-added widget doesn't disappear
+   *  for users who customized their order before it shipped). Stale ids
+   *  that no longer match the catalog are silently filtered at read time. */
+  widgetOrder: z.array(z.string()),
+});
+export const parseUpdateDashboardPrefs = (input: unknown) =>
+  UpdateDashboardPrefsSchema.parse(input);

@@ -1,7 +1,10 @@
 {
   "name": "tanstack-start-example-basic-react-query",
   "private": true,
-  "sideEffects": false,
+  "sideEffects": [
+    "./src/instrument.server.ts",
+    "./src/instrument.client.ts"
+  ],
   "type": "module",
   "scripts": {
     "dev": "vite dev",

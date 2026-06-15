@@ -175,7 +175,7 @@ function PrintableRfiBody({
       )}
 
       <Section title="Signatures">
-        <div className="grid grid-cols-2 gap-6 mt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-6 mt-2">
           <SignatureBlock label="Originator" name={rfi.initiatedBy} />
           <SignatureBlock
             label="Responder"

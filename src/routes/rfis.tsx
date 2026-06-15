@@ -185,7 +185,7 @@ function RfiLogPage() {
   }
 
   return (
-    <main className="p-4 max-w-7xl space-y-6">
+    <main className="p-4 max-w-7xl mx-auto space-y-6">
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
@@ -224,13 +224,13 @@ function RfiLogPage() {
       />
 
       <div className="flex items-center gap-2 flex-wrap rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="relative">
+        <div className="relative w-full sm:w-auto">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-4 text-slate-400 pointer-events-none" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search RFI #, subject, question, drawings, specs…"
-            className="pl-7 w-80"
+            className="pl-7 w-full sm:w-80"
           />
         </div>
         <FilterSelect

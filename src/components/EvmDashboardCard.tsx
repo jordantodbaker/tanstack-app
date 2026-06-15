@@ -80,7 +80,7 @@ export function EvmDashboardCard() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <Metric label="BAC" value={formatCurrency(total.bac)} />
         <Metric label="EV" value={formatCurrency(total.ev)} />
         <Metric label="AC" value={formatCurrency(total.ac)} />

@@ -23,7 +23,11 @@ function Tabs({
 }
 
 const tabsListVariants = cva(
-  "group/tabs-list inline-flex w-fit items-center justify-center rounded-lg p-[3px] text-muted-foreground group-data-horizontal/tabs:h-8 group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col data-[variant=line]:rounded-none",
+  // `max-w-full overflow-x-auto` keeps a horizontal tab strip from blowing past
+  // its parent on narrow viewports (entity dialogs at ≤320px) — it scrolls
+  // instead. Vertical orientation is unaffected since the flex-col variant
+  // changes the layout direction.
+  "group/tabs-list inline-flex w-fit max-w-full overflow-x-auto items-center justify-center rounded-lg p-[3px] text-muted-foreground group-data-horizontal/tabs:h-8 group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col data-[variant=line]:rounded-none",
   {
     variants: {
       variant: {

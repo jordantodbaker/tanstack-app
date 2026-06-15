@@ -111,7 +111,7 @@ function DashboardPage() {
     ),
     "cvr-stats": () => (
       <Section title="Change Log (CVRs)">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
           <StatCard
             label="Total CVRs"
             value={cvr.total.toString()}
@@ -352,7 +352,7 @@ function DashboardPage() {
   };
 
   return (
-    <main className="p-4 max-w-7xl space-y-6">
+    <main className="p-4 max-w-7xl mx-auto space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">

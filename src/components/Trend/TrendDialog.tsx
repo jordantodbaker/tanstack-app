@@ -26,6 +26,7 @@ import {
 } from "~/utils/trends";
 import { TREND_TRANSITIONS, availableTransitions } from "~/utils/workflow";
 import { useCurrentUser } from "~/lib/use-current-user";
+import { useRecordRecentView } from "~/lib/use-record-recent-view";
 import { hasAtLeastRole } from "~/utils/users";
 import { WorkflowActions } from "~/components/WorkflowActions";
 import { disciplines } from "~/config/disciplines";
@@ -192,6 +193,19 @@ function TrendDialogBody({
     deleteConfirm: (i) =>
       `Delete trend "${i.title}"? This cannot be undone.`,
   });
+
+  // Record this open in the user's "Recently viewed".
+  useRecordRecentView(
+    initial
+      ? {
+          entityType: "Trend",
+          entityId: initial.id,
+          projectId: initial.projectId,
+          number: initial.trendNumber,
+          title: initial.title,
+        }
+      : null,
+  );
 
   const { data: currentUser } = useCurrentUser();
   const isOriginator =

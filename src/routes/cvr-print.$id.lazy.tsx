@@ -206,7 +206,7 @@ function PrintableCvrBody({ cvr }: { cvr: ChangeLogDetail }) {
       )}
 
       <Section title="Signatures">
-        <div className="grid grid-cols-3 gap-6 mt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 print:grid-cols-3 gap-6 mt-2">
           <SignatureBlock label="Originator" name={cvr.originator} />
           <SignatureBlock
             label="Internal approver"

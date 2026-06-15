@@ -42,6 +42,7 @@ import { useCurrentUser, useIsAdmin } from "~/lib/use-current-user";
 import { Button } from "~/components/ui/button";
 import { NotificationBell } from "~/components/NotificationBell";
 import { GlobalSearch } from "~/components/GlobalSearch";
+import { TOP_NAV_LINKS } from "~/config/top-nav-links";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -206,7 +207,7 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
                 </span>
               </div>
             </div>
-            <div className="hidden sm:block shrink-0">
+            <div className="hidden lg:block shrink-0">
               <ProjectSelect
                 placeholder="Select project…"
                 className="h-9 min-w-50"
@@ -215,94 +216,13 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
             <div className="shrink-0">
               <GlobalSearch />
             </div>
-            <nav className="hidden sm:flex items-center gap-1 flex-1">
-              <Link
-                to="/dashboard"
-                className="px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                activeProps={{ className: "text-red-800 bg-red-50" }}
-                inactiveProps={{
-                  className:
-                    "text-slate-600 hover:text-slate-900 hover:bg-slate-100",
-                }}
-                activeOptions={{ exact: true }}
-              >
-                Dashboard
-              </Link>
-              <Link
-                to="/changelog"
-                className="px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                activeProps={{ className: "text-red-800 bg-red-50" }}
-                inactiveProps={{
-                  className:
-                    "text-slate-600 hover:text-slate-900 hover:bg-slate-100",
-                }}
-                activeOptions={{ exact: true }}
-              >
-                Change Log
-              </Link>
-              <Link
-                to="/fco-log"
-                className="px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                activeProps={{ className: "text-red-800 bg-red-50" }}
-                inactiveProps={{
-                  className:
-                    "text-slate-600 hover:text-slate-900 hover:bg-slate-100",
-                }}
-                activeOptions={{ exact: true }}
-              >
-                FCO Log
-              </Link>
-              <Link
-                to="/rfis"
-                className="px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                activeProps={{ className: "text-red-800 bg-red-50" }}
-                inactiveProps={{
-                  className:
-                    "text-slate-600 hover:text-slate-900 hover:bg-slate-100",
-                }}
-                activeOptions={{ exact: true }}
-              >
-                RFIs
-              </Link>
-              <Link
-                to="/trends"
-                className="px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                activeProps={{ className: "text-red-800 bg-red-50" }}
-                inactiveProps={{
-                  className:
-                    "text-slate-600 hover:text-slate-900 hover:bg-slate-100",
-                }}
-                activeOptions={{ exact: true }}
-              >
-                Trends
-              </Link>
-              <Link
-                to="/pco"
-                className="px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                activeProps={{ className: "text-red-800 bg-red-50" }}
-                inactiveProps={{
-                  className:
-                    "text-slate-600 hover:text-slate-900 hover:bg-slate-100",
-                }}
-                activeOptions={{ exact: true }}
-              >
-                PCOs
-              </Link>
-              <Link
-                to="/reporting"
-                className="px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                activeProps={{ className: "text-red-800 bg-red-50" }}
-                inactiveProps={{
-                  className:
-                    "text-slate-600 hover:text-slate-900 hover:bg-slate-100",
-                }}
-                activeOptions={{ exact: true }}
-              >
-                Reporting
-              </Link>
-              {isAdmin && (
+            {/* Top nav — desktop only. Mobile + tablet (< lg) see these same
+                links inside the sidebar drawer (lg:hidden block in Sidebar). */}
+            <nav className="hidden lg:flex items-center gap-1 flex-1 min-w-0">
+              {TOP_NAV_LINKS.filter((l) => !l.adminOnly || isAdmin).map((l) => (
                 <Link
-                  to="/setup"
+                  key={l.to}
+                  to={l.to}
                   className="px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
                   activeProps={{ className: "text-red-800 bg-red-50" }}
                   inactiveProps={{
@@ -311,11 +231,11 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
                   }}
                   activeOptions={{ exact: true }}
                 >
-                  Field Estimate Form
+                  {l.label}
                 </Link>
-              )}
+              ))}
             </nav>
-            <div className="shrink-0 flex items-center gap-1 md:gap-2 ml-auto sm:ml-0">
+            <div className="shrink-0 flex items-center gap-1 md:gap-2 ml-auto lg:ml-0">
               <NotificationBell />
               <UserButton />
               <div className="hidden sm:block">

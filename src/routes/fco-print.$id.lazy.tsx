@@ -220,7 +220,7 @@ function PrintableFcoBody({
       )}
 
       <Section title="Signatures">
-        <div className="grid grid-cols-3 gap-6 mt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 print:grid-cols-3 gap-6 mt-2">
           <SignatureBlock label="Initiated by" name={fco.initiatedBy} />
           <SignatureBlock label="Field contact" name={fco.fieldContact} />
           <SignatureBlock label="Closed by" name="" date={fco.closedAt} />

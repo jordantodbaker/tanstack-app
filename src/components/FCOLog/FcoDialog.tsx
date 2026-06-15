@@ -14,6 +14,7 @@ import {
 } from "~/utils/fcoTemplates";
 import { useIsAdmin } from "~/lib/use-current-user";
 import { invalidateAdminEntity } from "~/lib/admin-invalidations";
+import { useRecordRecentView } from "~/lib/use-record-recent-view";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -221,6 +222,19 @@ function FcoDialogBody({
       : undefined,
     deleteConfirm: (i) => `Delete FCO "${i.title}"? This cannot be undone.`,
   });
+
+  // Record this open in the user's "Recently viewed".
+  useRecordRecentView(
+    initial
+      ? {
+          entityType: "FieldChangeOrder",
+          entityId: initial.id,
+          projectId: initial.projectId,
+          number: initial.fcoNumber,
+          title: initial.title,
+        }
+      : null,
+  );
 
   const isAdmin = useIsAdmin();
   const queryClient = useQueryClient();

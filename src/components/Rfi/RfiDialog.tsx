@@ -26,6 +26,7 @@ import {
 } from "~/utils/rfis";
 import { RFI_TRANSITIONS, availableTransitions } from "~/utils/workflow";
 import { useCurrentUser } from "~/lib/use-current-user";
+import { useRecordRecentView } from "~/lib/use-record-recent-view";
 import { WorkflowActions } from "~/components/WorkflowActions";
 import { disciplines } from "~/config/disciplines";
 import {
@@ -194,6 +195,19 @@ function RfiDialogBody({
       : undefined,
     deleteConfirm: (i) => `Delete RFI "${i.subject}"? This cannot be undone.`,
   });
+
+  // Record this open in the user's "Recently viewed".
+  useRecordRecentView(
+    initial
+      ? {
+          entityType: "Rfi",
+          entityId: initial.id,
+          projectId: initial.projectId,
+          number: initial.rfiNumber,
+          title: initial.subject,
+        }
+      : null,
+  );
 
   async function handlePromote() {
     if (!initial?.id || !onPromote) return;

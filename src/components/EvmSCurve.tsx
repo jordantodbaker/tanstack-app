@@ -131,11 +131,11 @@ function SCurveChart({ points }: { points: EvmTimeSeriesPoint[] }) {
   ];
 
   return (
-    <div className="overflow-x-auto">
+    <div className="w-full overflow-x-auto">
       <svg
-        width={WIDTH}
-        height={HEIGHT}
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+        preserveAspectRatio="xMidYMid meet"
+        className="w-full h-auto"
         role="img"
         aria-label="Earned Value Management S-curve"
       >

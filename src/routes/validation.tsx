@@ -212,7 +212,7 @@ function ValidationPage() {
         <h2 className="text-lg font-semibold text-slate-800 mb-4">
           Disciplines vs. Indirects
         </h2>
-        <div className="flex flex-col sm:flex-row items-center gap-10">
+        <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-10">
           <DonutChart slices={donutSlices} total={grandTotal} />
           <div className="space-y-5 min-w-48">
             {donutSlices.map(({ label, value, color }) => {
@@ -255,7 +255,7 @@ function ValidationPage() {
             No discipline cost data recorded yet.
           </p>
         ) : (
-          <div className="flex flex-col sm:flex-row items-center gap-10">
+          <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-10">
             <DonutChart
               slices={disciplineDonutSlices}
               total={disciplinesTotal}

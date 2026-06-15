@@ -1,8 +1,20 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
-import { resolveCurrentUser } from "./users.server";
-import { parseUpdateDashboardPrefs } from "~/lib/validators";
+import {
+  getAccessibleProjectIds,
+  requireProjectAccess,
+  resolveCurrentUser,
+} from "./users.server";
+import {
+  parseRecordRecentView,
+  parseUpdateDashboardPrefs,
+} from "~/lib/validators";
+import {
+  RECENTS_MAX_STORED,
+  RECENT_ENTITY_TYPES,
+  type RecentEntityType,
+} from "~/config/recent-entities";
 
 /**
  * Per-user preferences server fns. Today: the dashboard customize dialog's
@@ -23,6 +35,7 @@ export type DashboardPrefs = {
 
 type StoredPrefs = {
   dashboard?: { hiddenWidgets?: unknown; widgetOrder?: unknown };
+  recentlyViewed?: unknown;
 };
 
 const EMPTY_DASHBOARD_PREFS: DashboardPrefs = {
@@ -104,4 +117,164 @@ export const updateUserDashboardPrefs = createServerFn({ method: "POST" })
       hiddenWidgets: data.hiddenWidgets,
       widgetOrder: data.widgetOrder,
     };
+  });
+
+// ── Recently viewed ─────────────────────────────────────────────────────────
+
+export type RecentItem = {
+  entityType: RecentEntityType;
+  entityId: number;
+  projectId: number;
+  /** Denormalized number (cvrNumber/fcoNumber/…), or "" if the record was
+   *  saved without one. Sidebar display only — may be stale. */
+  number: string;
+  /** Denormalized title / subject. Sidebar display only — may be stale. */
+  title: string;
+  /** ISO datetime. */
+  viewedAt: string;
+};
+
+const RECENT_ENTITY_TYPE_SET = new Set<string>(RECENT_ENTITY_TYPES);
+
+/** Narrow a raw JSON value to `RecentItem[]`. Drops any element that doesn't
+ *  pass shape + enum validation — defends the read path against manually-
+ *  edited DB rows or schema drift.
+ *
+ *  Exported for `recent-entities.test.ts` — the narrowing has eight reject
+ *  branches and a clear pure-function contract, so it's worth pinning. */
+export function extractRecents(raw: unknown): RecentItem[] {
+  if (typeof raw !== "object" || raw === null) return [];
+  const arr = (raw as StoredPrefs).recentlyViewed;
+  if (!Array.isArray(arr)) return [];
+  const out: RecentItem[] = [];
+  for (const entry of arr) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const e = entry as Record<string, unknown>;
+    if (typeof e.entityType !== "string") continue;
+    if (!RECENT_ENTITY_TYPE_SET.has(e.entityType)) continue;
+    if (typeof e.entityId !== "number" || !Number.isInteger(e.entityId)) {
+      continue;
+    }
+    if (typeof e.projectId !== "number" || !Number.isInteger(e.projectId)) {
+      continue;
+    }
+    if (typeof e.number !== "string") continue;
+    if (typeof e.title !== "string") continue;
+    if (typeof e.viewedAt !== "string") continue;
+    out.push({
+      entityType: e.entityType as RecentEntityType,
+      entityId: e.entityId,
+      projectId: e.projectId,
+      number: e.number,
+      title: e.title,
+      viewedAt: e.viewedAt,
+    });
+  }
+  return out;
+}
+
+/** Sidebar reads this via `useQuery`. The server filters out entries from
+ *  projects the user can no longer access (rather than 403-ing or showing
+ *  un-clickable items). */
+export const fetchUserRecents = createServerFn({ method: "GET" }).handler(
+  async (): Promise<RecentItem[]> => {
+    const actor = await resolveCurrentUser();
+    if (!actor) return [];
+    const row = await prisma.userPreference.findUnique({
+      where: { userId: actor.id },
+      select: { prefs: true },
+    });
+    const all = row ? extractRecents(row.prefs) : [];
+    if (all.length === 0) return all;
+    const accessible = await getAccessibleProjectIds();
+    if (accessible === "all") return all;
+    return all.filter((r) => accessible.has(r.projectId));
+  },
+);
+
+export const userRecentsQueryOptions = () =>
+  queryOptions({
+    queryKey: ["userRecents"],
+    queryFn: () => fetchUserRecents(),
+    // Short staleTime so a freshly-recorded view appears in the sidebar
+    // promptly after the mutation invalidates the key.
+    staleTime: 5 * 1000,
+  });
+
+/**
+ * Pure dedup-prepend-cap transform. Lifted out of `recordRecentView` so it
+ * can be unit-tested without a Prisma round-trip.
+ *
+ * Contract:
+ *   - Returns a new array; never mutates `existing`.
+ *   - The new entry is always at index 0.
+ *   - Any prior entry with the same `(entityType, entityId)` is dropped
+ *     (so re-opening a record moves it to the top, no duplicates).
+ *   - Result length is capped at `RECENTS_MAX_STORED`; oldest items roll off.
+ */
+export function applyRecentView(
+  existing: RecentItem[],
+  newEntry: RecentItem,
+): RecentItem[] {
+  const deduped = existing.filter(
+    (r) =>
+      r.entityType !== newEntry.entityType ||
+      r.entityId !== newEntry.entityId,
+  );
+  return [newEntry, ...deduped].slice(0, RECENTS_MAX_STORED);
+}
+
+/**
+ * Append one view event to the user's recents list. Idempotent for a given
+ * `(entityType, entityId)` — re-opening the same record moves the existing
+ * entry to the top rather than duplicating. Capped at `RECENTS_MAX_STORED`;
+ * oldest items roll off when the cap is exceeded.
+ *
+ * The handler enforces project access on the recorded projectId so a caller
+ * can't seed their recents with records from projects they don't have
+ * access to (defense in depth — the dialog only mounts for accessible
+ * records, but the server fn endpoint is reachable independently).
+ */
+export const recordRecentView = createServerFn({ method: "POST" })
+  .inputValidator(parseRecordRecentView)
+  .handler(async ({ data }): Promise<RecentItem[]> => {
+    const actor = await requireProjectAccess(data.projectId);
+
+    const existing = await prisma.userPreference.findUnique({
+      where: { userId: actor.id },
+      select: { prefs: true },
+    });
+    const existingRecents = existing
+      ? extractRecents(existing.prefs)
+      : [];
+
+    const newEntry: RecentItem = {
+      entityType: data.entityType,
+      entityId: data.entityId,
+      projectId: data.projectId,
+      number: data.number,
+      title: data.title,
+      // viewedAt comes from server time so client clock skew doesn't break
+      // the newest-first ordering.
+      viewedAt: new Date().toISOString(),
+    };
+
+    const next = applyRecentView(existingRecents, newEntry);
+
+    // Merge into the existing prefs blob so other keys (dashboard prefs,
+    // future preferences) aren't clobbered.
+    const merged = {
+      ...(typeof existing?.prefs === "object" && existing.prefs !== null
+        ? (existing.prefs as object)
+        : {}),
+      recentlyViewed: next,
+    };
+
+    await prisma.userPreference.upsert({
+      where: { userId: actor.id },
+      create: { userId: actor.id, prefs: merged },
+      update: { prefs: merged },
+    });
+
+    return next;
   });

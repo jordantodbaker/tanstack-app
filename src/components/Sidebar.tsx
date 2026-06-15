@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
+  Clock,
   PanelLeftClose,
   PanelLeftOpen,
   Shield,
@@ -15,6 +16,14 @@ import { useSelectedProject } from "~/lib/selected-project";
 import { allowedCbsL1CodesQueryOptions } from "~/utils/setup";
 import { useIsAdmin } from "~/lib/use-current-user";
 import { invalidByDisciplineQueryOptions } from "~/utils/projectTotals";
+import { userRecentsQueryOptions } from "~/utils/userPreferences";
+import {
+  RECENTS_MAX_DISPLAYED,
+  RECENT_ENTITY_LABELS,
+  RECENT_ENTITY_ROUTES,
+} from "~/config/recent-entities";
+import { TOP_NAV_LINKS } from "~/config/top-nav-links";
+import { ProjectSelect } from "~/components/ProjectSelect";
 
 /**
  * Order shown under the Admin section. The `to` paths must exist as routes
@@ -42,7 +51,7 @@ export function Sidebar({
 }) {
   const [collapsed, setCollapsed] = React.useState(false);
   const [openSections, setOpenSections] = React.useState<Set<string>>(
-    () => new Set(["project-controls", "admin"]),
+    () => new Set(["project-controls", "admin", "recents"]),
   );
 
   const toggleSection = (id: string) => {
@@ -117,6 +126,37 @@ export function Sidebar({
         </button>
 
         <nav className="flex-1 overflow-y-auto py-3">
+          {/* Mobile/tablet top-nav block — mirrors the header's top nav for
+              users below the `lg` breakpoint, where the header hides nav and
+              the project picker to avoid overflow. Hidden on desktop (lg+)
+              and when the sidebar is collapsed (collapsed mode is desktop-
+              only — see the collapse button at lines above). */}
+          <div
+            className={`lg:hidden border-b border-slate-200 pb-3 mb-2 ${collapsed ? "md:hidden" : ""}`}
+          >
+            <div className="px-4 pb-2">
+              <ProjectSelect
+                placeholder="Select project…"
+                className="h-9 w-full"
+              />
+            </div>
+            {TOP_NAV_LINKS.filter((l) => !l.adminOnly || isAdmin).map((l) => (
+              <Link
+                key={l.to}
+                to={l.to}
+                onClick={onMobileClose}
+                className="block px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                activeProps={{
+                  className:
+                    "block px-4 py-2 text-sm font-medium text-red-800 bg-red-50",
+                }}
+                activeOptions={{ exact: true }}
+              >
+                {l.label}
+              </Link>
+            ))}
+          </div>
+
           {visibleDisciplines.map((discipline) => {
             const Icon = discipline.icon;
             const isOpen = openSections.has(discipline.id);
@@ -224,6 +264,14 @@ export function Sidebar({
           })}
         </nav>
 
+        <RecentsSection
+          projectId={projectId}
+          collapsed={collapsed}
+          isOpen={openSections.has("recents")}
+          onToggle={() => toggleSection("recents")}
+          onItemClick={onMobileClose}
+        />
+
         {/* Admin — pinned below the scrolling discipline list so it stays
             visible regardless of how many disciplines are shown. Only
             rendered for ADMINISTRATOR users; the /admin routes are also
@@ -277,5 +325,92 @@ export function Sidebar({
         )}
       </aside>
     </>
+  );
+}
+
+/**
+ * Compact "Recently viewed" list pinned between the discipline nav and the
+ * Admin block. Scoped to the currently-selected project — switching projects
+ * resets the list to that project's recents (full per-user log is kept in
+ * `UserPreference.prefs.recentlyViewed`, the project filter is purely a
+ * display choice). Hidden entirely when:
+ *   - the sidebar is collapsed (no horizontal room for two-line rows),
+ *   - no project is selected (recents are always project-scoped here),
+ *   - the user has no recents for this project yet.
+ *
+ * A click navigates to the entity's list route with `?q={number}` so the
+ * destination table is pre-filtered to that single record; one more click on
+ * the row opens the dialog. We deliberately don't deep-link to the dialog
+ * itself — routes don't carry dialog state today, and a list-filter is the
+ * existing convention.
+ */
+function RecentsSection({
+  projectId,
+  collapsed,
+  isOpen,
+  onToggle,
+  onItemClick,
+}: {
+  projectId: number | null;
+  collapsed: boolean;
+  isOpen: boolean;
+  onToggle: () => void;
+  onItemClick?: () => void;
+}) {
+  const { data: allRecents = [] } = useQuery(userRecentsQueryOptions());
+
+  // Project filter — keeps the sidebar's view of recents focused on what
+  // the user is currently working on. The stored log still contains items
+  // from other projects; switching projects surfaces them again.
+  const recents = React.useMemo(
+    () =>
+      projectId === null
+        ? []
+        : allRecents
+            .filter((r) => r.projectId === projectId)
+            .slice(0, RECENTS_MAX_DISPLAYED),
+    [allRecents, projectId],
+  );
+
+  if (collapsed) return null;
+  if (projectId === null) return null;
+  if (recents.length === 0) return null;
+
+  return (
+    <div className="border-t border-slate-200 py-1 shrink-0">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center gap-3 py-2 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+      >
+        <Clock size={17} className="shrink-0 text-slate-500" />
+        <span className="flex-1 text-left">Recently viewed</span>
+        {isOpen ? (
+          <ChevronDown size={13} className="text-slate-400" />
+        ) : (
+          <ChevronRight size={13} className="text-slate-400" />
+        )}
+      </button>
+
+      {isOpen && (
+        <div className="ml-9 border-l border-slate-200 mb-1">
+          {recents.map((r) => (
+            <Link
+              key={`${r.entityType}:${r.entityId}`}
+              to={RECENT_ENTITY_ROUTES[r.entityType]}
+              search={{ q: r.number || r.title }}
+              onClick={onItemClick}
+              title={`${RECENT_ENTITY_LABELS[r.entityType]} ${r.number} — ${r.title}`}
+              className="block pl-3 pr-2 py-1.5 text-xs text-slate-600 hover:bg-slate-100 transition-colors"
+            >
+              <span className="font-medium text-slate-700">
+                {RECENT_ENTITY_LABELS[r.entityType]}
+                {r.number ? ` ${r.number}` : ""}
+              </span>
+              <span className="block truncate text-slate-500">{r.title}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

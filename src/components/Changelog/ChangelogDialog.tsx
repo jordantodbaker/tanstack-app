@@ -70,6 +70,7 @@ import {
 } from "~/utils/cvrTemplates";
 import { useIsAdmin } from "~/lib/use-current-user";
 import { invalidateAdminEntity } from "~/lib/admin-invalidations";
+import { useRecordRecentView } from "~/lib/use-record-recent-view";
 
 const DISCIPLINE_OPTIONS = disciplines
   .filter((d) => d.l1Codes && d.l1Codes.length > 0)
@@ -155,9 +156,10 @@ export function ChangelogDialog({
       initial={initial}
       fullQueryOptions={changeLogQueryOptions}
       loadingLabel="Loading change item…"
-      // Fixed-height flex column so the dialog stays the same size on every
-      // tab — only the tab panel scrolls; the header and footer are pinned.
-      contentClassName="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,1100px)] h-[85vh] flex flex-col overflow-hidden"
+      // Dynamic-viewport sized so the dialog stays consistent across tabs
+      // (min-h floor) but never overflows a landscape phone (max-h cap, in
+      // dvh so it adapts as mobile browser chrome shows/hides).
+      contentClassName="w-[calc(100vw-2rem)] sm:max-w-[min(95vw,1100px)] min-h-[60dvh] max-h-[90dvh] flex flex-col overflow-hidden"
     >
       {(full, closeDialog) => (
         <ChangelogDialogBody
@@ -213,6 +215,20 @@ function ChangelogDialogBody({
 
   const isAdmin = useIsAdmin();
   const queryClient = useQueryClient();
+
+  // Record this open in the user's "Recently viewed" once the full record
+  // is in hand. No-op in create mode (no `initial`).
+  useRecordRecentView(
+    initial
+      ? {
+          entityType: "ChangeLog",
+          entityId: initial.id,
+          projectId: initial.projectId,
+          number: initial.cvrNumber,
+          title: initial.title,
+        }
+      : null,
+  );
 
   /** Fold a template's field set into the current draft. Status/dates and
    *  identity (id, cvrNumber) stay on whatever the user already entered —

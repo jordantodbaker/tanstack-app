@@ -458,3 +458,26 @@ export const UpdateDashboardPrefsSchema = z.object({
 });
 export const parseUpdateDashboardPrefs = (input: unknown) =>
   UpdateDashboardPrefsSchema.parse(input);
+
+// ── Recently viewed ─────────────────────────────────────────────────────────
+
+/** Recording one "I opened this record" event. The server appends to the
+ *  user's recents list, dedupes against existing entries for the same
+ *  `(entityType, entityId)`, and caps the list length. `number` and `title`
+ *  are denormalized snapshots for sidebar display — the live record may
+ *  drift; clicking the link re-fetches the current state. */
+export const RecordRecentViewSchema = z.object({
+  entityType: z.enum([
+    "ChangeLog",
+    "FieldChangeOrder",
+    "Rfi",
+    "Trend",
+    "Pco",
+  ] as const),
+  entityId: Id,
+  projectId: ProjectId,
+  number: Text,
+  title: Text,
+});
+export const parseRecordRecentView = (input: unknown) =>
+  RecordRecentViewSchema.parse(input);

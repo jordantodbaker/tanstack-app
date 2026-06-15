@@ -95,7 +95,7 @@ function ReportingPage() {
   }, [periods, selectedId]);
 
   return (
-    <main className="p-4 max-w-7xl space-y-4">
+    <main className="p-4 max-w-7xl mx-auto space-y-4">
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
@@ -398,7 +398,7 @@ function EvmTable({ period }: { period: PeriodWithEvm }) {
   }
   return (
     <div className="overflow-x-auto rounded border border-slate-200">
-      <table className="w-full border-collapse text-sm">
+      <table className="w-full min-w-5xl border-collapse text-sm">
         <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
           <tr>
             <th className="px-2 py-1 text-left">Bucket</th>

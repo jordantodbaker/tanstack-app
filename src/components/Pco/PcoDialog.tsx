@@ -20,6 +20,7 @@ import {
 } from "~/utils/pco";
 import { PCO_TRANSITIONS, availableTransitions } from "~/utils/workflow";
 import { useCurrentUser } from "~/lib/use-current-user";
+import { useRecordRecentView } from "~/lib/use-record-recent-view";
 import { WorkflowActions } from "~/components/WorkflowActions";
 import { PCO_PRIORITY_LABELS } from "~/utils/pcoLabels";
 import { PcoStatusBadge } from "~/components/Pco/PcoBadges";
@@ -156,6 +157,19 @@ function PcoDialogBody({
     deleteConfirm: (i) =>
       `Delete PCO "${i.title}"? Linked CVRs will be detached (not deleted).`,
   });
+
+  // Record this open in the user's "Recently viewed".
+  useRecordRecentView(
+    initial
+      ? {
+          entityType: "Pco",
+          entityId: initial.id,
+          projectId: initial.projectId,
+          number: initial.pcoNumber,
+          title: initial.title,
+        }
+      : null,
+  );
 
   const { data: currentUser } = useCurrentUser();
   const isOriginator =

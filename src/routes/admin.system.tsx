@@ -1,12 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Bell, Play } from "lucide-react";
+import { Bell, Play, BugPlay } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
   runScheduledRemindersFn,
   type RunRemindersResult,
 } from "~/utils/reminders";
+import { triggerServerSentrySmoke } from "~/utils/sentry-smoke";
+import { logger } from "~/lib/logger";
 
 /**
  * Admin → System. Houses cross-cutting controls that don't belong under a
@@ -93,6 +95,92 @@ function AdminSystemPage() {
           )}
         </div>
       </div>
+
+      <SentrySmokeTestCard />
     </main>
+  );
+}
+
+/**
+ * Two buttons that exercise each Sentry capture path independently so an
+ * operator can confirm Sentry is wired up after a deploy or DSN change. Each
+ * triggers exactly one event tagged "[sentry-smoke]" so they're easy to
+ * find — and easy to discard — in the Sentry issue list. Safe to leave
+ * permanently: the surface is admin-only and each click sends one event.
+ *
+ *   - Server-side path: `triggerServerSentrySmoke` throws inside the server
+ *     fn handler; `sentryGlobalFunctionMiddleware` captures the throw. The
+ *     mutation's onError is expected — the rejection is the point.
+ *
+ *   - Client-side path: `logger.error(...)` from the browser. Tests both
+ *     the in-browser Sentry SDK init AND the `forwardErrorToSentry` wire we
+ *     added to `logger.ts`.
+ */
+function SentrySmokeTestCard() {
+  const [lastFired, setLastFired] = React.useState<"server" | "client" | null>(
+    null,
+  );
+
+  const serverSmoke = useMutation({
+    mutationFn: () => triggerServerSentrySmoke({ data: {} }),
+    // onError is expected — the server fn throws by design.
+    onSettled: () => setLastFired("server"),
+  });
+
+  function fireClientSmoke() {
+    logger.error("[sentry-smoke] client-side log at " + new Date().toISOString(), {
+      err: new Error(
+        "[sentry-smoke] client-side throw — if you can see this in Sentry, " +
+          "the browser SDK and logger.error → Sentry forwarder are wired up.",
+      ),
+    });
+    setLastFired("client");
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
+        <BugPlay className="size-4 text-slate-500" />
+        <h2 className="text-sm font-semibold text-slate-700">
+          Sentry smoke test
+        </h2>
+      </div>
+      <div className="p-4 space-y-3 text-sm text-slate-700">
+        <p>
+          Verify Sentry is shipping events end-to-end. Each button fires
+          exactly one event tagged{" "}
+          <span className="font-mono text-xs">[sentry-smoke]</span> — easy to
+          find in the issue list and easy to discard.{" "}
+          <span className="text-slate-500">
+            No-op (event silently dropped) when no DSN is configured. The
+            event should land in your Sentry dashboard within ~30 seconds.
+          </span>
+        </p>
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => serverSmoke.mutate()}
+            disabled={serverSmoke.isPending}
+          >
+            {serverSmoke.isPending
+              ? "Firing…"
+              : "Throw server-side error"}
+          </Button>
+          <Button size="sm" variant="outline" onClick={fireClientSmoke}>
+            Throw client-side error
+          </Button>
+        </div>
+
+        {lastFired && (
+          <div className="rounded border border-sky-200 bg-sky-50 px-3 py-2 text-sky-900">
+            Fired a {lastFired}-side event. Check your Sentry dashboard for
+            an issue starting with{" "}
+            <span className="font-mono text-xs">[sentry-smoke]</span>.
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

@@ -189,7 +189,7 @@ function FcoLogPage() {
 
   return (
     <main className="p-4 max-w-7xl mx-auto space-y-6">
-      <div className="flex items-end justify-between gap-4 flex-wrap">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
             <HardHat className="size-6 text-amber-600" />
@@ -275,24 +275,29 @@ function FcoLogPage() {
             { value: "unlinked", label: "Not linked" },
           ]}
         />
-        <span className="ml-auto text-xs text-slate-500">
-          Showing {filtered.length} of {items.length}
-        </span>
-        <ExportCsvButton
-          getItems={async () => {
-            // List payload is slim — narrative columns the CSV wants only
-            // ship via the full endpoint. Pull it on demand here, then
-            // re-apply the active filters so the export matches what the
-            // user sees in the table.
-            const full = await queryClient.fetchQuery(
-              fcoListFullQueryOptions(projectId),
-            );
-            return full.filter(matchesFilters);
-          }}
-          disabled={filtered.length === 0}
-          columns={fcoCsvColumns(areaLabel)}
-          filenamePrefix="fco-export"
-        />
+        {/* Count + Export wrapped together so on tablet they wrap as a unit
+            rather than the count grabbing `ml-auto` and leaving Export
+            stranded on its own row. */}
+        <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
+          <span className="text-xs text-slate-500">
+            Showing {filtered.length} of {items.length}
+          </span>
+          <ExportCsvButton
+            getItems={async () => {
+              // List payload is slim — narrative columns the CSV wants only
+              // ship via the full endpoint. Pull it on demand here, then
+              // re-apply the active filters so the export matches what the
+              // user sees in the table.
+              const full = await queryClient.fetchQuery(
+                fcoListFullQueryOptions(projectId),
+              );
+              return full.filter(matchesFilters);
+            }}
+            disabled={filtered.length === 0}
+            columns={fcoCsvColumns(areaLabel)}
+            filenamePrefix="fco-export"
+          />
+        </div>
       </div>
 
       <FcoTable

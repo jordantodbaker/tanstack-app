@@ -30,6 +30,8 @@ import {
   type UpsertPcoInput,
 } from "~/utils/pco";
 import { PCO_STATUS_LABELS } from "~/utils/pcoLabels";
+import { pcoCsvColumns } from "~/utils/pcoCsv";
+import { ExportCsvButton } from "~/components/ExportCsvButton";
 import {
   PcoPriorityBadge,
   PcoStatusBadge,
@@ -159,7 +161,7 @@ function PcoLogPage() {
 
   return (
     <main className="p-4 max-w-7xl mx-auto space-y-6">
-      <div className="flex items-end justify-between gap-4 flex-wrap">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
             <Handshake className="size-6 text-sky-600" />
@@ -221,9 +223,22 @@ function PcoLogPage() {
             })),
           ]}
         />
-        <span className="ml-auto text-xs text-slate-500">
-          Showing {filtered.length} of {items.length}
-        </span>
+        <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
+          <span className="text-xs text-slate-500">
+            Showing {filtered.length} of {items.length}
+          </span>
+          <ExportCsvButton
+            getItems={async () => {
+              const full = await queryClient.fetchQuery(
+                pcoListFullQueryOptions(projectId),
+              );
+              return full.filter(matchesFilters);
+            }}
+            disabled={filtered.length === 0}
+            columns={pcoCsvColumns()}
+            filenamePrefix="pco-export"
+          />
+        </div>
       </div>
 
       <PcoTable

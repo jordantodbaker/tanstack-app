@@ -30,6 +30,8 @@ import {
   type TrendStatus,
   type UpsertTrendInput,
 } from "~/utils/trends";
+import { trendCsvColumns } from "~/utils/trendsCsv";
+import { ExportCsvButton } from "~/components/ExportCsvButton";
 import { invalidateChangeLogQueries } from "~/utils/changelog";
 import { TREND_STATUS_LABELS } from "~/utils/trendLabels";
 import {
@@ -204,7 +206,7 @@ function TrendLogPage() {
 
   return (
     <main className="p-4 max-w-7xl mx-auto space-y-6">
-      <div className="flex items-end justify-between gap-4 flex-wrap">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
             <TrendingUp className="size-6 text-amber-600" />
@@ -276,9 +278,22 @@ function TrendLogPage() {
               .map((d) => ({ value: d.id, label: d.label })),
           ]}
         />
-        <span className="ml-auto text-xs text-slate-500">
-          Showing {filtered.length} of {items.length}
-        </span>
+        <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
+          <span className="text-xs text-slate-500">
+            Showing {filtered.length} of {items.length}
+          </span>
+          <ExportCsvButton
+            getItems={async () => {
+              const full = await queryClient.fetchQuery(
+                trendListFullQueryOptions(projectId),
+              );
+              return full.filter(matchesFilters);
+            }}
+            disabled={filtered.length === 0}
+            columns={trendCsvColumns(areaLabel)}
+            filenamePrefix="trend-export"
+          />
+        </div>
       </div>
 
       <TrendTable

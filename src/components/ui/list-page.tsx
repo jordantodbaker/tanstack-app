@@ -25,8 +25,12 @@ export function StatCard({
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-slate-500">{label}</p>
-        {Icon && <Icon className={`size-4 ${toneClass} opacity-70`} />}
+        {/* `leading-tight` keeps wrapped long labels ("Approved unbilled (3)")
+            visually compact on 2-col mobile grids where they wrap to 2 lines.
+            `text-sm sm:text-xs` raises the on-phone size above the ~14px
+            sustained-reading threshold; desktop keeps the denser look. */}
+        <p className="text-sm sm:text-xs leading-tight text-slate-500">{label}</p>
+        {Icon && <Icon className={`size-4 ${toneClass} opacity-70 shrink-0`} />}
       </div>
       <p className={`mt-1 text-xl font-bold tabular-nums ${toneClass}`}>
         {value}
@@ -47,12 +51,12 @@ export function FilterSelect({
   options: { value: string; label: string }[];
 }) {
   return (
-    <label className="flex items-center gap-1.5 text-sm">
-      <span className="text-slate-500">{label}:</span>
+    <label className="flex items-center gap-1.5 text-sm w-full sm:w-auto">
+      <span className="text-slate-500 shrink-0">{label}:</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-7 rounded-md border border-input bg-white px-2 text-sm focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 outline-none"
+        className="h-7 rounded-md border border-input bg-white px-2 text-sm focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 outline-none flex-1 sm:flex-none"
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>

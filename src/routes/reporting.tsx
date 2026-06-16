@@ -96,7 +96,7 @@ function ReportingPage() {
 
   return (
     <main className="p-4 max-w-7xl mx-auto space-y-4">
-      <div className="flex items-end justify-between gap-4 flex-wrap">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
             <LineChart className="size-6 text-red-700" />
@@ -149,7 +149,10 @@ function PeriodPicker({
   onSelect: (id: number) => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-2">
+    // Capped height with scroll so the picker doesn't dominate the viewport
+    // when many periods have been created (mobile in particular — each card
+    // is two lines tall so 5+ periods push the EVM table well below the fold).
+    <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
       {periods.map((p) => {
         const active = p.id === selectedId;
         return (
@@ -336,6 +339,7 @@ function PeriodDetail({ periodId }: { periodId: number }) {
         <DeletePeriodButton period={period} />
       </div>
 
+      <EvmGlossary />
       <EvmTable period={period} />
       <ProjectTotalRow total={period.total} />
     </section>
@@ -387,6 +391,54 @@ function DeletePeriodButton({ period }: { period: PeriodWithEvm }) {
   );
 }
 
+/**
+ * Collapsible EVM glossary rendered above the bucket table. Replaces the
+ * `title=` tooltips that were on % Comp / Pending / AFC / VAFC headers —
+ * those don't surface on touch devices, so on mobile users had no way to
+ * learn what the acronyms meant. Native `<details>` for zero JS + keyboard
+ * accessibility.
+ */
+function EvmGlossary() {
+  const terms: Array<[string, string]> = [
+    ["BAC", "Budget at Completion — original baseline cost"],
+    ["CVR Rev", "CVR-driven revisions to the baseline"],
+    ["Curr. Budget", "Current Budget = BAC + CVR Rev"],
+    ["% Comp", "Percent complete entered for this bucket this period"],
+    ["EV", "Earned Value = % Comp × Current Budget"],
+    ["AC", "Actual Cost spent through the data date"],
+    ["PV", "Planned Value — what we'd expect to have earned by now"],
+    ["CV", "Cost Variance = EV − AC (negative is over budget)"],
+    ["SV", "Schedule Variance = EV − PV (negative is behind schedule)"],
+    ["CPI", "Cost Performance Index = EV ÷ AC (≥ 1.0 on budget)"],
+    ["SPI", "Schedule Performance Index = EV ÷ PV (≥ 1.0 on schedule)"],
+    ["EAC", "Estimate at Completion = AC + (Curr. Budget − EV) ÷ CPI"],
+    ["Pending", "Probability-weighted forecast from pending Trend records"],
+    ["AFC", "Anticipated Final Cost = EAC + Pending Trend forecast"],
+    ["VAC", "Variance at Completion = Curr. Budget − EAC"],
+    [
+      "VAFC",
+      "Variance at completion against AFC (after probability-weighted pending changes)",
+    ],
+  ];
+  return (
+    <details className="rounded-md border border-slate-200 bg-slate-50 text-sm">
+      <summary className="cursor-pointer px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 select-none">
+        Column definitions
+      </summary>
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 px-3 pb-3 text-xs">
+        {terms.map(([k, v]) => (
+          <div key={k} className="flex gap-2">
+            <dt className="font-semibold text-slate-700 shrink-0 w-20 sm:w-24">
+              {k}
+            </dt>
+            <dd className="text-slate-600">{v}</dd>
+          </div>
+        ))}
+      </dl>
+    </details>
+  );
+}
+
 function EvmTable({ period }: { period: PeriodWithEvm }) {
   if (period.buckets.length === 0) {
     return (
@@ -405,7 +457,7 @@ function EvmTable({ period }: { period: PeriodWithEvm }) {
             <th className="px-2 py-1 text-right">BAC</th>
             <th className="px-2 py-1 text-right">CVR Rev</th>
             <th className="px-2 py-1 text-right">Curr. Budget</th>
-            <th className="px-2 py-1 text-right" title="Percent complete">% Comp</th>
+            <th className="px-2 py-1 text-right">% Comp</th>
             <th className="px-2 py-1 text-right">EV</th>
             <th className="px-2 py-1 text-right">AC</th>
             <th className="px-2 py-1 text-right">PV</th>
@@ -414,22 +466,10 @@ function EvmTable({ period }: { period: PeriodWithEvm }) {
             <th className="px-2 py-1 text-right">CPI</th>
             <th className="px-2 py-1 text-right">SPI</th>
             <th className="px-2 py-1 text-right">EAC</th>
-            <th className="px-2 py-1 text-right" title="Probability-weighted pending trends">
-              Pending
-            </th>
-            <th
-              className="px-2 py-1 text-right"
-              title="Anticipated Final Cost = EAC + Pending Trend forecast"
-            >
-              AFC
-            </th>
+            <th className="px-2 py-1 text-right">Pending</th>
+            <th className="px-2 py-1 text-right">AFC</th>
             <th className="px-2 py-1 text-right">VAC</th>
-            <th
-              className="px-2 py-1 text-right"
-              title="Variance at completion against AFC (after pending changes)"
-            >
-              VAFC
-            </th>
+            <th className="px-2 py-1 text-right">VAFC</th>
             <th className="px-2 py-1 text-left">Notes</th>
           </tr>
         </thead>
@@ -538,7 +578,7 @@ function BucketRow({
             if (!Number.isFinite(pct)) return;
             save.mutate({ percentComplete: pct / 100 });
           }}
-          className="w-16 rounded border border-slate-200 px-1 py-0.5 text-right text-sm"
+          className="w-20 rounded border border-slate-200 px-2 py-1 text-right text-sm"
         />
       </td>
       <td className="px-2 py-1 text-right tabular-nums">{formatCurrency(m.ev)}</td>
@@ -554,7 +594,7 @@ function BucketRow({
             if (!Number.isFinite(ac)) return;
             save.mutate({ actualCost: ac });
           }}
-          className="w-24 rounded border border-slate-200 px-1 py-0.5 text-right text-sm"
+          className="w-28 rounded border border-slate-200 px-2 py-1 text-right text-sm"
         />
       </td>
       <td className="px-2 py-1 text-right tabular-nums" title={`PV source: ${row.pvSource}`}>

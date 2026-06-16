@@ -54,7 +54,7 @@ export function WorkflowActions<S extends string>({
           No actions available from this status for your role.
         </p>
       ) : (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {transitions.map((t) => {
             const destructive = t.to === "VOID" || t.to === "REJECTED";
             return (

@@ -186,7 +186,7 @@ function RfiLogPage() {
 
   return (
     <main className="p-4 max-w-7xl mx-auto space-y-6">
-      <div className="flex items-end justify-between gap-4 flex-wrap">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
             <HelpCircle className="size-6 text-indigo-600" />
@@ -256,20 +256,22 @@ function RfiLogPage() {
               .map((d) => ({ value: d.id, label: d.label })),
           ]}
         />
-        <span className="ml-auto text-xs text-slate-500">
-          Showing {filtered.length} of {items.length}
-        </span>
-        <ExportCsvButton
-          getItems={async () => {
-            const full = await queryClient.fetchQuery(
-              rfiListFullQueryOptions(projectId),
-            );
-            return full.filter(matchesFilters);
-          }}
-          disabled={filtered.length === 0}
-          columns={rfiCsvColumns(areaLabel)}
-          filenamePrefix="rfi-export"
-        />
+        <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
+          <span className="text-xs text-slate-500">
+            Showing {filtered.length} of {items.length}
+          </span>
+          <ExportCsvButton
+            getItems={async () => {
+              const full = await queryClient.fetchQuery(
+                rfiListFullQueryOptions(projectId),
+              );
+              return full.filter(matchesFilters);
+            }}
+            disabled={filtered.length === 0}
+            columns={rfiCsvColumns(areaLabel)}
+            filenamePrefix="rfi-export"
+          />
+        </div>
       </div>
 
       <RfiTable

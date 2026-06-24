@@ -54,6 +54,13 @@ import { disciplineById } from "~/config/disciplines";
 import { formatAreaLabel } from "~/utils/areaLabels";
 import { formatMoney } from "~/lib/formatting";
 import { SelectProjectBanner } from "~/components/SelectProjectBanner";
+import { TREND_TRANSITIONS } from "~/utils/workflow";
+import { useBulkActions } from "~/lib/use-bulk-selection";
+import {
+  BulkActionBar,
+  BulkHeaderCell,
+  BulkRowCell,
+} from "~/components/BulkActionBar";
 
 export const Route = createFileRoute("/trends")({
   loader: async ({ context }) => {
@@ -152,6 +159,16 @@ function TrendLogPage() {
     () => items.filter(matchesFilters),
     [items, matchesFilters],
   );
+
+  // Bulk selection + actions over the currently-filtered rows.
+  const bulk = useBulkActions({
+    rows: filtered,
+    transitions: TREND_TRANSITIONS,
+    entityNoun: "trend",
+    onTransition: (input) => transition.mutateAsync(input),
+    onDelete: (id) => remove.mutateAsync(id),
+    invalidate,
+  });
 
   const stats = React.useMemo(() => {
     const now = new Date();
@@ -296,6 +313,8 @@ function TrendLogPage() {
         </div>
       </div>
 
+      <BulkActionBar {...bulk.bar} />
+
       <TrendTable
         items={filtered}
         projectId={projectId}
@@ -304,6 +323,7 @@ function TrendLogPage() {
         onDelete={handleDelete}
         onTransition={handleTransition}
         onPromote={handlePromote}
+        {...bulk.table}
       />
     </main>
   );
@@ -368,6 +388,11 @@ function TrendTable({
   onDelete,
   onTransition,
   onPromote,
+  selected,
+  onToggle,
+  onToggleAll,
+  allSelected,
+  someSelected,
 }: {
   items: TrendListItem[];
   projectId: number | null;
@@ -376,6 +401,11 @@ function TrendTable({
   onDelete: (id: number) => Promise<unknown>;
   onTransition: (input: { id: number; action: string }) => Promise<unknown>;
   onPromote: (id: number) => Promise<unknown>;
+  selected: Set<number>;
+  onToggle: (id: number) => void;
+  onToggleAll: (next: boolean) => void;
+  allSelected: boolean;
+  someSelected: boolean;
 }) {
   if (items.length === 0) {
     return <TableEmptyState message="No trends match the current filters." />;
@@ -385,6 +415,11 @@ function TrendTable({
       <table className="w-full border-collapse text-sm">
         <thead className="bg-slate-50">
           <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <BulkHeaderCell
+              allSelected={allSelected}
+              someSelected={someSelected}
+              onToggleAll={onToggleAll}
+            />
             <Th>Trend #</Th>
             <Th>Title</Th>
             <Th>Status</Th>
@@ -408,6 +443,8 @@ function TrendTable({
               onDelete={onDelete}
               onTransition={onTransition}
               onPromote={onPromote}
+              selected={selected.has(item.id)}
+              onToggle={() => onToggle(item.id)}
             />
           ))}
         </tbody>
@@ -424,6 +461,8 @@ function TrendRow({
   onDelete,
   onTransition,
   onPromote,
+  selected,
+  onToggle,
 }: {
   item: TrendListItem;
   projectId: number | null;
@@ -432,6 +471,8 @@ function TrendRow({
   onDelete: (id: number) => Promise<unknown>;
   onTransition: (input: { id: number; action: string }) => Promise<unknown>;
   onPromote: (id: number) => Promise<unknown>;
+  selected: boolean;
+  onToggle: () => void;
 }) {
   const disciplineLabel = item.discipline
     ? (disciplineById[item.discipline]?.label ?? item.discipline)
@@ -447,6 +488,7 @@ function TrendRow({
       projectId={projectId}
       trigger={
         <tr className="cursor-pointer hover:bg-slate-50 transition-colors">
+          <BulkRowCell checked={selected} onToggle={onToggle} />
           <td className={`${cellCls} font-mono text-xs text-slate-700`}>
             {item.trendNumber || `#${item.id}`}
           </td>

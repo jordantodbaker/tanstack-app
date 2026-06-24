@@ -44,6 +44,13 @@ import { cvrCsvColumns } from "~/utils/changelogCsv";
 import { ExportCsvButton } from "~/components/ExportCsvButton";
 import { SelectProjectBanner } from "~/components/SelectProjectBanner";
 import { formatAreaLabel } from "~/utils/areaLabels";
+import { CVR_TRANSITIONS } from "~/utils/workflow";
+import { useBulkActions } from "~/lib/use-bulk-selection";
+import {
+  BulkActionBar,
+  BulkHeaderCell,
+  BulkRowCell,
+} from "~/components/BulkActionBar";
 
 export const Route = createFileRoute("/changelog")({
   loader: async ({ context }) => {
@@ -126,6 +133,16 @@ function ChangelogPage() {
     () => items.filter(matchesFilters),
     [items, matchesFilters],
   );
+
+  // Bulk selection + actions over the currently-filtered rows.
+  const bulk = useBulkActions({
+    rows: filtered,
+    transitions: CVR_TRANSITIONS,
+    entityNoun: "CVR",
+    onTransition: (input) => transition.mutateAsync(input),
+    onDelete: (id) => remove.mutateAsync(id),
+    invalidate,
+  });
 
   const stats = React.useMemo(() => {
     const totalCost = items.reduce((acc, i) => acc + i.costImpact, 0);
@@ -238,12 +255,15 @@ function ChangelogPage() {
         />
       </div>
 
+      <BulkActionBar {...bulk.bar} />
+
       <ChangelogTable
         items={filtered}
         areaLabel={areaLabel}
         onSubmit={handleSubmit}
         onDelete={handleDelete}
         onTransition={handleTransition}
+        {...bulk.table}
       />
     </main>
   );
@@ -295,12 +315,22 @@ function ChangelogTable({
   onSubmit,
   onDelete,
   onTransition,
+  selected,
+  onToggle,
+  onToggleAll,
+  allSelected,
+  someSelected,
 }: {
   items: ChangeLogListItem[];
   areaLabel: (raw: string) => string;
   onSubmit: (input: Omit<UpsertChangeLogInput, "projectId">) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;
   onTransition: (input: { id: number; action: string }) => Promise<unknown>;
+  selected: Set<number>;
+  onToggle: (id: number) => void;
+  onToggleAll: (next: boolean) => void;
+  allSelected: boolean;
+  someSelected: boolean;
 }) {
   if (items.length === 0) {
     return (
@@ -313,6 +343,11 @@ function ChangelogTable({
       <table className="w-full border-collapse text-sm">
         <thead className="bg-slate-50">
           <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <BulkHeaderCell
+              allSelected={allSelected}
+              someSelected={someSelected}
+              onToggleAll={onToggleAll}
+            />
             <Th>CVR</Th>
             <Th>Title</Th>
             <Th>Status</Th>
@@ -335,6 +370,8 @@ function ChangelogTable({
               onSubmit={onSubmit}
               onDelete={onDelete}
               onTransition={onTransition}
+              selected={selected.has(item.id)}
+              onToggle={() => onToggle(item.id)}
             />
           ))}
         </tbody>
@@ -349,12 +386,16 @@ function ChangelogRow({
   onSubmit,
   onDelete,
   onTransition,
+  selected,
+  onToggle,
 }: {
   item: ChangeLogListItem;
   areaLabel: (raw: string) => string;
   onSubmit: (input: Omit<UpsertChangeLogInput, "projectId">) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;
   onTransition: (input: { id: number; action: string }) => Promise<unknown>;
+  selected: boolean;
+  onToggle: () => void;
 }) {
   const disciplineLabel = item.discipline
     ? (disciplineById[item.discipline]?.label ?? item.discipline)
@@ -365,6 +406,7 @@ function ChangelogRow({
     <ChangelogDialog
       trigger={
         <tr className="cursor-pointer hover:bg-slate-50 transition-colors">
+          <BulkRowCell checked={selected} onToggle={onToggle} />
           <td className={`${cellCls} font-mono text-xs text-slate-700`}>
             {item.cvrNumber || "—"}
           </td>

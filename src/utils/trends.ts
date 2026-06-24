@@ -35,6 +35,11 @@ import {
 import { applyWorkflowTransition } from "./workflow.server";
 import { TREND_TRANSITIONS } from "./workflow";
 import { TREND_STATUS_LABELS } from "./trendLabels";
+import { allocateEntityNumber, allocateIfBlank } from "./entityNumbers.server";
+import {
+  flushNotificationEmails,
+  type PendingNotificationEmail,
+} from "./notification-email.server";
 
 /**
  * SERVER-SIDE Trend module. Trends are anticipated cost impacts that haven't
@@ -331,7 +336,18 @@ export const upsertTrend = createServerFn({ method: "POST" })
         return updated;
       }
       const created = await tx.trend.create({
-        data: { ...payload, createdById: actor.id },
+        data: {
+          ...payload,
+          // Auto-assign a trend number when blank; a typed value (manual
+          // override / legacy import) is kept as-is.
+          trendNumber: await allocateIfBlank(
+            tx,
+            data.projectId,
+            "Trend",
+            data.trendNumber,
+          ),
+          createdById: actor.id,
+        },
       });
       await recordCreate(tx, {
         entityType: "Trend",
@@ -357,6 +373,7 @@ export const transitionTrend = createServerFn({ method: "POST" })
       select: { projectId: true },
     });
     const actor = await requireProjectAccess(pre.projectId);
+    const pendingEmails: PendingNotificationEmail[] = [];
     const row = await prisma.$transaction(async (tx) => {
       const before = await tx.trend.findUniqueOrThrow({
         where: { id: data.id },
@@ -367,6 +384,7 @@ export const transitionTrend = createServerFn({ method: "POST" })
         actor,
         action: data.action,
         comment: data.comment,
+        pendingEmails,
         config: {
           entityType: "Trend",
           transitionMap: TREND_TRANSITIONS,
@@ -389,6 +407,8 @@ export const transitionTrend = createServerFn({ method: "POST" })
       });
       return updated;
     });
+    // After commit: send email copies (no-op unless email is configured).
+    await flushNotificationEmails(pendingEmails);
     return toItem(row);
   });
 
@@ -433,9 +453,13 @@ export const promoteTrendToCvr = createServerFn({ method: "POST" })
       const cvr = await tx.changeLog.create({
         data: {
           projectId: trend.projectId,
-          // Number assigned by the user later; not auto-generated to match
-          // the existing CVR numbering convention.
-          cvrNumber: "",
+          // Mint a real CVR number from the project sequence; the source trend
+          // is recorded in `notes` below.
+          cvrNumber: await allocateEntityNumber(
+            tx,
+            trend.projectId,
+            "ChangeLog",
+          ),
           title: trend.title,
           description: trend.description,
           // CVR opens for the team to refine before submitting for approval;

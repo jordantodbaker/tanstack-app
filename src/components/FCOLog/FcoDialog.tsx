@@ -493,7 +493,7 @@ function FcoDialogBody({
             <Labeled label="FCO Number">
               <Input
                 value={form.fcoNumber}
-                placeholder="FCO-001"
+                placeholder="Auto-assigned if blank"
                 onChange={(e) => update("fcoNumber", e.target.value)}
               />
             </Labeled>

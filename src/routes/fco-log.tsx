@@ -55,6 +55,13 @@ import { fcoCsvColumns } from "~/utils/fcoLogCsv";
 import { ExportCsvButton } from "~/components/ExportCsvButton";
 import { SelectProjectBanner } from "~/components/SelectProjectBanner";
 import { formatAreaLabel } from "~/utils/areaLabels";
+import { FCO_TRANSITIONS } from "~/utils/workflow";
+import { useBulkActions } from "~/lib/use-bulk-selection";
+import {
+  BulkActionBar,
+  BulkHeaderCell,
+  BulkRowCell,
+} from "~/components/BulkActionBar";
 
 export const Route = createFileRoute("/fco-log")({
   loader: async ({ context }) => {
@@ -150,6 +157,16 @@ function FcoLogPage() {
     () => items.filter(matchesFilters),
     [items, matchesFilters],
   );
+
+  // Bulk selection + actions over the currently-filtered rows.
+  const bulk = useBulkActions({
+    rows: filtered,
+    transitions: FCO_TRANSITIONS,
+    entityNoun: "FCO",
+    onTransition: (input) => transition.mutateAsync(input),
+    onDelete: (id) => remove.mutateAsync(id),
+    invalidate,
+  });
 
   const stats = React.useMemo(() => {
     const openCount = items.filter((i) =>
@@ -300,6 +317,8 @@ function FcoLogPage() {
         </div>
       </div>
 
+      <BulkActionBar {...bulk.bar} />
+
       <FcoTable
         items={filtered}
         projectId={projectId}
@@ -308,6 +327,7 @@ function FcoLogPage() {
         onDelete={handleDelete}
         onPromote={handlePromote}
         onTransition={handleTransition}
+        {...bulk.table}
       />
     </main>
   );
@@ -372,6 +392,11 @@ function FcoTable({
   onDelete,
   onPromote,
   onTransition,
+  selected,
+  onToggle,
+  onToggleAll,
+  allSelected,
+  someSelected,
 }: {
   items: FcoListItem[];
   projectId: number | null;
@@ -380,6 +405,11 @@ function FcoTable({
   onDelete: (id: number) => Promise<unknown>;
   onPromote: (id: number) => Promise<unknown>;
   onTransition: (input: { id: number; action: string }) => Promise<unknown>;
+  selected: Set<number>;
+  onToggle: (id: number) => void;
+  onToggleAll: (next: boolean) => void;
+  allSelected: boolean;
+  someSelected: boolean;
 }) {
   if (items.length === 0) {
     return (
@@ -392,6 +422,11 @@ function FcoTable({
       <table className="w-full border-collapse text-sm">
         <thead className="bg-slate-50">
           <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <BulkHeaderCell
+              allSelected={allSelected}
+              someSelected={someSelected}
+              onToggleAll={onToggleAll}
+            />
             <Th>FCO #</Th>
             <Th>Title / Location</Th>
             <Th>Status</Th>
@@ -415,6 +450,8 @@ function FcoTable({
               onDelete={onDelete}
               onPromote={onPromote}
               onTransition={onTransition}
+              selected={selected.has(item.id)}
+              onToggle={() => onToggle(item.id)}
             />
           ))}
         </tbody>
@@ -431,6 +468,8 @@ function FcoRow({
   onDelete,
   onPromote,
   onTransition,
+  selected,
+  onToggle,
 }: {
   item: FcoListItem;
   projectId: number | null;
@@ -439,6 +478,8 @@ function FcoRow({
   onDelete: (id: number) => Promise<unknown>;
   onPromote: (id: number) => Promise<unknown>;
   onTransition: (input: { id: number; action: string }) => Promise<unknown>;
+  selected: boolean;
+  onToggle: () => void;
 }) {
   const disciplineLabel = item.discipline
     ? (disciplineById[item.discipline]?.label ?? item.discipline)
@@ -452,6 +493,7 @@ function FcoRow({
       projectId={projectId}
       trigger={
         <tr className={`cursor-pointer transition-colors ${rowHighlight}`}>
+          <BulkRowCell checked={selected} onToggle={onToggle} />
           <td className={`${cellCls} font-mono text-xs text-slate-700`}>
             {item.fcoNumber || `#${item.id}`}
           </td>

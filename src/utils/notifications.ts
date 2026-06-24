@@ -8,6 +8,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from "./notifications.server";
+import { isEmailConfigured } from "../server/email.server";
 
 /**
  * CLIENT-SAFE. Mirrors the `users.ts` / `users.server.ts` split — all
@@ -67,6 +68,21 @@ export const markAllNotificationsReadFn = createServerFn({
   await markAllNotificationsRead(userId);
   return { ok: true };
 });
+
+/** Whether the server has email delivery configured (provider creds present).
+ *  Drives whether the UI offers the per-user "also email me" toggle — no point
+ *  showing it when nothing can be sent. */
+export const fetchEmailDeliveryConfigured = createServerFn({
+  method: "GET",
+}).handler(async (): Promise<boolean> => isEmailConfigured());
+
+export const emailDeliveryConfiguredQueryOptions = () =>
+  queryOptions({
+    queryKey: ["emailDeliveryConfigured"],
+    queryFn: () => fetchEmailDeliveryConfigured(),
+    // Server config doesn't change within a session; cache for the session.
+    staleTime: Infinity,
+  });
 
 export const notificationsQueryOptions = () =>
   queryOptions({

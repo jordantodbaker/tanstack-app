@@ -1,6 +1,8 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { prisma } from "../server/db";
+import { isEmailNotificationOptedIn } from "~/lib/email-pref";
 import {
   getAccessibleProjectIds,
   requireProjectAccess,
@@ -36,6 +38,7 @@ export type DashboardPrefs = {
 type StoredPrefs = {
   dashboard?: { hiddenWidgets?: unknown; widgetOrder?: unknown };
   recentlyViewed?: unknown;
+  notifications?: { emailEnabled?: unknown };
 };
 
 const EMPTY_DASHBOARD_PREFS: DashboardPrefs = {
@@ -117,6 +120,62 @@ export const updateUserDashboardPrefs = createServerFn({ method: "POST" })
       hiddenWidgets: data.hiddenWidgets,
       widgetOrder: data.widgetOrder,
     };
+  });
+
+// ── Email notification preference ───────────────────────────────────────────
+
+export const fetchEmailNotificationPref = createServerFn({
+  method: "GET",
+}).handler(async (): Promise<boolean> => {
+  const actor = await resolveCurrentUser();
+  if (!actor) return true;
+  const row = await prisma.userPreference.findUnique({
+    where: { userId: actor.id },
+    select: { prefs: true },
+  });
+  return isEmailNotificationOptedIn(row?.prefs);
+});
+
+export const emailNotificationPrefQueryOptions = () =>
+  queryOptions({
+    queryKey: ["emailNotificationPref"],
+    queryFn: () => fetchEmailNotificationPref(),
+    staleTime: Infinity,
+  });
+
+export const updateEmailNotificationPref = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) =>
+    z.object({ enabled: z.boolean() }).parse(input),
+  )
+  .handler(async ({ data }): Promise<boolean> => {
+    const actor = await resolveCurrentUser();
+    if (!actor) throw new Error("Unauthorized: not signed in");
+    // Merge into the existing blob so dashboard / recents prefs aren't
+    // clobbered — same pattern as the dashboard + recents writers.
+    const existing = await prisma.userPreference.findUnique({
+      where: { userId: actor.id },
+      select: { prefs: true },
+    });
+    const base =
+      typeof existing?.prefs === "object" && existing.prefs !== null
+        ? (existing.prefs as object)
+        : {};
+    const existingNotif = (base as StoredPrefs).notifications;
+    const merged = {
+      ...base,
+      notifications: {
+        ...(typeof existingNotif === "object" && existingNotif !== null
+          ? existingNotif
+          : {}),
+        emailEnabled: data.enabled,
+      },
+    };
+    await prisma.userPreference.upsert({
+      where: { userId: actor.id },
+      create: { userId: actor.id, prefs: merged },
+      update: { prefs: merged },
+    });
+    return data.enabled;
   });
 
 // ── Recently viewed ─────────────────────────────────────────────────────────

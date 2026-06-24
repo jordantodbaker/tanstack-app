@@ -341,7 +341,7 @@ function TrendDialogBody({
                 <Labeled label="Trend Number">
                   <Input
                     value={form.trendNumber}
-                    placeholder="TR-001"
+                    placeholder="Auto-assigned if blank"
                     onChange={(e) => update("trendNumber", e.target.value)}
                   />
                 </Labeled>

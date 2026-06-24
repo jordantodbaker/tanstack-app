@@ -450,7 +450,7 @@ function ChangelogDialogBody({
             <Labeled label="CVR Number">
               <Input
                 value={form.cvrNumber}
-                placeholder="CVR-001"
+                placeholder="Auto-assigned if blank"
                 onChange={(e) => update("cvrNumber", e.target.value)}
               />
             </Labeled>

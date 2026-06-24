@@ -287,8 +287,37 @@ model Project {
   basisInputs        BasisInputs?
   estimateSnapshots  EstimateSnapshot[]
   reportingPeriods   ReportingPeriod[]
+  numberSequences    NumberSequence[]
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @default(now())
+}
+
+// Per-project, per-entity counter backing the auto-generated record numbers
+// (CVR / FCO / RFI / PCO / Trend). One row per (projectId, entityType);
+// `allocateEntityNumber` (entityNumbers.server.ts) does a single atomic
+// `INSERT ... ON CONFLICT DO UPDATE` increment, so two concurrent creates can
+// never read the same `lastValue` — Postgres serializes the row update and
+// each caller gets a distinct, gap-free number. The allocation runs inside the
+// same transaction as the record create, so a rolled-back create rolls back
+// the increment too (no burned numbers).
+//
+// `prefix` + `padWidth` are seeded from per-entity defaults the first time a
+// number is allocated and can be edited on the row afterward to change the
+// format (e.g. prefix "CO-") without a code change. `lastValue` is the most
+// recently assigned number (0 before the first allocation).
+model NumberSequence {
+  id         Int      @id @default(autoincrement())
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId  Int
+  /// Discriminates the entity: "ChangeLog" | "FieldChangeOrder" | "Rfi" |
+  /// "Pco" | "Trend" — the same string the audit log uses as `entityType`.
+  entityType String
+  prefix     String
+  padWidth   Int      @default(4)
+  lastValue  Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([projectId, entityType])
 }
 
 // Subcontractor company. `displayId` is the human-assigned ID code (unique).

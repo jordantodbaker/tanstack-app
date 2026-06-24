@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "seed-test": "tsx prisma/seed-test.ts",
+    "backfill-numbers": "tsx prisma/backfill-number-sequences.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

@@ -5,6 +5,7 @@ import {
   resolveCommentRecipients,
   resolveNotificationRecipients,
 } from "./notification-recipients";
+import type { PendingNotificationEmail } from "./notification-email.server";
 
 /**
  * SERVER-ONLY notification fan-out. Called from inside workflow-transition
@@ -45,11 +46,15 @@ export type WorkflowEvent = {
  * back a successful workflow transition because of one would be worse.
  * Audit events keep the strict "fail-the-transaction" contract because a
  * missing audit row is a data-integrity problem; notifications are not.
+ *
+ * Returns the recipients + content as a `PendingNotificationEmail` (or `null`
+ * when there's no one to notify / on failure) so the caller can send email
+ * copies AFTER its transaction commits — see `flushNotificationEmails`.
  */
 export async function emitWorkflowNotification(
   db: NotificationDb,
   event: WorkflowEvent,
-): Promise<void> {
+): Promise<PendingNotificationEmail | null> {
   try {
     // Reviewer lookup is only worth doing when the destination state needs
     // attention — skip the round-trip for outcome-only transitions.
@@ -78,7 +83,7 @@ export async function emitWorkflowNotification(
       needsReview: event.needsReview,
       reviewerIds,
     });
-    if (recipients.length === 0) return;
+    if (recipients.length === 0) return null;
 
     await db.notification.createMany({
       data: recipients.map((userId) => ({
@@ -91,8 +96,18 @@ export async function emitWorkflowNotification(
         actorEmail: event.actor.email,
       })),
     });
+    return {
+      recipientUserIds: recipients,
+      projectId: event.projectId,
+      entityType: event.entityType,
+      entityId: event.entityId,
+      title: event.title,
+      message: event.message,
+      actorEmail: event.actor.email,
+    };
   } catch (err) {
     console.error("emitWorkflowNotification failed:", err);
+    return null;
   }
 }
 
@@ -119,18 +134,21 @@ export type CommentEvent = {
  * who has commented on the record before (deduped, actor excluded). Same
  * fail-soft error handling as `emitWorkflowNotification` — a notification
  * miss is logged, not thrown, so a comment write always commits.
+ *
+ * Returns the recipients + content as a `PendingNotificationEmail` (or `null`)
+ * so the caller can send email copies after its transaction commits.
  */
 export async function emitCommentNotification(
   db: NotificationDb,
   event: CommentEvent,
-): Promise<void> {
+): Promise<PendingNotificationEmail | null> {
   try {
     const recipients = resolveCommentRecipients({
       originatorId: event.originatorId,
       actorId: event.actor.id,
       priorAuthorIds: event.priorAuthorIds,
     });
-    if (recipients.length === 0) return;
+    if (recipients.length === 0) return null;
 
     await db.notification.createMany({
       data: recipients.map((userId) => ({
@@ -143,8 +161,18 @@ export async function emitCommentNotification(
         actorEmail: event.actor.email,
       })),
     });
+    return {
+      recipientUserIds: recipients,
+      projectId: event.projectId,
+      entityType: event.entityType,
+      entityId: event.entityId,
+      title: event.title,
+      message: event.message,
+      actorEmail: event.actor.email,
+    };
   } catch (err) {
     console.error("emitCommentNotification failed:", err);
+    return null;
   }
 }
 

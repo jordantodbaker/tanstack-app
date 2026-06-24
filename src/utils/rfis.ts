@@ -25,6 +25,11 @@ import { diffFields, recordCreate, recordDelete, recordUpdate } from "./audit.se
 import { applyWorkflowTransition } from "./workflow.server";
 import { RFI_TRANSITIONS } from "./workflow";
 import { RFI_STATUS_LABELS } from "./rfiLabels";
+import { allocateEntityNumber, allocateIfBlank } from "./entityNumbers.server";
+import {
+  flushNotificationEmails,
+  type PendingNotificationEmail,
+} from "./notification-email.server";
 
 export const RFI_STATUSES = [
   "DRAFT",
@@ -319,7 +324,18 @@ export const upsertRfi = createServerFn({ method: "POST" })
         return updated;
       }
       const created = await tx.rfi.create({
-        data: { ...payload, createdById: actor.id },
+        data: {
+          ...payload,
+          // Auto-assign an RFI number when blank; a typed value (manual
+          // override / legacy import) is kept as-is.
+          rfiNumber: await allocateIfBlank(
+            tx,
+            data.projectId,
+            "Rfi",
+            data.rfiNumber,
+          ),
+          createdById: actor.id,
+        },
         include: linkedFcosInclude,
       });
       await recordCreate(tx, {
@@ -350,6 +366,7 @@ export const transitionRfi = createServerFn({ method: "POST" })
     // the before-read and the update so the row exiting the transaction
     // already has the relation needed by toItem. Eliminates the post-tx
     // re-fetch round-trip that previously followed this transaction.
+    const pendingEmails: PendingNotificationEmail[] = [];
     const row = await prisma.$transaction(async (tx) => {
       const before = await tx.rfi.findUniqueOrThrow({
         where: { id: data.id },
@@ -361,6 +378,7 @@ export const transitionRfi = createServerFn({ method: "POST" })
         actor,
         action: data.action,
         comment: data.comment,
+        pendingEmails,
         config: {
           entityType: "Rfi",
           transitionMap: RFI_TRANSITIONS,
@@ -386,6 +404,8 @@ export const transitionRfi = createServerFn({ method: "POST" })
           }),
       });
     });
+    // After commit: send email copies (no-op unless email is configured).
+    await flushNotificationEmails(pendingEmails);
     return toItem(row);
   });
 
@@ -412,7 +432,13 @@ export const promoteRfiToFco = createServerFn({ method: "POST" })
       const fco = await tx.fieldChangeOrder.create({
         data: {
           projectId: rfi.projectId,
-          fcoNumber: "",
+          // Mint a real FCO number from the project sequence; the source RFI
+          // is recorded via `linkedRfiId` and the legacy `rfiNumbers` echo.
+          fcoNumber: await allocateEntityNumber(
+            tx,
+            rfi.projectId,
+            "FieldChangeOrder",
+          ),
           title: rfi.subject,
           description: rfi.question,
           // Status defaults to DRAFT via the schema; do not pass it here so

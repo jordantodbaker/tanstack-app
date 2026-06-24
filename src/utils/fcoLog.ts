@@ -37,6 +37,11 @@ import {
   applyWorkflowTransition,
   type WorkflowTransitionConfig,
 } from "./workflow.server";
+import { allocateEntityNumber, allocateIfBlank } from "./entityNumbers.server";
+import {
+  flushNotificationEmails,
+  type PendingNotificationEmail,
+} from "./notification-email.server";
 
 const FCO_STATUSES_NEEDING_REVIEW = new Set<string>([
   "SUBMITTED",
@@ -434,6 +439,14 @@ export const upsertFco = createServerFn({ method: "POST" })
       const created = await tx.fieldChangeOrder.create({
         data: {
           ...editableFields,
+          // Auto-assign an FCO number when blank; a typed value (manual
+          // override / legacy import) is kept as-is.
+          fcoNumber: await allocateIfBlank(
+            tx,
+            data.projectId,
+            "FieldChangeOrder",
+            data.fcoNumber,
+          ),
           projectId: data.projectId,
           createdById: actor.id,
         },
@@ -466,6 +479,7 @@ export const transitionFco = createServerFn({ method: "POST" })
     // followed this transaction. `applyWorkflowTransition`'s Row generic
     // infers to the with-relations shape; the audit diff (config.auditFields)
     // names scalar columns only, which are still valid keys on the wider row.
+    const pendingEmails: PendingNotificationEmail[] = [];
     const row = await prisma.$transaction(async (tx) => {
       const before = await tx.fieldChangeOrder.findUniqueOrThrow({
         where: { id: data.id },
@@ -485,8 +499,11 @@ export const transitionFco = createServerFn({ method: "POST" })
             data: payload,
             include: linkedRelationsInclude,
           }),
+        pendingEmails,
       });
     });
+    // After commit: send email copies (no-op unless email is configured).
+    await flushNotificationEmails(pendingEmails);
     return toItem(row);
   });
 
@@ -531,7 +548,9 @@ export const promoteFcoToCvr = createServerFn({ method: "POST" })
       const cvr = await tx.changeLog.create({
         data: {
           projectId: fco.projectId,
-          cvrNumber: fco.fcoNumber ? `CVR-from-${fco.fcoNumber}` : "",
+          // Mint a real CVR number from the project sequence; the FCO it came
+          // from is recorded in `notes` below.
+          cvrNumber: await allocateEntityNumber(tx, fco.projectId, "ChangeLog"),
           title: fco.title,
           description:
             fco.description ||

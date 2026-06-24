@@ -36,6 +36,11 @@ import {
 import { applyWorkflowTransition } from "./workflow.server";
 import { PCO_TRANSITIONS } from "./workflow";
 import { PCO_STATUS_LABELS } from "./pcoLabels";
+import { allocateIfBlank } from "./entityNumbers.server";
+import {
+  flushNotificationEmails,
+  type PendingNotificationEmail,
+} from "./notification-email.server";
 
 /**
  * SERVER-SIDE PCO module. PCOs (Prime / Owner Change Orders) bundle one or
@@ -451,7 +456,18 @@ export const upsertPco = createServerFn({ method: "POST" })
         pcoId = updated.id;
       } else {
         const created = await tx.pco.create({
-          data: { ...payload, createdById: actor.id },
+          data: {
+            ...payload,
+            // Auto-assign a PCO number when blank; a typed value (manual
+            // override / legacy import) is kept as-is.
+            pcoNumber: await allocateIfBlank(
+              tx,
+              data.projectId,
+              "Pco",
+              data.pcoNumber,
+            ),
+            createdById: actor.id,
+          },
         });
         await recordCreate(tx, {
           entityType: "Pco",
@@ -557,6 +573,7 @@ export const transitionPco = createServerFn({ method: "POST" })
     // Apply the workflow transition with the `linkedCvrs` include on both
     // before and update so the row exiting the transaction already carries
     // the relation needed by toItem. Eliminates the post-tx re-fetch.
+    const pendingEmails: PendingNotificationEmail[] = [];
     const row = await prisma.$transaction(async (tx) => {
       const before = await tx.pco.findUniqueOrThrow({
         where: { id: data.id },
@@ -568,6 +585,7 @@ export const transitionPco = createServerFn({ method: "POST" })
         actor,
         action: data.action,
         comment: data.comment,
+        pendingEmails,
         config: {
           entityType: "Pco",
           transitionMap: PCO_TRANSITIONS,
@@ -622,6 +640,8 @@ export const transitionPco = createServerFn({ method: "POST" })
           }),
       });
     });
+    // After commit: send email copies (no-op unless email is configured).
+    await flushNotificationEmails(pendingEmails);
     return toItem(row);
   });
 

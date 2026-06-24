@@ -256,7 +256,7 @@ function PcoDialogBody({
                 <Labeled label="PCO Number">
                   <Input
                     value={form.pcoNumber}
-                    placeholder="PCO-001"
+                    placeholder="Auto-assigned if blank"
                     onChange={(e) => update("pcoNumber", e.target.value)}
                   />
                 </Labeled>

@@ -4,6 +4,10 @@ import { prisma } from "../server/db";
 import { z } from "zod";
 import { requireProjectAccess } from "./users.server";
 import { emitCommentNotification } from "./notifications.server";
+import {
+  flushNotificationEmails,
+  type PendingNotificationEmail,
+} from "./notification-email.server";
 import { Id, ProjectId } from "~/lib/validators";
 
 const CommentsInputSchema = z.object({
@@ -205,6 +209,7 @@ export const postComment = createServerFn({ method: "POST" })
       );
     }
 
+    const pendingEmails: PendingNotificationEmail[] = [];
     const row = await prisma.$transaction(async (tx) => {
       const created = await tx.comment.create({
         data: {
@@ -229,7 +234,7 @@ export const postComment = createServerFn({ method: "POST" })
         },
         select: { authorId: true },
       });
-      await emitCommentNotification(tx, {
+      const pending = await emitCommentNotification(tx, {
         entityType: data.entityType,
         entityId: data.entityId,
         projectId: data.projectId,
@@ -239,7 +244,10 @@ export const postComment = createServerFn({ method: "POST" })
         actor,
         priorAuthorIds: priorAuthors.map((p) => p.authorId),
       });
+      if (pending) pendingEmails.push(pending);
       return created;
     });
+    // After commit: send email copies (no-op unless email is configured).
+    await flushNotificationEmails(pendingEmails);
     return toItem(row);
   });

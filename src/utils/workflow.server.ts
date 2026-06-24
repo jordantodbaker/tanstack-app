@@ -4,6 +4,7 @@ import type { Transition } from "./workflow";
 import { availableTransitions } from "./workflow";
 import { diffFields, recordUpdate } from "./audit.server";
 import { emitWorkflowNotification } from "./notifications.server";
+import type { PendingNotificationEmail } from "./notification-email.server";
 
 /**
  * SERVER-ONLY shared transition orchestration for CVR/FCO workflow handlers.
@@ -55,6 +56,10 @@ export type WorkflowTransitionConfig<
  * action isn't permitted from the current status for this actor. Caller
  * provides `updateRow`, which should close over the surrounding `tx` and
  * apply the merged payload to the correct prisma model.
+ *
+ * When a `pendingEmails` collector is passed, the notification email batch is
+ * pushed into it (inside the transaction) so the caller can send email copies
+ * after the transaction commits via `flushNotificationEmails`.
  */
 export async function applyWorkflowTransition<
   Row extends RowMinimum,
@@ -67,6 +72,7 @@ export async function applyWorkflowTransition<
   comment,
   config,
   updateRow,
+  pendingEmails,
 }: {
   tx: WorkflowTx;
   before: Row;
@@ -75,6 +81,7 @@ export async function applyWorkflowTransition<
   comment?: string;
   config: WorkflowTransitionConfig<Row, S>;
   updateRow: (data: Record<string, unknown>) => Promise<Row>;
+  pendingEmails?: PendingNotificationEmail[];
 }): Promise<Row> {
   const isOriginator =
     before.createdById !== null && before.createdById === actor.id;
@@ -107,7 +114,7 @@ export async function applyWorkflowTransition<
 
   const fromLabel = config.statusLabels[before.status as S];
   const toLabel = config.statusLabels[updated.status as S];
-  await emitWorkflowNotification(tx, {
+  const pending = await emitWorkflowNotification(tx, {
     entityType: config.entityType,
     entityId: updated.id,
     projectId: updated.projectId,
@@ -117,6 +124,7 @@ export async function applyWorkflowTransition<
     actor,
     needsReview: config.statusesNeedingReview.has(updated.status),
   });
+  if (pending && pendingEmails) pendingEmails.push(pending);
 
   return updated;
 }

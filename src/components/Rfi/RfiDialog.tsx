@@ -357,7 +357,7 @@ function RfiDialogBody({
                 <Labeled label="RFI Number">
                   <Input
                     value={form.rfiNumber}
-                    placeholder="RFI-001"
+                    placeholder="Auto-assigned if blank"
                     onChange={(e) => update("rfiNumber", e.target.value)}
                   />
                 </Labeled>

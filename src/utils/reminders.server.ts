@@ -14,6 +14,10 @@ import {
 } from "./fcoLog";
 import { type RfiItem, type RfiPriority, type RfiStatus } from "./rfis";
 import { selectReminders, type RunRemindersResult } from "./reminders";
+import {
+  flushNotificationEmails,
+  type PendingNotificationEmail,
+} from "./notification-email.server";
 
 /**
  * SERVER-ONLY. Drives the daily time-based reminder cron.
@@ -178,6 +182,7 @@ export async function runScheduledReminders(
     // Single transaction per project so a partial failure rolls back the
     // notifications + log together. Failure for one project shouldn't kill
     // the whole run; the caller catches at the outer level.
+    const pendingEmails: PendingNotificationEmail[] = [];
     await prisma.$transaction(async (tx) => {
       for (const r of reminders) {
         await tx.notification.createMany({
@@ -201,9 +206,22 @@ export async function runScheduledReminders(
             sentAt: now,
           })),
         });
+        pendingEmails.push({
+          recipientUserIds: r.recipientUserIds,
+          projectId: r.projectId,
+          entityType: r.entityType,
+          entityId: r.entityId,
+          title: r.title,
+          message: r.message,
+          actorEmail: SYSTEM_ACTOR_EMAIL,
+        });
         notificationsCreated += r.recipientUserIds.length;
       }
     });
+    // After this project's reminders commit, send email copies (no-op unless
+    // email is configured). Per-project so a slow send doesn't hold a DB
+    // transaction open.
+    await flushNotificationEmails(pendingEmails);
     remindersFired += reminders.length;
   }
 

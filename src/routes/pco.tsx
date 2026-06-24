@@ -49,6 +49,13 @@ import {
 } from "~/utils/projectCookie";
 import { formatMoney } from "~/lib/formatting";
 import { SelectProjectBanner } from "~/components/SelectProjectBanner";
+import { PCO_TRANSITIONS } from "~/utils/workflow";
+import { useBulkActions } from "~/lib/use-bulk-selection";
+import {
+  BulkActionBar,
+  BulkHeaderCell,
+  BulkRowCell,
+} from "~/components/BulkActionBar";
 
 export const Route = createFileRoute("/pco")({
   loader: async ({ context }) => {
@@ -116,6 +123,16 @@ function PcoLogPage() {
     () => items.filter(matchesFilters),
     [items, matchesFilters],
   );
+
+  // Bulk selection + actions over the currently-filtered rows.
+  const bulk = useBulkActions({
+    rows: filtered,
+    transitions: PCO_TRANSITIONS,
+    entityNoun: "PCO",
+    onTransition: (input) => transition.mutateAsync(input),
+    onDelete: (id) => remove.mutateAsync(id),
+    invalidate,
+  });
 
   const stats = React.useMemo(() => {
     // "Open" — pre-approval bucket. Sums requested $ (what we're chasing
@@ -241,12 +258,15 @@ function PcoLogPage() {
         </div>
       </div>
 
+      <BulkActionBar {...bulk.bar} />
+
       <PcoTable
         items={filtered}
         projectId={projectId}
         onSubmit={handleSubmit}
         onDelete={handleDelete}
         onTransition={handleTransition}
+        {...bulk.table}
       />
     </main>
   );
@@ -312,12 +332,22 @@ function PcoTable({
   onSubmit,
   onDelete,
   onTransition,
+  selected,
+  onToggle,
+  onToggleAll,
+  allSelected,
+  someSelected,
 }: {
   items: PcoListItem[];
   projectId: number | null;
   onSubmit: (input: Omit<UpsertPcoInput, "projectId">) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;
   onTransition: (input: { id: number; action: string }) => Promise<unknown>;
+  selected: Set<number>;
+  onToggle: (id: number) => void;
+  onToggleAll: (next: boolean) => void;
+  allSelected: boolean;
+  someSelected: boolean;
 }) {
   if (items.length === 0) {
     return <TableEmptyState message="No PCOs match the current filters." />;
@@ -327,6 +357,11 @@ function PcoTable({
       <table className="w-full border-collapse text-sm">
         <thead className="bg-slate-50">
           <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <BulkHeaderCell
+              allSelected={allSelected}
+              someSelected={someSelected}
+              onToggleAll={onToggleAll}
+            />
             <Th>PCO #</Th>
             <Th>Title</Th>
             <Th>Status</Th>
@@ -347,6 +382,8 @@ function PcoTable({
               onSubmit={onSubmit}
               onDelete={onDelete}
               onTransition={onTransition}
+              selected={selected.has(item.id)}
+              onToggle={() => onToggle(item.id)}
             />
           ))}
         </tbody>
@@ -361,12 +398,16 @@ function PcoRow({
   onSubmit,
   onDelete,
   onTransition,
+  selected,
+  onToggle,
 }: {
   item: PcoListItem;
   projectId: number | null;
   onSubmit: (input: Omit<UpsertPcoInput, "projectId">) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;
   onTransition: (input: { id: number; action: string }) => Promise<unknown>;
+  selected: boolean;
+  onToggle: () => void;
 }) {
   const cellCls = "px-3 py-2 border-b border-slate-100 align-top";
   return (
@@ -374,6 +415,7 @@ function PcoRow({
       projectId={projectId}
       trigger={
         <tr className="cursor-pointer hover:bg-slate-50 transition-colors">
+          <BulkRowCell checked={selected} onToggle={onToggle} />
           <td className={`${cellCls} font-mono text-xs text-slate-700`}>
             {item.pcoNumber || `#${item.id}`}
           </td>

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Bell } from "lucide-react";
 import {
+  emailDeliveryConfiguredQueryOptions,
   markAllNotificationsReadFn,
   markNotificationReadFn,
   notificationsQueryOptions,
@@ -10,11 +11,17 @@ import {
   type NotificationItem,
 } from "~/utils/notifications";
 import {
+  emailNotificationPrefQueryOptions,
+  updateEmailNotificationPref,
+} from "~/utils/userPreferences";
+import { entityListPath } from "~/lib/entity-routes";
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
 import { QueryError } from "~/components/ui/list-page";
 
 /**
@@ -42,6 +49,23 @@ export function NotificationBell() {
     enabled: open,
   });
 
+  // Email-preference toggle: only surfaced when the server actually has email
+  // delivery configured. Both fetched lazily on open.
+  const { data: emailConfigured = false } = useQuery({
+    ...emailDeliveryConfiguredQueryOptions(),
+    enabled: open,
+  });
+  const { data: emailEnabled = true } = useQuery({
+    ...emailNotificationPrefQueryOptions(),
+    enabled: open && emailConfigured,
+  });
+  const setEmailPref = useMutation({
+    mutationFn: (enabled: boolean) =>
+      updateEmailNotificationPref({ data: { enabled } }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["emailNotificationPref"] }),
+  });
+
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["notifications"] });
   };
@@ -58,11 +82,9 @@ export function NotificationBell() {
   function handleClick(n: NotificationItem) {
     if (n.readAt === null) markRead.mutate(n.id);
     setOpen(false);
-    if (n.entityType === "ChangeLog") {
-      void navigate({ to: "/changelog" });
-    } else if (n.entityType === "FieldChangeOrder") {
-      void navigate({ to: "/fco-log" });
-    }
+    // Navigate to the entity's list page; the user opens the row from there.
+    const path = entityListPath(n.entityType);
+    if (path) void navigate({ to: path });
   }
 
   const badge = unreadCount > 9 ? "9+" : String(unreadCount);
@@ -124,6 +146,22 @@ export function NotificationBell() {
               />
             ))}
           </ul>
+        )}
+        {emailConfigured && (
+          <div className="flex items-center gap-2 border-t border-slate-200 px-3 py-2">
+            <Checkbox
+              id="notif-email-pref"
+              checked={emailEnabled}
+              onCheckedChange={(v) => setEmailPref.mutate(v === true)}
+              disabled={setEmailPref.isPending}
+            />
+            <label
+              htmlFor="notif-email-pref"
+              className="cursor-pointer select-none text-xs text-slate-600"
+            >
+              Also email me these notifications
+            </label>
+          </div>
         )}
       </PopoverContent>
     </Popover>

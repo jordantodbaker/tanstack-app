@@ -38,6 +38,11 @@ import {
   type CvrCostType,
   type CvrLineItemDto,
 } from "./cvrLineItems";
+import { allocateIfBlank } from "./entityNumbers.server";
+import {
+  flushNotificationEmails,
+  type PendingNotificationEmail,
+} from "./notification-email.server";
 
 const CVR_STATUSES_NEEDING_REVIEW = new Set<string>([
   "IN_REVIEW",
@@ -438,6 +443,14 @@ export const upsertChangeLog = createServerFn({ method: "POST" })
         const created = await tx.changeLog.create({
           data: {
             ...editableFields,
+            // Auto-assign a CVR number when blank; a typed value (manual
+            // override / legacy import) is kept as-is.
+            cvrNumber: await allocateIfBlank(
+              tx,
+              data.projectId,
+              "ChangeLog",
+              data.cvrNumber,
+            ),
             projectId: data.projectId,
             createdById: actor.id,
           },
@@ -483,6 +496,7 @@ export const transitionChangeLog = createServerFn({ method: "POST" })
     // `projectId` for the access check).
     const actor = await resolveCurrentUser();
     if (!actor) throw new Error("Unauthorized: not signed in");
+    const pendingEmails: PendingNotificationEmail[] = [];
     const row = await prisma.$transaction(async (tx) => {
       const before = await tx.changeLog.findUniqueOrThrow({
         where: { id: data.id },
@@ -497,8 +511,11 @@ export const transitionChangeLog = createServerFn({ method: "POST" })
         config: CVR_WORKFLOW_CONFIG,
         updateRow: (payload) =>
           tx.changeLog.update({ where: { id: data.id }, data: payload }),
+        pendingEmails,
       });
     });
+    // After commit: send email copies (no-op unless email is configured).
+    await flushNotificationEmails(pendingEmails);
     return toItem(row);
   });
 

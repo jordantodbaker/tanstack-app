@@ -13,15 +13,27 @@ export function SearchableSelect({
   options,
   placeholder = "-- Select --",
   onSelect,
+  onSearchChange,
+  loading = false,
 }: {
   value: string;
   options: SearchableSelectOption[];
   placeholder?: string;
   onSelect: (value: string) => void;
+  /** When provided, the parent owns search: the term is reported here (the
+   *  parent fetches matching `options`) and client-side filtering is skipped. */
+  onSearchChange?: (query: string) => void;
+  /** Show a "Searching…" hint while the parent's fetch is in flight. */
+  loading?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const containerRef = React.useRef<HTMLDivElement>(null);
+
+  // Async mode: notify the parent of the search term (it fetches options).
+  React.useEffect(() => {
+    onSearchChange?.(search);
+  }, [search, onSearchChange]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -45,12 +57,14 @@ export function SearchableSelect({
   }, [open]);
 
   const filtered = React.useMemo(() => {
+    // Async mode: `options` are already server-filtered for `search`.
+    if (onSearchChange) return options;
     const q = search.trim().toLowerCase();
     if (!q) return options;
     return options.filter((opt) =>
       (opt.searchText ?? opt.label.toLowerCase()).includes(q),
     );
-  }, [search, options]);
+  }, [search, options, onSearchChange]);
 
   function apply(next: string) {
     onSelect(next);
@@ -67,8 +81,11 @@ export function SearchableSelect({
         onClick={() => setOpen((o) => !o)}
         className={`${editableCellClass} flex items-center justify-between text-left cursor-pointer`}
       >
-        <span className={selected ? "truncate" : "truncate text-slate-400"}>
-          {selected ? selected.label : placeholder}
+        <span className={value ? "truncate" : "truncate text-slate-400"}>
+          {/* Fall back to the raw value when the selected option isn't in the
+              current (possibly server-paged) options, so a saved code still
+              shows instead of reverting to the placeholder. */}
+          {selected ? selected.label : value ? value : placeholder}
         </span>
         <span className="ml-2 shrink-0 text-slate-400">▾</span>
       </button>
@@ -94,7 +111,9 @@ export function SearchableSelect({
               </button>
             </li>
             {filtered.length === 0 ? (
-              <li className="px-2 py-1 text-sm text-slate-400">No matches</li>
+              <li className="px-2 py-1 text-sm text-slate-400">
+                {loading ? "Searching…" : "No matches"}
+              </li>
             ) : (
               filtered.map((opt) => (
                 <li key={opt.value}>

@@ -4,7 +4,7 @@ import { ExternalLink, Printer, Trash2, ArrowUpRight } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { DialogClose } from "~/components/ui/dialog";
 import { EntityDialogShell } from "~/components/EntityDialog/EntityDialogShell";
-import { useCbsSearchableOptions } from "~/lib/use-cbs-searchable-options";
+import { CbsMultiSelect } from "~/components/CbsMultiSelect";
 import { TemplatePicker } from "~/components/EntityDialog/TemplatePicker";
 import {
   fcoTemplatePickerQueryOptions,
@@ -46,8 +46,6 @@ import {
   FCO_PRIORITY_LABELS,
   FcoStatusBadge,
 } from "~/components/FCOLog/FcoBadges";
-import { SearchableMultiSelect } from "~/components/SearchableMultiSelect";
-import type { SearchableSelectOption } from "~/components/SearchableSelect";
 import {
   Tabs,
   TabsList,
@@ -327,7 +325,6 @@ function FcoDialogBody({
     enabled: projectId !== null,
   });
 
-  const cbsOptions: SearchableSelectOption[] = useCbsSearchableOptions();
 
   // Areas for the selected project — populates the Area dropdown. We store
   // the area id as a string in `locationArea`, mirroring the FefRow.area
@@ -664,9 +661,8 @@ function FcoDialogBody({
             label="Affected CBS Codes"
             help="Search and select one or more CBS items"
           >
-            <SearchableMultiSelect
+            <CbsMultiSelect
               values={form.cbsCodes}
-              options={cbsOptions}
               placeholder="Search CBS items…"
               onChange={(v) => update("cbsCodes", v)}
             />

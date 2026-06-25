@@ -4,7 +4,7 @@ import { Plus, Printer, Trash2, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { DialogClose } from "~/components/ui/dialog";
 import { EntityDialogShell } from "~/components/EntityDialog/EntityDialogShell";
-import { useCbsSearchableOptions } from "~/lib/use-cbs-searchable-options";
+import { CbsMultiSelect } from "~/components/CbsMultiSelect";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import {
@@ -43,11 +43,7 @@ import {
   TYPE_LABELS,
 } from "~/components/Changelog/StatusBadge";
 import { WorkflowActions } from "~/components/WorkflowActions";
-import { SearchableMultiSelect } from "~/components/SearchableMultiSelect";
-import {
-  SearchableSelect,
-  type SearchableSelectOption,
-} from "~/components/SearchableSelect";
+import { CbsSelect } from "~/components/CbsSelect";
 import {
   Tabs,
   TabsList,
@@ -304,8 +300,6 @@ function ChangelogDialogBody({
         )
       : [];
 
-  // `open` is implicitly true — only mounted when outer is open + full loaded.
-  const cbsOptions: SearchableSelectOption[] = useCbsSearchableOptions();
 
   // Areas for the selected project — populates the Area dropdown. CVRs may
   // be project-wide, so "— None —" is the default. Legacy rows that pre-date
@@ -559,9 +553,8 @@ function ChangelogDialogBody({
             label="Affected CBS Codes"
             help="Search and select one or more CBS items"
           >
-            <SearchableMultiSelect
+            <CbsMultiSelect
               values={form.cbsCodes}
-              options={cbsOptions}
               placeholder="Search CBS items…"
               onChange={(v) => update("cbsCodes", v)}
             />
@@ -692,7 +685,6 @@ function ChangelogDialogBody({
               <CostBuildupEditor
                 lines={form.lineItems}
                 derivedCost={derivedCost}
-                cbsOptions={cbsOptions}
                 onAdd={addLine}
                 onUpdate={updateLine}
                 onRemove={removeLine}
@@ -728,14 +720,12 @@ function ChangelogDialogBody({
 function CostBuildupEditor({
   lines,
   derivedCost,
-  cbsOptions,
   onAdd,
   onUpdate,
   onRemove,
 }: {
   lines: CvrLineItemDto[];
   derivedCost: number;
-  cbsOptions: SearchableSelectOption[];
   onAdd: () => void;
   onUpdate: (index: number, patch: Partial<CvrLineItemDto>) => void;
   onRemove: (index: number) => void;
@@ -786,9 +776,8 @@ function CostBuildupEditor({
                     />
                   </td>
                   <td className="px-2 py-1.5">
-                    <SearchableSelect
+                    <CbsSelect
                       value={li.cbsCode}
-                      options={cbsOptions}
                       placeholder="— CBS item —"
                       onSelect={(v) => onUpdate(i, { cbsCode: v })}
                     />

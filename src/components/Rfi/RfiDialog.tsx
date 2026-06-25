@@ -4,7 +4,7 @@ import { ArrowUpRight, Link as LinkIcon, Printer, Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { DialogClose } from "~/components/ui/dialog";
 import { EntityDialogShell } from "~/components/EntityDialog/EntityDialogShell";
-import { useCbsSearchableOptions } from "~/lib/use-cbs-searchable-options";
+import { CbsMultiSelect } from "~/components/CbsMultiSelect";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -33,8 +33,6 @@ import {
   RFI_PRIORITY_LABELS,
 } from "~/utils/rfiLabels";
 import { RfiStatusBadge } from "~/components/Rfi/RfiBadges";
-import { SearchableMultiSelect } from "~/components/SearchableMultiSelect";
-import type { SearchableSelectOption } from "~/components/SearchableSelect";
 import {
   Tabs,
   TabsList,
@@ -248,7 +246,6 @@ function RfiDialogBody({
 
   // `open` is implicitly true — this component only mounts when the outer
   // dialog is open and the full record has loaded.
-  const cbsOptions: SearchableSelectOption[] = useCbsSearchableOptions();
   const { data: areas = [] } = useQuery({
     ...areasByProjectQueryOptions(projectId),
     enabled: projectId !== null,
@@ -542,10 +539,9 @@ function RfiDialogBody({
                 label="Affected CBS codes"
                 help="Search and select one or more CBS items"
               >
-                <SearchableMultiSelect
+                <CbsMultiSelect
                   values={form.cbsCodes}
                   onChange={(values) => update("cbsCodes", values)}
-                  options={cbsOptions}
                   placeholder="Type to search CBS codes…"
                 />
               </Labeled>

@@ -12,8 +12,7 @@ import { Textarea } from "~/components/ui/textarea";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Labeled, NativeSelect } from "~/components/ui/form-helpers";
 import { useFormDialog } from "~/lib/use-form-dialog";
-import { useCbsSearchableOptions } from "~/lib/use-cbs-searchable-options";
-import { SearchableMultiSelect } from "~/components/SearchableMultiSelect";
+import { CbsMultiSelect } from "~/components/CbsMultiSelect";
 import { disciplines } from "~/config/disciplines";
 import {
   FCO_ORIGIN_TYPES,
@@ -107,7 +106,6 @@ export function FcoTemplateDialog({
         `Delete template "${t.name}"? Existing FCOs created from this template are unaffected. This cannot be undone.`,
     });
 
-  const cbsOptions = useCbsSearchableOptions();
 
   // Comma-separated text fields for the array columns. Commit on blur; mirrors
   // the FcoDialog pattern.
@@ -276,9 +274,8 @@ export function FcoTemplateDialog({
             </div>
 
             <Labeled label="Affected CBS Codes">
-              <SearchableMultiSelect
+              <CbsMultiSelect
                 values={form.cbsCodes}
-                options={cbsOptions}
                 placeholder="Search CBS items…"
                 onChange={(v) => update("cbsCodes", v)}
               />

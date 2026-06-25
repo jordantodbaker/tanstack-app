@@ -155,18 +155,44 @@ export const cbsItemsQueryOptions = () =>
     queryFn: () => fetchCbsItems(),
   });
 
-/** Lightweight code + name list for CBS item pickers (e.g. FCO dialog). */
-export const fetchCbsCodeOptions = createServerFn({ method: "GET" }).handler(
-  () =>
-    prisma.cbsItem.findMany({
+/**
+ * Server-side search over the CBS catalog for the entity-dialog pickers.
+ * Capped (`take`) so each keystroke pulls a small page instead of shipping the
+ * whole ~5k-row catalog to the client on first dialog open. An empty query
+ * returns the first `take` codes so the dropdown isn't blank before the user
+ * types. Selected codes render from their stored value, so they don't need to
+ * be present in the result page.
+ */
+const CbsCodeSearchSchema = z.object({
+  query: z.string(),
+  take: z.int().positive().max(100).optional(),
+});
+export const searchCbsCodeOptions = createServerFn({ method: "GET" })
+  .inputValidator((input: unknown) => CbsCodeSearchSchema.parse(input))
+  .handler(({ data }) => {
+    const q = data.query.trim();
+    return prisma.cbsItem.findMany({
+      where: q
+        ? {
+            OR: [
+              { displayCode: { contains: q, mode: "insensitive" } },
+              { name: { contains: q, mode: "insensitive" } },
+            ],
+          }
+        : undefined,
       orderBy: { displayCode: "asc" },
+      take: data.take ?? 50,
       select: { displayCode: true, name: true },
-    }),
-);
+    });
+  });
 
-export const cbsCodeOptionsQueryOptions = () =>
+export const cbsCodeSearchQueryOptions = (query: string) =>
   queryOptions({
-    queryKey: ["cbsCodeOptions"],
-    queryFn: () => fetchCbsCodeOptions(),
-    staleTime: Infinity,
+    queryKey: ["cbsCodeSearch", query],
+    queryFn: () => searchCbsCodeOptions({ data: { query } }),
+    // The same query rarely changes mid-session; cache a few minutes. Keep the
+    // previous page visible while the next keystroke's query is in flight so
+    // the dropdown doesn't flicker empty.
+    staleTime: 5 * 60 * 1000,
+    placeholderData: (prev) => prev,
   });

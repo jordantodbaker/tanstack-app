@@ -16,15 +16,28 @@ export function SearchableMultiSelect({
   options,
   placeholder = "-- Select --",
   onChange,
+  onSearchChange,
+  loading = false,
 }: {
   values: string[];
   options: SearchableSelectOption[];
   placeholder?: string;
   onChange: (values: string[]) => void;
+  /** When provided, the parent owns search: the term is reported here (the
+   *  parent fetches matching `options`) and client-side filtering is skipped,
+   *  since `options` are already the server-filtered results. */
+  onSearchChange?: (query: string) => void;
+  /** Show a "Searching…" hint while the parent's fetch is in flight. */
+  loading?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const containerRef = React.useRef<HTMLDivElement>(null);
+
+  // Async mode: notify the parent of the search term (it fetches options).
+  React.useEffect(() => {
+    onSearchChange?.(search);
+  }, [search, onSearchChange]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -50,12 +63,15 @@ export function SearchableMultiSelect({
   const selectedSet = React.useMemo(() => new Set(values), [values]);
 
   const filtered = React.useMemo(() => {
+    // Async mode: `options` are already server-filtered for `search`; don't
+    // re-filter (and never hide them behind a stale client predicate).
+    if (onSearchChange) return options;
     const q = search.trim().toLowerCase();
     if (!q) return options;
     return options.filter((opt) =>
       (opt.searchText ?? opt.label.toLowerCase()).includes(q),
     );
-  }, [search, options]);
+  }, [search, options, onSearchChange]);
 
   const visible = filtered.slice(0, RENDER_CAP);
   const hiddenCount = filtered.length - visible.length;
@@ -97,7 +113,9 @@ export function SearchableMultiSelect({
           />
           <ul className="max-h-64 overflow-auto py-1">
             {visible.length === 0 ? (
-              <li className="px-2 py-1 text-sm text-slate-400">No matches</li>
+              <li className="px-2 py-1 text-sm text-slate-400">
+                {loading ? "Searching…" : "No matches"}
+              </li>
             ) : (
               visible.map((opt) => {
                 const checked = selectedSet.has(opt.value);

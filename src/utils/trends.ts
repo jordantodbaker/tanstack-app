@@ -588,4 +588,8 @@ export function invalidateTrendQueries(
   queryClient.invalidateQueries({
     queryKey: qk.reporting.evmTimeSeries(projectId),
   });
+  // Weighted pending trends feed the living-budget reconciliation's AFC.
+  queryClient.invalidateQueries({
+    queryKey: qk.reporting.budgetReconciliationAll(projectId),
+  });
 }

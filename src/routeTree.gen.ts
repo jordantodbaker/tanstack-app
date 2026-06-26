@@ -37,6 +37,7 @@ import { Route as AdminFcoTemplatesRouteImport } from './routes/admin.fco-templa
 import { Route as AdminCvrTemplatesRouteImport } from './routes/admin.cvr-templates'
 import { Route as AdminCrewMixesRouteImport } from './routes/admin.crew-mixes'
 import { Route as AdminAreasRouteImport } from './routes/admin.areas'
+import { Route as ApiCronRemindersRouteImport } from './routes/api.cron.reminders'
 
 const ValidationRoute = ValidationRouteImport.update({
   id: '/validation',
@@ -178,6 +179,11 @@ const AdminAreasRoute = AdminAreasRouteImport.update({
   path: '/areas',
   getParentRoute: () => AdminRoute,
 } as any)
+const ApiCronRemindersRoute = ApiCronRemindersRouteImport.update({
+  id: '/api/cron/reminders',
+  path: '/api/cron/reminders',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -208,6 +214,7 @@ export interface FileRoutesByFullPath {
   '/cvr-print/$id': typeof CvrPrintIdRoute
   '/fco-print/$id': typeof FcoPrintIdRoute
   '/rfi-print/$id': typeof RfiPrintIdRoute
+  '/api/cron/reminders': typeof ApiCronRemindersRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -238,6 +245,7 @@ export interface FileRoutesByTo {
   '/cvr-print/$id': typeof CvrPrintIdRoute
   '/fco-print/$id': typeof FcoPrintIdRoute
   '/rfi-print/$id': typeof RfiPrintIdRoute
+  '/api/cron/reminders': typeof ApiCronRemindersRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -269,6 +277,7 @@ export interface FileRoutesById {
   '/cvr-print/$id': typeof CvrPrintIdRoute
   '/fco-print/$id': typeof FcoPrintIdRoute
   '/rfi-print/$id': typeof RfiPrintIdRoute
+  '/api/cron/reminders': typeof ApiCronRemindersRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -301,6 +310,7 @@ export interface FileRouteTypes {
     | '/cvr-print/$id'
     | '/fco-print/$id'
     | '/rfi-print/$id'
+    | '/api/cron/reminders'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -331,6 +341,7 @@ export interface FileRouteTypes {
     | '/cvr-print/$id'
     | '/fco-print/$id'
     | '/rfi-print/$id'
+    | '/api/cron/reminders'
   id:
     | '__root__'
     | '/'
@@ -361,6 +372,7 @@ export interface FileRouteTypes {
     | '/cvr-print/$id'
     | '/fco-print/$id'
     | '/rfi-print/$id'
+    | '/api/cron/reminders'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -383,6 +395,7 @@ export interface RootRouteChildren {
   CvrPrintIdRoute: typeof CvrPrintIdRoute
   FcoPrintIdRoute: typeof FcoPrintIdRoute
   RfiPrintIdRoute: typeof RfiPrintIdRoute
+  ApiCronRemindersRoute: typeof ApiCronRemindersRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -583,6 +596,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAreasRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/api/cron/reminders': {
+      id: '/api/cron/reminders'
+      path: '/api/cron/reminders'
+      fullPath: '/api/cron/reminders'
+      preLoaderRoute: typeof ApiCronRemindersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -632,6 +652,7 @@ const rootRouteChildren: RootRouteChildren = {
   CvrPrintIdRoute: CvrPrintIdRoute,
   FcoPrintIdRoute: FcoPrintIdRoute,
   RfiPrintIdRoute: RfiPrintIdRoute,
+  ApiCronRemindersRoute: ApiCronRemindersRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

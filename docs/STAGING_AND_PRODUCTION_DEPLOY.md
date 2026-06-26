@@ -93,6 +93,7 @@ each to Production vs Preview:
 | `EMAIL_FROM` | Prod + Preview | verified sender, e.g. `EPC Manager <notify@yourco.com>` — required to send |
 | `EMAIL_REPLY_TO` | optional | Reply-To header on notification emails |
 | `APP_BASE_URL` | Prod + Preview | public URL (e.g. `https://app.yourco.com`) for "open in app" links in emails |
+| `CRON_SECRET` | Prod (+ any env running the cron) | guards `/api/cron/reminders`; Vercel injects it as the cron's `Authorization` header (see Step 6) |
 
 Email is fully gated on `RESEND_API_KEY` + `EMAIL_FROM`: with either unset, the
 app sends no email and only writes the in-app inbox (no errors). Verify a
@@ -127,18 +128,31 @@ write-DDL creds, and a failed migration mid-build is messy). Pick one:
 - Keep `prisma generate` where it is (`postinstall`) — that's correct and must
   stay.
 
-## Step 6 — Replace in-process cron with Vercel Cron
+## Step 6 — Daily reminder cron (Vercel Cron) — implemented
 
-Add to [vercel.json](../vercel.json):
+The daily reminder pass (and the reminder emails wired into it) runs on
+**Vercel Cron**, because the in-process `node-cron` in
+[src/server/cron.ts](../src/server/cron.ts) can't fire on serverless (the
+instance is frozen between requests). `node-cron` is left in place — harmless
+on Vercel, and still works on a long-running/non-serverless host.
 
-```json
-"crons": [{ "path": "/api/cron/reminders", "schedule": "0 7 * * *" }]
-```
+Already wired:
+- [vercel.json](../vercel.json) `crons`: `{ "path": "/api/cron/reminders", "schedule": "0 14 * * *" }`.
+  **Vercel crons run in UTC** — `0 14 * * *` ≈ 07:00 Pacific. Adjust the hour
+  for your timezone / DST preference.
+- The SSR app route [src/routes/api.cron.reminders.tsx](../src/routes/api.cron.reminders.tsx)
+  (reached via the catch-all rewrite) whose loader calls the
+  `CRON_SECRET`-guarded `runRemindersCronFn` in
+  [src/utils/reminders.ts](../src/utils/reminders.ts).
 
-Create an `/api/cron/reminders` endpoint that calls `runScheduledReminders()`
-and verifies the `CRON_SECRET` header Vercel sends. Then delete/neuter the
-`node-cron` registration in [src/server/cron.ts](../src/server/cron.ts). (A
-manual "Run reminders now" admin button already exists as a fallback.)
+**You must set `CRON_SECRET`** in Vercel (any environment that should run the
+cron). Vercel injects it as an `Authorization: Bearer <CRON_SECRET>` header on
+cron invocations; the endpoint rejects anything else with 401. With
+`CRON_SECRET` unset the guard is skipped (fine for local/dev). The manual "Run
+reminders now" admin button remains as a fallback / on-demand trigger.
+
+Verify after deploy: `curl -i -H "Authorization: Bearer $CRON_SECRET" https://<env-url>/api/cron/reminders`
+→ 200; calling it without the header → 401.
 
 ## Step 7 — Deploy to staging
 

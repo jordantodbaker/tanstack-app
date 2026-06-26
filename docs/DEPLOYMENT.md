@@ -23,9 +23,11 @@ Procurement, Construction) firm. It manages:
 - Per-record audit history, comments, and notifications
 
 **Stack:** TanStack Start (React 19, Server Functions), Prisma 7 + PostgreSQL,
-Clerk authentication, Vercel Blob for object storage. Deployed today as a
-serverless Node bundle on Vercel; portable to any Node-capable serverless
-platform with minor changes to [api/handler.js](../api/handler.js).
+Clerk authentication, Vercel Blob for object storage, Resend for outbound
+email, Sentry for error tracking, Vercel Cron for the daily reminder pass.
+Deployed today as a serverless Node bundle on Vercel; portable to any
+Node-capable serverless platform with minor changes to
+[api/handler.js](../api/handler.js).
 
 **Scale assumption:** Internal tool for a single company. Expect 10–100 active
 users, dozens of concurrent projects, thousands of CVR/FCO/RFI records per
@@ -241,11 +243,27 @@ and server-fn inputs scrubbed before send ([sentry-options.ts](../src/lib/sentry
 | `SENTRY_AUTH_TOKEN` | **Build only** | Enables source-map upload. Omit and you still get errors, just minified stack traces |
 | `SENTRY_ORG` / `SENTRY_PROJECT` | Build only | Org + project slugs for the source-map plugin |
 
-### Optional / future
+### Optional — Outbound email (wired up)
 
-| Variable | Purpose |
-|---|---|
-| Email service credentials | Out-of-app notifications (not yet wired up) |
+Notification email is **fully gated on `RESEND_API_KEY` + `EMAIL_FROM`**: with
+either unset the app sends no email and only writes the in-app inbox (no
+errors). Sends are best-effort and never block the action that triggered them.
+Per-user opt-out is respected (a toggle in the notification bell).
+
+| Variable | Source | Purpose |
+|---|---|---|
+| `RESEND_API_KEY` | Resend dashboard | Enables outbound notification email |
+| `EMAIL_FROM` | You (verified domain) | Sender, e.g. `EPC Manager <notify@companyname.com>` |
+| `EMAIL_REPLY_TO` | Optional | Reply-To header on notification emails |
+| `APP_BASE_URL` | You | Public URL (`https://epc-manager.companyname.com`) for "open in app" links in emails |
+
+Provision a **Resend account + verified sending domain** before setting these.
+
+### Daily reminder cron
+
+| Variable | Source | Purpose |
+|---|---|---|
+| `CRON_SECRET` | You (random secret) | Guards `/api/cron/reminders`; Vercel injects it as the cron's `Authorization` header. Required in production — see §8 |
 
 ### Secret management
 Use the hosting platform's secrets manager (Vercel Environment Variables,
@@ -259,25 +277,32 @@ them through CI logs.
 ### What it does
 Once per day, scans for CVRs / FCOs / RFIs awaiting approval, past their
 due date, or stuck in a workflow state, and dispatches in-app notifications
-to the relevant approvers / originators. Implementation:
-[cron.ts](../src/server/cron.ts) + [reminders.ts](../src/utils/reminders.ts).
+(and email copies, when email is configured per §7) to the relevant
+approvers / originators. Implementation:
+[reminders.ts](../src/utils/reminders.ts) + [reminders.server.ts](../src/utils/reminders.server.ts).
 
-### Current behavior
-The cron is registered in-process via `node-cron`. On serverless (Vercel),
-this only fires when a function is warm — **not reliable for daily
-delivery in production**.
+### Current behavior (wired up — Vercel Cron)
+Driven by **Vercel Cron**, configured in [vercel.json](../vercel.json):
+`{ "path": "/api/cron/reminders", "schedule": "0 14 * * *" }`. Vercel GETs that
+path on schedule; the catch-all rewrite routes it to the SSR handler, where the
+[/api/cron/reminders](../src/routes/api.cron.reminders.tsx) route loader runs
+`runScheduledReminders()` via the `CRON_SECRET`-guarded `runRemindersCronFn`.
+
+The in-process `node-cron` in [cron.ts](../src/server/cron.ts) is retained as a
+fallback for long-running / non-serverless hosts; on Vercel it never fires
+(frozen instances) and is harmless.
 
 ### What IT needs to set up
-Pick one:
+- **Set `CRON_SECRET`** (§7). Vercel sends it as `Authorization: Bearer
+  <CRON_SECRET>`; the endpoint 401s on anything else. Unset = guard skipped
+  (acceptable for dev only).
+- **Adjust the schedule if needed.** Vercel crons run in **UTC** — `0 14 * * *`
+  ≈ 07:00 Pacific. Edit `vercel.json`'s `crons` to suit timezone / DST.
 
-- **Vercel Cron Job** (easiest if staying on Vercel) hitting a server-fn
-  endpoint that calls `runScheduledReminders()` once per day
-- **Cloudflare Worker scheduled trigger** hitting the same endpoint
-- **Always-on worker** running `node-cron` (e.g. small EC2 or Fargate task)
-
-Recommended schedule: once daily, mid-morning user-local time
-(e.g. 9 AM ET). The Admin → System page has a "Run reminders now" button
-for manual triggering.
+The Admin → System page's "Run reminders now" button remains as a manual
+trigger. Verify after deploy:
+`curl -i -H "Authorization: Bearer $CRON_SECRET" https://<env>/api/cron/reminders`
+→ 200 (and → 401 without the header).
 
 ---
 
@@ -374,6 +399,8 @@ follow-up feature (a scheduled job marking and removing eligible projects).
 2. **Set up Clerk production app** with a custom domain
    (`clerk.epc-manager.companyname.com`) and verified sender email.
 3. **Set up Vercel Blob** (or equivalent object storage).
+3b. **(Optional) Set up Resend** + a verified sending domain if outbound
+   notification email is wanted (§7). Skip to ship with in-app inbox only.
 4. **Update bootstrap admin email** in
    [users.server.ts](../src/utils/users.server.ts):
    replace `jordantodbaker@gmail.com` with a real production admin email.
@@ -389,9 +416,19 @@ follow-up feature (a scheduled job marking and removing eligible projects).
 9. **First project setup** — from Admin → Projects, create the first real
    project. Then Admin → Subcontractors / Areas / Users to populate the
    first project's collaborators.
-10. **Set up the daily cron** (§8) and uptime monitoring (§9).
-11. **Smoke-test:** create a CVR, transition it through the workflow,
-    upload an attachment, run the global search.
+10. **Set `CRON_SECRET`** for the daily reminder cron (§8) and set up uptime
+    monitoring (§9). The cron itself is already wired in `vercel.json` — no
+    extra infra to stand up.
+11. **Back-fill record-number sequences** — *only if the database already
+    contains CVRs / FCOs / RFIs / PCOs / Trends* (e.g. a restored or migrated
+    DB; skip for an empty production DB, where sequences correctly start at 1):
+    `DATABASE_URL=<env-url> npm run backfill-numbers` (preview first with
+    `-- --dry-run`). Seeds each project's auto-number sequence to continue from
+    the highest existing number. Idempotent — safe to re-run.
+12. **Smoke-test:** create a CVR (confirm it auto-numbers), transition it
+    through the workflow, open the dialog's CBS picker, bulk-approve a couple
+    of records, upload an attachment, run the global search — and if email is
+    configured, confirm a notification email arrives.
 
 ---
 
@@ -401,7 +438,9 @@ The following are not blockers for v1 production but should be tracked:
 
 - **Error tracking integration** (Sentry or equivalent)
 - **Healthcheck endpoint** for uptime monitoring
-- **Email / Slack notification delivery** — currently in-app inbox only
+- **Slack / Teams notification delivery** — email is now wired (§7); chat-app
+  delivery is still future. Emailing *external* RFI responders (the free-text
+  `assignedTo`, not app users) is also not yet wired
 - **Server-side PDF generation** for CVR / FCO / RFI print packets
   (currently relies on the browser print dialog)
 - **Retention policy** for closed projects (if contractually required)

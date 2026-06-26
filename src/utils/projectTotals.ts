@@ -31,43 +31,57 @@ const EMPTY_TOTALS: ProjectFefRowTotals = {
   invalidByDiscipline: {},
 };
 
+/**
+ * Plain (no-auth) loader: every FefRow for the project → aggregated totals.
+ * Module-private and called only by `fetchProjectFefRowTotals`'s handler, so
+ * the tanstack-start client transform dead-strips it (and the prisma import)
+ * from the browser bundle. **Do not `export` it** — an exported module-scope
+ * prisma function survives client stripping and pulls the Node-only Prisma
+ * client into the browser (it broke the dashboard once already).
+ */
+async function loadProjectTotals(
+  projectId: number,
+): Promise<ProjectFefRowTotals> {
+  const rows = await prisma.fefRow.findMany({
+    where: { projectId },
+    // All FEF free-text fields are selected: the Take Off invalid check
+    // treats *any* non-empty field as "user touched this row", so any one
+    // of these missing on the server side would silently under-count.
+    select: {
+      discipline: true,
+      section: true,
+      cbsCode: true,
+      area: true,
+      name: true,
+      description: true,
+      shopField: true,
+      weldGroupDescription: true,
+      quantity: true,
+      size: true,
+      unit: true,
+      metallurgyCode: true,
+      boreSize: true,
+      role: true,
+      crewMixId: true,
+      schedule: true,
+      taskCode: true,
+      laborHours: true,
+      laborFactor: true,
+      laborRate: true,
+      materialCost: true,
+      equipment: true,
+      notes: true,
+      sub: true,
+    },
+  });
+  return accumulateProjectTotals(rows);
+}
+
 export const fetchProjectFefRowTotals = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
   .handler(async ({ data: projectId }): Promise<ProjectFefRowTotals> => {
     await requireProjectAccess(projectId);
-    const rows = await prisma.fefRow.findMany({
-      where: { projectId },
-      // All FEF free-text fields are selected: the Take Off invalid check
-      // treats *any* non-empty field as "user touched this row", so any one
-      // of these missing on the server side would silently under-count.
-      select: {
-        discipline: true,
-        section: true,
-        cbsCode: true,
-        area: true,
-        name: true,
-        description: true,
-        shopField: true,
-        weldGroupDescription: true,
-        quantity: true,
-        size: true,
-        unit: true,
-        metallurgyCode: true,
-        boreSize: true,
-        role: true,
-        crewMixId: true,
-        schedule: true,
-        taskCode: true,
-        laborHours: true,
-        laborFactor: true,
-        laborRate: true,
-        materialCost: true,
-        equipment: true,
-        notes: true,
-        sub: true,
-      },
-    });
-    return accumulateProjectTotals(rows);
+    return loadProjectTotals(projectId);
   });
 
 export const projectFefRowTotalsQueryOptions = (projectId: number | null) =>

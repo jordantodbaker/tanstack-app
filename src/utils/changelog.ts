@@ -568,4 +568,8 @@ export function invalidateChangeLogQueries(
   // mutation so the dropdown picks up new/renamed CVRs without a hard refresh.
   queryClient.invalidateQueries({ queryKey: qk.changeLog.cvrOptions(projectId) });
   queryClient.invalidateQueries({ queryKey: qk.dashboardSummary(projectId) });
+  // Approved/executed CVR cost feeds the living-budget reconciliation.
+  queryClient.invalidateQueries({
+    queryKey: qk.reporting.budgetReconciliationAll(projectId),
+  });
 }

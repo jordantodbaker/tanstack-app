@@ -17,6 +17,7 @@ import { formatMoney } from "~/lib/formatting";
 import { useSelectedProject } from "~/lib/selected-project";
 import { projectFefRowTotalsQueryOptions } from "~/utils/projectTotals";
 import { SnapshotsSection } from "~/components/SnapshotsSection";
+import { BudgetSection } from "~/components/BudgetSection";
 import {
   readProjectIdForLoader,
   tryPrefetchProjectQuery,
@@ -453,6 +454,7 @@ function SummaryPage() {
           </AccordionContent>
         </AccordionItem>
       </Accordion>
+      <BudgetSection />
       <SnapshotsSection />
     </main>
   );

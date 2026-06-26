@@ -16,6 +16,7 @@ import {
 } from "~/utils/snapshots";
 import { projectFefRowTotalsQueryOptions } from "~/utils/projectTotals";
 import type { ProjectFefRowTotals } from "~/lib/project-totals";
+import { qk } from "~/lib/query-keys";
 import {
   cvTone,
   formatCurrency,
@@ -128,6 +129,10 @@ function SnapshotRow({
     mutationFn: (id: number) => deleteSnapshot({ data: { id } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["snapshots", projectId] });
+      // The deleted snapshot may have been the budget view's latest baseline.
+      queryClient.invalidateQueries({
+        queryKey: qk.reporting.budgetReconciliationAll(projectId),
+      });
     },
   });
 
@@ -191,6 +196,10 @@ function CreateSnapshotDialog({ projectId }: { projectId: number }) {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["snapshots", projectId] });
+      // A new snapshot becomes the budget view's latest baseline.
+      queryClient.invalidateQueries({
+        queryKey: qk.reporting.budgetReconciliationAll(projectId),
+      });
       setOpen(false);
       setLabel("");
       setNotes("");

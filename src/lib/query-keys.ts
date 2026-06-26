@@ -73,5 +73,14 @@ export const qk = {
       ["latestPeriodWithEvm", projectId] as const,
     evmTimeSeries: (projectId: number | null) =>
       ["evmTimeSeries", projectId] as const,
+    /** Always-on estimate↔change budget reconciliation, keyed by the chosen
+     *  baseline snapshot (null = latest / live-estimate fallback). */
+    budgetReconciliation: (
+      projectId: number | null,
+      baselineSnapshotId: number | null,
+    ) => ["budgetReconciliation", projectId, baselineSnapshotId] as const,
+    /** Prefix match — busts every baseline variant for the project. */
+    budgetReconciliationAll: (projectId: number | null) =>
+      ["budgetReconciliation", projectId] as const,
   },
 } as const;

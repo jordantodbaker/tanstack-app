@@ -48,7 +48,15 @@ import {
   computePeriodEvm,
   type PeriodBucketRow as PurePeriodBucketRow,
 } from "~/lib/period-evm";
-import { resolveCvrBucket } from "./cvr-bucket";
+import {
+  attributeCvrCostByL1,
+  resolveCvrBucket,
+  rollUpL1ToDiscipline,
+} from "./cvr-bucket";
+import {
+  computeBudgetReconciliation,
+  type BudgetReconciliationRow,
+} from "~/lib/budget-reconciliation";
 import {
   trendForecastContribution,
   TREND_ACTIVE_STATUSES,
@@ -236,6 +244,208 @@ async function loadRevisionsByBucket(
   }
   return revisions;
 }
+
+/**
+ * Like `loadRevisionsByBucket`, but attributed to **L1** (3-char parent CBS)
+ * buckets and line-item-aware — the grain the always-on budget reconciliation
+ * view reconciles against the estimate's `*ByL1` totals. Includes the cost
+ * buildup so a multi-account CVR splits across its lines'
+ * accounts; CVRs entered as a manual `costImpact` fall back to `cbsCodes[0]`'s
+ * L1 (and blank/short codes land under the "" unattributed key). Same
+ * current-set caveat as `loadRevisionsByBucket`.
+ *
+ * Module-private (NOT exported) on purpose — see `loadProjectTotals` in
+ * projectTotals.ts: an exported module-scope prisma function survives the
+ * client transform and leaks the Prisma client into the browser bundle.
+ */
+async function loadRevisionsByL1(
+  projectId: number,
+): Promise<Record<string, number>> {
+  const cvrs = await prisma.changeLog.findMany({
+    where: { projectId, status: { in: ["APPROVED", "EXECUTED"] } },
+    select: {
+      costImpact: true,
+      cbsCodes: true,
+      lineItems: { select: { cbsCode: true, quantity: true, unitRate: true } },
+    },
+  });
+  const revisions: Record<string, number> = {};
+  for (const c of cvrs) {
+    for (const [l1, amount] of Object.entries(attributeCvrCostByL1(c))) {
+      revisions[l1] = (revisions[l1] ?? 0) + amount;
+    }
+  }
+  return revisions;
+}
+
+/** As-bid BAC per L1 (3-char parent CBS) = labor + materials. The L1-keyed
+ *  sibling of `bacByDiscipline`, matching the estimate's `*ByL1` totals. */
+function bacByL1(totals: ProjectFefRowTotals): Record<string, number> {
+  const out: Record<string, number> = {};
+  const add = (l1: string, amount: number) => {
+    if (amount === 0) return;
+    out[l1] = (out[l1] ?? 0) + amount;
+  };
+  for (const [l1, v] of Object.entries(totals.laborByL1)) add(l1, v);
+  for (const [l1, v] of Object.entries(totals.materialsByL1)) add(l1, v);
+  return out;
+}
+
+/** Pending-trend forecast per L1 (trends carry no cost buildup, so the whole
+ *  weighted forecast lands on `cbsCodes[0]`'s L1; codeless → "" unattributed). */
+async function loadTrendForecastByL1(
+  projectId: number,
+): Promise<Record<string, number>> {
+  const trends = await prisma.trend.findMany({
+    where: { projectId, status: { in: TREND_ACTIVE_STATUSES } },
+    select: { status: true, probability: true, costLikely: true, cbsCodes: true },
+  });
+  const out: Record<string, number> = {};
+  for (const t of trends) {
+    const contrib = trendForecastContribution({
+      status: t.status as TrendStatus,
+      probability: t.probability,
+      costLikely: t.costLikely,
+    });
+    if (contrib === 0) continue;
+    const code = t.cbsCodes[0] ?? "";
+    const l1 = code.length >= 3 ? code.slice(0, 3) : "";
+    out[l1] = (out[l1] ?? 0) + contrib;
+  }
+  return out;
+}
+
+export type BudgetReconciliationDisciplineRow = BudgetReconciliationRow & {
+  disciplineLabel: string;
+};
+
+/** Always-on living-budget reconciliation for a project: as-bid → approved
+ *  changes → current budget → weighted trends → AFC, at L1 and discipline
+ *  granularity. Unlike the period EVM read, it needs no reporting period. */
+export type ProjectBudgetReconciliation = {
+  /** Snapshot used as the as-bid baseline; null when none exists (live-estimate
+   *  fallback). */
+  baselineSnapshotId: number | null;
+  baselineLabel: string | null;
+  byDiscipline: BudgetReconciliationDisciplineRow[];
+  byL1: BudgetReconciliationRow[];
+  total: BudgetReconciliationRow;
+};
+
+const BudgetReconciliationInputSchema = z.object({
+  projectId: ProjectId,
+  baselineSnapshotId: Id.nullable().optional(),
+});
+
+export const fetchBudgetReconciliation = createServerFn({ method: "GET" })
+  .inputValidator((input: unknown) =>
+    BudgetReconciliationInputSchema.parse(input),
+  )
+  .handler(async ({ data }): Promise<ProjectBudgetReconciliation> => {
+    await requireProjectAccess(data.projectId);
+
+    // Resolve the as-bid baseline: the chosen snapshot, else the latest, else
+    // the live estimate (documented fallback when no snapshot exists yet).
+    const snap = data.baselineSnapshotId
+      ? await prisma.estimateSnapshot.findUnique({
+          where: { id: data.baselineSnapshotId },
+          select: { id: true, projectId: true, label: true, totals: true },
+        })
+      : await prisma.estimateSnapshot.findFirst({
+          where: { projectId: data.projectId },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, projectId: true, label: true, totals: true },
+        });
+
+    let baselineSnapshotId: number | null = null;
+    let baselineLabel: string | null = null;
+    let asBidTotals: ProjectFefRowTotals;
+    if (snap && snap.projectId === data.projectId) {
+      baselineSnapshotId = snap.id;
+      baselineLabel = snap.label;
+      if (hasL1Buckets(snap.totals)) {
+        asBidTotals = snap.totals;
+      } else {
+        // Legacy / pre-`byL1` cache — recompute from the frozen rows.
+        const legacy = await prisma.estimateSnapshot.findUniqueOrThrow({
+          where: { id: snap.id },
+          select: { fefRows: true },
+        });
+        asBidTotals = accumulateProjectTotals(
+          (legacy.fefRows as unknown as ProjectTotalsRow[]) ?? [],
+        );
+      }
+    } else {
+      // No snapshot — reconcile against the live estimate. Inlined here (rather
+      // than importing a shared loader from projectTotals.ts) to keep this
+      // prisma call inside the handler, so the client transform strips it and
+      // the Prisma client never reaches the browser bundle.
+      const rows = await prisma.fefRow.findMany({
+        where: { projectId: data.projectId },
+        select: {
+          discipline: true,
+          section: true,
+          cbsCode: true,
+          area: true,
+          quantity: true,
+          laborHours: true,
+          laborRate: true,
+          materialCost: true,
+        },
+      });
+      asBidTotals = accumulateProjectTotals(rows);
+    }
+
+    const asBidByL1 = bacByL1(asBidTotals);
+    const [approvedByL1, trendByL1] = await Promise.all([
+      loadRevisionsByL1(data.projectId),
+      loadTrendForecastByL1(data.projectId),
+    ]);
+
+    const l1 = computeBudgetReconciliation({
+      asBidByBucket: asBidByL1,
+      approvedByBucket: approvedByL1,
+      trendByBucket: trendByL1,
+    });
+    // Discipline view is the L1 view rolled up — so a discipline's row is
+    // exactly the sum of its accounts (internally consistent), and more precise
+    // than EVM's whole-cost-on-first-code attribution.
+    const disc = computeBudgetReconciliation({
+      asBidByBucket: rollUpL1ToDiscipline(asBidByL1),
+      approvedByBucket: rollUpL1ToDiscipline(approvedByL1),
+      trendByBucket: rollUpL1ToDiscipline(trendByL1),
+    });
+
+    return {
+      baselineSnapshotId,
+      baselineLabel,
+      byL1: l1.byBucket,
+      byDiscipline: disc.byBucket.map((r) => ({
+        ...r,
+        disciplineLabel:
+          r.bucket === ""
+            ? "Unattributed"
+            : (disciplineLabelById[r.bucket] ?? r.bucket),
+      })),
+      total: l1.total,
+    };
+  });
+
+export const budgetReconciliationQueryOptions = (
+  projectId: number | null,
+  baselineSnapshotId: number | null = null,
+) =>
+  queryOptions({
+    queryKey: qk.reporting.budgetReconciliation(projectId, baselineSnapshotId),
+    queryFn: (): Promise<ProjectBudgetReconciliation | null> =>
+      projectId === null
+        ? Promise.resolve(null)
+        : fetchBudgetReconciliation({
+            data: { projectId, baselineSnapshotId },
+          }),
+    enabled: projectId !== null,
+    staleTime: 30 * 1000,
+  });
 
 export const createReportingPeriod = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => CreateReportingPeriodSchema.parse(input))

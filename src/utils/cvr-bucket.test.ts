@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   attributeCvrCostByL1,
+  disciplineForL1,
   resolveCvrBucket,
   rollUpL1ToDiscipline,
 } from "./cvr-bucket";
@@ -163,5 +164,24 @@ describe("rollUpL1ToDiscipline", () => {
     expect(rollUpL1ToDiscipline({ "601": 0, "201": 100 })).toEqual({
       concrete: 100,
     });
+  });
+});
+
+describe("disciplineForL1", () => {
+  it("maps a known L1 to its discipline", () => {
+    expect(disciplineForL1("601")).toBe("piping");
+    expect(disciplineForL1("293")).toBe("grout");
+    expect(disciplineForL1("201")).toBe("concrete");
+  });
+
+  it("returns '' (unattributed) for the empty key", () => {
+    expect(disciplineForL1("")).toBe("");
+  });
+
+  it("agrees with rollUpL1ToDiscipline's bucketing", () => {
+    // The two share the mapping — a single L1 rolled up must equal its
+    // disciplineForL1 bucket, or the UI grouping desyncs from the server.
+    const rolled = rollUpL1ToDiscipline({ "601": 100 });
+    expect(rolled).toEqual({ [disciplineForL1("601")]: 100 });
   });
 });

@@ -344,18 +344,24 @@ export const fetchBudgetReconciliation = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<ProjectBudgetReconciliation> => {
     await requireProjectAccess(data.projectId);
 
-    // Resolve the as-bid baseline: the chosen snapshot, else the latest, else
-    // the live estimate (documented fallback when no snapshot exists yet).
-    const snap = data.baselineSnapshotId
-      ? await prisma.estimateSnapshot.findUnique({
-          where: { id: data.baselineSnapshotId },
-          select: { id: true, projectId: true, label: true, totals: true },
-        })
-      : await prisma.estimateSnapshot.findFirst({
-          where: { projectId: data.projectId },
-          orderBy: { createdAt: "desc" },
-          select: { id: true, projectId: true, label: true, totals: true },
-        });
+    // The baseline-snapshot lookup and the project-wide approved-CVR / trend
+    // loads are independent — run all three in parallel rather than serially.
+    // (Resolving the as-bid totals from `snap` may add one more await on the
+    // rare legacy/no-snapshot paths below.)
+    const [snap, approvedByL1, trendByL1] = await Promise.all([
+      data.baselineSnapshotId
+        ? prisma.estimateSnapshot.findUnique({
+            where: { id: data.baselineSnapshotId },
+            select: { id: true, projectId: true, label: true, totals: true },
+          })
+        : prisma.estimateSnapshot.findFirst({
+            where: { projectId: data.projectId },
+            orderBy: { createdAt: "desc" },
+            select: { id: true, projectId: true, label: true, totals: true },
+          }),
+      loadRevisionsByL1(data.projectId),
+      loadTrendForecastByL1(data.projectId),
+    ]);
 
     let baselineSnapshotId: number | null = null;
     let baselineLabel: string | null = null;
@@ -397,10 +403,6 @@ export const fetchBudgetReconciliation = createServerFn({ method: "GET" })
     }
 
     const asBidByL1 = bacByL1(asBidTotals);
-    const [approvedByL1, trendByL1] = await Promise.all([
-      loadRevisionsByL1(data.projectId),
-      loadTrendForecastByL1(data.projectId),
-    ]);
 
     const l1 = computeBudgetReconciliation({
       asBidByBucket: asBidByL1,
@@ -585,16 +587,14 @@ export const fetchPeriodWithEvm = createServerFn({ method: "GET" })
       baselineTotals = accumulateProjectTotals(rows);
     }
 
-    // 2. CVR-driven budget revisions per bucket. Only APPROVED / EXECUTED
-    //    count — pending/rejected/voided CVRs aren't authorized budget.
-    const revisionsByBucket = await loadRevisionsByBucket(period.projectId);
-
-    // 3. Probability-weighted pending-trend forecast per bucket. Drives the
-    //    AFC / VAFC columns. IDENTIFIED + PROBABLE only — CONVERTED trends
-    //    already live in `revisionsByBucket` via their linked CVR.
-    const trendForecastByBucket = await loadTrendForecastByBucket(
-      period.projectId,
-    );
+    // 2/3. CVR-driven budget revisions + probability-weighted pending-trend
+    //    forecast, per bucket. Independent reads — run them in parallel.
+    //    APPROVED/EXECUTED CVRs only; IDENTIFIED + PROBABLE trends only
+    //    (CONVERTED trends already live in `revisionsByBucket` via their CVR).
+    const [revisionsByBucket, trendForecastByBucket] = await Promise.all([
+      loadRevisionsByBucket(period.projectId),
+      loadTrendForecastByBucket(period.projectId),
+    ]);
 
     // 4. Hand the loaded data to the pure helper for the per-bucket math.
     const dataDateIso = period.dataDate.toISOString();
@@ -713,13 +713,17 @@ export const fetchEvmTimeSeries = createServerFn({ method: "GET" })
     });
     if (periods.length === 0) return [];
 
-    const project = await prisma.project.findUniqueOrThrow({
-      where: { id: projectId },
-      select: { startDate: true, endDate: true },
-    });
-
-    const revisionsByBucket = await loadRevisionsByBucket(projectId);
-    const trendForecastByBucket = await loadTrendForecastByBucket(projectId);
+    // Project dates + the project-wide CVR/trend buckets are independent of
+    // each other — fetch them in parallel rather than three serial round-trips.
+    const [project, revisionsByBucket, trendForecastByBucket] =
+      await Promise.all([
+        prisma.project.findUniqueOrThrow({
+          where: { id: projectId },
+          select: { startDate: true, endDate: true },
+        }),
+        loadRevisionsByBucket(projectId),
+        loadTrendForecastByBucket(projectId),
+      ]);
 
     // Resolve any legacy snapshots (no cached `totals`) up front — one extra
     // query each. Almost always empty; only matters for snapshots created

@@ -6,6 +6,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useListFilters } from "~/lib/use-list-filters";
+import { matchesListFilters } from "~/lib/list-filtering";
 import {
   changeLogListQueryOptions,
   changeLogListFullQueryOptions,
@@ -115,17 +116,17 @@ function ChangelogPage() {
   // search by CVR #, title, originator, approver, CBS, area covers the
   // common cases without pulling multi-paragraph text on every visit.
   const matchesFilters = React.useCallback(
-    (it: ChangeLogListItem): boolean => {
-      const q = search.trim().toLowerCase();
-      if (statusFilter && it.status !== statusFilter) return false;
-      if (disciplineFilter && it.discipline !== disciplineFilter) return false;
-      if (q) {
-        const haystack =
-          `${it.cvrNumber} ${it.title} ${it.originator} ${it.approver} ${it.cbsCodes.join(` `)} ${areaLabel(it.area)}`.toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      return true;
-    },
+    (it: ChangeLogListItem): boolean =>
+      matchesListFilters(
+        it,
+        { search, statusFilter, disciplineFilter },
+        {
+          status: (i) => i.status,
+          discipline: (i) => i.discipline,
+          haystack: (i) =>
+            `${i.cvrNumber} ${i.title} ${i.originator} ${i.approver} ${i.cbsCodes.join(` `)} ${areaLabel(i.area)}`,
+        },
+      ),
     [search, statusFilter, disciplineFilter, areaLabel],
   );
 

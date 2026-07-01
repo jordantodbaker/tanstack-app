@@ -1,6 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Download } from "lucide-react";
+import { Button } from "~/components/ui/button";
+import {
+  downloadCsv,
+  rowsToCsv,
+  todayStamp,
+  type CsvColumn,
+} from "~/lib/csv-export";
 import {
   Accordion,
   AccordionItem,
@@ -194,6 +201,35 @@ function totalCost(row: SummaryRow): string {
     maximumFractionDigits: 2,
   });
 }
+
+/** A summary row tagged with the section it came from, for the CSV export. */
+type SummaryExportRow = { section: string; row: SummaryRow };
+
+/** Display cells hold formatted strings ("1,234.56"); parse back to a number
+ *  so Excel treats the column as numeric (sortable/summable), "" for blanks. */
+function numOrBlank(s: string): number | "" {
+  if (!s) return "";
+  const n = parseMoney(s);
+  return Number.isNaN(n) ? "" : n;
+}
+
+/** Estimate-summary CSV columns — mirror the on-screen table plus a leading
+ *  Section column, with the money/quantity cells emitted as numbers. */
+const ESTIMATE_CSV_COLUMNS: CsvColumn<SummaryExportRow>[] = [
+  { header: "Section", get: (r) => r.section },
+  { header: "Description", get: (r) => r.row.description },
+  { header: "QTY", get: (r) => numOrBlank(r.row.qty) },
+  { header: "UOM", get: (r) => r.row.uom },
+  { header: "Unit Rate", get: (r) => numOrBlank(r.row.unitRate) },
+  { header: "HRS", get: (r) => numOrBlank(r.row.hrs) },
+  { header: "Rate", get: (r) => numOrBlank(r.row.rate) },
+  { header: "Total Labor", get: (r) => numOrBlank(r.row.totalLabor) },
+  { header: "Material", get: (r) => numOrBlank(r.row.material) },
+  { header: "Sub", get: (r) => numOrBlank(r.row.sub) },
+  { header: "Equip", get: (r) => numOrBlank(r.row.equip) },
+  { header: "Other", get: (r) => numOrBlank(r.row.other) },
+  { header: "Total Cost", get: (r) => numOrBlank(totalCost(r.row)) },
+];
 
 const columns: {
   key: keyof SummaryRow | "totalCost";
@@ -407,9 +443,37 @@ function SummaryPage() {
   );
   const ticRows = makeRows(TIC_BEFORE_CONTINGENCY);
 
+  function handleExportCsv() {
+    const sections: { name: string; rows: SummaryRow[] }[] = [
+      { name: "Disciplines", rows: disciplineRows },
+      { name: "Indirects", rows: indirectRows },
+      { name: "Administration & Home Office", rows: adminHomeOfficeRows },
+      { name: "Engineering & Design", rows: engineeringRows },
+      { name: "TIC Before Contingency", rows: ticRows },
+    ];
+    const rows: SummaryExportRow[] = sections.flatMap((s) =>
+      s.rows.map((row) => ({ section: s.name, row })),
+    );
+    downloadCsv(
+      `estimate-summary-${todayStamp()}.csv`,
+      rowsToCsv(rows, ESTIMATE_CSV_COLUMNS),
+    );
+  }
+
   return (
     <main className="p-4 space-y-4">
-      <h1 className="text-2xl font-bold mb-4">Summary</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold">Summary</h1>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleExportCsv}
+          disabled={!dbTotals}
+        >
+          <Download className="mr-1 size-4" />
+          Export CSV
+        </Button>
+      </div>
       <Accordion
         type="multiple"
         defaultValue={[

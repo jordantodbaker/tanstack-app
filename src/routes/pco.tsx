@@ -15,6 +15,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useListFilters } from "~/lib/use-list-filters";
+import { matchesListFilters } from "~/lib/list-filtering";
 import {
   pcoListQueryOptions,
   pcoListFullQueryOptions,
@@ -106,16 +107,16 @@ function PcoLogPage() {
   // search by PCO #, owner ref, title, owner rep, invoice covers the
   // common cases without pulling multi-paragraph text on every visit.
   const matchesFilters = React.useCallback(
-    (it: PcoListItem): boolean => {
-      const q = search.trim().toLowerCase();
-      if (statusFilter && it.status !== statusFilter) return false;
-      if (q) {
-        const haystack =
-          `${it.pcoNumber} ${it.ownerReference} ${it.title} ${it.ownerRepName} ${it.ownerRepEmail} ${it.invoiceNumber}`.toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      return true;
-    },
+    (it: PcoListItem): boolean =>
+      matchesListFilters(
+        it,
+        { search, statusFilter, disciplineFilter: "" },
+        {
+          status: (i) => i.status,
+          haystack: (i) =>
+            `${i.pcoNumber} ${i.ownerReference} ${i.title} ${i.ownerRepName} ${i.ownerRepEmail} ${i.invoiceNumber}`,
+        },
+      ),
     [search, statusFilter],
   );
 

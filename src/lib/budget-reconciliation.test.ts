@@ -14,10 +14,25 @@ describe("computeBudgetReconciliation", () => {
         asBid: 1000,
         approvedChange: 250,
         currentBudget: 1250,
+        pendingChange: 0,
         weightedTrend: 100,
         afc: 1350,
       },
     ]);
+  });
+
+  it("carries pendingChange as a separate band without touching currentBudget or afc", () => {
+    const { byBucket, total } = computeBudgetReconciliation({
+      asBidByBucket: { piping: 1000 },
+      approvedByBucket: { piping: 250 },
+      pendingByBucket: { piping: 400 }, // open CVRs in the pipeline
+      trendByBucket: { piping: 100 },
+    });
+    const row = byBucket[0];
+    expect(row.pendingChange).toBe(400);
+    expect(row.currentBudget).toBe(1250); // asBid + approved only — pending excluded
+    expect(row.afc).toBe(1350); // currentBudget + trend only — pending excluded
+    expect(total.pendingChange).toBe(400);
   });
 
   it("unions buckets across all three inputs (a change with no as-bid surfaces)", () => {
@@ -49,6 +64,7 @@ describe("computeBudgetReconciliation", () => {
       asBid: 3000,
       approvedChange: -200,
       currentBudget: 2800,
+      pendingChange: 0,
       weightedTrend: 50,
       afc: 2850,
     });
@@ -82,6 +98,7 @@ describe("computeBudgetReconciliation", () => {
       asBid: 0,
       approvedChange: 0,
       currentBudget: 0,
+      pendingChange: 0,
       weightedTrend: 0,
       afc: 0,
     });
@@ -98,6 +115,7 @@ describe("computeBudgetReconciliation", () => {
       asBid: 0,
       approvedChange: 0,
       currentBudget: 0,
+      pendingChange: 0,
       weightedTrend: 25,
       afc: 25,
     });

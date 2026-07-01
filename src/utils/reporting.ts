@@ -57,6 +57,7 @@ import {
   computeBudgetReconciliation,
   type BudgetReconciliationRow,
 } from "~/lib/budget-reconciliation";
+import { CVR_OPEN_STATUSES } from "./changelog";
 import {
   trendForecastContribution,
   TREND_ACTIVE_STATUSES,
@@ -246,36 +247,43 @@ async function loadRevisionsByBucket(
 }
 
 /**
- * Like `loadRevisionsByBucket`, but attributed to **L1** (3-char parent CBS)
- * buckets and line-item-aware — the grain the always-on budget reconciliation
- * view reconciles against the estimate's `*ByL1` totals. Includes the cost
- * buildup so a multi-account CVR splits across its lines'
- * accounts; CVRs entered as a manual `costImpact` fall back to `cbsCodes[0]`'s
- * L1 (and blank/short codes land under the "" unattributed key). Same
- * current-set caveat as `loadRevisionsByBucket`.
+ * CVR change attributed to **L1** (3-char parent CBS) buckets, line-item-aware,
+ * split into **approved** (APPROVED/EXECUTED — authorized budget) and
+ * **pending** (REQUESTED…PENDING_APPROVAL — the approval pipeline). One query
+ * for both; each is bucketed by `attributeCvrCostByL1` (cost buildup splits a
+ * multi-account CVR across its lines; manual-cost CVRs fall back to
+ * `cbsCodes[0]`'s L1; blank/short codes land under "").
  *
  * Module-private (NOT exported) on purpose — see `loadProjectTotals` in
  * projectTotals.ts: an exported module-scope prisma function survives the
  * client transform and leaks the Prisma client into the browser bundle.
  */
-async function loadRevisionsByL1(
-  projectId: number,
-): Promise<Record<string, number>> {
+async function loadCvrChangeByL1(projectId: number): Promise<{
+  approved: Record<string, number>;
+  pending: Record<string, number>;
+}> {
   const cvrs = await prisma.changeLog.findMany({
-    where: { projectId, status: { in: ["APPROVED", "EXECUTED"] } },
+    where: {
+      projectId,
+      status: { in: ["APPROVED", "EXECUTED", ...CVR_OPEN_STATUSES] },
+    },
     select: {
+      status: true,
       costImpact: true,
       cbsCodes: true,
       lineItems: { select: { cbsCode: true, quantity: true, unitRate: true } },
     },
   });
-  const revisions: Record<string, number> = {};
+  const approved: Record<string, number> = {};
+  const pending: Record<string, number> = {};
   for (const c of cvrs) {
+    const target =
+      c.status === "APPROVED" || c.status === "EXECUTED" ? approved : pending;
     for (const [l1, amount] of Object.entries(attributeCvrCostByL1(c))) {
-      revisions[l1] = (revisions[l1] ?? 0) + amount;
+      target[l1] = (target[l1] ?? 0) + amount;
     }
   }
-  return revisions;
+  return { approved, pending };
 }
 
 /** As-bid BAC per L1 (3-char parent CBS) = labor + materials. The L1-keyed
@@ -319,6 +327,12 @@ export type BudgetReconciliationDisciplineRow = BudgetReconciliationRow & {
   disciplineLabel: string;
 };
 
+/** An L1 reconciliation row enriched with its CBS account name (from
+ *  `CbsItem.accountDescription`), or null when the L1 isn't in the catalog. */
+export type BudgetReconciliationL1Row = BudgetReconciliationRow & {
+  name: string | null;
+};
+
 /** Always-on living-budget reconciliation for a project: as-bid → approved
  *  changes → current budget → weighted trends → AFC, at L1 and discipline
  *  granularity. Unlike the period EVM read, it needs no reporting period. */
@@ -328,7 +342,7 @@ export type ProjectBudgetReconciliation = {
   baselineSnapshotId: number | null;
   baselineLabel: string | null;
   byDiscipline: BudgetReconciliationDisciplineRow[];
-  byL1: BudgetReconciliationRow[];
+  byL1: BudgetReconciliationL1Row[];
   total: BudgetReconciliationRow;
 };
 
@@ -348,7 +362,7 @@ export const fetchBudgetReconciliation = createServerFn({ method: "GET" })
     // loads are independent — run all three in parallel rather than serially.
     // (Resolving the as-bid totals from `snap` may add one more await on the
     // rare legacy/no-snapshot paths below.)
-    const [snap, approvedByL1, trendByL1] = await Promise.all([
+    const [snap, cvrChange, trendByL1] = await Promise.all([
       data.baselineSnapshotId
         ? prisma.estimateSnapshot.findUnique({
             where: { id: data.baselineSnapshotId },
@@ -359,9 +373,10 @@ export const fetchBudgetReconciliation = createServerFn({ method: "GET" })
             orderBy: { createdAt: "desc" },
             select: { id: true, projectId: true, label: true, totals: true },
           }),
-      loadRevisionsByL1(data.projectId),
+      loadCvrChangeByL1(data.projectId),
       loadTrendForecastByL1(data.projectId),
     ]);
+    const { approved: approvedByL1, pending: pendingByL1 } = cvrChange;
 
     let baselineSnapshotId: number | null = null;
     let baselineLabel: string | null = null;
@@ -407,6 +422,7 @@ export const fetchBudgetReconciliation = createServerFn({ method: "GET" })
     const l1 = computeBudgetReconciliation({
       asBidByBucket: asBidByL1,
       approvedByBucket: approvedByL1,
+      pendingByBucket: pendingByL1,
       trendByBucket: trendByL1,
     });
     // Discipline view is the L1 view rolled up — so a discipline's row is
@@ -415,13 +431,38 @@ export const fetchBudgetReconciliation = createServerFn({ method: "GET" })
     const disc = computeBudgetReconciliation({
       asBidByBucket: rollUpL1ToDiscipline(asBidByL1),
       approvedByBucket: rollUpL1ToDiscipline(approvedByL1),
+      pendingByBucket: rollUpL1ToDiscipline(pendingByL1),
       trendByBucket: rollUpL1ToDiscipline(trendByL1),
     });
+
+    // Enrich each L1 row with its CBS account name so the UI can show
+    // "611 — High Alloy SS…" instead of a bare code. One row per L1
+    // (`distinct`); L1s not in the catalog (e.g. ad-hoc CVR codes) get null.
+    const l1Codes = l1.byBucket
+      .map((r) => r.bucket)
+      .filter((b): b is string => b !== "");
+    const nameRows = l1Codes.length
+      ? await prisma.cbsItem.findMany({
+          where: { l1: { in: l1Codes } },
+          select: { l1: true, accountDescription: true, name: true },
+          distinct: ["l1"],
+          orderBy: { id: "asc" },
+        })
+      : [];
+    // Prefer the account description; fall back to the item name for the rare
+    // L1 whose accountDescription is blank. null only when the L1 isn't in the
+    // catalog at all (e.g. an ad-hoc CVR code) — the UI flags that case.
+    const nameByL1 = new Map(
+      nameRows.map((r) => [r.l1, r.accountDescription || r.name || null]),
+    );
 
     return {
       baselineSnapshotId,
       baselineLabel,
-      byL1: l1.byBucket,
+      byL1: l1.byBucket.map((r) => ({
+        ...r,
+        name: r.bucket ? (nameByL1.get(r.bucket) ?? null) : null,
+      })),
       byDiscipline: disc.byBucket.map((r) => ({
         ...r,
         disciplineLabel:

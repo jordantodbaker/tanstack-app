@@ -6,6 +6,11 @@
  *
  *   asBid  + approvedChange = currentBudget  + weightedTrend = afc
  *
+ * `pendingChange` (open, not-yet-authorized CVRs, at full cost) is carried as a
+ * separate exposure band — it does NOT move `currentBudget` (only authorized
+ * change does) or `afc` (the probabilistic forecast is the trend mechanism),
+ * so it's informational and never double-counts against trends.
+ *
  * This is the **actuals-free** budget view shown on the estimate side. It is
  * deliberately distinct from the EVM forecast in `evm.ts`, where
  * `afc = eac + trend` folds in actual-cost performance (CPI). Here there are no
@@ -25,6 +30,9 @@ export type BudgetReconciliationRow = {
   approvedChange: number;
   /** asBid + approvedChange. */
   currentBudget: number;
+  /** Net cost of open (REQUESTED…PENDING_APPROVAL) CVRs at full value — the
+   *  approval pipeline. Informational; not in currentBudget or afc. */
+  pendingChange: number;
   /** Probability-weighted IDENTIFIED + PROBABLE trend forecast. */
   weightedTrend: number;
   /** currentBudget + weightedTrend. */
@@ -41,13 +49,16 @@ const safe = (n: number): number => (Number.isFinite(n) ? n : 0);
 export function computeBudgetReconciliation(input: {
   asBidByBucket: Record<string, number>;
   approvedByBucket: Record<string, number>;
+  pendingByBucket?: Record<string, number>;
   trendByBucket?: Record<string, number>;
 }): BudgetReconciliation {
+  const pendingByBucket = input.pendingByBucket ?? {};
   const trendByBucket = input.trendByBucket ?? {};
   const buckets = Array.from(
     new Set<string>([
       ...Object.keys(input.asBidByBucket),
       ...Object.keys(input.approvedByBucket),
+      ...Object.keys(pendingByBucket),
       ...Object.keys(trendByBucket),
     ]),
   ).sort();
@@ -55,6 +66,7 @@ export function computeBudgetReconciliation(input: {
   const makeRow = (bucket: string): BudgetReconciliationRow => {
     const asBid = safe(input.asBidByBucket[bucket]);
     const approvedChange = safe(input.approvedByBucket[bucket]);
+    const pendingChange = safe(pendingByBucket[bucket]);
     const weightedTrend = safe(trendByBucket[bucket]);
     const currentBudget = asBid + approvedChange;
     return {
@@ -62,6 +74,7 @@ export function computeBudgetReconciliation(input: {
       asBid,
       approvedChange,
       currentBudget,
+      pendingChange,
       weightedTrend,
       afc: currentBudget + weightedTrend,
     };
@@ -74,6 +87,7 @@ export function computeBudgetReconciliation(input: {
       asBid: acc.asBid + r.asBid,
       approvedChange: acc.approvedChange + r.approvedChange,
       currentBudget: acc.currentBudget + r.currentBudget,
+      pendingChange: acc.pendingChange + r.pendingChange,
       weightedTrend: acc.weightedTrend + r.weightedTrend,
       afc: acc.afc + r.afc,
     }),
@@ -82,6 +96,7 @@ export function computeBudgetReconciliation(input: {
       asBid: 0,
       approvedChange: 0,
       currentBudget: 0,
+      pendingChange: 0,
       weightedTrend: 0,
       afc: 0,
     },

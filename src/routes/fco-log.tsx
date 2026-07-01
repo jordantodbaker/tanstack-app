@@ -15,6 +15,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useListFilters } from "~/lib/use-list-filters";
+import { matchesListFilters } from "~/lib/list-filtering";
 import {
   FCO_STATUSES,
   FCO_OPEN_STATUSES,
@@ -138,17 +139,19 @@ function FcoLogPage() {
   // text columns — they're not in the slim list payload anyway.
   const matchesFilters = React.useCallback(
     (it: FcoListItem): boolean => {
-      const q = search.trim().toLowerCase();
-      if (statusFilter && it.status !== statusFilter) return false;
-      if (disciplineFilter && it.discipline !== disciplineFilter) return false;
+      // FCO-only linkage predicate — applied alongside the shared filters.
       if (linkageFilter === "linked" && it.linkedCvrId === null) return false;
       if (linkageFilter === "unlinked" && it.linkedCvrId !== null) return false;
-      if (q) {
-        const haystack =
-          `${it.fcoNumber} ${it.title} ${areaLabel(it.locationArea)} ${it.initiatedBy} ${it.cbsCodes.join(" ")} ${it.drawingRefs.join(" ")} ${it.rfiNumbers.join(" ")} ${it.linkedCvrNumber ?? ""}`.toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      return true;
+      return matchesListFilters(
+        it,
+        { search, statusFilter, disciplineFilter },
+        {
+          status: (i) => i.status,
+          discipline: (i) => i.discipline,
+          haystack: (i) =>
+            `${i.fcoNumber} ${i.title} ${areaLabel(i.locationArea)} ${i.initiatedBy} ${i.cbsCodes.join(" ")} ${i.drawingRefs.join(" ")} ${i.rfiNumbers.join(" ")} ${i.linkedCvrNumber ?? ""}`,
+        },
+      );
     },
     [search, statusFilter, disciplineFilter, linkageFilter, areaLabel],
   );

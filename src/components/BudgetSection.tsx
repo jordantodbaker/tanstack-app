@@ -5,6 +5,7 @@ import { useSelectedProject } from "~/lib/selected-project";
 import {
   budgetReconciliationQueryOptions,
   type BudgetReconciliationDisciplineRow,
+  type BudgetReconciliationL1Row,
 } from "~/utils/reporting";
 import type { BudgetReconciliationRow } from "~/lib/budget-reconciliation";
 import { snapshotsQueryOptions } from "~/utils/snapshots";
@@ -37,7 +38,7 @@ export function BudgetSection() {
   // Group the L1 rows under the discipline the server rolled them into, so a
   // discipline can expand to show which accounts moved.
   const l1ByDiscipline = React.useMemo(() => {
-    const map = new Map<string, BudgetReconciliationRow[]>();
+    const map = new Map<string, BudgetReconciliationL1Row[]>();
     for (const row of data?.byL1 ?? []) {
       const disc = disciplineForL1(row.bucket);
       const list = map.get(disc) ?? [];
@@ -70,7 +71,8 @@ export function BudgetSection() {
           <p className="text-xs text-slate-500 max-w-prose">
             As-bid estimate + approved CVRs = current budget; + probability-
             weighted trends = anticipated final cost (AFC). Reconciled by CBS
-            account.
+            account. <span className="text-slate-400">Pending</span> = open CVRs
+            in the approval pipeline (full cost, not yet in the budget).
           </p>
         </div>
         <label className="flex items-center gap-1.5 text-sm shrink-0">
@@ -132,6 +134,7 @@ export function BudgetSection() {
                   <th className="px-3 py-2 text-right">As-bid</th>
                   <th className="px-3 py-2 text-right">+ Approved</th>
                   <th className="px-3 py-2 text-right">= Current Budget</th>
+                  <th className="px-3 py-2 text-right">Pending</th>
                   <th className="px-3 py-2 text-right">+ Trend (wtd)</th>
                   <th className="px-3 py-2 text-right">= AFC</th>
                 </tr>
@@ -166,7 +169,7 @@ function DisciplineRows({
   l1Rows,
 }: {
   row: BudgetReconciliationDisciplineRow;
-  l1Rows: BudgetReconciliationRow[];
+  l1Rows: BudgetReconciliationL1Row[];
 }) {
   const [open, setOpen] = React.useState(false);
   const expandable = l1Rows.length > 0;
@@ -184,13 +187,24 @@ function DisciplineRows({
         l1Rows.map((l1) => (
           <BudgetRow
             key={l1.bucket || "unattributed-l1"}
-            label={l1.bucket || "Unattributed"}
+            label={l1Label(l1)}
             row={l1}
             indent
           />
         ))}
     </>
   );
+}
+
+/** "611 — High Alloy SS…" when the L1 has a CBS account name; "Unattributed"
+ *  for the "" bucket; and "<code> — not in CBS catalog" for a code that has no
+ *  catalog match (an ad-hoc / invalid CVR code), so a nameless row reads as a
+ *  data issue rather than a missing label. */
+function l1Label(row: BudgetReconciliationL1Row): string {
+  if (!row.bucket) return "Unattributed";
+  return row.name
+    ? `${row.bucket} — ${row.name}`
+    : `${row.bucket} — not in CBS catalog`;
 }
 
 function BudgetRow({
@@ -239,6 +253,7 @@ function BudgetRow({
       <td className="px-3 py-2 text-right tabular-nums font-medium">
         {fmt(row.currentBudget)}
       </td>
+      <DeltaTd value={row.pendingChange} />
       <DeltaTd value={row.weightedTrend} />
       <td className="px-3 py-2 text-right tabular-nums font-medium">
         {fmt(row.afc)}

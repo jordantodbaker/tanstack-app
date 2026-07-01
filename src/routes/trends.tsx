@@ -14,6 +14,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useListFilters } from "~/lib/use-list-filters";
+import { matchesListFilters } from "~/lib/list-filtering";
 import {
   trendListQueryOptions,
   trendListFullQueryOptions,
@@ -141,17 +142,17 @@ function TrendLogPage() {
   // Slim list payload drops `description` / `reasonNarrative` / `notes`;
   // search by trend #, title, initiator, and area covers the common cases.
   const matchesFilters = React.useCallback(
-    (it: TrendListItem): boolean => {
-      const q = search.trim().toLowerCase();
-      if (statusFilter && it.status !== statusFilter) return false;
-      if (disciplineFilter && it.discipline !== disciplineFilter) return false;
-      if (q) {
-        const haystack =
-          `${it.trendNumber} ${it.title} ${it.initiatedBy} ${areaLabel(it.locationArea)}`.toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      return true;
-    },
+    (it: TrendListItem): boolean =>
+      matchesListFilters(
+        it,
+        { search, statusFilter, disciplineFilter },
+        {
+          status: (i) => i.status,
+          discipline: (i) => i.discipline,
+          haystack: (i) =>
+            `${i.trendNumber} ${i.title} ${i.initiatedBy} ${areaLabel(i.locationArea)}`,
+        },
+      ),
     [search, statusFilter, disciplineFilter, areaLabel],
   );
 

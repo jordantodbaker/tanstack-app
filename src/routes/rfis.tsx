@@ -14,6 +14,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useListFilters } from "~/lib/use-list-filters";
+import { matchesListFilters } from "~/lib/list-filtering";
 import {
   rfiListQueryOptions,
   rfiListFullQueryOptions,
@@ -136,17 +137,17 @@ function RfiLogPage() {
   // responder, drawings/specs, and area covers the common cases without
   // pulling multi-paragraph text on every list visit.
   const matchesFilters = React.useCallback(
-    (it: RfiListItem): boolean => {
-      const q = search.trim().toLowerCase();
-      if (statusFilter && it.status !== statusFilter) return false;
-      if (disciplineFilter && it.discipline !== disciplineFilter) return false;
-      if (q) {
-        const haystack =
-          `${it.rfiNumber} ${it.subject} ${it.initiatedBy} ${it.assignedTo} ${it.drawingRefs.join(" ")} ${it.specRefs.join(" ")} ${areaLabel(it.locationArea)}`.toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      return true;
-    },
+    (it: RfiListItem): boolean =>
+      matchesListFilters(
+        it,
+        { search, statusFilter, disciplineFilter },
+        {
+          status: (i) => i.status,
+          discipline: (i) => i.discipline,
+          haystack: (i) =>
+            `${i.rfiNumber} ${i.subject} ${i.initiatedBy} ${i.assignedTo} ${i.drawingRefs.join(" ")} ${i.specRefs.join(" ")} ${areaLabel(i.locationArea)}`,
+        },
+      ),
     [search, statusFilter, disciplineFilter, areaLabel],
   );
 

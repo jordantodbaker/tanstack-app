@@ -5,6 +5,7 @@ yarn.lock
 .DS_Store
 .cache
 .env
+.env.test
 .vercel
 .output
 /build/
@@ -23,3 +24,6 @@ yarn.lock
 
 # clerk configuration (can include secrets)
 /.clerk/
+
+# Vitest coverage output
+coverage/

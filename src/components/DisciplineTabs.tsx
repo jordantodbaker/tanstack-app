@@ -38,6 +38,7 @@ import {
   FefTableContent,
   SelectionCheckboxCell,
   type FefTableMeta,
+  type FefTableState,
   type ServerPagination,
 } from "~/lib/table-utils";
 import { isTakeOffRowInvalid } from "~/lib/fef-helpers";
@@ -61,6 +62,26 @@ const takeOffSelectionColumn: ColumnDef<FefRow, string> =
  */
 const isTakeOffRowInvalidLive = (row: FefRow): boolean =>
   isTakeOffRowInvalid(row);
+
+/**
+ * Keep a trailing blank row available for data entry: whenever the last row
+ * has a computable Total Cost (labor hours × rate), append a fresh blank so
+ * the user can always start another row. The Take Off and Support Labor sheets
+ * both grow this way. Blank rows carry a `__fe-blank-` id and aren't persisted
+ * until they hold real data, and once a blank is appended the last row is no
+ * longer computable, so this settles after a single append.
+ */
+function useAutoAppendBlankRow(state: FefTableState) {
+  const nextBlankId = React.useRef(1);
+  const { data, setData } = state;
+  React.useEffect(() => {
+    if (data.length === 0) return;
+    if (canComputeTotalCost(data[data.length - 1])) {
+      const id = nextBlankId.current++;
+      setData((prev) => [...prev, makeBlankRow(id)]);
+    }
+  }, [data, setData]);
+}
 
 export type DisciplineTabsProps = {
   /** When provided, renders a `<main>` wrapper with an `<h1>` header. */
@@ -91,7 +112,6 @@ export function DisciplineTabs({
   supportLaborInitialRows,
   serverPagination,
 }: DisciplineTabsProps) {
-  const nextBlankId = React.useRef(1);
   const initialTakeOffRows = React.useMemo(() => [makeBlankRow(0)], []);
   const takeOffState = useFefTableState({ initialRows: initialTakeOffRows });
   const fieldEstimateState = useFefTableState({
@@ -118,16 +138,10 @@ export function DisciplineTabs({
     fallbackRows: supportLaborInitialRows,
   });
 
-  // Auto-append a fresh blank row whenever the last row has computable labor.
-  React.useEffect(() => {
-    const data = takeOffState.data;
-    if (data.length === 0) return;
-    const lastRow = data[data.length - 1];
-    if (canComputeTotalCost(lastRow)) {
-      const id = nextBlankId.current++;
-      takeOffState.setData((prev) => [...prev, makeBlankRow(id)]);
-    }
-  }, [takeOffState.data, takeOffState.setData]);
+  // Auto-append a fresh blank row on both sheets whenever the last row has
+  // computable labor, so each always has a trailing row to enter data into.
+  useAutoAppendBlankRow(takeOffState);
+  useAutoAppendBlankRow(supportLaborState);
 
   const [selectedRowIndices, setSelectedRowIndices] = React.useState<
     Set<number>

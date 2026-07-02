@@ -129,6 +129,13 @@ type ChangelogDialogProps = {
   trigger: React.ReactNode;
   /** Slim list-item shape; dialog lazy-fetches the full record on open. */
   initial?: ChangeLogListItem;
+  /**
+   * Create-mode seed values (ignored when `initial` is set). Used to open a
+   * pre-filled new CVR — e.g. converted from selected Field Estimate take-off
+   * rows via `buildCvrDraftFromFefRows`. Only the provided keys override the
+   * blank form.
+   */
+  draft?: Partial<FormState>;
   onSubmit: (form: FormState) => Promise<unknown>;
   onDelete?: (id: number) => Promise<unknown>;
   /**
@@ -142,6 +149,7 @@ type ChangelogDialogProps = {
 export function ChangelogDialog({
   trigger,
   initial,
+  draft,
   onSubmit,
   onDelete,
   onTransition,
@@ -160,6 +168,7 @@ export function ChangelogDialog({
       {(full, closeDialog) => (
         <ChangelogDialogBody
           initial={full}
+          draft={draft}
           onSubmit={onSubmit}
           onDelete={onDelete}
           onTransition={onTransition}
@@ -172,12 +181,14 @@ export function ChangelogDialog({
 
 function ChangelogDialogBody({
   initial,
+  draft,
   onSubmit,
   onDelete,
   onTransition,
   closeDialog,
 }: {
   initial?: ChangeLogDetail;
+  draft?: Partial<FormState>;
   onSubmit: (form: FormState) => Promise<unknown>;
   onDelete?: (id: number) => Promise<unknown>;
   onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
@@ -193,7 +204,8 @@ function ChangelogDialogBody({
     handleDelete,
   } = useFormDialog<ChangeLogDetail, FormState>({
     initial,
-    blank: blankForm,
+    // Create mode seeds from the blank form merged with any provided draft.
+    blank: () => ({ ...blankForm(), ...draft }),
     fromItem,
     onSubmit: async (formState) => {
       await onSubmit(formState);

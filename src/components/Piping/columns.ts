@@ -14,6 +14,7 @@ import {
   PipingSizeCell,
   SubCheckboxCell,
   CrewMixSelectCell,
+  CbsSearchSelectCell,
 } from "~/components/Piping/cells";
 
 const columnHelper = createColumnHelper<FefRow>();
@@ -64,7 +65,7 @@ export const supportLaborColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("id", { header: "ID", cell: EditableCell, size: 150 }),
   columnHelper.accessor("name", {
     header: "Name",
-    cell: ReadOnlyCell,
+    cell: CbsSearchSelectCell,
     size: 300,
   }),
   columnHelper.accessor("role", {

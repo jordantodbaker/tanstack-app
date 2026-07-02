@@ -200,7 +200,14 @@ export function DisciplinePage({
     areaOptions,
     crewMixOptions,
   };
-  const supportMeta: FefTableMeta = { roleOptions, scheduleOptions, roleRates };
+  // cbsOptions powers the searchable CBS picker on the Support Labor Name
+  // column (client-filtered from the discipline's catalog).
+  const supportMeta: FefTableMeta = {
+    ...baseMeta,
+    roleOptions,
+    scheduleOptions,
+    roleRates,
+  };
 
   return (
     <DisciplineTabs

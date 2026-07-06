@@ -43,6 +43,16 @@ export type CellProps = {
   table: ReturnType<typeof useReactTable<FefRow>>;
 };
 
+/** Focus a focusable, non-disabled control inside `cell`, selecting its text
+ *  if it's an input. Returns true when something was focused. */
+function focusCellControl(cell: Element | undefined | null): boolean {
+  const target = cell?.querySelector<HTMLElement>("input, select, textarea");
+  if (!target || (target as HTMLInputElement).disabled) return false;
+  target.focus();
+  if (target instanceof HTMLInputElement) target.select();
+  return true;
+}
+
 /**
  * Move keyboard focus to the editable control in the same column of the
  * adjacent row, so the grid navigates like a spreadsheet. Walks the DOM from
@@ -59,15 +69,7 @@ function focusSiblingCell(from: HTMLElement, direction: 1 | -1) {
   let sibling =
     direction === 1 ? tr.nextElementSibling : tr.previousElementSibling;
   while (sibling) {
-    const cell = sibling.children[colIndex];
-    const target = cell?.querySelector<HTMLElement>(
-      "input, select, textarea",
-    );
-    if (target && !(target as HTMLInputElement).disabled) {
-      target.focus();
-      if (target instanceof HTMLInputElement) target.select();
-      return;
-    }
+    if (focusCellControl(sibling.children[colIndex])) return;
     sibling =
       direction === 1
         ? sibling.nextElementSibling
@@ -76,14 +78,33 @@ function focusSiblingCell(from: HTMLElement, direction: 1 | -1) {
 }
 
 /**
+ * Move keyboard focus to the next/previous editable control in the same row,
+ * skipping read-only or disabled cells. `direction` is +1 for right, -1 for
+ * left.
+ */
+function focusAdjacentColumn(from: HTMLElement, direction: 1 | -1) {
+  const td = from.closest("td");
+  const tr = td?.closest("tr");
+  if (!td || !tr) return;
+  const cells = Array.from(tr.children);
+  let idx = cells.indexOf(td);
+  if (idx < 0) return;
+  for (idx += direction; idx >= 0 && idx < cells.length; idx += direction) {
+    if (focusCellControl(cells[idx])) return;
+  }
+}
+
+/**
  * Editable text input whose value commits on blur. Holds a local draft so
  * keystrokes don't churn table state; resyncs when the underlying value
  * changes. `stripBlankPrefix` blanks the synthetic `__fe-blank-*` row ids.
  *
- * Keyboard: Enter commits and moves down one row (Shift+Enter moves up);
- * Escape reverts the draft to the underlying value and blurs. Tab/Shift+Tab
- * keep their native left/right movement — leaving the field fires `onBlur`,
- * which commits — so the grid is fully navigable from the keyboard.
+ * Keyboard (Excel-style): Enter or Arrow Down commits and moves down one row
+ * (Shift+Enter / Arrow Up move up). Arrow Left/Right move the caret within the
+ * text and only jump to the adjacent column once the caret sits at the text
+ * boundary. Escape reverts the draft to the underlying value and blurs.
+ * Tab/Shift+Tab keep their native left/right movement — leaving the field
+ * fires `onBlur`, which commits — so the grid is fully navigable by keyboard.
  */
 export function TextCell({
   value: rawValue,
@@ -105,14 +126,34 @@ export function TextCell({
   }, [rawValue, stripBlankPrefix]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
+    const input = e.currentTarget;
+    if (e.key === "Enter" || e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       onCommit(value);
-      focusSiblingCell(e.currentTarget, e.shiftKey ? -1 : 1);
+      const up = e.key === "ArrowUp" || (e.key === "Enter" && e.shiftKey);
+      focusSiblingCell(input, up ? -1 : 1);
+    } else if (e.key === "ArrowLeft") {
+      // Only leave the cell once the caret is at the very start with no
+      // selection; otherwise let the caret move through the text.
+      if (input.selectionStart === 0 && input.selectionEnd === 0) {
+        e.preventDefault();
+        onCommit(value);
+        focusAdjacentColumn(input, -1);
+      }
+    } else if (e.key === "ArrowRight") {
+      // Symmetric: only leave once the caret is at the end of the text.
+      const atEnd =
+        input.selectionStart === value.length &&
+        input.selectionEnd === value.length;
+      if (atEnd) {
+        e.preventDefault();
+        onCommit(value);
+        focusAdjacentColumn(input, 1);
+      }
     } else if (e.key === "Escape") {
       e.preventDefault();
       setValue(normalize(rawValue));
-      e.currentTarget.blur();
+      input.blur();
     }
   };
 

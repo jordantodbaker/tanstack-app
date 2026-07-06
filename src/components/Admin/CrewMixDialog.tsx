@@ -1,4 +1,5 @@
 import React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Trash2, Plus } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
@@ -16,6 +17,7 @@ import type {
   CrewMixAdminItem,
   UpsertCrewMixInput,
 } from "~/utils/crewMixes";
+import { rolesAdminQueryOptions } from "~/utils/roles";
 
 // Members are edited as strings in the form so a half-typed wage doesn't
 // snap to NaN/0 mid-keystroke. They're parsed back to numbers on submit.
@@ -24,17 +26,24 @@ type FormState = {
   id?: number;
   name: string;
   description: string;
+  schedule: string;
   members: MemberDraft[];
 };
 
 function toForm(item?: CrewMixAdminItem): FormState {
   if (!item) {
-    return { name: "", description: "", members: [{ jobTitle: "", wage: "" }] };
+    return {
+      name: "",
+      description: "",
+      schedule: "",
+      members: [{ jobTitle: "", wage: "" }],
+    };
   }
   return {
     id: item.id,
     name: item.name,
     description: item.description,
+    schedule: item.schedule,
     members:
       item.members.length === 0
         ? [{ jobTitle: "", wage: "" }]
@@ -50,6 +59,7 @@ function toUpsert(form: FormState): UpsertCrewMixInput {
     id: form.id,
     name: form.name,
     description: form.description,
+    schedule: form.schedule,
     members: form.members
       .map((m) => ({
         jobTitle: m.jobTitle.trim(),
@@ -101,6 +111,73 @@ export function CrewMixDialog({
       ...f,
       members: f.members.map((m, i) => (i === idx ? { ...m, ...patch } : m)),
     }));
+
+  // Roles drive the Job Title and Schedule dropdowns. Lazy-fetched on open
+  // so opening the trigger row doesn't fire a request on every list render.
+  const { data: roles = [] } = useQuery({
+    ...rolesAdminQueryOptions(),
+    enabled: open,
+  });
+  const roleByName = React.useMemo(
+    () => new Map(roles.map((r) => [r.name, r])),
+    [roles],
+  );
+  const roleNames = React.useMemo(
+    () => roles.map((r) => r.name).sort(),
+    [roles],
+  );
+  // Union of every schedule label that appears on any role's rate set.
+  // The crew's schedule is shared across all members, so the choices here
+  // are "anything any role supports" rather than the per-role intersection.
+  const scheduleOptions = React.useMemo(() => {
+    const s = new Set<string>();
+    for (const r of roles) for (const rate of r.rates) s.add(rate.schedule);
+    return Array.from(s).sort();
+  }, [roles]);
+
+  /** Looks up the rate for (role name, schedule). Returns undefined when
+   *  either the role doesn't exist or it has no rate for that schedule —
+   *  in either case the dialog leaves the wage field as the user set it. */
+  const rateFor = React.useCallback(
+    (jobTitle: string, schedule: string): number | undefined => {
+      if (!jobTitle || !schedule) return undefined;
+      const role = roleByName.get(jobTitle);
+      return role?.rates.find((rt) => rt.schedule === schedule)?.rate;
+    },
+    [roleByName],
+  );
+
+  /** Apply a new schedule to the whole mix, refilling member wages where
+   *  the new (role, schedule) pair maps to a known rate. Unknown pairs
+   *  leave the wage as-is so a manually-typed override isn't clobbered
+   *  just because the user picked a different schedule. */
+  const setSchedule = (newSchedule: string) =>
+    setForm((f) => ({
+      ...f,
+      schedule: newSchedule,
+      members: f.members.map((m) => {
+        const lookup = rateFor(m.jobTitle, newSchedule);
+        return lookup === undefined ? m : { ...m, wage: String(lookup) };
+      }),
+    }));
+
+  /** Pick a Role for a member. Auto-fills the wage from the current
+   *  schedule when the pair maps to a known rate. */
+  const setMemberRole = (idx: number, newRole: string) =>
+    setForm((f) => {
+      const lookup = rateFor(newRole, f.schedule);
+      return {
+        ...f,
+        members: f.members.map((m, i) =>
+          i === idx
+            ? {
+                jobTitle: newRole,
+                wage: lookup === undefined ? m.wage : String(lookup),
+              }
+            : m,
+        ),
+      };
+    });
 
   const validMembers = form.members
     .map((m) => ({ wage: parseFloat(m.wage), jobTitle: m.jobTitle.trim() }))
@@ -155,6 +232,30 @@ export function CrewMixDialog({
             />
           </Labeled>
 
+          <Labeled
+            label="Schedule"
+            help="Applies to every member. Changing it refills each member's wage from the matching role rate; manually-entered wages are preserved when the (role, schedule) pair doesn't have a configured rate."
+          >
+            <select
+              value={form.schedule}
+              onChange={(e) => setSchedule(e.target.value)}
+              className="h-9 w-full rounded-md border border-input bg-white px-2 text-sm focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 outline-none"
+            >
+              <option value="">— Not set —</option>
+              {scheduleOptions.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+              {/* Preserve a legacy schedule label even if no role currently
+                  carries it, so editing an old mix doesn't drop the value. */}
+              {form.schedule !== "" &&
+                !scheduleOptions.includes(form.schedule) && (
+                  <option value={form.schedule}>{form.schedule} (legacy)</option>
+                )}
+            </select>
+          </Labeled>
+
           <div>
             <div className="flex items-center justify-between mb-1">
               <span className="block text-xs font-medium text-slate-700">
@@ -181,16 +282,33 @@ export function CrewMixDialog({
                   </tr>
                 </thead>
                 <tbody>
-                  {form.members.map((m, idx) => (
+                  {form.members.map((m, idx) => {
+                    // Show the existing jobTitle even if no Role of that name
+                    // exists right now (legacy mix, or role got renamed). The
+                    // legacy entry is added inline as a pinned option below
+                    // the live role list, marked so the user notices.
+                    const isLegacyTitle =
+                      m.jobTitle !== "" && !roleByName.has(m.jobTitle);
+                    return (
                     <tr key={idx}>
                       <td className="px-3 py-1.5 border-b border-slate-100">
-                        <Input
+                        <select
                           value={m.jobTitle}
-                          placeholder="Foreman"
-                          onChange={(e) =>
-                            updateMember(idx, { jobTitle: e.target.value })
-                          }
-                        />
+                          onChange={(e) => setMemberRole(idx, e.target.value)}
+                          className="h-9 w-full rounded-md border border-input bg-white px-2 text-sm focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 outline-none"
+                        >
+                          <option value="">— Select role —</option>
+                          {roleNames.map((name) => (
+                            <option key={name} value={name}>
+                              {name}
+                            </option>
+                          ))}
+                          {isLegacyTitle && (
+                            <option value={m.jobTitle}>
+                              {m.jobTitle} (legacy)
+                            </option>
+                          )}
+                        </select>
                       </td>
                       <td className="px-3 py-1.5 border-b border-slate-100">
                         <Input
@@ -213,7 +331,8 @@ export function CrewMixDialog({
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

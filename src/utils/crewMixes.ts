@@ -13,6 +13,8 @@ import { parseIdInput, parseUpsertCrewMix } from "~/lib/validators";
 export type CrewMixData = {
   id: number;
   name: string;
+  /** Optional schedule label applied to every member of this mix. */
+  schedule: string;
   members: { jobTitle: string; wage: number }[];
 }[];
 
@@ -23,6 +25,7 @@ export const fetchCrewMixData = createServerFn({ method: "GET" }).handler(
       select: {
         id: true,
         name: true,
+        schedule: true,
         members: {
           select: { jobTitle: true, wage: true },
           orderBy: { id: "asc" },
@@ -49,11 +52,12 @@ export function crewMixAverageWage(
   return sum / members.length;
 }
 
-/** Admin-side crew mix item: id + name + description + members. */
+/** Admin-side crew mix item: id + name + description + schedule + members. */
 export type CrewMixAdminItem = {
   id: number;
   name: string;
   description: string;
+  schedule: string;
   members: { jobTitle: string; wage: number }[];
 };
 
@@ -65,6 +69,7 @@ export const fetchCrewMixesAdmin = createServerFn({ method: "GET" }).handler(
         id: true,
         name: true,
         description: true,
+        schedule: true,
         members: {
           select: { jobTitle: true, wage: true },
           orderBy: { id: "asc" },
@@ -86,6 +91,7 @@ export type UpsertCrewMixInput = {
   id?: number;
   name: string;
   description: string;
+  schedule: string;
   members: { jobTitle: string; wage: number }[];
 };
 
@@ -100,6 +106,7 @@ export const upsertCrewMix = createServerFn({ method: "POST" })
     adminHandler(async ({ data }): Promise<{ ok: true }> => {
       const name = data.name.trim();
       const description = data.description.trim();
+      const schedule = data.schedule.trim();
       const cleanMembers = data.members
         .map((m) => ({ jobTitle: m.jobTitle.trim(), wage: Number(m.wage) }))
         .filter((m) => m.jobTitle !== "" && Number.isFinite(m.wage));
@@ -108,7 +115,7 @@ export const upsertCrewMix = createServerFn({ method: "POST" })
         if (data.id) {
           await tx.crewMix.update({
             where: { id: data.id },
-            data: { name, description },
+            data: { name, description, schedule },
           });
           await tx.crewMixMember.deleteMany({
             where: { crewMixId: data.id },
@@ -127,6 +134,7 @@ export const upsertCrewMix = createServerFn({ method: "POST" })
             data: {
               name,
               description,
+              schedule,
               members: { create: cleanMembers },
             },
           });

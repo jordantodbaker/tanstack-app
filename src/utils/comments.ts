@@ -4,6 +4,7 @@ import { prisma } from "../server/db";
 import { z } from "zod";
 import { requireProjectAccess } from "./users.server";
 import { emitCommentNotification } from "./notifications.server";
+import { lookupParentRecord } from "./entityLookup.server";
 import { Id, ProjectId } from "~/lib/validators";
 
 const CommentsInputSchema = z.object({
@@ -72,68 +73,21 @@ const toItem = (r: CommentRow): CommentItem => ({
 export const MAX_COMMENT_LENGTH = 5000;
 
 /**
- * Looks up the parent record's projectId + the originator (createdById) +
- * a human-readable title in one query. Used by `postComment` to (a)
- * confirm the entity belongs to the claimed project, and (b) populate the
- * notification's `originatorId` + `title` fields.
+ * Looks up the parent record's projectId + originator + human-readable title.
+ * Used by `postComment` to (a) confirm the entity belongs to the claimed
+ * project and (b) populate the notification's `originatorId` + `title`.
+ *
+ * Delegates to the shared `lookupParentRecord` registry so all polymorphic
+ * children (comments, attachments, future) use one source of truth — the
+ * previous in-place switch handled ChangeLog/FCO/RFI explicitly and silently
+ * fell through to the RFI table for Trend/PCO ids, which could mis-attribute
+ * a comment if a real RFI with the same id existed.
  */
 async function readParentRecord(
   entityType: CommentEntityType,
   entityId: number,
-): Promise<{
-  projectId: number;
-  originatorId: number | null;
-  title: string;
-}> {
-  if (entityType === "ChangeLog") {
-    const row = await prisma.changeLog.findUnique({
-      where: { id: entityId },
-      select: {
-        projectId: true,
-        createdById: true,
-        cvrNumber: true,
-        title: true,
-      },
-    });
-    if (!row) throw new Error(`ChangeLog #${entityId} not found.`);
-    return {
-      projectId: row.projectId,
-      originatorId: row.createdById,
-      title: `${row.cvrNumber || `CVR #${entityId}`} — ${row.title}`,
-    };
-  }
-  if (entityType === "FieldChangeOrder") {
-    const row = await prisma.fieldChangeOrder.findUnique({
-      where: { id: entityId },
-      select: {
-        projectId: true,
-        createdById: true,
-        fcoNumber: true,
-        title: true,
-      },
-    });
-    if (!row) throw new Error(`FieldChangeOrder #${entityId} not found.`);
-    return {
-      projectId: row.projectId,
-      originatorId: row.createdById,
-      title: `${row.fcoNumber || `FCO #${entityId}`} — ${row.title}`,
-    };
-  }
-  const row = await prisma.rfi.findUnique({
-    where: { id: entityId },
-    select: {
-      projectId: true,
-      createdById: true,
-      rfiNumber: true,
-      subject: true,
-    },
-  });
-  if (!row) throw new Error(`Rfi #${entityId} not found.`);
-  return {
-    projectId: row.projectId,
-    originatorId: row.createdById,
-    title: `${row.rfiNumber || `RFI #${entityId}`} — ${row.subject}`,
-  };
+) {
+  return lookupParentRecord(entityType, entityId);
 }
 
 export const fetchComments = createServerFn({ method: "GET" })

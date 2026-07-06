@@ -1,5 +1,5 @@
 import React from "react";
-import { Trash2 } from "lucide-react";
+import { Plus, Trash2, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -11,7 +11,7 @@ import { Input } from "~/components/ui/input";
 import { Labeled } from "~/components/ui/form-helpers";
 import { useFormDialog } from "~/lib/use-form-dialog";
 import { disciplines } from "~/config/disciplines";
-import type { RoleAdminItem, UpsertRoleInput } from "~/utils/roles";
+import type { RoleAdminItem, RoleRateAdmin, UpsertRoleInput } from "~/utils/roles";
 
 // Real construction disciplines — anything with a CBS L1-code mapping. Skips
 // nav-only sections like Setup / Summary / Subcontracts so the checkbox list
@@ -34,16 +34,34 @@ export function RoleDialog({
   onSubmit: (form: FormState) => Promise<unknown>;
   onDelete?: (id: number) => Promise<unknown>;
 }) {
+  // Drop empty/blank rate rows before the parent's `onSubmit` runs them
+  // through the zod validator — the table can hold an in-progress "" row
+  // the user added but never filled in, and we don't want that as an error.
+  const wrappedOnSubmit = React.useCallback(
+    (form: FormState) =>
+      onSubmit({
+        ...form,
+        rates: form.rates
+          .map((r) => ({ schedule: r.schedule.trim(), rate: r.rate }))
+          .filter((r) => r.schedule !== ""),
+      }),
+    [onSubmit],
+  );
+
   const { open, setOpen, form, busy, update, handleSubmit, handleDelete } =
     useFormDialog<RoleAdminItem, FormState>({
       initial,
-      blank: () => ({ name: "", disciplines: [] }),
+      blank: () => ({ name: "", disciplines: [], rates: [] }),
       fromItem: (r) => ({
         id: r.id,
         name: r.name,
         disciplines: r.disciplines,
+        rates: r.rates.map((rate) => ({
+          schedule: rate.schedule,
+          rate: rate.rate,
+        })),
       }),
-      onSubmit,
+      onSubmit: wrappedOnSubmit,
       onDelete,
       deleteConfirm: (r) =>
         `Delete role "${r.name}"? ` +
@@ -52,6 +70,40 @@ export function RoleDialog({
           : "") +
         `Existing Take Off rows that reference this role will keep the name as a stale value. This cannot be undone.`,
     });
+
+  /** Editing helpers for the rates table. Schedule is uniqued at submit
+   *  time by the zod validator; here we just shuttle local state. */
+  const setRate = (index: number, patch: Partial<RoleRateAdmin>) => {
+    update(
+      "rates",
+      form.rates.map((r, i) => (i === index ? { ...r, ...patch } : r)),
+    );
+  };
+  const addRate = () => {
+    update("rates", [...form.rates, { schedule: "", rate: 0 }]);
+  };
+  const removeRate = (index: number) => {
+    update(
+      "rates",
+      form.rates.filter((_, i) => i !== index),
+    );
+  };
+
+  // Duplicate-schedule warning — same rule the server-side validator enforces.
+  // Surfaced inline so the user can fix it before clicking Save and seeing a
+  // generic server error.
+  const duplicateSchedules = React.useMemo(() => {
+    const seen = new Set<string>();
+    const dupes = new Set<string>();
+    for (const r of form.rates) {
+      const s = r.schedule.trim();
+      if (!s) continue;
+      if (seen.has(s)) dupes.add(s);
+      seen.add(s);
+    }
+    return dupes;
+  }, [form.rates]);
+  const hasDuplicates = duplicateSchedules.size > 0;
 
   const toggleDiscipline = (id: string) => {
     const next = form.disciplines.includes(id)
@@ -147,6 +199,105 @@ export function RoleDialog({
             </span>
           </div>
 
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="block text-xs font-medium text-slate-700">
+                Labor rates
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addRate}
+                className="text-xs"
+              >
+                <Plus className="size-3 mr-1" />
+                Add rate
+              </Button>
+            </div>
+            <div className="rounded-md border border-slate-200 bg-white">
+              {form.rates.length === 0 ? (
+                <p className="px-3 py-4 text-xs text-slate-500 text-center">
+                  No rates yet. Add a rate per schedule (e.g. ST, OT, DT) so
+                  this role can be selected on a Take Off row.
+                </p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-xs font-semibold uppercase tracking-wide text-slate-500 border-b border-slate-200">
+                      <th className="px-3 py-1.5 text-left">Schedule</th>
+                      <th className="px-3 py-1.5 text-right">Rate ($)</th>
+                      <th className="px-3 py-1.5"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {form.rates.map((rate, i) => {
+                      const trimmed = rate.schedule.trim();
+                      const isDuplicate =
+                        trimmed !== "" && duplicateSchedules.has(trimmed);
+                      return (
+                        <tr key={i} className="border-b border-slate-100 last:border-0">
+                          <td className="px-2 py-1">
+                            <Input
+                              value={rate.schedule}
+                              placeholder="ST"
+                              onChange={(e) =>
+                                setRate(i, { schedule: e.target.value })
+                              }
+                              className={
+                                isDuplicate
+                                  ? "border-red-300 focus-visible:ring-red-300"
+                                  : ""
+                              }
+                              aria-invalid={isDuplicate || undefined}
+                            />
+                          </td>
+                          <td className="px-2 py-1">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={rate.rate}
+                              onChange={(e) =>
+                                setRate(i, {
+                                  rate: parseFloat(e.target.value) || 0,
+                                })
+                              }
+                              className="text-right tabular-nums"
+                            />
+                          </td>
+                          <td className="px-2 py-1 w-10 text-center">
+                            <button
+                              type="button"
+                              onClick={() => removeRate(i)}
+                              aria-label={`Remove ${rate.schedule || "rate"}`}
+                              className="text-slate-400 hover:text-red-600 inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-red-50"
+                            >
+                              <X size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            {hasDuplicates ? (
+              <span className="mt-0.5 block text-xs text-red-600">
+                Duplicate schedule
+                {duplicateSchedules.size === 1 ? "" : "s"}:{" "}
+                {Array.from(duplicateSchedules).join(", ")}. Each schedule
+                must appear at most once per role.
+              </span>
+            ) : (
+              <span className="mt-0.5 block text-xs text-slate-400">
+                The Take Off sheet looks up the rate by (Role, Schedule). Empty
+                rows are dropped on save; common schedules are ST, OT, DT.
+              </span>
+            )}
+          </div>
+
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
             <DialogClose asChild>
               <Button variant="outline" type="button" disabled={busy}>
@@ -156,7 +307,7 @@ export function RoleDialog({
             <Button
               type="button"
               onClick={handleSubmit}
-              disabled={busy || !form.name.trim()}
+              disabled={busy || !form.name.trim() || hasDuplicates}
             >
               {busy ? "Saving…" : initial ? "Save Changes" : "Create"}
             </Button>

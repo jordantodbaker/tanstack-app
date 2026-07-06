@@ -347,10 +347,33 @@ export const UpsertProjectSchema = z.object({
 export const parseUpsertProject = (input: unknown) =>
   UpsertProjectSchema.parse(input);
 
+/** One row of the rate table on a Role — schedule label + dollar rate. */
+const RoleRateInput = z.object({
+  /** "ST" / "OT" / "DT" / free-form text. Trimmed; empty rows are dropped
+   *  client-side before submit so they never reach this validator. */
+  schedule: RequiredText,
+  /** Non-negative dollar rate. */
+  rate: Money.nonnegative(),
+});
 export const UpsertRoleSchema = z.object({
   id: OptionalId,
   name: RequiredText,
   disciplines: StringArray,
+  /** Replaces the role's full rate set on save. Duplicate schedule labels
+   *  within one role are rejected — there should be one rate per schedule. */
+  rates: z.array(RoleRateInput).superRefine((rates, ctx) => {
+    const seen = new Set<string>();
+    rates.forEach((r, i) => {
+      if (seen.has(r.schedule)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `Duplicate schedule "${r.schedule}"`,
+          path: [i, "schedule"],
+        });
+      }
+      seen.add(r.schedule);
+    });
+  }),
 });
 export const parseUpsertRole = (input: unknown) =>
   UpsertRoleSchema.parse(input);
@@ -359,6 +382,10 @@ export const UpsertCrewMixSchema = z.object({
   id: OptionalId,
   name: RequiredText,
   description: Text,
+  /** Optional schedule label that applies to every member. The dialog uses
+   *  (jobTitle = role name, schedule) to look up the per-member wage from
+   *  the role's `RoleRate` rows. Empty string = no schedule set. */
+  schedule: Text,
   members: z.array(
     z.object({
       jobTitle: Text,

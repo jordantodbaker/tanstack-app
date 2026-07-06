@@ -57,11 +57,20 @@ export const roleDataQueryOptions = (disciplineId: string | null = null) =>
     staleTime: Infinity,
   });
 
-/** Admin-side role row: full identity plus the discipline assignments. */
+/** One labor-rate row attached to a Role (admin payload + upsert input). */
+export type RoleRateAdmin = {
+  schedule: string;
+  rate: number;
+};
+
+/** Admin-side role row: full identity, discipline assignments, and the full
+ *  rate set (so the dialog can render the table without a second fetch). */
 export type RoleAdminItem = {
   id: number;
   name: string;
   disciplines: string[];
+  rates: RoleRateAdmin[];
+  /** Denormalized for the list-view "Rates" column; matches `rates.length`. */
   rateCount: number;
 };
 
@@ -73,14 +82,18 @@ export const fetchRolesAdmin = createServerFn({ method: "GET" }).handler(
         id: true,
         name: true,
         disciplines: true,
-        _count: { select: { rates: true } },
+        rates: {
+          select: { schedule: true, rate: true },
+          orderBy: { schedule: "asc" },
+        },
       },
     });
     return rows.map((r) => ({
       id: r.id,
       name: r.name,
       disciplines: r.disciplines,
-      rateCount: r._count.rates,
+      rates: r.rates,
+      rateCount: r.rates.length,
     }));
   }),
 );
@@ -97,21 +110,46 @@ export type UpsertRoleInput = {
   id?: number;
   name: string;
   disciplines: string[];
+  rates: RoleRateAdmin[];
 };
 
-/** Create or update a construction discipline role. Admin-only. */
+/**
+ * Create or update a construction discipline role. Admin-only.
+ *
+ * Updates atomically replace the role's full rate set inside a transaction
+ * — the simpler delete-then-recreate is safe here because there's no
+ * foreign-key inbound to `RoleRate.id` (Take Off rows store the schedule
+ * label by value, not by id, so an id churn is invisible to consumers).
+ */
 export const upsertRole = createServerFn({ method: "POST" })
   .inputValidator(parseUpsertRole)
   .handler(
     adminHandler(async ({ data }): Promise<{ ok: true }> => {
-      const payload = {
-        name: data.name.trim(),
-        disciplines: data.disciplines,
-      };
+      const name = data.name.trim();
+      const ratesData = data.rates.map((r) => ({
+        schedule: r.schedule.trim(),
+        rate: r.rate,
+      }));
       if (data.id) {
-        await prisma.role.update({ where: { id: data.id }, data: payload });
+        const id = data.id;
+        await prisma.$transaction([
+          prisma.role.update({
+            where: { id },
+            data: { name, disciplines: data.disciplines },
+          }),
+          prisma.roleRate.deleteMany({ where: { roleId: id } }),
+          prisma.roleRate.createMany({
+            data: ratesData.map((r) => ({ ...r, roleId: id })),
+          }),
+        ]);
       } else {
-        await prisma.role.create({ data: payload });
+        await prisma.role.create({
+          data: {
+            name,
+            disciplines: data.disciplines,
+            rates: { createMany: { data: ratesData } },
+          },
+        });
       }
       return { ok: true };
     }),

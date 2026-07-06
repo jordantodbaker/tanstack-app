@@ -50,7 +50,7 @@ function AdminCrewMixesPage() {
       }
       items={mixes}
       emptyMessage="No crew mixes yet. Create the first one."
-      columns={["Name", "Members", "Avg Wage"]}
+      columns={["Name", "Schedule", "Members", "Avg Wage"]}
       renderRow={(mix) => (
         <CrewMixRow
           key={mix.id}
@@ -80,6 +80,15 @@ function CrewMixRow({
         <tr className="cursor-pointer hover:bg-slate-50 transition-colors">
           <td className={`${cellCls} font-medium text-slate-800`}>
             {mix.name}
+          </td>
+          <td className={`${cellCls} text-slate-700`}>
+            {mix.schedule ? (
+              <span className="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-xs font-mono text-slate-700">
+                {mix.schedule}
+              </span>
+            ) : (
+              <span className="text-xs text-slate-400">—</span>
+            )}
           </td>
           <td className={`${cellCls} text-slate-700 text-xs`}>
             {mix.members.length === 0 ? (

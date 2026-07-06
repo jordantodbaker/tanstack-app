@@ -457,6 +457,11 @@ model CrewMix {
   id          Int             @id @default(autoincrement())
   name        String          @unique
   description String          @default("")
+  /// Optional schedule label that applies to every member of the mix
+  /// (e.g. "ST"/"OT"/"DT"). The dialog uses (member.jobTitle = role name,
+  /// schedule) to look up the rate from `RoleRate` and auto-populate
+  /// `wage`. Defaults to "" so existing mixes don't need a backfill.
+  schedule    String          @default("")
   members     CrewMixMember[]
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt

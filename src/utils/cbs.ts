@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
+import { Prisma } from "../generated/prisma/client";
 import { prisma } from "../server/db";
 import { z } from "zod";
 import { Id } from "~/lib/validators";
@@ -23,6 +24,54 @@ export const fetchCbsItems = createServerFn({ method: "GET" }).handler(() => {
   return prisma.cbsItem.findMany({ orderBy: { id: "asc" } });
 });
 
+/**
+ * Resolve pasted CBS codes against the WHOLE catalog (not one discipline's
+ * subset) so Excel paste can accept codes from any discipline. Matches each
+ * input against a normalized display code OR cost code — hyphens and spaces
+ * stripped, case-insensitive — so "601-C0-0000-00-M", "601C0000000M", and
+ * lowercased variants all resolve. Returns only the matched items.
+ */
+export const resolveCbsCodes = createServerFn({ method: "GET" })
+  .inputValidator(StringArrParser)
+  .handler(async ({ data }) => {
+    const normalized = [
+      ...new Set(
+        data
+          .map((c) => c.replace(/[-\s]/g, "").toLowerCase())
+          .filter((c) => c !== ""),
+      ),
+    ];
+    if (normalized.length === 0) return [];
+    const list = Prisma.join(normalized);
+    return prisma.$queryRaw<
+      { displayCode: string; costCode: string; name: string; uom: string }[]
+    >(Prisma.sql`
+      SELECT "displayCode", "costCode", "name", "uom"
+      FROM "CbsItem"
+      WHERE lower(regexp_replace("displayCode", '[- ]', '', 'g')) IN (${list})
+         OR lower(regexp_replace("costCode", '[- ]', '', 'g')) IN (${list})
+    `);
+  });
+
+export const cbsCodeResolveQueryOptions = (codes: string[]) =>
+  queryOptions({
+    // Sort so the cache key is order-independent.
+    queryKey: ["cbsCodeResolve", [...codes].sort()],
+    queryFn: () =>
+      codes.length === 0
+        ? Promise.resolve(
+            [] as {
+              displayCode: string;
+              costCode: string;
+              name: string;
+              uom: string;
+            }[],
+          )
+        : resolveCbsCodes({ data: codes }),
+    enabled: codes.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
+
 export const fetchCbsItemsByL1 = createServerFn({ method: "GET" })
   .inputValidator(StringArrParser)
   .handler(({ data }) => {
@@ -32,6 +81,7 @@ export const fetchCbsItemsByL1 = createServerFn({ method: "GET" })
       select: {
         id: true,
         displayCode: true,
+        costCode: true,
         name: true,
         uom: true,
         displayDescription: true,

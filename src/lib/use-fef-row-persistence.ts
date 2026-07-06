@@ -10,6 +10,7 @@ import {
 } from "~/utils/fefRows";
 import { logger } from "~/lib/logger";
 import { qk } from "~/lib/query-keys";
+import type { SaveStatus } from "~/components/SaveIndicator";
 
 const SAVE_DEBOUNCE_MS = 500;
 
@@ -32,7 +33,7 @@ export function useFefRowPersistence({
   section: FefSectionKey;
   state: FefTableState;
   fallbackRows?: FefRow[];
-}): { isLoading: boolean } {
+}): { isLoading: boolean; saveStatus: SaveStatus; lastSavedAt: number | null } {
   const queryClient = useQueryClient();
   const { isHydrated: isProjectHydrated } = useSelectedProject();
   const queryOpts = fefRowsQueryOptions({ projectId, discipline, section });
@@ -43,6 +44,9 @@ export function useFefRowPersistence({
   const skipNextSaveRef = React.useRef(false);
   const saveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentKey = `${projectId}|${discipline}|${section}`;
+
+  const [saveStatus, setSaveStatus] = React.useState<SaveStatus>("idle");
+  const [lastSavedAt, setLastSavedAt] = React.useState<number | null>(null);
 
   const [appliedKey, setAppliedKey] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
@@ -106,7 +110,10 @@ export function useFefRowPersistence({
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     const snapshot = data;
+    // Edits made; a save is scheduled but not yet sent.
+    setSaveStatus("pending");
     saveTimerRef.current = setTimeout(() => {
+      setSaveStatus("saving");
       saveFefRows({
         data: { projectId, discipline, section, rows: snapshot },
       })
@@ -121,6 +128,8 @@ export function useFefRowPersistence({
           queryClient.invalidateQueries({
             queryKey: qk.invalidByDiscipline(projectId),
           });
+          setSaveStatus("saved");
+          setLastSavedAt(Date.now());
         })
         .catch((err) => {
           logger.error("fef-persist save failed", {
@@ -130,6 +139,7 @@ export function useFefRowPersistence({
             section,
             err,
           });
+          setSaveStatus("error");
         });
     }, SAVE_DEBOUNCE_MS);
 
@@ -137,5 +147,9 @@ export function useFefRowPersistence({
     // Browser refresh will still drop pending saves — that's a separate concern.
   }, [projectId, discipline, section, currentKey, data, queryClient, appliedKey]);
 
-  return { isLoading: isPending || appliedKey !== currentKey };
+  return {
+    isLoading: isPending || appliedKey !== currentKey,
+    saveStatus,
+    lastSavedAt,
+  };
 }

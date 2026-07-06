@@ -41,9 +41,29 @@ import {
   type FefTableState,
   type ServerPagination,
 } from "~/lib/table-utils";
-import { isTakeOffRowInvalid } from "~/lib/fef-helpers";
+import { isTakeOffRowInvalid, fefRowHasUserData } from "~/lib/fef-helpers";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useFefRowPersistence } from "~/lib/use-fef-row-persistence";
+import { useFefUndo } from "~/lib/use-fef-undo";
+import { SaveIndicator, combineSaveStatus } from "~/components/SaveIndicator";
+import { TakeOffPasteDialog } from "~/components/TakeOffPasteDialog";
+import { ChangelogDialog } from "~/components/Changelog/ChangelogDialog";
+import { buildCvrDraftFromFefRows } from "~/lib/fef-to-cvr";
+import {
+  upsertChangeLog,
+  invalidateChangeLogQueries,
+  type UpsertChangeLogInput,
+} from "~/utils/changelog";
+import { Undo2, Redo2 } from "lucide-react";
+import { splitRowsByDiscipline } from "~/lib/take-off-paste";
+import { computeTakeOffTotals } from "~/lib/take-off-totals";
+import { makeTakeOffCsvColumns, takeOffRowsForExport } from "~/lib/take-off-csv";
+import { rowsToCsv, downloadCsv, todayStamp } from "~/lib/csv-export";
+import { formatCurrency } from "~/lib/formatting";
+import { appendTakeOffRows } from "~/utils/fefRows";
+import { useQueryClient } from "@tanstack/react-query";
+import { qk } from "~/lib/query-keys";
+import { disciplineById } from "~/config/disciplines";
 
 const selectionColumnHelper = createColumnHelper<FefRow>();
 const takeOffSelectionColumn: ColumnDef<FefRow, string> =
@@ -124,19 +144,46 @@ export function DisciplineTabs({
   const syncToFieldEstimate = useTakeOffSync(takeOffState, fieldEstimateState);
 
   const { projectId } = useSelectedProject();
-  const { isLoading: isTakeOffLoading } = useFefRowPersistence({
+  const takeOffPersist = useFefRowPersistence({
     projectId,
     discipline,
     section: "TAKE_OFF",
     state: takeOffState,
   });
-  useFefRowPersistence({
+  const supportPersist = useFefRowPersistence({
     projectId,
     discipline,
     section: "SUPPORT_LABOR",
     state: supportLaborState,
     fallbackRows: supportLaborInitialRows,
   });
+  const isTakeOffLoading = takeOffPersist.isLoading;
+
+  // One page-level autosave headline across both persisted sections.
+  const saveStatus = combineSaveStatus([
+    takeOffPersist.saveStatus,
+    supportPersist.saveStatus,
+  ]);
+  const lastSavedAt =
+    Math.max(takeOffPersist.lastSavedAt ?? 0, supportPersist.lastSavedAt ?? 0) ||
+    null;
+
+  // Warn before a browser refresh/close while a save is pending, in flight, or
+  // failed — SPA navigation keeps the debounce timer alive, but unloading the
+  // tab would drop it.
+  const hasUnsaved =
+    saveStatus === "pending" ||
+    saveStatus === "saving" ||
+    saveStatus === "error";
+  React.useEffect(() => {
+    if (!hasUnsaved) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasUnsaved]);
 
   // Auto-append a fresh blank row on both sheets whenever the last row has
   // computable labor, so each always has a trailing row to enter data into.
@@ -171,6 +218,23 @@ export function DisciplineTabs({
     [takeOffState],
   );
 
+  // Undo/redo over the Take Off sheet. Enabled only once persistence has
+  // hydrated (so the initial DB load isn't recorded as an edit), and reset
+  // when the project/discipline row set is swapped. Undo/redo clear the
+  // selection since post-restore row indices may no longer line up.
+  const { undo, redo, canUndo, canRedo } = useFefUndo(takeOffState, {
+    enabled: !isTakeOffLoading,
+    resetKey: `${projectId}|${discipline}`,
+  });
+  const handleUndo = React.useCallback(() => {
+    undo();
+    setSelectedRowIndices(new Set());
+  }, [undo]);
+  const handleRedo = React.useCallback(() => {
+    redo();
+    setSelectedRowIndices(new Set());
+  }, [redo]);
+
   const [duplicateTimes, setDuplicateTimes] = React.useState("");
   const handleDuplicateSelectedRows = () => {
     if (selectedRowIndices.size === 0) return;
@@ -193,6 +257,113 @@ export function DisciplineTabs({
     });
     setSelectedRowIndices(new Set());
   };
+
+  const queryClient = useQueryClient();
+  // Transient notice when pasted rows are routed to other disciplines' sheets.
+  const [routedNotice, setRoutedNotice] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (!routedNotice) return;
+    const t = setTimeout(() => setRoutedNotice(null), 8000);
+    return () => clearTimeout(t);
+  }, [routedNotice]);
+
+  // Append pasted rows. Rows whose CBS code belongs to another discipline are
+  // routed to that discipline's Take Off (persisted server-side, since that
+  // page isn't open); the rest are appended to this sheet before its trailing
+  // blank template row so the grid keeps a ready-to-type last row.
+  const handlePasteAppend = React.useCallback(
+    (rows: FefRow[]) => {
+      if (rows.length === 0) return;
+      const { local, byDiscipline } = splitRowsByDiscipline(rows, discipline);
+
+      if (local.length > 0) {
+        takeOffState.setData((prev) => {
+          const last = prev[prev.length - 1];
+          const lastIsBlank =
+            !!last &&
+            last.id.startsWith("__fe-blank-") &&
+            !fefRowHasUserData(last);
+          return lastIsBlank
+            ? [...prev.slice(0, -1), ...local, last]
+            : [...prev, ...local];
+        });
+      }
+
+      if (byDiscipline.size === 0 || projectId === null) return;
+
+      const groups = [...byDiscipline].map(([disciplineId, discRows]) => ({
+        discipline: disciplineId,
+        rows: discRows,
+      }));
+      appendTakeOffRows({ data: { projectId, groups } })
+        .then((routed) => {
+          for (const g of routed) {
+            queryClient.invalidateQueries({
+              queryKey: ["fefRows", projectId, g.discipline, "TAKE_OFF"],
+            });
+          }
+          queryClient.invalidateQueries({
+            queryKey: qk.projectFefRowTotals(projectId),
+          });
+          queryClient.invalidateQueries({
+            queryKey: qk.invalidByDiscipline(projectId),
+          });
+          const total = routed.reduce((sum, g) => sum + g.count, 0);
+          if (total > 0) {
+            const names = routed
+              .map((g) => disciplineById[g.discipline]?.label ?? g.discipline)
+              .join(", ");
+            setRoutedNotice(
+              `${total} row${total === 1 ? "" : "s"} routed to ${names} Take Off.`,
+            );
+          }
+        })
+        .catch(() => {
+          setRoutedNotice(
+            "Some pasted rows could not be routed to their disciplines.",
+          );
+        });
+    },
+    [discipline, projectId, takeOffState, queryClient],
+  );
+
+  const takeOffTotals = React.useMemo(
+    () => computeTakeOffTotals(takeOffState.data),
+    [takeOffState.data],
+  );
+
+  const handleExportCsv = React.useCallback(() => {
+    const areaOptions = takeOffMeta?.areaOptions ?? [];
+    const areaLabelFor = (id: string) =>
+      areaOptions.find((o) => o.value === id)?.label ?? id;
+    const rows = takeOffRowsForExport(takeOffState.data);
+    const csv = rowsToCsv(rows, makeTakeOffCsvColumns(areaLabelFor));
+    downloadCsv(`${discipline || "take-off"}-takeoff-${todayStamp()}.csv`, csv);
+  }, [takeOffState.data, discipline, takeOffMeta]);
+
+  // Build a pre-filled CVR draft from the currently-selected take-off rows —
+  // each becomes a LABOR cost-buildup line (hours × rate). Recomputed as the
+  // selection changes; read by the ChangelogDialog when it opens.
+  const cvrDraft = React.useMemo(() => {
+    const rows = Array.from(selectedRowIndices)
+      .sort((a, b) => a - b)
+      .map((i) => takeOffState.data[i])
+      .filter((r): r is FefRow => !!r);
+    return buildCvrDraftFromFefRows(rows, {
+      discipline,
+      disciplineLabel: disciplineById[discipline]?.label,
+    });
+  }, [selectedRowIndices, takeOffState.data, discipline]);
+
+  const handleCreateCvr = React.useCallback(
+    async (form: Omit<UpsertChangeLogInput, "projectId">) => {
+      if (projectId === null) return;
+      await upsertChangeLog({ data: { ...form, projectId } });
+      invalidateChangeLogQueries(queryClient, projectId);
+      setSelectedRowIndices(new Set());
+    },
+    [projectId, queryClient],
+  );
 
   const takeOffColumnsWithSelection = React.useMemo(
     () => [takeOffSelectionColumn, ...takeOffColumns],
@@ -232,14 +403,63 @@ export function DisciplineTabs({
   };
   const showMask = isTakeOffLoading || isTabSwitching;
 
+  // Ctrl/Cmd+Z (undo) and Ctrl/Cmd+Shift+Z or Ctrl+Y (redo), only while the
+  // Take Off tab is active. Ignored when focus is in an editable control so a
+  // cell's native text-undo keeps working; use the toolbar buttons to
+  // undo/redo row changes while editing.
+  React.useEffect(() => {
+    if (activeTab !== "takeoff") return;
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (
+        tag === "INPUT" ||
+        tag === "SELECT" ||
+        tag === "TEXTAREA" ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+      const key = e.key.toLowerCase();
+      if (key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      } else if ((key === "z" && e.shiftKey) || key === "y") {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [activeTab, handleUndo, handleRedo]);
+
   const inner = (
     <>
       {showMask && <LoadMask />}
-      {title && (
-        <h1 className="text-xl md:text-2xl font-bold mb-3 md:mb-4 flex items-center gap-2">
-          {Icon && <Icon className="size-6 md:size-7" />}
-          {title}
-        </h1>
+      <div className="mb-3 md:mb-4 flex items-center justify-between gap-2">
+        {title ? (
+          <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2">
+            {Icon && <Icon className="size-6 md:size-7" />}
+            {title}
+          </h1>
+        ) : (
+          <span />
+        )}
+        <SaveIndicator status={saveStatus} lastSavedAt={lastSavedAt} />
+      </div>
+      {routedNotice && (
+        <div className="mb-2 flex items-center justify-between gap-2 rounded border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs text-blue-800">
+          <span>{routedNotice}</span>
+          <button
+            type="button"
+            onClick={() => setRoutedNotice(null)}
+            aria-label="Dismiss"
+            className="shrink-0 text-blue-400 hover:text-blue-700"
+          >
+            ×
+          </button>
+        </div>
       )}
       <Tabs
         value={activeTab}
@@ -255,7 +475,29 @@ export function DisciplineTabs({
           </TabsTrigger>
         </TabsList>
         <TabsContent value="takeoff" className="mt-4">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={handleUndo}
+                disabled={!canUndo}
+                title="Undo (Ctrl+Z)"
+                aria-label="Undo"
+                className="flex items-center gap-1 px-2 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+              >
+                <Undo2 className="size-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleRedo}
+                disabled={!canRedo}
+                title="Redo (Ctrl+Shift+Z)"
+                aria-label="Redo"
+                className="flex items-center gap-1 px-2 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+              >
+                <Redo2 className="size-4" />
+              </button>
+            </div>
             <button
               onClick={handleDuplicateSelectedRows}
               disabled={selectedRowIndices.size === 0}
@@ -263,6 +505,20 @@ export function DisciplineTabs({
             >
               Duplicate Selected Rows
             </button>
+            <ChangelogDialog
+              trigger={
+                <button
+                  type="button"
+                  disabled={selectedRowIndices.size === 0 || projectId === null}
+                  title="Create a CVR pre-filled from the selected take-off rows"
+                  className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+                >
+                  Create CVR from Selected
+                </button>
+              }
+              draft={cvrDraft}
+              onSubmit={handleCreateCvr}
+            />
             <input
               type="number"
               min={1}
@@ -287,6 +543,40 @@ export function DisciplineTabs({
             >
               {useCrewMix ? "Use Role" : "Use Crew Mix"}
             </button>
+            <TakeOffPasteDialog
+              cbsOptions={takeOffMeta?.cbsOptions ?? []}
+              areaOptions={takeOffMeta?.areaOptions ?? []}
+              onAppend={handlePasteAppend}
+            />
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              disabled={takeOffTotals.itemCount === 0}
+              className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+            >
+              Export CSV
+            </button>
+            <div className="ml-auto flex items-center gap-3 text-xs text-slate-600">
+              <span>
+                <span className="font-semibold text-slate-800">
+                  {takeOffTotals.itemCount}
+                </span>{" "}
+                {takeOffTotals.itemCount === 1 ? "item" : "items"}
+              </span>
+              <span className="text-slate-300">·</span>
+              <span>
+                <span className="font-semibold text-slate-800">
+                  {takeOffTotals.laborHours.toLocaleString(undefined, {
+                    maximumFractionDigits: 1,
+                  })}
+                </span>{" "}
+                hrs
+              </span>
+              <span className="text-slate-300">·</span>
+              <span className="font-semibold text-slate-800">
+                {formatCurrency(takeOffTotals.laborCost)}
+              </span>
+            </div>
           </div>
           <FefTableContent
             state={takeOffState}

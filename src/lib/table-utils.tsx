@@ -44,9 +44,46 @@ export type CellProps = {
 };
 
 /**
+ * Move keyboard focus to the editable control in the same column of the
+ * adjacent row, so the grid navigates like a spreadsheet. Walks the DOM from
+ * the current cell (`<td>`) to the next/previous `<tr>`, skipping rows whose
+ * cell in that column is read-only (a `<span>`, no focusable control) or
+ * disabled. `direction` is +1 for down, -1 for up.
+ */
+function focusSiblingCell(from: HTMLElement, direction: 1 | -1) {
+  const td = from.closest("td");
+  const tr = td?.closest("tr");
+  if (!td || !tr) return;
+  const colIndex = Array.from(tr.children).indexOf(td);
+  if (colIndex < 0) return;
+  let sibling =
+    direction === 1 ? tr.nextElementSibling : tr.previousElementSibling;
+  while (sibling) {
+    const cell = sibling.children[colIndex];
+    const target = cell?.querySelector<HTMLElement>(
+      "input, select, textarea",
+    );
+    if (target && !(target as HTMLInputElement).disabled) {
+      target.focus();
+      if (target instanceof HTMLInputElement) target.select();
+      return;
+    }
+    sibling =
+      direction === 1
+        ? sibling.nextElementSibling
+        : sibling.previousElementSibling;
+  }
+}
+
+/**
  * Editable text input whose value commits on blur. Holds a local draft so
  * keystrokes don't churn table state; resyncs when the underlying value
  * changes. `stripBlankPrefix` blanks the synthetic `__fe-blank-*` row ids.
+ *
+ * Keyboard: Enter commits and moves down one row (Shift+Enter moves up);
+ * Escape reverts the draft to the underlying value and blurs. Tab/Shift+Tab
+ * keep their native left/right movement — leaving the field fires `onBlur`,
+ * which commits — so the grid is fully navigable from the keyboard.
  */
 export function TextCell({
   value: rawValue,
@@ -67,12 +104,25 @@ export function TextCell({
     );
   }, [rawValue, stripBlankPrefix]);
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      onCommit(value);
+      focusSiblingCell(e.currentTarget, e.shiftKey ? -1 : 1);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setValue(normalize(rawValue));
+      e.currentTarget.blur();
+    }
+  };
+
   return (
     <input
       className={editableCellClass}
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onBlur={() => onCommit(value)}
+      onKeyDown={handleKeyDown}
     />
   );
 }

@@ -31,6 +31,7 @@ import { supportLaborColumns } from "~/components/Piping/columns";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useFefRowPersistence } from "~/lib/use-fef-row-persistence";
 import { DisciplineTabs } from "~/components/DisciplineTabs";
+import { SaveIndicator } from "~/components/SaveIndicator";
 
 const columnHelper = createColumnHelper<FefRow>();
 
@@ -240,7 +241,7 @@ function MaterialsSection({
     sectionKey,
   });
 
-  useFefRowPersistence({
+  const { saveStatus, lastSavedAt } = useFefRowPersistence({
     projectId: sectionKey ? projectId : null,
     discipline: sectionKey ?? "",
     section: "MATERIALS",
@@ -249,10 +250,15 @@ function MaterialsSection({
   });
 
   return (
-    <FefTableContent
-      state={takeOffState}
-      meta={{ cbsOptions }}
-      columns={materialsColumns}
-    />
+    <div>
+      <div className="mb-2 flex justify-end">
+        <SaveIndicator status={saveStatus} lastSavedAt={lastSavedAt} />
+      </div>
+      <FefTableContent
+        state={takeOffState}
+        meta={{ cbsOptions }}
+        columns={materialsColumns}
+      />
+    </div>
   );
 }

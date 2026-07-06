@@ -37,6 +37,16 @@ const SaveFefRowsSchema = z.object({
   rows: z.array(FefRowSchema),
 });
 
+const AppendTakeOffSchema = z.object({
+  projectId: ProjectId,
+  groups: z.array(
+    z.object({
+      discipline: z.string().min(1),
+      rows: z.array(FefRowSchema),
+    }),
+  ),
+});
+
 export type FefSectionKey = "TAKE_OFF" | "SUPPORT_LABOR" | "MATERIALS";
 
 type FefRowDb = {
@@ -219,5 +229,67 @@ export const saveFefRows = createServerFn({ method: "POST" })
         });
         throw err;
       }
+    }),
+  );
+
+/**
+ * Append rows to the END of one or more disciplines' TAKE_OFF sheets, without
+ * touching what's already there. Used by Excel paste to route "off-discipline"
+ * codes to their own discipline's Take Off (that page isn't open, so an
+ * append-only insert is race-free and avoids a fetch-merge round-trip). Returns
+ * how many rows landed on each discipline. Only rows with a real CBS code or
+ * user data are kept — blank template rows are dropped.
+ */
+export const appendTakeOffRows = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => AppendTakeOffSchema.parse(input))
+  .handler(
+    projectScopedHandler(async ({ data }) => {
+      const { projectId, groups } = data;
+      const routed: { discipline: string; count: number }[] = [];
+
+      await prisma.$transaction(async (tx) => {
+        for (const group of groups) {
+          const { discipline } = group;
+          const rows = group.rows.filter(
+            (r) =>
+              (!r.id.startsWith("__fe-blank-") && r.id !== "") ||
+              fefRowHasUserData(r),
+          );
+          if (rows.length === 0) continue;
+
+          // Positions are contiguous 0..count-1 (saveFefRows keeps them so), so
+          // the next free position is the current row count.
+          const start = await tx.fefRow.count({
+            where: { projectId, discipline, section: "TAKE_OFF" },
+          });
+
+          const values = rows.map(
+            (p, i) => Prisma.sql`(
+              ${projectId}, ${discipline}, 'TAKE_OFF'::"FefSection", ${start + i},
+              ${p.id.startsWith("__fe-blank-") ? "" : p.id}, ${p.name}, ${p.description}, ${p.shopField}, ${p.weldGroupDescription},
+              ${p.quantity}, ${p.size}, ${p.unit}, ${p.metallurgyCode}, ${p.boreSize},
+              ${p.role}, ${p.crewMixId}, ${p.schedule}, ${p.taskCode}, ${p.laborHours}, ${p.laborFactor}, ${p.laborRate},
+              ${p.materialCost}, ${p.equipment}, ${p.notes}, ${p.sub}, ${p.area},
+              NOW(), NOW()
+            )`,
+          );
+
+          await tx.$executeRaw(Prisma.sql`
+            INSERT INTO "FefRow" (
+              "projectId", "discipline", "section", "position",
+              "cbsCode", "name", "description", "shopField", "weldGroupDescription",
+              "quantity", "size", "unit", "metallurgyCode", "boreSize",
+              "role", "crewMixId", "schedule", "taskCode", "laborHours", "laborFactor", "laborRate",
+              "materialCost", "equipment", "notes", "sub", "area",
+              "createdAt", "updatedAt"
+            )
+            VALUES ${Prisma.join(values)}
+          `);
+
+          routed.push({ discipline, count: rows.length });
+        }
+      });
+
+      return routed;
     }),
   );

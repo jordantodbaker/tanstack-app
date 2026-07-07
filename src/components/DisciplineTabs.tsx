@@ -586,6 +586,7 @@ export function DisciplineTabs({
             columnVisibility={takeOffColumnVisibility}
             minRows={20}
             getRowInvalid={isTakeOffRowInvalidLive}
+            enableRangeEditing
           />
         </TabsContent>
         <TabsContent value="estimate" className="mt-4">

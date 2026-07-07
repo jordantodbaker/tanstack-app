@@ -23,6 +23,17 @@ import {
 import { aggregateTakeOff } from "./take-off-sync";
 import { createDebug } from "./logger";
 import { canComputeTotalCost, makeFefRow } from "./fef-helpers";
+import {
+  normalizeRange,
+  rangeSpansMultiple,
+  serializeRange,
+  parseClipboardMatrix,
+  applyPaste,
+  applyClear,
+  applyFillDown,
+  type RangeSelection,
+  type WriteCtx,
+} from "./grid-range";
 
 const debug = createDebug("fef");
 
@@ -637,6 +648,19 @@ export type ServerPagination = {
  * comparator forces every row to re-render with fresh meta after a refetch,
  * without giving up the per-keystroke memoization win for editing.
  */
+/** Callbacks the range-editing rows use to report pointer/focus and start a
+ *  fill-handle drag. All are stable (useCallback) so they don't defeat the
+ *  row memo. */
+type RangeRowHandlers = {
+  onCellPointerDown: (
+    rowIndex: number,
+    colIndex: number,
+    e: React.MouseEvent,
+  ) => void;
+  onCellFocus: (rowIndex: number, colIndex: number) => void;
+  onFillHandleDown: (e: React.MouseEvent) => void;
+};
+
 const FefTableRow = React.memo(
   function FefTableRow({
     row,
@@ -644,6 +668,10 @@ const FefTableRow = React.memo(
     selected: _selected,
     metaRev: _metaRev,
     getRowInvalid,
+    selMin,
+    selMax,
+    selBottom,
+    rangeHandlers,
   }: {
     row: Row<FefRow>;
     rowIndex: number;
@@ -654,6 +682,16 @@ const FefTableRow = React.memo(
      *  queries (roleOptions, cbsOptions, etc.) change reference. */
     metaRev: object;
     getRowInvalid?: (row: FefRow) => boolean;
+    /** Inclusive visible-column range selected on THIS row, or -1/-1 when the
+     *  row is outside the current range selection. Primitives so the memo
+     *  comparator skips rows whose selection didn't change. */
+    selMin: number;
+    selMax: number;
+    /** True when this is the bottom row of the selection (renders the fill
+     *  handle on its right-most selected cell). */
+    selBottom: boolean;
+    /** Present only when range editing is enabled on this table. */
+    rangeHandlers?: RangeRowHandlers;
   }) {
     void _selected;
     void _metaRev;
@@ -673,15 +711,50 @@ const FefTableRow = React.memo(
             : undefined
         }
       >
-        {row.getVisibleCells().map((cell) => (
-          <td
-            key={cell.id}
-            style={{ minWidth: cell.column.getSize() }}
-            className="border border-gray-300"
-          >
-            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-          </td>
-        ))}
+        {row.getVisibleCells().map((cell, colIndex) => {
+          const inSel = selMin >= 0 && colIndex >= selMin && colIndex <= selMax;
+          const isFillCorner = selBottom && colIndex === selMax;
+          return (
+            <td
+              key={cell.id}
+              data-row={row.index}
+              data-col={colIndex}
+              style={{ minWidth: cell.column.getSize() }}
+              className={`relative border border-gray-300${
+                inSel ? " outline outline-1 -outline-offset-1 outline-blue-500" : ""
+              }`}
+              onMouseDown={
+                rangeHandlers
+                  ? (e) => rangeHandlers.onCellPointerDown(row.index, colIndex, e)
+                  : undefined
+              }
+              onFocusCapture={
+                rangeHandlers
+                  ? () => rangeHandlers.onCellFocus(row.index, colIndex)
+                  : undefined
+              }
+            >
+              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              {inSel && (
+                // Translucent wash above the cell's own input so the selection
+                // reads over the white editors; pointer-events-none keeps
+                // typing/clicking working through it.
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 z-[1] bg-blue-400/15"
+                />
+              )}
+              {isFillCorner && rangeHandlers && (
+                <span
+                  aria-hidden="true"
+                  title="Drag to fill down"
+                  onMouseDown={rangeHandlers.onFillHandleDown}
+                  className="absolute -bottom-[3px] -right-[3px] z-[2] h-2 w-2 cursor-crosshair border border-white bg-blue-600"
+                />
+              )}
+            </td>
+          );
+        })}
       </tr>
     );
   },
@@ -694,12 +767,18 @@ const FefTableRow = React.memo(
     // affected row, not every row in the table. `metaRev` flips only when a
     // query-derived meta array changes reference, so query refetches (e.g.
     // an admin added a Role) re-render every row's dropdowns with fresh
-    // options without disturbing the editing-speed memoization.
+    // options without disturbing the editing-speed memoization. The sel*
+    // primitives re-render only the rows whose range-selection changed;
+    // `rangeHandlers` is a stable object.
     prev.row.original === next.row.original &&
     prev.rowIndex === next.rowIndex &&
     prev.selected === next.selected &&
     prev.metaRev === next.metaRev &&
-    prev.getRowInvalid === next.getRowInvalid,
+    prev.getRowInvalid === next.getRowInvalid &&
+    prev.selMin === next.selMin &&
+    prev.selMax === next.selMax &&
+    prev.selBottom === next.selBottom &&
+    prev.rangeHandlers === next.rangeHandlers,
 );
 
 export function useFefTableState(opts: {
@@ -747,6 +826,7 @@ export function FefTableContent({
   onColumnVisibilityChange,
   minRows,
   getRowInvalid,
+  enableRangeEditing,
 }: {
   state: FefTableState;
   meta?: FefTableMeta;
@@ -764,6 +844,13 @@ export function FefTableContent({
    * passes this; other sections leave it undefined and render unmarked.
    */
   getRowInvalid?: (row: FefRow) => boolean;
+  /**
+   * Enables Excel-style range editing on the grid: Shift+Click / Shift+Arrow
+   * to select a rectangle, Ctrl+C / Ctrl+V to copy-paste (including to and
+   * from Excel), Ctrl+D and the corner fill handle to fill down, and Delete
+   * to clear. Only the Take Off sheet opts in.
+   */
+  enableRangeEditing?: boolean;
 }) {
   const { data, setData, columnFilters, setColumnFilters } = state;
   const [localPageIndex, setLocalPageIndex] = React.useState(0);
@@ -861,8 +948,200 @@ export function FefTableContent({
     } satisfies TableMeta<RowData>,
   });
 
+  // ── Excel-style range editing (opt-in via enableRangeEditing) ─────────────
+  // All hooks below run unconditionally (rules of hooks); their behavior is
+  // gated on `enableRangeEditing` so non-Take-Off sheets are unaffected.
+  const rows = table.getRowModel().rows;
+  const columnIds = table.getVisibleLeafColumns().map((c) => c.id);
+  const colCount = columnIds.length;
+  const firstRowIndex = rows.length > 0 ? rows[0].index : 0;
+  const lastRowIndex = rows.length > 0 ? rows[rows.length - 1].index : 0;
+
+  const [selection, setSelection] = React.useState<RangeSelection | null>(null);
+  const [filling, setFilling] = React.useState(false);
+  const pasteIdRef = React.useRef(1_000_000);
+
+  const writeCtx = React.useMemo<WriteCtx>(
+    () => ({
+      roleOptions: meta?.roleOptions ?? [],
+      scheduleOptions: meta?.scheduleOptions ?? [],
+      roleRates: meta?.roleRates ?? [],
+      areaOptions: meta?.areaOptions ?? [],
+      cbsOptions: meta?.cbsOptions ?? [],
+      crewMixOptions: meta?.crewMixOptions ?? [],
+    }),
+    [
+      meta?.roleOptions,
+      meta?.scheduleOptions,
+      meta?.roleRates,
+      meta?.areaOptions,
+      meta?.cbsOptions,
+      meta?.crewMixOptions,
+    ],
+  );
+
+  // Snapshot of everything a deferred (drag mouseup) handler needs, refreshed
+  // after every render so those closures never read stale state.
+  const latest = React.useRef({ data, columnIds, writeCtx, selection });
+  React.useEffect(() => {
+    latest.current = { data, columnIds, writeCtx, selection };
+  });
+
+  const onCellFocus = React.useCallback((rowIndex: number, colIndex: number) => {
+    // Plain focus/click collapses the selection to the focused cell.
+    setSelection({
+      anchor: { row: rowIndex, col: colIndex },
+      focus: { row: rowIndex, col: colIndex },
+    });
+  }, []);
+
+  const onCellPointerDown = React.useCallback(
+    (rowIndex: number, colIndex: number, e: React.MouseEvent) => {
+      // Shift+Click extends the range from the existing anchor without moving
+      // DOM focus (so the anchor cell keeps its caret).
+      if (!e.shiftKey) return;
+      e.preventDefault();
+      setSelection((prev) =>
+        prev
+          ? { ...prev, focus: { row: rowIndex, col: colIndex } }
+          : {
+              anchor: { row: rowIndex, col: colIndex },
+              focus: { row: rowIndex, col: colIndex },
+            },
+      );
+    },
+    [],
+  );
+
+  const onFillHandleDown = React.useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setFilling(true);
+  }, []);
+
+  const rangeHandlers = React.useMemo(
+    () => ({ onCellPointerDown, onCellFocus, onFillHandleDown }),
+    [onCellPointerDown, onCellFocus, onFillHandleDown],
+  );
+
+  // Fill-handle drag: extend the selection downward to the row under the
+  // cursor, then fill-down on release. Down-only (the common estimator case).
+  React.useEffect(() => {
+    if (!filling) return;
+    const onMove = (ev: MouseEvent) => {
+      const el = document.elementFromPoint(ev.clientX, ev.clientY);
+      const td = (el as Element | null)?.closest("td[data-row]");
+      const attr = td?.getAttribute("data-row");
+      if (attr == null) return;
+      const r = parseInt(attr, 10);
+      if (Number.isNaN(r)) return;
+      setSelection((prev) => {
+        if (!prev) return prev;
+        const top = Math.min(prev.anchor.row, prev.focus.row);
+        return { ...prev, focus: { row: Math.max(top, r), col: prev.focus.col } };
+      });
+    };
+    const onUp = () => {
+      setFilling(false);
+      const { data: d, columnIds: cids, writeCtx: c, selection: sel } =
+        latest.current;
+      if (sel && rangeSpansMultiple(sel)) {
+        setData(applyFillDown(d, cids, sel, c));
+      }
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [filling, setData]);
+
+  const onGridKeyDown = (e: React.KeyboardEvent) => {
+    if (!enableRangeEditing || !selection) return;
+    const mod = e.ctrlKey || e.metaKey;
+    const key = e.key;
+
+    if (!mod && e.shiftKey && key.startsWith("Arrow")) {
+      e.preventDefault();
+      e.stopPropagation();
+      setSelection((prev) => {
+        if (!prev) return prev;
+        let { row, col } = prev.focus;
+        if (key === "ArrowUp") row = Math.max(firstRowIndex, row - 1);
+        else if (key === "ArrowDown") row = Math.min(lastRowIndex, row + 1);
+        else if (key === "ArrowLeft") col = Math.max(0, col - 1);
+        else if (key === "ArrowRight") col = Math.min(colCount - 1, col + 1);
+        return { ...prev, focus: { row, col } };
+      });
+      return;
+    }
+
+    if (mod && (key === "d" || key === "D")) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (rangeSpansMultiple(selection)) {
+        setData(applyFillDown(data, columnIds, selection, writeCtx));
+      }
+      return;
+    }
+
+    if ((key === "Delete" || key === "Backspace") && rangeSpansMultiple(selection)) {
+      e.preventDefault();
+      e.stopPropagation();
+      setData(applyClear(data, columnIds, selection, writeCtx));
+      return;
+    }
+
+    if (key === "Escape" && rangeSpansMultiple(selection)) {
+      e.preventDefault();
+      e.stopPropagation();
+      setSelection((prev) => (prev ? { anchor: prev.focus, focus: prev.focus } : prev));
+    }
+  };
+
+  const onGridCopy = (e: React.ClipboardEvent) => {
+    if (!enableRangeEditing || !selection || !rangeSpansMultiple(selection)) return;
+    // Multi-cell selection → own the copy; single cell falls through to the
+    // input's native text copy.
+    e.preventDefault();
+    e.clipboardData.setData(
+      "text/plain",
+      serializeRange(data, columnIds, selection, writeCtx),
+    );
+  };
+
+  const onGridPaste = (e: React.ClipboardEvent) => {
+    if (!enableRangeEditing || !selection) return;
+    const text = e.clipboardData.getData("text/plain");
+    const matrix = parseClipboardMatrix(text);
+    const isBlock = matrix.length > 1 || matrix.some((r) => r.length > 1);
+    // A single value pasted into one cell is left to the input's native paste;
+    // a block (or a multi-cell target) is spilled across the grid.
+    if (!isBlock && !rangeSpansMultiple(selection)) return;
+    e.preventDefault();
+    const { minRow, minCol } = normalizeRange(selection);
+    setData(
+      applyPaste(
+        data,
+        columnIds,
+        { row: minRow, col: minCol },
+        matrix,
+        writeCtx,
+        () => makeBlankRow(pasteIdRef.current++),
+      ),
+    );
+  };
+
+  const rangeSel = enableRangeEditing && selection ? normalizeRange(selection) : null;
+
   return (
-    <div className="overflow-x-auto">
+    <div
+      className="overflow-x-auto"
+      onKeyDownCapture={enableRangeEditing ? onGridKeyDown : undefined}
+      onCopy={enableRangeEditing ? onGridCopy : undefined}
+      onPaste={enableRangeEditing ? onGridPaste : undefined}
+    >
       <table className="w-full border-collapse text-sm">
         <thead>
           {table.getHeaderGroups().map((headerGroup) => (
@@ -888,16 +1167,26 @@ export function FefTableContent({
           ))}
         </thead>
         <tbody>
-          {table.getRowModel().rows.map((row, i) => (
-            <FefTableRow
-              key={row.id}
-              row={row}
-              rowIndex={i}
-              selected={meta?.selectedRowIndices?.has(i) ?? false}
-              metaRev={metaRev}
-              getRowInvalid={getRowInvalid}
-            />
-          ))}
+          {rows.map((row, i) => {
+            const inRange =
+              rangeSel != null &&
+              row.index >= rangeSel.minRow &&
+              row.index <= rangeSel.maxRow;
+            return (
+              <FefTableRow
+                key={row.id}
+                row={row}
+                rowIndex={i}
+                selected={meta?.selectedRowIndices?.has(i) ?? false}
+                metaRev={metaRev}
+                getRowInvalid={getRowInvalid}
+                selMin={inRange ? rangeSel!.minCol : -1}
+                selMax={inRange ? rangeSel!.maxCol : -1}
+                selBottom={inRange && row.index === rangeSel!.maxRow}
+                rangeHandlers={enableRangeEditing ? rangeHandlers : undefined}
+              />
+            );
+          })}
           {minRows !== undefined &&
             Array.from(
               {

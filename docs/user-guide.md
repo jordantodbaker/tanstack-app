@@ -74,6 +74,61 @@ Working with rows:
   etc.) for a cleaner take-off view.
 - **Invalid rows** (started but Total Cost can't be computed) are tinted and
   counted with the ⚠️ badge in the sidebar and on the **Validation** page.
+- **Keyboard navigation:** move between cells like a spreadsheet — **Enter** (or
+  **↓**) commits the cell and moves down, **Shift+Enter** / **↑** move up, and
+  **← / →** move the caret through the text, jumping to the next column once the
+  caret reaches the edge. **Esc** reverts a cell to its last saved value.
+- **Undo / redo:** the toolbar's **↶ / ↷** buttons — or **Ctrl+Z** and
+  **Ctrl+Shift+Z** (**Ctrl+Y** also redoes) — step back and forward through row
+  edits. Each paste, fill, or clear counts as a single step.
+
+### Spreadsheet-style range editing (Take Off)
+
+The Take Off grid handles bulk edits like Excel:
+
+- **Select a range** — click a cell, then **Shift+Click** another cell, or hold
+  **Shift** and press the **arrow keys**, to extend a highlighted rectangle.
+- **Copy — Ctrl+C** — copies the selected cells to the clipboard as
+  tab-separated text, so you can paste them straight into Excel or Google
+  Sheets. Every column copies, including computed ones (ID, Labor Hours, Total
+  Cost) and the Crew Mix name.
+- **Paste — Ctrl+V** — pastes a block starting at the top-left of your
+  selection, spilling right and down. It works from Excel, Google Sheets, or the
+  grid itself; if the pasted block is taller than the sheet, **new rows are added
+  automatically**.
+- **Fill down — Ctrl+D**, or **drag the fill handle** (the small square at the
+  bottom-right corner of the selection) downward — copies the top row of the
+  selection down through the rest.
+- **Clear — Delete** — empties the writable cells in the selection.
+
+**Which columns accept paste / fill / clear:** Description, Notes, Quantity,
+Labor Factor, Area, Role, Schedule, **Name** (CBS item), and **Crew Mix**. Writes
+keep the row consistent — changing Quantity or Labor Factor recomputes **Labor
+Hours**, Role/Schedule re-resolve the **Labor Rate**, a Name resolves the CBS
+**code + unit**, and a Crew Mix snapshots the crew's **average wage** onto the
+rate (clearing Role/Schedule). A pasted value that doesn't match a known Area,
+Role, Schedule, CBS item, or Crew Mix is **skipped** rather than written, so a
+stray cell can't corrupt a row.
+
+The computed columns — **ID, Unit, Labor Hours, Labor Rate, Total Cost** — and
+the **Sub** checkbox are read-only to range edits: they still copy out, but
+paste, fill, and clear skip them.
+
+### Importing rows from a spreadsheet
+
+For bringing in many rows at once, the **Paste from Excel** button opens an
+importer. Paste your columns in this order — **CBS Code · Description · Quantity ·
+Labor Factor · Labor Rate · Area** — and the importer detects and skips a header
+row and cleans commas / `$` from numbers. Each **CBS Code** is matched against
+the catalog to fill Name and Unit. Any row whose CBS code belongs to a
+**different discipline** is routed to that discipline's Take Off automatically
+(and saved there), with a note telling you how many rows were routed.
+
+### Exporting
+
+**Export CSV** downloads the current Take Off as a spreadsheet (with area labels
+resolved), named by discipline and date. The toolbar also shows a **live tally**
+of item count, labor hours, and labor cost for the sheet.
 
 ### Field Estimate (Craft Labor + Support Labor)
 
@@ -235,6 +290,10 @@ Admins configure the shared data the rest of the app draws on:
 ## 7. Tips
 
 - Most grids **autosave**; there's no explicit save step for the estimate.
+- On **Take Off**, work like Excel: **Shift+select** a range and **Ctrl+C /
+  Ctrl+V** to move data to and from a spreadsheet, **Ctrl+D** or the fill handle
+  to fill down, and **Ctrl+Z** to undo. For a first bulk load, **Paste from
+  Excel** is faster than typing rows one by one.
 - Keep the estimate **Validation-clean** before snapshotting so your as-bid
   baseline is complete.
 - Use **⌘K / /** to jump to any CVR/FCO/RFI/PCO/Trend by number or title.

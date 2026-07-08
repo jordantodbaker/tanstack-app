@@ -68,8 +68,11 @@ Working with rows:
 - **Adding rows is automatic:** as soon as the last row has a computable Total
   Cost, a fresh blank row appears beneath it — so there's always a row to type
   into.
-- **Duplicate Selected Rows:** tick the checkboxes on one or more rows, optionally
-  enter a "times" count, and duplicate them in place.
+- **Copy / paste rows:** select a range of cells (click a cell, then Shift+Click
+  or Shift+Arrow), **Ctrl+C**, click a destination cell, and **Ctrl+V** — the
+  same as Excel, including pasting to and from a spreadsheet. Use this to
+  duplicate rows.
+- **Row checkboxes** (left column) mark rows for **Create CVR from Selected**.
 - **Show / Hide Details:** collapses the wide detail columns (ID, Unit, rates,
   etc.) for a cleaner take-off view.
 - **Invalid rows** (started but Total Cost can't be computed) are tinted and

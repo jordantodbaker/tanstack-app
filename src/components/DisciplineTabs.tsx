@@ -235,29 +235,6 @@ export function DisciplineTabs({
     setSelectedRowIndices(new Set());
   }, [redo]);
 
-  const [duplicateTimes, setDuplicateTimes] = React.useState("");
-  const handleDuplicateSelectedRows = () => {
-    if (selectedRowIndices.size === 0) return;
-    const indices = Array.from(selectedRowIndices).sort((a, b) => a - b);
-    const times = Math.max(1, parseInt(duplicateTimes) || 1);
-    const insertAfter = indices[indices.length - 1];
-    takeOffState.setData((prev) => {
-      const rowsToDuplicate = indices
-        .map((i) => prev[i])
-        .filter((r): r is FefRow => !!r);
-      const duplicates: FefRow[] = [];
-      for (let t = 0; t < times; t++) {
-        for (const row of rowsToDuplicate) duplicates.push({ ...row });
-      }
-      return [
-        ...prev.slice(0, insertAfter + 1),
-        ...duplicates,
-        ...prev.slice(insertAfter + 1),
-      ];
-    });
-    setSelectedRowIndices(new Set());
-  };
-
   const queryClient = useQueryClient();
   // Transient notice when pasted rows are routed to other disciplines' sheets.
   const [routedNotice, setRoutedNotice] = React.useState<string | null>(null);
@@ -498,13 +475,6 @@ export function DisciplineTabs({
                 <Redo2 className="size-4" />
               </button>
             </div>
-            <button
-              onClick={handleDuplicateSelectedRows}
-              disabled={selectedRowIndices.size === 0}
-              className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
-            >
-              Duplicate Selected Rows
-            </button>
             <ChangelogDialog
               trigger={
                 <button
@@ -518,14 +488,6 @@ export function DisciplineTabs({
               }
               draft={cvrDraft}
               onSubmit={handleCreateCvr}
-            />
-            <input
-              type="number"
-              min={1}
-              value={duplicateTimes}
-              onChange={(e) => setDuplicateTimes(e.target.value)}
-              placeholder="times"
-              className="w-20 px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-400"
             />
             <button
               onClick={() => setDetailsVisible((v) => !v)}

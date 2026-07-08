@@ -27,3 +27,4 @@ yarn.lock
 
 # Vitest coverage output
 coverage/
+.env*

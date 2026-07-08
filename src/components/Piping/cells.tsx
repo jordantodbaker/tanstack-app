@@ -1,6 +1,7 @@
 import React from "react";
 import type { CbsOption, FefRow } from "~/lib/types";
 import {
+  CellSelect,
   editableCellClass,
   readOnlyCellClass,
   TextCell,
@@ -232,24 +233,18 @@ export function RoleSelectCell({ getValue, row, table }: CellProps) {
   const value = getValue() as string;
   const { roleOptions = [], roleRates = [] } = table.options.meta ?? {};
   return (
-    <select
-      className={editableCellClass}
+    <CellSelect
       value={value}
-      onChange={(e) => {
+      options={roleOptions.map((opt) => ({ value: opt, label: opt }))}
+      ariaLabel="Role"
+      onValueChange={(v) => {
         const rowData = table.getRowModel().rows[row.index].original;
         table.options.meta?.updateRow?.(
           row.index,
-          applyRoleRate({ role: e.target.value }, rowData, roleRates),
+          applyRoleRate({ role: v }, rowData, roleRates),
         );
       }}
-    >
-      <option value="">-- Select --</option>
-      {roleOptions.map((opt) => (
-        <option key={opt} value={opt}>
-          {opt}
-        </option>
-      ))}
-    </select>
+    />
   );
 }
 
@@ -264,11 +259,14 @@ export function CrewMixSelectCell({ row, table }: CellProps) {
   const value = row.original.crewMixId;
   const { crewMixOptions = [] } = table.options.meta ?? {};
   return (
-    <select
-      className={editableCellClass}
+    <CellSelect
       value={value}
-      onChange={(e) => {
-        const id = e.target.value;
+      options={crewMixOptions.map((opt) => ({
+        value: String(opt.id),
+        label: opt.name,
+      }))}
+      ariaLabel="Crew Mix"
+      onValueChange={(id) => {
         if (id === "") {
           table.options.meta?.updateRow?.(row.index, {
             crewMixId: "",
@@ -291,14 +289,7 @@ export function CrewMixSelectCell({ row, table }: CellProps) {
           schedule: "",
         });
       }}
-    >
-      <option value="">-- Select --</option>
-      {crewMixOptions.map((opt) => (
-        <option key={opt.id} value={String(opt.id)}>
-          {opt.name}
-        </option>
-      ))}
-    </select>
+    />
   );
 }
 
@@ -479,23 +470,17 @@ export function ScheduleSelectCell({ getValue, row, table }: CellProps) {
   const value = getValue() as string;
   const { scheduleOptions = [], roleRates = [] } = table.options.meta ?? {};
   return (
-    <select
-      className={editableCellClass}
+    <CellSelect
       value={value}
-      onChange={(e) => {
+      options={scheduleOptions.map((opt) => ({ value: opt, label: opt }))}
+      ariaLabel="Schedule"
+      onValueChange={(v) => {
         const rowData = table.getRowModel().rows[row.index].original;
         table.options.meta?.updateRow?.(
           row.index,
-          applyRoleRate({ schedule: e.target.value }, rowData, roleRates),
+          applyRoleRate({ schedule: v }, rowData, roleRates),
         );
       }}
-    >
-      <option value="">-- Select --</option>
-      {scheduleOptions.map((opt) => (
-        <option key={opt} value={opt}>
-          {opt}
-        </option>
-      ))}
-    </select>
+    />
   );
 }

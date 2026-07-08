@@ -392,5 +392,55 @@ export function applyFillDown(
   });
 }
 
+export type SelectionStats = {
+  /** Non-empty cells in the selection. */
+  count: number;
+  /** Selected cells whose text parses as a finite number. */
+  numericCount: number;
+  /** Sum of the numeric cells. */
+  sum: number;
+  /** Average of the numeric cells (0 when there are none). */
+  average: number;
+};
+
+/**
+ * Excel-style aggregate of the selected cells for the status bar: Count of
+ * non-empty cells, plus Sum and Average over the ones that parse as numbers.
+ * Currency symbols / thousands separators are stripped before parsing, matching
+ * the paste/number handling elsewhere, and derived columns (Total Cost) read
+ * through `readCellText` so their computed values count.
+ */
+export function selectionStats(
+  data: FefRow[],
+  columnIds: string[],
+  sel: RangeSelection,
+  ctx: WriteCtx,
+): SelectionStats {
+  const { minRow, maxRow, minCol, maxCol } = normalizeRange(sel);
+  let count = 0;
+  let numericCount = 0;
+  let sum = 0;
+  for (let r = minRow; r <= maxRow; r++) {
+    const row = data[r];
+    if (!row) continue;
+    for (let c = minCol; c <= maxCol; c++) {
+      const text = readCellText(columnIds[c], row, ctx).trim();
+      if (text === "") continue;
+      count++;
+      const n = parseFloat(text.replace(/[$,\s]/g, ""));
+      if (Number.isFinite(n)) {
+        numericCount++;
+        sum += n;
+      }
+    }
+  }
+  return {
+    count,
+    numericCount,
+    sum,
+    average: numericCount === 0 ? 0 : sum / numericCount,
+  };
+}
+
 // `CbsOption` is re-exported for callers assembling a WriteCtx alongside cbs data.
 export type { CbsOption };

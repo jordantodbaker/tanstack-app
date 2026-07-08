@@ -21,7 +21,7 @@ const DETAILS_COL_IDS = [
   "totalCost",
 ] as const;
 import { LoadMask } from "~/components/LoadMask";
-import { canComputeTotalCost, tabTriggerClass } from "~/lib/fef-helpers";
+import { tabTriggerClass } from "~/lib/fef-helpers";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import {
   Accordion,
@@ -84,23 +84,42 @@ const isTakeOffRowInvalidLive = (row: FefRow): boolean =>
   isTakeOffRowInvalid(row);
 
 /**
- * Keep a trailing blank row available for data entry: whenever the last row
- * has a computable Total Cost (labor hours × rate), append a fresh blank so
- * the user can always start another row. The Take Off and Support Labor sheets
- * both grow this way. Blank rows carry a `__fe-blank-` id and aren't persisted
- * until they hold real data, and once a blank is appended the last row is no
- * longer computable, so this settles after a single append.
+ * Keep a buffer of empty, editable rows at the bottom of the sheet. The user
+ * can always start another row, and — now that the grid supports Ctrl+D
+ * fill-down — there's a block of real empty rows to fill into (rather than the
+ * old single trailing blank + non-editable filler). Ensures at least
+ * `minTrailing` trailing empty rows (no user data) and at least `minTotal` rows
+ * overall, topping up as the buffer is consumed.
+ *
+ * Empty `__fe-blank-` rows aren't persisted (`saveFefRows` drops them), so the
+ * buffer costs nothing in the DB. Each top-up is a pure trailing-blank append,
+ * so it settles in one pass and is folded into the prior undo step (see
+ * `isTrailingBlankAppend`).
  */
-function useAutoAppendBlankRow(state: FefTableState) {
+function useEnsureTrailingBlankRows(
+  state: FefTableState,
+  minTrailing: number,
+  minTotal = 0,
+) {
   const nextBlankId = React.useRef(1);
   const { data, setData } = state;
   React.useEffect(() => {
-    if (data.length === 0) return;
-    if (canComputeTotalCost(data[data.length - 1])) {
-      const id = nextBlankId.current++;
-      setData((prev) => [...prev, makeBlankRow(id)]);
+    let trailing = 0;
+    for (let i = data.length - 1; i >= 0; i--) {
+      const r = data[i];
+      if (r.id.startsWith("__fe-blank-") && !fefRowHasUserData(r)) trailing++;
+      else break;
     }
-  }, [data, setData]);
+    const need = Math.max(minTrailing - trailing, minTotal - data.length);
+    if (need <= 0) return;
+    setData((prev) => {
+      const next = prev.slice();
+      for (let i = 0; i < need; i++) {
+        next.push(makeBlankRow(nextBlankId.current++));
+      }
+      return next;
+    });
+  }, [data, setData, minTrailing, minTotal]);
 }
 
 export type DisciplineTabsProps = {
@@ -188,8 +207,11 @@ export function DisciplineTabs({
 
   // Auto-append a fresh blank row on both sheets whenever the last row has
   // computable labor, so each always has a trailing row to enter data into.
-  useAutoAppendBlankRow(takeOffState);
-  useAutoAppendBlankRow(supportLaborState);
+  // Take Off: fill the sheet with real editable blank rows (≥ the 20-row
+  // visible height) and always keep a block of empties to fill down into.
+  useEnsureTrailingBlankRows(takeOffState, 8, 20);
+  // Support Labor: just keep one trailing blank for the next entry.
+  useEnsureTrailingBlankRows(supportLaborState, 1);
 
   const [selectedRowIndices, setSelectedRowIndices] = React.useState<
     Set<number>

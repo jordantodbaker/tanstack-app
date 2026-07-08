@@ -32,6 +32,7 @@ import {
   validateUpload,
   writeAttachmentFile,
 } from "./attachments.server";
+import { lookupParentRecord } from "./entityLookup.server";
 
 /**
  * Upload size cap, in bytes. Defined here (client-safe module) rather than in
@@ -100,26 +101,25 @@ const toItem = (r: AttachmentRow): AttachmentItem => ({
 /**
  * Confirms the (entityType, entityId) refers to a real record in the claimed
  * project. Prevents an attacker who has access to project A from attaching
- * to a CVR/FCO that actually belongs to project B.
+ * to a record that actually belongs to project B.
+ *
+ * Delegates the entity-type → table mapping to the shared
+ * `lookupParentRecord` registry so adding a new attachable entity type
+ * doesn't require touching this file — and so unknown entity types fail
+ * closed (the previous in-place switch silently fell through to the
+ * FieldChangeOrder table for RFI/Trend/PCO ids, which could "pass" if a
+ * FieldChangeOrder with that id happened to exist in the claimed project).
  */
 async function assertEntityInProject(
   entityType: AttachmentEntityType,
   entityId: number,
   projectId: number,
 ): Promise<void> {
-  const row =
-    entityType === "ChangeLog"
-      ? await prisma.changeLog.findUnique({
-          where: { id: entityId },
-          select: { projectId: true },
-        })
-      : await prisma.fieldChangeOrder.findUnique({
-          where: { id: entityId },
-          select: { projectId: true },
-        });
-  if (!row) throw new Error(`${entityType} #${entityId} not found.`);
-  if (row.projectId !== projectId) {
-    throw new Error(`${entityType} #${entityId} does not belong to this project.`);
+  const parent = await lookupParentRecord(entityType, entityId);
+  if (parent.projectId !== projectId) {
+    throw new Error(
+      `${entityType} #${entityId} does not belong to this project.`,
+    );
   }
 }
 

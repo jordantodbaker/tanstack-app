@@ -8,6 +8,7 @@ import {
   requireProjectAccess,
   resolveCurrentUser,
 } from "./users.server";
+import { lookupParentRecord } from "./entityLookup.server";
 import {
   parseRecordRecentView,
   parseUpdateDashboardPrefs,
@@ -289,15 +290,27 @@ export function applyRecentView(
  * entry to the top rather than duplicating. Capped at `RECENTS_MAX_STORED`;
  * oldest items roll off when the cap is exceeded.
  *
- * The handler enforces project access on the recorded projectId so a caller
- * can't seed their recents with records from projects they don't have
- * access to (defense in depth — the dialog only mounts for accessible
- * records, but the server fn endpoint is reachable independently).
+ * The handler enforces project access on the recorded projectId AND
+ * verifies the (entityType, entityId) actually belongs to that project.
+ * Without the second check, a caller with access to project A could seed
+ * their recents JSON with records from project B tagged with a projectId
+ * they *do* have access to — the sidebar would then link to records they
+ * shouldn't have. `lookupParentRecord` is the shared registry that also
+ * powers the attachment + comment membership checks.
  */
 export const recordRecentView = createServerFn({ method: "POST" })
   .inputValidator(parseRecordRecentView)
   .handler(async ({ data }): Promise<RecentItem[]> => {
     const actor = await requireProjectAccess(data.projectId);
+    // Confirm the entity lives in the claimed project. `lookupParentRecord`
+    // default-DENIES unknown entity types via the same registry attachments
+    // + comments use.
+    const parent = await lookupParentRecord(data.entityType, data.entityId);
+    if (parent.projectId !== data.projectId) {
+      throw new Error(
+        `${data.entityType} #${data.entityId} does not belong to this project.`,
+      );
+    }
 
     const existing = await prisma.userPreference.findUnique({
       where: { userId: actor.id },

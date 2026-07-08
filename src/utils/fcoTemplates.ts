@@ -4,6 +4,7 @@ import { prisma } from "../server/db";
 import {
   adminHandler,
   adminHandlerNoInput,
+  requireRole,
 } from "./users.server";
 import {
   parseIdInput,
@@ -186,9 +187,17 @@ export const deleteFcoTemplate = createServerFn({ method: "POST" })
     }),
   );
 
+/**
+ * Fetches a template's field set and bumps its `usageCount`. Requires a
+ * signed-in user (any role passes — `USER` is the floor). The downstream
+ * FCO upsert independently enforces project access; this guard exists so
+ * an anonymous caller can't poison the picker's usage-based sort. Matches
+ * the same shape as `instantiateCvrTemplate`.
+ */
 export const instantiateFcoTemplate = createServerFn({ method: "POST" })
   .inputValidator(parseInstantiateFcoTemplate)
   .handler(async ({ data }): Promise<FcoTemplateFieldSet> => {
+    await requireRole("USER");
     const row = await prisma.fcoTemplate.update({
       where: { id: data.id },
       data: { usageCount: { increment: 1 } },

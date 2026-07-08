@@ -4,6 +4,7 @@ import { prisma } from "../server/db";
 import {
   adminHandler,
   adminHandlerNoInput,
+  requireRole,
 } from "./users.server";
 import {
   parseIdInput,
@@ -190,12 +191,17 @@ export const deleteCvrTemplate = createServerFn({ method: "POST" })
  * saves, so a fetched-but-abandoned instantiation does count as usage
  * (matches "the picker was used" semantics — Phase 2 sort uses this).
  *
- * Available to any signed-in user; templates aren't sensitive and the
- * downstream CVR upsert still enforces project access.
+ * Requires a signed-in user (any role passes — `USER` is the floor). The
+ * doc comment used to claim "available to any signed-in user" without
+ * enforcing it — an unauthenticated POST would still bump `usageCount`.
+ * The downstream CVR upsert independently enforces project access, so this
+ * guard exists purely to prevent anonymous callers from poisoning the
+ * picker's usage-based sort order.
  */
 export const instantiateCvrTemplate = createServerFn({ method: "POST" })
   .inputValidator(parseInstantiateCvrTemplate)
   .handler(async ({ data }): Promise<CvrTemplateFieldSet> => {
+    await requireRole("USER");
     const row = await prisma.cvrTemplate.update({
       where: { id: data.id },
       data: { usageCount: { increment: 1 } },

@@ -120,11 +120,52 @@ export type Reminder = {
   message: string;
 };
 
+/**
+ * Narrow subsets of the full `*Item` types — every field the selector
+ * actually reads and nothing else. Widens the input contract so callers
+ * that only have the metadata (like the cron path with its narrow Prisma
+ * `select`) don't need to fabricate full-item shapes. Full-item callers
+ * (dashboard, tests) still satisfy these via structural subtyping.
+ */
+export type RemindableCvr = Pick<
+  ChangeLogItem,
+  | "id"
+  | "projectId"
+  | "status"
+  | "updatedAt"
+  | "createdById"
+  | "cvrNumber"
+  | "title"
+>;
+export type RemindableFco = Pick<
+  FcoItem,
+  | "id"
+  | "projectId"
+  | "status"
+  | "updatedAt"
+  | "createdById"
+  | "fcoNumber"
+  | "title"
+  | "workStopped"
+>;
+export type RemindableRfi = Pick<
+  RfiItem,
+  | "id"
+  | "projectId"
+  | "status"
+  | "updatedAt"
+  | "dueDate"
+  | "createdById"
+  | "rfiNumber"
+  | "subject"
+  | "answeredAt"
+>;
+
 export type SelectRemindersInput = {
   projectId: number;
-  cvrs: ChangeLogItem[];
-  fcos: FcoItem[];
-  rfis: RfiItem[];
+  cvrs: RemindableCvr[];
+  fcos: RemindableFco[];
+  rfis: RemindableRfi[];
   /** User.ids of APPROVER + ADMINISTRATOR users with access to this project. */
   reviewerUserIds: number[];
   /** User.ids of ADMINISTRATOR users (project-agnostic; admins see all). */

@@ -351,6 +351,14 @@ export const UpsertRoleSchema = z.object({
   id: OptionalId,
   name: RequiredText,
   disciplines: StringArray,
+  // Per-schedule labor rates. Empty/blank entries are dropped server-side, so
+  // the dialog can send a full row per known schedule and leave unused ones out.
+  rates: z.array(
+    z.object({
+      schedule: RequiredText,
+      rate: Money,
+    }),
+  ),
 });
 export const parseUpsertRole = (input: unknown) =>
   UpsertRoleSchema.parse(input);
@@ -359,15 +367,22 @@ export const UpsertCrewMixSchema = z.object({
   id: OptionalId,
   name: RequiredText,
   description: Text,
-  members: z.array(
-    z.object({
-      jobTitle: Text,
-      wage: Money,
-    }),
-  ),
+  // One schedule for the whole mix; member roles' rates are read at it.
+  schedule: Text,
+  // Roles plus a head count each (>= 1). The server collapses duplicate roles
+  // and drops non-positive counts.
+  members: z.array(z.object({ roleId: Id, count: Int.min(1) })),
 });
 export const parseUpsertCrewMix = (input: unknown) =>
   UpsertCrewMixSchema.parse(input);
+
+export const UpsertScheduleSchema = z.object({
+  id: OptionalId,
+  name: RequiredText,
+  position: Int.optional(),
+});
+export const parseUpsertSchedule = (input: unknown) =>
+  UpsertScheduleSchema.parse(input);
 
 export const SetUserSchema = z.object({
   userId: Id,

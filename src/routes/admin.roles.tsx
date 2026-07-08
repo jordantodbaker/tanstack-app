@@ -14,12 +14,16 @@ import {
   type RoleAdminItem,
   type UpsertRoleInput,
 } from "~/utils/roles";
+import { schedulesQueryOptions } from "~/utils/schedules";
 import { disciplineById } from "~/config/disciplines";
 
 // Admin role gate lives on the parent `/admin` layout route.
 export const Route = createFileRoute("/admin/roles")({
   loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(rolesAdminQueryOptions());
+    await Promise.all([
+      context.queryClient.ensureQueryData(rolesAdminQueryOptions()),
+      context.queryClient.ensureQueryData(schedulesQueryOptions()),
+    ]);
   },
   component: AdminRolesPage,
 });
@@ -102,9 +106,9 @@ function RoleRow({
             )}
           </td>
           <td className={`${cellCls} text-slate-500 text-xs`}>
-            {role.rateCount === 0
+            {role.rates.length === 0
               ? "—"
-              : `${role.rateCount} rate${role.rateCount === 1 ? "" : "s"}`}
+              : `${role.rates.length} rate${role.rates.length === 1 ? "" : "s"}`}
           </td>
         </tr>
       }

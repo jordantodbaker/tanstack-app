@@ -25,7 +25,7 @@ export const fetchRoleData = createServerFn({ method: "GET" })
   .handler(async ({ data: disciplineId }): Promise<RoleData> => {
     const roleWhere =
       disciplineId === null ? {} : { disciplines: { has: disciplineId } };
-    const [roles, rates] = await Promise.all([
+    const [roles, rates, schedules] = await Promise.all([
       prisma.role.findMany({
         where: roleWhere,
         select: { name: true },
@@ -36,12 +36,17 @@ export const fetchRoleData = createServerFn({ method: "GET" })
         include: { role: { select: { name: true } } },
         orderBy: [{ role: { name: "asc" } }, { schedule: "asc" }],
       }),
+      // Schedule dropdown options come from the managed Schedule list (ordered),
+      // not the distinct set of rate rows — so a schedule with no rate yet still
+      // appears, and the ordering is admin-controlled.
+      prisma.schedule.findMany({
+        orderBy: [{ position: "asc" }, { name: "asc" }],
+        select: { name: true },
+      }),
     ]);
-    const scheduleSet = new Set<string>();
-    for (const r of rates) scheduleSet.add(r.schedule);
     return {
       roleOptions: roles.map((r) => r.name),
-      scheduleOptions: Array.from(scheduleSet).sort(),
+      scheduleOptions: schedules.map((s) => s.name),
       roleRates: rates.map((r) => ({
         roleName: r.role.name,
         schedule: r.schedule,
@@ -57,31 +62,31 @@ export const roleDataQueryOptions = (disciplineId: string | null = null) =>
     staleTime: Infinity,
   });
 
-/** Admin-side role row: full identity plus the discipline assignments. */
+/**
+ * Admin-side role row: identity, discipline assignments, and the full
+ * per-schedule rate rows (so the dialog can pre-fill a rate box per schedule).
+ */
 export type RoleAdminItem = {
   id: number;
   name: string;
   disciplines: string[];
-  rateCount: number;
+  rates: { schedule: string; rate: number }[];
 };
 
 export const fetchRolesAdmin = createServerFn({ method: "GET" }).handler(
   adminHandlerNoInput(async (): Promise<RoleAdminItem[]> => {
-    const rows = await prisma.role.findMany({
+    return prisma.role.findMany({
       orderBy: { name: "asc" },
       select: {
         id: true,
         name: true,
         disciplines: true,
-        _count: { select: { rates: true } },
+        rates: {
+          select: { schedule: true, rate: true },
+          orderBy: { schedule: "asc" },
+        },
       },
     });
-    return rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      disciplines: r.disciplines,
-      rateCount: r._count.rates,
-    }));
   }),
 );
 
@@ -97,22 +102,51 @@ export type UpsertRoleInput = {
   id?: number;
   name: string;
   disciplines: string[];
+  rates: { schedule: string; rate: number }[];
 };
 
-/** Create or update a construction discipline role. Admin-only. */
+/**
+ * Create or update a construction discipline role, including its per-schedule
+ * labor rates. Rates are replaced wholesale — the dialog sends the full set
+ * every time — mirroring how `upsertCrewMix` handles members. Blank/invalid
+ * rate rows are dropped so a schedule left empty in the dialog simply has no
+ * RoleRate. Admin-only.
+ */
 export const upsertRole = createServerFn({ method: "POST" })
   .inputValidator(parseUpsertRole)
   .handler(
     adminHandler(async ({ data }): Promise<{ ok: true }> => {
-      const payload = {
-        name: data.name.trim(),
-        disciplines: data.disciplines,
-      };
-      if (data.id) {
-        await prisma.role.update({ where: { id: data.id }, data: payload });
-      } else {
-        await prisma.role.create({ data: payload });
-      }
+      const name = data.name.trim();
+      const cleanRates = data.rates
+        .map((r) => ({ schedule: r.schedule.trim(), rate: Number(r.rate) }))
+        .filter((r) => r.schedule !== "" && Number.isFinite(r.rate));
+
+      await prisma.$transaction(async (tx) => {
+        if (data.id) {
+          await tx.role.update({
+            where: { id: data.id },
+            data: { name, disciplines: data.disciplines },
+          });
+          await tx.roleRate.deleteMany({ where: { roleId: data.id } });
+          if (cleanRates.length > 0) {
+            await tx.roleRate.createMany({
+              data: cleanRates.map((r) => ({
+                roleId: data.id!,
+                schedule: r.schedule,
+                rate: r.rate,
+              })),
+            });
+          }
+        } else {
+          await tx.role.create({
+            data: {
+              name,
+              disciplines: data.disciplines,
+              rates: { createMany: { data: cleanRates } },
+            },
+          });
+        }
+      });
       return { ok: true };
     }),
   );

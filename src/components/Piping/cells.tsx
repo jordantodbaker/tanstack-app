@@ -8,6 +8,7 @@ import {
   type CellProps,
 } from "~/lib/table-utils";
 import { computeBoreSize } from "~/lib/utils";
+import { crewMixAverageRate } from "~/lib/crew-mix-rate";
 import {
   SearchableSelect,
   type SearchableSelectOption,
@@ -257,7 +258,7 @@ export function RoleSelectCell({ getValue, row, table }: CellProps) {
  */
 export function CrewMixSelectCell({ row, table }: CellProps) {
   const value = row.original.crewMixId;
-  const { crewMixOptions = [] } = table.options.meta ?? {};
+  const { crewMixOptions = [], roleRates = [] } = table.options.meta ?? {};
   return (
     <CellSelect
       value={value}
@@ -275,14 +276,17 @@ export function CrewMixSelectCell({ row, table }: CellProps) {
           return;
         }
         const match = crewMixOptions.find((m) => String(m.id) === id);
-        const wages = match?.members ?? [];
-        const avg =
-          wages.length === 0
-            ? 0
-            : wages.reduce((acc, m) => acc + m.wage, 0) / wages.length;
+        if (!match) return;
+        // Rate = head-count-weighted average of the mix's member-role rates at
+        // its schedule.
+        const avg = crewMixAverageRate(
+          match.members,
+          match.schedule,
+          roleRates,
+        );
         table.options.meta?.updateRow?.(row.index, {
           crewMixId: id,
-          laborRate: wages.length === 0 ? "" : avg.toFixed(2),
+          laborRate: avg > 0 ? avg.toFixed(2) : "",
           // Clear role + schedule so the row's mode is unambiguous and
           // sidebar tooltips don't show stale picker values.
           role: "",

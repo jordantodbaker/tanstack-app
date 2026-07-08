@@ -5,6 +5,8 @@ import {
   splitRowsByDiscipline,
 } from "./take-off-paste";
 import { makeFefRow } from "./fef-helpers";
+import { rowsToCsv } from "./csv-export";
+import { makeTakeOffCsvColumns } from "./take-off-csv";
 import type { CbsOption } from "./types";
 
 const OPTS: CbsOption[] = [
@@ -85,6 +87,31 @@ describe("parseTakeOffPaste", () => {
     );
     expect(rows[0].laborHours).toBe("150.0");
     expect(rows[1].laborHours).toBe("40.0"); // no factor → ×1
+  });
+
+  it("imports Role, Schedule, and Notes (global — they cross projects)", () => {
+    const { rows } = parseTakeOffPaste(
+      tsv([
+        [
+          "601-10-0000-00-L",
+          "spool",
+          "10",
+          "1",
+          "55",
+          "",
+          "Pipefitter",
+          "1x6x10",
+          "field note",
+        ],
+      ]),
+      OPTS,
+    );
+    expect(rows[0]).toMatchObject({
+      role: "Pipefitter",
+      schedule: "1x6x10",
+      notes: "field note",
+      laborRate: "55",
+    });
   });
 
   it("keeps an unrecognized code as-is and reports it", () => {
@@ -203,6 +230,72 @@ describe("parseTakeOffPaste", () => {
       expect(rows[0].area).toBe("");
       expect(rows[1].area).toBe("");
     });
+  });
+});
+
+describe("CSV import (comma-separated, incl. the app's own export)", () => {
+  it("round-trips the CSV export: BOM + header + CRLF + quoted comma cell", () => {
+    const source = [
+      makeFefRow({
+        id: "601-10-0000-00-L",
+        name: "Pipe, Carbon Steel",
+        unit: "LF",
+        description: "Spool, 6in", // comma → quoted by the exporter
+        quantity: "100",
+        laborFactor: "1.5",
+        laborRate: "55",
+        laborHours: "150.0",
+        area: "3",
+        role: "Pipefitter",
+        schedule: "1x6x10",
+        notes: "note, with comma",
+      }),
+    ];
+    const areaLabel = (id: string) =>
+      id === "3" ? "A1 — Foundation" : id;
+    // downloadCsv prepends the UTF-8 BOM; simulate that here.
+    const csv = "﻿" + rowsToCsv(source, makeTakeOffCsvColumns(areaLabel));
+
+    const { rows } = parseTakeOffPaste(csv, OPTS, [
+      { value: "3", label: "A1 — Foundation" },
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: "601-10-0000-00-L",
+      name: "Pipe, Carbon Steel",
+      description: "Spool, 6in",
+      quantity: "100",
+      laborFactor: "1.5",
+      laborRate: "55",
+      area: "3", // Area label resolved back to its id
+      role: "Pipefitter", // global → round-trips across projects
+      schedule: "1x6x10",
+      notes: "note, with comma", // quoted comma survived
+    });
+  });
+
+  it("splits on commas when the block has no tabs", () => {
+    const { rows } = parseTakeOffPaste("601-10-0000-00-L,desc,10,1,55", OPTS);
+    expect(rows[0]).toMatchObject({
+      id: "601-10-0000-00-L",
+      description: "desc",
+      quantity: "10",
+      laborRate: "55",
+    });
+  });
+
+  it("prefers tabs when present, so a comma inside an Excel cell is literal", () => {
+    const { rows } = parseTakeOffPaste("601-10-0000-00-L\tPipe, 6in\t10", OPTS);
+    expect(rows[0].description).toBe("Pipe, 6in");
+    expect(rows[0].quantity).toBe("10");
+  });
+
+  it("unescapes doubled double-quotes inside a quoted field", () => {
+    const { rows } = parseTakeOffPaste(
+      '601-10-0000-00-L,"a ""quoted"" note",10',
+      OPTS,
+    );
+    expect(rows[0].description).toBe('a "quoted" note');
   });
 });
 

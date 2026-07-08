@@ -22,13 +22,24 @@ const FAN_OUT = {
   // because non-admins' visible-project set may change.
   users: ["adminUsers", "projects"],
   // Role save changes which roles appear in each discipline's Take Off
-  // dropdown — bust every `roleData` cache (any disciplineId arg) as well
-  // as the admin list itself.
-  roles: ["rolesAdmin", "roleData"],
+  // dropdown and the per-schedule rates the grid resolves — bust every
+  // `roleData` cache (any disciplineId arg), the crew-mix caches (their rates
+  // are computed from role rates), and the admin lists.
+  roles: ["rolesAdmin", "roleData", "crewMixData", "crewMixesAdmin"],
   // Crew mix save changes which mixes appear in the Take Off "Use Crew Mix"
   // dropdown — bust the shared `crewMixData` cache used by every discipline
   // alongside the admin list.
   crewMixes: ["crewMixesAdmin", "crewMixData"],
+  // Schedule save/rename/delete changes the picker list, the schedule options
+  // and rate rows the take-off reads (`roleData`), and can clear a crew mix's
+  // schedule — bust all of them plus both admin lists.
+  schedules: [
+    "schedules",
+    "roleData",
+    "crewMixData",
+    "rolesAdmin",
+    "crewMixesAdmin",
+  ],
   // CVR template save changes the picker payload the Change Log dialog
   // reads — bust both the admin list and the slim picker cache. Same
   // shape for FCO templates below.

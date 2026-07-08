@@ -20,6 +20,10 @@ const ctx: WriteCtx = {
   roleRates: [
     { roleName: "Pipefitter", schedule: "ST", rate: 55 },
     { roleName: "Welder", schedule: "OT", rate: 90 },
+    // Used by the crew-mix fixtures below (kept distinct from the role/schedule
+    // cases above so those assertions are unaffected).
+    { roleName: "Foreman", schedule: "ST", rate: 60 },
+    { roleName: "Laborer", schedule: "ST", rate: 40 },
   ],
   areaOptions: [
     { value: "1", label: "A-100 — Boiler" },
@@ -41,8 +45,16 @@ const ctx: WriteCtx = {
     },
   ],
   crewMixOptions: [
-    { id: 7, name: "Fab Crew A", members: [{ wage: 40 }, { wage: 60 }] },
-    { id: 8, name: "Empty Crew", members: [] },
+    {
+      id: 7,
+      name: "Fab Crew A",
+      schedule: "ST",
+      members: [
+        { roleName: "Foreman", count: 1 },
+        { roleName: "Laborer", count: 1 },
+      ],
+    },
+    { id: 8, name: "Empty Crew", schedule: "ST", members: [] },
   ],
 };
 
@@ -165,10 +177,10 @@ describe("resolveCellWrite", () => {
     expect(resolveCellWrite("name", "nonsense", row, ctx)).toBeNull();
   });
 
-  it("resolves a crew mix (by id or name), averaging the wage onto the rate", () => {
+  it("resolves a crew mix (by id or name), averaging member-role rates at its schedule", () => {
     expect(resolveCellWrite("crewMixId", "Fab Crew A", row, ctx)).toEqual({
       crewMixId: "7",
-      laborRate: "50.00", // (40 + 60) / 2
+      laborRate: "50.00", // avg(Foreman 60, Laborer 40) at schedule ST
       role: "",
       schedule: "",
     });

@@ -1,9 +1,9 @@
 /**
- * CSV columns for exporting a Take Off sheet. The first five columns mirror the
+ * CSV columns for exporting a Take Off sheet. The leading columns mirror the
  * "Paste from Excel" importer's column order (see TAKE_OFF_PASTE_COLUMNS), so an
  * exported sheet round-trips: export → edit in Excel → copy → paste back. The
  * trailing columns are reference/report only (paste ignores columns past the
- * fifth). Pure — no React — so the mapping is unit-tested.
+ * round-trip set). Pure — no React — so the mapping is unit-tested.
  */
 import type { CsvColumn } from "./csv-export";
 import type { FefRow } from "./types";
@@ -38,15 +38,17 @@ export function makeTakeOffCsvColumns(
     { header: "Labor Factor", get: (r) => r.laborFactor },
     { header: "Labor Rate", get: (r) => r.laborRate },
     { header: "Area", get: (r) => (r.area ? areaLabelFor(r.area) : "") },
+    // Role/Schedule are global (not per-project), so they round-trip across
+    // projects; Notes is free text and round-trips too.
+    { header: "Role", get: (r) => r.role },
+    { header: "Schedule", get: (r) => r.schedule },
+    { header: "Notes", get: (r) => r.notes },
     // ── Reference columns (ignored on paste) ──
     { header: "Name", get: (r) => r.name },
     { header: "Unit", get: (r) => r.unit },
     { header: "Labor Hours", get: (r) => r.laborHours },
     { header: "Total Cost", get: totalCost },
     { header: "Area ID", get: (r) => r.area },
-    { header: "Role", get: (r) => r.role },
-    { header: "Schedule", get: (r) => r.schedule },
-    { header: "Notes", get: (r) => r.notes },
   ];
 }
 

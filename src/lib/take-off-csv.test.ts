@@ -56,6 +56,8 @@ describe("takeOffCsvColumns", () => {
       laborFactor: "1.5",
       laborRate: "55",
       area: "3",
+      role: "Pipefitter",
+      schedule: "1x6x10",
     });
     const areaOptions = [{ value: "3", label: "A1 — Foundation" }];
     const cols = makeTakeOffCsvColumns(
@@ -84,6 +86,8 @@ describe("takeOffCsvColumns", () => {
       laborRate: "55",
       name: "Carbon Steel Pipe",
       area: "3", // exported "A1 — Foundation" resolved back to the id
+      role: "Pipefitter",
+      schedule: "1x6x10",
     });
   });
 });

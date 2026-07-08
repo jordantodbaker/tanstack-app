@@ -149,6 +149,7 @@ export function DisciplineTabs({
     discipline,
     section: "TAKE_OFF",
     state: takeOffState,
+    emptyRows: initialTakeOffRows,
   });
   const supportPersist = useFefRowPersistence({
     projectId,

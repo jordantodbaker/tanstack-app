@@ -14,6 +14,9 @@ import type { SaveStatus } from "~/components/SaveIndicator";
 
 const SAVE_DEBOUNCE_MS = 500;
 
+/** Stable default so the reset effect's dependency doesn't change each render. */
+const NO_ROWS: FefRow[] = [];
+
 /**
  * Hydrates a FefTableState from the database on mount and persists subsequent
  * edits via debounced batch saves. No-op when projectId is null.
@@ -27,12 +30,17 @@ export function useFefRowPersistence({
   section,
   state,
   fallbackRows,
+  emptyRows = NO_ROWS,
 }: {
   projectId: number | null;
   discipline: string;
   section: FefSectionKey;
   state: FefTableState;
   fallbackRows?: FefRow[];
+  /** Rows to reset the grid to when the (project, discipline, section) key
+   *  changes, before the new key's data hydrates. Defaults to empty; the Take
+   *  Off passes a single blank row so the grid is never momentarily rowless. */
+  emptyRows?: FefRow[];
 }): { isLoading: boolean; saveStatus: SaveStatus; lastSavedAt: number | null } {
   const queryClient = useQueryClient();
   const { isHydrated: isProjectHydrated } = useSelectedProject();
@@ -50,6 +58,20 @@ export function useFefRowPersistence({
 
   const [appliedKey, setAppliedKey] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
+
+  // Whenever the (project, discipline, section) key changes, drop any rows left
+  // over from the previously-selected key so they're neither shown nor
+  // autosaved into the new one. The hydration effect below refills from the DB
+  // (or `fallbackRows`) once the query for the new key settles; until then the
+  // grid shows this clean slate behind the load mask. Keyed on `currentKey`
+  // only (emptyRows read through a ref) so a mere query refetch never wipes
+  // in-progress edits.
+  const emptyRowsRef = React.useRef(emptyRows);
+  emptyRowsRef.current = emptyRows;
+  React.useEffect(() => {
+    skipNextSaveRef.current = true;
+    setData(emptyRowsRef.current);
+  }, [currentKey, setData]);
 
   React.useEffect(() => {
     if (!isProjectHydrated) return;

@@ -5,7 +5,8 @@
  *
  * Expected columns, in order (trailing columns optional):
  *
- *   CBS Code | Description | Quantity | Labor Factor | Labor Rate
+ *   CBS Code | Description | Quantity | Labor Factor | Labor Rate | Area |
+ *   Role | Schedule | Notes
  *
  * A CBS Code is resolved against the discipline's catalog to fill the row's
  * name and unit; an unrecognized code is kept as-is (and reported so the UI can
@@ -25,6 +26,9 @@ export const TAKE_OFF_PASTE_COLUMNS = [
   "Labor Factor",
   "Labor Rate",
   "Area",
+  "Role",
+  "Schedule",
+  "Notes",
 ] as const;
 
 /** Area lookup entry: the stored id (`value`) and its display label. Both are
@@ -78,6 +82,9 @@ type RawPastedRow = {
   laborFactor: string;
   laborRate: string;
   area: string;
+  role: string;
+  schedule: string;
+  notes: string;
 };
 
 /** Map an area cell (its id OR its label, case-insensitive) to the stored area
@@ -94,18 +101,69 @@ function buildAreaResolver(areaOptions: AreaMatchOption[]): Map<string, string> 
   return map;
 }
 
+/**
+ * Split a raw block into rows of string cells, auto-detecting the delimiter and
+ * honoring RFC 4180 double-quote quoting. Tabs win when present (a copy out of
+ * Excel/Sheets), otherwise commas (a raw CSV file — e.g. this app's own Take Off
+ * export), so both round-trip. A quoted field may contain the delimiter, quotes
+ * (doubled), or newlines. A leading UTF-8 BOM (which our CSV download carries)
+ * is stripped.
+ */
+function parseDelimited(text: string): string[][] {
+  const src = text.replace(/^﻿/, "");
+  const delimiter = src.includes("\t") ? "\t" : ",";
+  const rows: string[][] = [];
+  let field = "";
+  let row: string[] = [];
+  let inQuotes = false;
+
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (src[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += c;
+      }
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === delimiter) {
+      row.push(field);
+      field = "";
+    } else if (c === "\n" || c === "\r") {
+      if (c === "\r" && src[i + 1] === "\n") i++;
+      row.push(field);
+      field = "";
+      rows.push(row);
+      row = [];
+    } else {
+      field += c;
+    }
+  }
+  // Flush a trailing field/row when the block doesn't end in a newline.
+  if (field !== "" || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows;
+}
+
 /** Split a pasted block into raw cell rows — skips blank lines and a leading
  *  header row, cleans numeric cells. No CBS resolution (that needs options). */
 function tokenize(text: string): RawPastedRow[] {
   const rows: RawPastedRow[] = [];
-  const lines = text.replace(/\r\n?/g, "\n").split("\n");
   let sawFirst = false;
 
-  for (const line of lines) {
-    if (line.trim() === "") continue;
-    const cells = line.split("\t").map((c) => c.trim());
+  for (const raw of parseDelimited(text)) {
+    const cells = raw.map((c) => c.trim());
+    if (cells.every((c) => c === "")) continue;
 
-    // Skip a leading header row (Excel copies often include column titles).
+    // Skip a leading header row (Excel copies / CSV files include column titles).
     if (!sawFirst && isHeaderLine(cells)) {
       sawFirst = true;
       continue;
@@ -125,6 +183,9 @@ function tokenize(text: string): RawPastedRow[] {
       laborFactor: cleanNumber(cells[3] ?? ""),
       laborRate: cleanNumber(cells[4] ?? ""),
       area: cells[5] ?? "",
+      role: cells[6] ?? "",
+      schedule: cells[7] ?? "",
+      notes: cells[8] ?? "",
     });
   }
 
@@ -211,6 +272,11 @@ export function parseTakeOffPaste(
       laborRate: raw.laborRate,
       laborHours: computeLaborHours(raw.quantity, raw.laborFactor),
       area,
+      // Role/Schedule are global, so they import as-is (the exported Labor Rate
+      // is kept as the row's snapshot rather than re-resolved). Notes is free text.
+      role: raw.role,
+      schedule: raw.schedule,
+      notes: raw.notes,
     });
   });
 

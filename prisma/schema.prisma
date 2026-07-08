@@ -461,10 +461,11 @@ model PipingFactorValue {
 // "Role" dropdown for a discipline whose id is in this list. Empty means
 // the role shows up nowhere.
 model Role {
-  id          Int        @id @default(autoincrement())
-  name        String     @unique
-  disciplines String[]   @default([])
-  rates       RoleRate[]
+  id             Int             @id @default(autoincrement())
+  name           String          @unique
+  disciplines    String[]        @default([])
+  rates          RoleRate[]
+  crewMixMembers CrewMixMember[]
 }
 
 model RoleRate {
@@ -475,28 +476,56 @@ model RoleRate {
   rate     Float
 }
 
-// Crew Mix — an admin-defined bundle of job titles + their wages used as an
+// Managed list of labor schedules — the crew/shift codes ("1x6x10", "2x7x12")
+// that a RoleRate is keyed on. This table is the source of truth for which
+// schedule names are valid and the order they show in; the name itself is
+// stored as a plain string on RoleRate.schedule, CrewMix.schedule, and
+// FefRow.schedule (no FK) so historical rows keep their value even if a
+// schedule is later renamed or removed. Renames cascade the string onto
+// RoleRate/CrewMix; deletes drop the matching RoleRate rows and clear
+// CrewMix.schedule (see schedules.ts).
+model Schedule {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  /// Sort order in the Role rate editor and schedule pickers; ties break on name.
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Crew Mix — an admin-defined bundle of Roles plus one Schedule, used as an
 // alternate way to set a Take Off row's labor rate. When the take-off's "Use
 // Crew Mix" toggle is on, the Role column is replaced by a Crew Mix dropdown
-// and the row's `laborRate` is set to the average of the selected crew mix's
-// member wages. Like `Role`, the rate is snapshotted onto the row at edit
-// time — later edits to the crew mix don't retroactively change existing
-// rows' labor rates.
+// and the row's `laborRate` is set to the average of the member roles' rates
+// at the mix's `schedule` (looked up from RoleRate). Like `Role`, the rate is
+// snapshotted onto the row at edit time — later edits to the crew mix or the
+// underlying role rates don't retroactively change existing rows' labor rates.
 model CrewMix {
   id          Int             @id @default(autoincrement())
   name        String          @unique
   description String          @default("")
+  /// Schedule name (matches a Schedule.name / RoleRate.schedule). The rate for
+  /// each member role is read at this schedule. "" until one is chosen.
+  schedule    String          @default("")
   members     CrewMixMember[]
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 }
 
+// One role in a crew mix, with a head count. The member contributes its role's
+// RoleRate at the parent mix's `schedule`, weighted by `count`, to the mix's
+// (head-count-weighted) average rate. Deleting the role removes it from every
+// mix (Cascade); a role appears at most once per mix — the `count` carries
+// "multiple of the same role" rather than duplicate rows.
 model CrewMixMember {
   id        Int     @id @default(autoincrement())
   crewMix   CrewMix @relation(fields: [crewMixId], references: [id], onDelete: Cascade)
   crewMixId Int
-  jobTitle  String
-  wage      Float
+  role      Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  roleId    Int
+  count     Int     @default(1)
+
+  @@unique([crewMixId, roleId])
 }
 
 // Reusable CVR scaffold — admin-managed, company-wide. The dialog's "Start

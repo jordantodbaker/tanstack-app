@@ -34,6 +34,7 @@ const ADMIN_LINKS = [
   { to: "/admin/projects", label: "Projects" },
   { to: "/admin/subcontractors", label: "Subcontractors" },
   { to: "/admin/areas", label: "Areas" },
+  { to: "/admin/schedules", label: "Schedules" },
   { to: "/admin/roles", label: "Roles" },
   { to: "/admin/crew-mixes", label: "Crew Mixes" },
   { to: "/admin/cvr-templates", label: "CVR Templates" },

@@ -31,6 +31,7 @@ import { Route as CvrPrintIdRouteImport } from './routes/cvr-print.$id'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminSystemRouteImport } from './routes/admin.system'
 import { Route as AdminSubcontractorsRouteImport } from './routes/admin.subcontractors'
+import { Route as AdminSchedulesRouteImport } from './routes/admin.schedules'
 import { Route as AdminRolesRouteImport } from './routes/admin.roles'
 import { Route as AdminProjectsRouteImport } from './routes/admin.projects'
 import { Route as AdminFcoTemplatesRouteImport } from './routes/admin.fco-templates'
@@ -149,6 +150,11 @@ const AdminSubcontractorsRoute = AdminSubcontractorsRouteImport.update({
   path: '/subcontractors',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminSchedulesRoute = AdminSchedulesRouteImport.update({
+  id: '/schedules',
+  path: '/schedules',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminRolesRoute = AdminRolesRouteImport.update({
   id: '/roles',
   path: '/roles',
@@ -208,6 +214,7 @@ export interface FileRoutesByFullPath {
   '/admin/fco-templates': typeof AdminFcoTemplatesRoute
   '/admin/projects': typeof AdminProjectsRoute
   '/admin/roles': typeof AdminRolesRoute
+  '/admin/schedules': typeof AdminSchedulesRoute
   '/admin/subcontractors': typeof AdminSubcontractorsRoute
   '/admin/system': typeof AdminSystemRoute
   '/admin/users': typeof AdminUsersRoute
@@ -239,6 +246,7 @@ export interface FileRoutesByTo {
   '/admin/fco-templates': typeof AdminFcoTemplatesRoute
   '/admin/projects': typeof AdminProjectsRoute
   '/admin/roles': typeof AdminRolesRoute
+  '/admin/schedules': typeof AdminSchedulesRoute
   '/admin/subcontractors': typeof AdminSubcontractorsRoute
   '/admin/system': typeof AdminSystemRoute
   '/admin/users': typeof AdminUsersRoute
@@ -271,6 +279,7 @@ export interface FileRoutesById {
   '/admin/fco-templates': typeof AdminFcoTemplatesRoute
   '/admin/projects': typeof AdminProjectsRoute
   '/admin/roles': typeof AdminRolesRoute
+  '/admin/schedules': typeof AdminSchedulesRoute
   '/admin/subcontractors': typeof AdminSubcontractorsRoute
   '/admin/system': typeof AdminSystemRoute
   '/admin/users': typeof AdminUsersRoute
@@ -304,6 +313,7 @@ export interface FileRouteTypes {
     | '/admin/fco-templates'
     | '/admin/projects'
     | '/admin/roles'
+    | '/admin/schedules'
     | '/admin/subcontractors'
     | '/admin/system'
     | '/admin/users'
@@ -335,6 +345,7 @@ export interface FileRouteTypes {
     | '/admin/fco-templates'
     | '/admin/projects'
     | '/admin/roles'
+    | '/admin/schedules'
     | '/admin/subcontractors'
     | '/admin/system'
     | '/admin/users'
@@ -366,6 +377,7 @@ export interface FileRouteTypes {
     | '/admin/fco-templates'
     | '/admin/projects'
     | '/admin/roles'
+    | '/admin/schedules'
     | '/admin/subcontractors'
     | '/admin/system'
     | '/admin/users'
@@ -554,6 +566,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSubcontractorsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/schedules': {
+      id: '/admin/schedules'
+      path: '/schedules'
+      fullPath: '/admin/schedules'
+      preLoaderRoute: typeof AdminSchedulesRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/roles': {
       id: '/admin/roles'
       path: '/roles'
@@ -613,6 +632,7 @@ interface AdminRouteChildren {
   AdminFcoTemplatesRoute: typeof AdminFcoTemplatesRoute
   AdminProjectsRoute: typeof AdminProjectsRoute
   AdminRolesRoute: typeof AdminRolesRoute
+  AdminSchedulesRoute: typeof AdminSchedulesRoute
   AdminSubcontractorsRoute: typeof AdminSubcontractorsRoute
   AdminSystemRoute: typeof AdminSystemRoute
   AdminUsersRoute: typeof AdminUsersRoute
@@ -625,6 +645,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminFcoTemplatesRoute: AdminFcoTemplatesRoute,
   AdminProjectsRoute: AdminProjectsRoute,
   AdminRolesRoute: AdminRolesRoute,
+  AdminSchedulesRoute: AdminSchedulesRoute,
   AdminSubcontractorsRoute: AdminSubcontractorsRoute,
   AdminSystemRoute: AdminSystemRoute,
   AdminUsersRoute: AdminUsersRoute,

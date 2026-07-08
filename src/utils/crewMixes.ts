@@ -5,15 +5,17 @@ import { adminHandler, adminHandlerNoInput } from "./users.server";
 import { parseIdInput, parseUpsertCrewMix } from "~/lib/validators";
 
 /**
- * Crew Mix data for the Take Off sheet's "Use Crew Mix" mode. Returns every
- * crew mix's id + name + members so the cell renderer can both populate the
- * dropdown and compute the average wage for the selected mix. Cached
- * indefinitely; admin mutations invalidate via `invalidateAdminEntity`.
+ * Crew Mix data for the Take Off sheet's "Use Crew Mix" mode. A crew mix is a
+ * set of roles plus one schedule; the cell renderer combines `roleNames` +
+ * `schedule` with `meta.roleRates` (see `crewMixAverageRate`) to compute the
+ * row's labor rate. Cached indefinitely; admin mutations invalidate via
+ * `invalidateAdminEntity`.
  */
 export type CrewMixData = {
   id: number;
   name: string;
-  members: { jobTitle: string; wage: number }[];
+  schedule: string;
+  members: { roleName: string; count: number }[];
 }[];
 
 export const fetchCrewMixData = createServerFn({ method: "GET" }).handler(
@@ -23,13 +25,19 @@ export const fetchCrewMixData = createServerFn({ method: "GET" }).handler(
       select: {
         id: true,
         name: true,
+        schedule: true,
         members: {
-          select: { jobTitle: true, wage: true },
+          select: { count: true, role: { select: { name: true } } },
           orderBy: { id: "asc" },
         },
       },
     });
-    return rows;
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      schedule: r.schedule,
+      members: r.members.map((m) => ({ roleName: m.role.name, count: m.count })),
+    }));
   },
 );
 
@@ -40,21 +48,16 @@ export const crewMixDataQueryOptions = () =>
     staleTime: Infinity,
   });
 
-/** Average of a crew mix's member wages. Returns 0 when the mix has no members. */
-export function crewMixAverageWage(
-  members: { wage: number }[],
-): number {
-  if (members.length === 0) return 0;
-  const sum = members.reduce((acc, m) => acc + m.wage, 0);
-  return sum / members.length;
-}
-
-/** Admin-side crew mix item: id + name + description + members. */
+/**
+ * Admin-side crew mix item: identity + description + schedule + member roles
+ * (both ids, for the form, and names, for display / rate preview).
+ */
 export type CrewMixAdminItem = {
   id: number;
   name: string;
   description: string;
-  members: { jobTitle: string; wage: number }[];
+  schedule: string;
+  members: { roleId: number; roleName: string; count: number }[];
 };
 
 export const fetchCrewMixesAdmin = createServerFn({ method: "GET" }).handler(
@@ -65,13 +68,24 @@ export const fetchCrewMixesAdmin = createServerFn({ method: "GET" }).handler(
         id: true,
         name: true,
         description: true,
+        schedule: true,
         members: {
-          select: { jobTitle: true, wage: true },
+          select: { roleId: true, count: true, role: { select: { name: true } } },
           orderBy: { id: "asc" },
         },
       },
     });
-    return rows;
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      schedule: r.schedule,
+      members: r.members.map((m) => ({
+        roleId: m.roleId,
+        roleName: m.role.name,
+        count: m.count,
+      })),
+    }));
   }),
 );
 
@@ -86,13 +100,30 @@ export type UpsertCrewMixInput = {
   id?: number;
   name: string;
   description: string;
-  members: { jobTitle: string; wage: number }[];
+  schedule: string;
+  members: { roleId: number; count: number }[];
 };
 
 /**
- * Create or update a crew mix. Members are replaced wholesale — the dialog
- * sends the full member list every time, so on edit we drop the old set and
- * re-insert. Admin-only.
+ * Collapse duplicate roles into one row per role, summing their counts, and
+ * drop non-positive counts. Keeps one row per (mix, role) as the schema's
+ * `@@unique([crewMixId, roleId])` requires, while letting the dialog express
+ * "multiple of the same role" as a count.
+ */
+function normalizeMembers(
+  members: { roleId: number; count: number }[],
+): { roleId: number; count: number }[] {
+  const byRole = new Map<number, number>();
+  for (const m of members) {
+    if (!(m.count > 0)) continue;
+    byRole.set(m.roleId, (byRole.get(m.roleId) ?? 0) + m.count);
+  }
+  return Array.from(byRole, ([roleId, count]) => ({ roleId, count }));
+}
+
+/**
+ * Create or update a crew mix. Members (roles + counts) are replaced wholesale
+ * — the dialog sends the full set every time. Admin-only.
  */
 export const upsertCrewMix = createServerFn({ method: "POST" })
   .inputValidator(parseUpsertCrewMix)
@@ -100,35 +131,24 @@ export const upsertCrewMix = createServerFn({ method: "POST" })
     adminHandler(async ({ data }): Promise<{ ok: true }> => {
       const name = data.name.trim();
       const description = data.description.trim();
-      const cleanMembers = data.members
-        .map((m) => ({ jobTitle: m.jobTitle.trim(), wage: Number(m.wage) }))
-        .filter((m) => m.jobTitle !== "" && Number.isFinite(m.wage));
+      const schedule = data.schedule.trim();
+      const members = normalizeMembers(data.members);
 
       await prisma.$transaction(async (tx) => {
         if (data.id) {
           await tx.crewMix.update({
             where: { id: data.id },
-            data: { name, description },
+            data: { name, description, schedule },
           });
-          await tx.crewMixMember.deleteMany({
-            where: { crewMixId: data.id },
-          });
-          if (cleanMembers.length > 0) {
+          await tx.crewMixMember.deleteMany({ where: { crewMixId: data.id } });
+          if (members.length > 0) {
             await tx.crewMixMember.createMany({
-              data: cleanMembers.map((m) => ({
-                crewMixId: data.id!,
-                jobTitle: m.jobTitle,
-                wage: m.wage,
-              })),
+              data: members.map((m) => ({ crewMixId: data.id!, ...m })),
             });
           }
         } else {
           await tx.crewMix.create({
-            data: {
-              name,
-              description,
-              members: { create: cleanMembers },
-            },
+            data: { name, description, schedule, members: { create: members } },
           });
         }
       });

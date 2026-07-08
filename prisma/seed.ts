@@ -252,8 +252,10 @@ export async function seedBaseData() {
   await prisma.pipingGroup.deleteMany();
   await prisma.pipingFactorValue.deleteMany();
   await prisma.pipingFactor.deleteMany();
+  await prisma.crewMix.deleteMany();
   await prisma.roleRate.deleteMany();
   await prisma.role.deleteMany();
+  await prisma.schedule.deleteMany();
 
   await prisma.project.createMany({ data: seedProjects });
 
@@ -303,6 +305,24 @@ export async function seedBaseData() {
     .map((d) => d.id);
 
   const compositeRates = loadCompositeRates();
+
+  // The managed Schedule list is seeded from the distinct schedule codes the
+  // composite-rates CSV uses, so the Role rate editor and Crew Mix schedule
+  // picker start populated. Sorted so `position` gives a stable display order.
+  const scheduleNames = Array.from(
+    new Set(
+      Array.from(compositeRates.values()).flatMap((rates) =>
+        rates.map((r) => r.schedule),
+      ),
+    ),
+  )
+    .filter((s) => s !== "")
+    .sort();
+  await prisma.schedule.createMany({
+    data: scheduleNames.map((name, i) => ({ name, position: i })),
+  });
+  console.log(`Inserted ${scheduleNames.length} schedules`);
+
   for (const [name, rates] of compositeRates) {
     await prisma.role.create({
       data: {

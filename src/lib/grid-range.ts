@@ -18,6 +18,7 @@
  * so a whole row exports to Excel, but paste/fill/clear skip them.
  */
 import type { CbsOption, FefRow } from "./types";
+import { crewMixAverageRate } from "./crew-mix-rate";
 
 export type CellCoord = { row: number; col: number };
 export type RangeSelection = { anchor: CellCoord; focus: CellCoord };
@@ -49,7 +50,8 @@ type AreaOption = { value: string; label: string };
 type CrewMixLookup = {
   id: number;
   name: string;
-  members: { wage: number }[];
+  schedule: string;
+  members: { roleName: string; count: number }[];
 };
 
 /** Lookups a range write needs, sourced from the table's `meta`. */
@@ -209,19 +211,16 @@ export function resolveCellWrite(
         : null;
     }
     case "crewMixId": {
-      // Mirrors CrewMixSelectCell: snapshot the crew's average wage onto the
-      // rate and clear role/schedule so the row's rate source is unambiguous.
+      // Mirrors CrewMixSelectCell: snapshot the average of the mix's member-role
+      // rates at its schedule and clear role/schedule so the row's rate source
+      // is unambiguous.
       if (raw.trim() === "") return { crewMixId: "", laborRate: "" };
       const match = resolveCrewMix(raw, ctx.crewMixOptions);
       if (!match) return null;
-      const wages = match.members ?? [];
-      const avg =
-        wages.length === 0
-          ? 0
-          : wages.reduce((acc, m) => acc + m.wage, 0) / wages.length;
+      const avg = crewMixAverageRate(match.members, match.schedule, ctx.roleRates);
       return {
         crewMixId: String(match.id),
-        laborRate: wages.length === 0 ? "" : avg.toFixed(2),
+        laborRate: avg > 0 ? avg.toFixed(2) : "",
         role: "",
         schedule: "",
       };

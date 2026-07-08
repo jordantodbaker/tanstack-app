@@ -392,6 +392,116 @@ export function applyFillDown(
   });
 }
 
+/** Case-insensitive replace-all of `query` with `replacement` in `text`. */
+function replaceCI(text: string, query: string, replacement: string): string {
+  if (query === "") return text;
+  const esc = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return text.replace(new RegExp(esc, "gi"), replacement);
+}
+
+/**
+ * Coordinates of every cell whose displayed text contains `query`
+ * (case-insensitive), scanned row-major. Empty `query` → no matches.
+ */
+export function findMatches(
+  data: FefRow[],
+  columnIds: string[],
+  query: string,
+  ctx: WriteCtx,
+): CellCoord[] {
+  const q = query.toLowerCase();
+  if (q === "") return [];
+  const out: CellCoord[] = [];
+  for (let r = 0; r < data.length; r++) {
+    const row = data[r];
+    if (!row) continue;
+    for (let c = 0; c < columnIds.length; c++) {
+      if (readCellText(columnIds[c], row, ctx).toLowerCase().includes(q)) {
+        out.push({ row: r, col: c });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Replace all occurrences of `query` with `replacement` in one cell (writable
+ * columns only; others and unresolvable results are left untouched). Returns a
+ * new array only when something changed.
+ */
+export function replaceInCell(
+  data: FefRow[],
+  columnIds: string[],
+  coord: CellCoord,
+  query: string,
+  replacement: string,
+  ctx: WriteCtx,
+): FefRow[] {
+  const colId = columnIds[coord.col];
+  const row = data[coord.row];
+  if (!row || query === "" || !RANGE_WRITABLE_COLUMNS.has(colId)) return data;
+  const text = readCellText(colId, row, ctx);
+  if (!text.toLowerCase().includes(query.toLowerCase())) return data;
+  const patch = resolveCellWrite(colId, replaceCI(text, query, replacement), row, ctx);
+  if (!patch) return data;
+  return data.map((r, i) => (i === coord.row ? { ...r, ...patch } : r));
+}
+
+/**
+ * Replace across the whole sheet in writable columns. Returns the new data and
+ * the number of cells changed.
+ */
+export function replaceAll(
+  data: FefRow[],
+  columnIds: string[],
+  query: string,
+  replacement: string,
+  ctx: WriteCtx,
+): { data: FefRow[]; count: number } {
+  if (query === "") return { data, count: 0 };
+  const q = query.toLowerCase();
+  let count = 0;
+  const next = data.map((row) => {
+    let patch: Partial<FefRow> | null = null;
+    for (let c = 0; c < columnIds.length; c++) {
+      const colId = columnIds[c];
+      if (!RANGE_WRITABLE_COLUMNS.has(colId)) continue;
+      const base = patch ? { ...row, ...patch } : row;
+      const text = readCellText(colId, base, ctx);
+      if (!text.toLowerCase().includes(q)) continue;
+      const p = resolveCellWrite(colId, replaceCI(text, query, replacement), base, ctx);
+      if (p) {
+        patch = { ...(patch ?? {}), ...p };
+        count++;
+      }
+    }
+    return patch ? { ...row, ...patch } : row;
+  });
+  return { data: next, count };
+}
+
+/** Insert `count` blank rows at `index` (0 = top, clamped to the array). */
+export function insertRows(
+  data: FefRow[],
+  index: number,
+  count: number,
+  makeBlank: (i: number) => FefRow,
+): FefRow[] {
+  if (count <= 0) return data;
+  const at = Math.max(0, Math.min(index, data.length));
+  const blanks = Array.from({ length: count }, (_, i) => makeBlank(i));
+  return [...data.slice(0, at), ...blanks, ...data.slice(at)];
+}
+
+/** Delete the rows in `[minRow, maxRow]` (inclusive). Returns a new array. */
+export function deleteRows(
+  data: FefRow[],
+  minRow: number,
+  maxRow: number,
+): FefRow[] {
+  return data.filter((_, i) => i < minRow || i > maxRow);
+}
+
 export type SelectionStats = {
   /** Non-empty cells in the selection. */
   count: number;

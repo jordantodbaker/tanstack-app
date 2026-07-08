@@ -10,6 +10,12 @@ import {
   applyPaste,
   applyClear,
   applyFillDown,
+  selectionStats,
+  insertRows,
+  deleteRows,
+  findMatches,
+  replaceInCell,
+  replaceAll,
   type RangeSelection,
   type WriteCtx,
 } from "./grid-range";
@@ -306,5 +312,102 @@ describe("applyFillDown", () => {
     expect(next[2].laborHours).toBe("12.0"); // 4 × 3
     // Source row is unchanged.
     expect(next[0].laborHours).toBe("6.0");
+  });
+});
+
+describe("find & replace", () => {
+  // COLS: description=0, quantity=1, laborFactor=2, area=3, role=4, schedule=5, ...
+  const rows = [
+    makeFefRow({ description: "Pipe spool", notes: "spool note" }),
+    makeFefRow({ description: "Elbow", notes: "" }),
+    makeFefRow({ description: "PIPE flange", notes: "" }),
+  ];
+
+  it("finds cells containing the query, case-insensitively, row-major", () => {
+    const hits = findMatches(rows, COLS, "pipe", ctx);
+    // rows 0 and 2 description; "spool" is separate. Only description col (0).
+    expect(hits).toEqual([
+      { row: 0, col: 0 },
+      { row: 2, col: 0 },
+    ]);
+  });
+
+  it("returns no matches for an empty query", () => {
+    expect(findMatches(rows, COLS, "", ctx)).toEqual([]);
+  });
+
+  it("replaces within a single writable cell (case-insensitive)", () => {
+    const next = replaceInCell(rows, COLS, { row: 2, col: 0 }, "pipe", "Tube", ctx);
+    expect(next[2].description).toBe("Tube flange");
+    expect(next[0].description).toBe("Pipe spool"); // untouched
+  });
+
+  it("replace-all rewrites every writable cell and reports the count", () => {
+    const { data: next, count } = replaceAll(rows, COLS, "spool", "assembly", ctx);
+    expect(count).toBe(2); // description[0] and notes[0]
+    expect(next[0].description).toBe("Pipe assembly");
+    expect(next[0].notes).toBe("assembly note");
+  });
+});
+
+describe("insertRows / deleteRows", () => {
+  const rows = [
+    makeFefRow({ id: "a" }),
+    makeFefRow({ id: "b" }),
+    makeFefRow({ id: "c" }),
+  ];
+  const blank = (i: number) => makeFefRow({ id: `__fe-blank-${i}` });
+
+  it("inserts blank rows at an index, pushing the rest down", () => {
+    const next = insertRows(rows, 1, 2, blank);
+    expect(next.map((r) => r.id)).toEqual([
+      "a",
+      "__fe-blank-0",
+      "__fe-blank-1",
+      "b",
+      "c",
+    ]);
+  });
+
+  it("clamps the insert index and no-ops on non-positive count", () => {
+    expect(insertRows(rows, 99, 1, blank).map((r) => r.id)).toEqual([
+      "a",
+      "b",
+      "c",
+      "__fe-blank-0",
+    ]);
+    expect(insertRows(rows, 0, 0, blank)).toBe(rows);
+  });
+
+  it("deletes an inclusive row range", () => {
+    expect(deleteRows(rows, 1, 2).map((r) => r.id)).toEqual(["a"]);
+    expect(deleteRows(rows, 0, 0).map((r) => r.id)).toEqual(["b", "c"]);
+  });
+});
+
+describe("selectionStats", () => {
+  const rows = [
+    makeFefRow({ quantity: "10", description: "a" }),
+    makeFefRow({ quantity: "20", description: "" }),
+    makeFefRow({ quantity: "", description: "note" }),
+    makeFefRow({ quantity: "1,200", description: "x" }),
+  ];
+
+  it("sums, averages, and counts the numeric cells in the selection", () => {
+    // quantity column (COLS index 1), rows 0..3: 10, 20, "" (skip), 1,200
+    const s = selectionStats(rows, COLS, range(0, 1, 3, 1), ctx);
+    expect(s.count).toBe(3); // non-empty
+    expect(s.numericCount).toBe(3);
+    expect(s.sum).toBe(1230);
+    expect(s.average).toBe(410);
+  });
+
+  it("counts non-empty text cells but keeps sum/average at 0 when non-numeric", () => {
+    // description column (COLS index 0), rows 0..3: "a", "", "note", "x"
+    const s = selectionStats(rows, COLS, range(0, 0, 3, 0), ctx);
+    expect(s.count).toBe(3);
+    expect(s.numericCount).toBe(0);
+    expect(s.sum).toBe(0);
+    expect(s.average).toBe(0);
   });
 });

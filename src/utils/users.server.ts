@@ -22,7 +22,10 @@ import { recordUpdate, type FieldChange } from "./audit.server";
  * demotes) and is reconciled on every load so these accounts can't be locked
  * out. Real admin management happens later via UI, not this list.
  */
-const BOOTSTRAP_ADMIN_EMAILS = ["jordantodbaker@gmail.com"];
+const BOOTSTRAP_ADMIN_EMAILS = [
+  "jordantodbaker@gmail.com",
+  "sskinner@haskellcorp.com",
+];
 
 function toCurrentUser(row: {
   id: number;

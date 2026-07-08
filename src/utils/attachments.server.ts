@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { del as blobDel, put as blobPut } from "@vercel/blob";
+import { del as blobDel, get as blobGet, put as blobPut } from "@vercel/blob";
 import { MAX_ATTACHMENT_BYTES } from "./attachments";
 
 /**
@@ -12,11 +12,12 @@ import { MAX_ATTACHMENT_BYTES } from "./attachments";
  *      `BLOB_READ_WRITE_TOKEN` store. The DB's `storageKey` column holds the
  *      full Blob URL returned by upload, not a relative path.
  *
- * Auth model: uploads use `addRandomSuffix: true`, so URLs are
- * unguessable. Downloads still flow through `downloadAttachment` (which
- * runs `requireProjectAccess`), so the URL never escapes to the browser
- * unless the caller is authorised — the random-suffix is just defence in
- * depth in case a URL leaks.
+ * Auth model: blobs are uploaded with `access: "private"`, so the object
+ * itself requires the store's credentials to read — a leaked URL is useless
+ * without the token. On top of that, uploads use `addRandomSuffix: true` (URLs
+ * are unguessable) and downloads always flow through `downloadAttachment`
+ * (which runs `requireProjectAccess` and reads the bytes server-side via the
+ * authenticated `get`), so the blob URL never reaches the browser at all.
  *
  * NOTE: `MAX_ATTACHMENT_BYTES` is defined in `./attachments` (client-safe)
  * and re-exported below so callers / tests that already pull it from here
@@ -119,9 +120,10 @@ export function validateUpload(args: {
 }
 
 /**
- * Uploads to Vercel Blob and returns the public URL — the caller stores
- * this URL as the row's `storageKey`. `addRandomSuffix: true` makes URLs
- * unguessable even when the pathname is predictable; combined with the
+ * Uploads to Vercel Blob as a PRIVATE object and returns its URL — the caller
+ * stores this URL as the row's `storageKey`. Private access means the object
+ * can only be read with the store's credentials (see `readAttachmentFile`).
+ * `addRandomSuffix: true` also makes the URL unguessable; combined with the
  * `randomFileId()` already baked into the pathname, the effective entropy
  * is high.
  *
@@ -134,7 +136,7 @@ export async function writeAttachmentFile(
   contentType: string,
 ): Promise<string> {
   const result = await blobPut(pathname, content, {
-    access: "public",
+    access: "private",
     addRandomSuffix: true,
     contentType,
   });
@@ -142,20 +144,19 @@ export async function writeAttachmentFile(
 }
 
 /**
- * Fetches the blob via the URL stored as `storageKey`. We keep proxying
- * downloads through the server fn (rather than handing URLs to the browser)
- * so `requireProjectAccess` stays the single source of truth for
- * authorisation — the random-suffix URL is defence in depth, not the
- * primary control.
+ * Reads the private blob stored as `storageKey`, authenticating with the
+ * store's `BLOB_READ_WRITE_TOKEN` (a plain `fetch` would 403 on a private
+ * object). Called only from `downloadAttachment`, which gates on
+ * `requireProjectAccess` first, so authorisation is enforced before the bytes
+ * are read — the private object + unguessable URL are defence in depth.
  */
 export async function readAttachmentFile(storageKey: string): Promise<Buffer> {
-  const res = await fetch(storageKey);
-  if (!res.ok) {
-    throw new Error(
-      `Attachment fetch failed (${res.status} ${res.statusText}).`,
-    );
+  const result = await blobGet(storageKey, { access: "private" });
+  if (!result) throw new Error("Attachment not found in storage.");
+  if (result.statusCode !== 200) {
+    throw new Error(`Attachment fetch failed (status ${result.statusCode}).`);
   }
-  return Buffer.from(await res.arrayBuffer());
+  return Buffer.from(await new Response(result.stream).arrayBuffer());
 }
 
 /**

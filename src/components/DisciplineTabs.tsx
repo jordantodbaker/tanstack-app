@@ -572,6 +572,7 @@ export function DisciplineTabs({
             minRows={20}
             getRowInvalid={isTakeOffRowInvalidLive}
             enableRangeEditing
+            frozenColumnCount={2}
           />
         </TabsContent>
         <TabsContent value="estimate" className="mt-4">

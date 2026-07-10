@@ -19,6 +19,7 @@
  */
 import type { CbsOption, FefRow } from "./types";
 import { crewMixAverageRate } from "./crew-mix-rate";
+import { fefRowHasUserData } from "./fef-helpers";
 
 export type CellCoord = { row: number; col: number };
 export type RangeSelection = { anchor: CellCoord; focus: CellCoord };
@@ -390,6 +391,41 @@ export function applyFillDown(
     }
     return patch ? { ...row, ...patch } : row;
   });
+}
+
+/**
+ * Sort the sheet by a column's displayed text, ascending or descending. This
+ * physically reorders the rows (not a view-only sort) so the grid's index-based
+ * selection / fill / copy stay correct and the order persists. Cells that both
+ * parse as numbers compare numerically; otherwise locale string compare. Empty
+ * trailing blank rows are held at the bottom so the entry buffer isn't scattered
+ * into the middle. Pure — returns a new array.
+ */
+export function sortRows(
+  data: FefRow[],
+  colId: string,
+  dir: "asc" | "desc",
+  ctx: WriteCtx,
+): FefRow[] {
+  const isBlank = (r: FefRow) =>
+    r.id.startsWith("__fe-blank-") && !fefRowHasUserData(r);
+  const real = data.filter((r) => !isBlank(r));
+  const blanks = data.filter(isBlank);
+  const sign = dir === "asc" ? 1 : -1;
+  const sorted = [...real].sort((a, b) => {
+    const av = readCellText(colId, a, ctx);
+    const bv = readCellText(colId, b, ctx);
+    const an = parseFloat(av.replace(/[$,\s]/g, ""));
+    const bn = parseFloat(bv.replace(/[$,\s]/g, ""));
+    if (av !== "" && bv !== "" && Number.isFinite(an) && Number.isFinite(bn)) {
+      return (an - bn) * sign;
+    }
+    // Blanks (unwritten cells) sort to the end regardless of direction.
+    if (av === "" && bv !== "") return 1;
+    if (bv === "" && av !== "") return -1;
+    return av.localeCompare(bv) * sign;
+  });
+  return [...sorted, ...blanks];
 }
 
 /** Case-insensitive replace-all of `query` with `replacement` in `text`. */

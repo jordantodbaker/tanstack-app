@@ -232,11 +232,12 @@ function applyRoleRate(
 
 export function RoleSelectCell({ getValue, row, table }: CellProps) {
   const value = getValue() as string;
-  const { roleOptions = [], roleRates = [] } = table.options.meta ?? {};
+  const { roleRates = [] } = table.options.meta ?? {};
+  const options = table.options.meta?.roleSelectOptions ?? [];
   return (
     <CellSelect
       value={value}
-      options={roleOptions.map((opt) => ({ value: opt, label: opt }))}
+      options={options}
       ariaLabel="Role"
       onValueChange={(v) => {
         const rowData = table.getRowModel().rows[row.index].original;
@@ -259,13 +260,11 @@ export function RoleSelectCell({ getValue, row, table }: CellProps) {
 export function CrewMixSelectCell({ row, table }: CellProps) {
   const value = row.original.crewMixId;
   const { crewMixOptions = [], roleRates = [] } = table.options.meta ?? {};
+  const options = table.options.meta?.crewMixSelectOptions ?? [];
   return (
     <CellSelect
       value={value}
-      options={crewMixOptions.map((opt) => ({
-        value: String(opt.id),
-        label: opt.name,
-      }))}
+      options={options}
       ariaLabel="Crew Mix"
       onValueChange={(id) => {
         if (id === "") {
@@ -472,11 +471,12 @@ export function PipingQuantityCell({ getValue, row, table }: CellProps) {
 
 export function ScheduleSelectCell({ getValue, row, table }: CellProps) {
   const value = getValue() as string;
-  const { scheduleOptions = [], roleRates = [] } = table.options.meta ?? {};
+  const { roleRates = [] } = table.options.meta ?? {};
+  const options = table.options.meta?.scheduleSelectOptions ?? [];
   return (
     <CellSelect
       value={value}
-      options={scheduleOptions.map((opt) => ({ value: opt, label: opt }))}
+      options={options}
       ariaLabel="Schedule"
       onValueChange={(v) => {
         const rowData = table.getRowModel().rows[row.index].original;

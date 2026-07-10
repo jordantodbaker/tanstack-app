@@ -23,6 +23,12 @@ declare module "@tanstack/react-table" {
       schedule: string;
       members: { roleName: string; count: number }[];
     }[];
+    // Pre-mapped `{ value, label }` lists for the dropdown cells, computed once
+    // per grid (see FefTableContent) so each cell doesn't re-map its source.
+    cbsSelectOptions?: { value: string; label: string }[];
+    roleSelectOptions?: { value: string; label: string }[];
+    scheduleSelectOptions?: { value: string; label: string }[];
+    crewMixSelectOptions?: { value: string; label: string }[];
     taskCodeOptions?: { code: string; taskDefinition: string }[];
     pipingFactorLookup?: Map<string, { unit: string; values: Map<number, number> }>;
     areaOptions?: { value: string; label: string }[];

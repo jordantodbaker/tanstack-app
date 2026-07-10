@@ -16,6 +16,7 @@ import {
   findMatches,
   replaceInCell,
   replaceAll,
+  sortRows,
   type RangeSelection,
   type WriteCtx,
 } from "./grid-range";
@@ -312,6 +313,33 @@ describe("applyFillDown", () => {
     expect(next[2].laborHours).toBe("12.0"); // 4 × 3
     // Source row is unchanged.
     expect(next[0].laborHours).toBe("6.0");
+  });
+});
+
+describe("sortRows", () => {
+  const rows = [
+    makeFefRow({ description: "Beta", quantity: "20" }),
+    makeFefRow({ description: "alpha", quantity: "100" }),
+    makeFefRow({ description: "Gamma", quantity: "3" }),
+    makeFefRow({ id: "__fe-blank-9" }), // empty trailing blank
+  ];
+
+  it("sorts text ascending, case-insensitively-ish, blanks at bottom", () => {
+    const out = sortRows(rows, "description", "asc", ctx);
+    expect(out.map((r) => r.description)).toEqual(["alpha", "Beta", "Gamma", ""]);
+    expect(out[3].id).toBe("__fe-blank-9"); // blank stays last
+  });
+
+  it("sorts numeric columns numerically, not lexically", () => {
+    const out = sortRows(rows, "quantity", "asc", ctx);
+    // 3, 20, 100 numerically (not "100" < "20" lexically), blank last
+    expect(out.map((r) => r.quantity)).toEqual(["3", "20", "100", ""]);
+  });
+
+  it("descending reverses real rows but keeps blanks at the bottom", () => {
+    const out = sortRows(rows, "quantity", "desc", ctx);
+    expect(out.map((r) => r.quantity)).toEqual(["100", "20", "3", ""]);
+    expect(out[3].id).toBe("__fe-blank-9");
   });
 });
 

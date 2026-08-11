@@ -38,6 +38,38 @@ export type FefRow = {
   sub: string;
   /** Selected area's id (as a string), or "" when none. */
   area: string;
+
+  // ── Reference / line-list attributes ────────────────────────────────────────
+  projectPhase: string;
+  drawingNumber: string;
+  drawingRev: string;
+  processUnit: string;
+  /** Free-text area name (distinct from `area`, which references a defined Area). */
+  areaName: string;
+  systemName: string;
+  tagNumber: string;
+
+  // ── Spec & testing (piping/mechanical) ──────────────────────────────────────
+  lineSpec: string;
+  paintSpec: string;
+  insulation: string;
+  nde: string;
+  pwht: string;
+  hydro: string;
+  heatTrace: string;
+
+  // ── Location ────────────────────────────────────────────────────────────────
+  agUg: string;
+  elevation: string;
+
+  // ── Labor adjustments ───────────────────────────────────────────────────────
+  siteFactor: string;
+  feetAboveGrade: string;
+  efficAdjust: string;
+  /** Labor-factor adjustment (distinct from `laborFactor`, the hours-per-unit). */
+  laborFactorAdj: string;
+  elevAdder: string;
+  weldAdder: string;
 };
 
 export type CbsOption = {

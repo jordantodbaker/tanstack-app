@@ -4,7 +4,11 @@ import { Prisma } from "../generated/prisma/client";
 import { prisma } from "../server/db";
 import { z } from "zod";
 import type { FefRow } from "~/lib/types";
-import { FEF_ROW_STRING_FIELDS, fefRowHasUserData } from "~/lib/fef-helpers";
+import {
+  FEF_DATA_COLUMNS,
+  FEF_ROW_STRING_FIELDS,
+  fefRowHasUserData,
+} from "~/lib/fef-helpers";
 import { requireVersionAccess, versionScopedHandler } from "./users.server";
 import { logger } from "~/lib/logger";
 import { VersionId } from "~/lib/validators";
@@ -49,32 +53,70 @@ const AppendTakeOffSchema = z.object({
 
 export type FefSectionKey = "TAKE_OFF" | "SUPPORT_LABOR" | "MATERIALS";
 
+// ── FefRow write SQL, derived from the single source of truth ─────────────────
+// A FefRow's DB data columns are `cbsCode` (stored from the client row `id`)
+// plus every FEF_ROW_STRING_FIELDS entry. Building the INSERT column list, the
+// per-row VALUES tuple, and the ON CONFLICT update list from that array (rather
+// than hand-writing each column in raw SQL) means adding a FefRow field only
+// requires updating the type + FEF_ROW_STRING_FIELDS — the SQL below follows
+// automatically. Identifiers come from our own constants, never user input, so
+// `Prisma.raw` interpolation here is injection-safe.
+type FefDataColumn = (typeof FEF_DATA_COLUMNS)[number];
+
+/** Full ordered INSERT column list: identity + data + timestamps. */
+const FEF_INSERT_COLUMN_SQL = Prisma.raw(
+  [
+    "projectId",
+    "versionId",
+    "discipline",
+    "section",
+    "position",
+    ...FEF_DATA_COLUMNS,
+    "createdAt",
+    "updatedAt",
+  ]
+    .map((c) => `"${c}"`)
+    .join(", "),
+);
+
+/** `SET "col" = EXCLUDED."col"` for every data column + updatedAt. The identity
+ *  columns are the conflict key and are never updated. */
+const FEF_CONFLICT_UPDATE_SQL = Prisma.raw(
+  [
+    ...FEF_DATA_COLUMNS.map((c) => `"${c}" = EXCLUDED."${c}"`),
+    `"updatedAt" = NOW()`,
+  ].join(", "),
+);
+
+/** A row ready to write, keyed exactly like the INSERT column order. */
+type FefWriteRow = {
+  projectId: number;
+  versionId: number;
+  discipline: string;
+  section: FefSectionKey;
+  position: number;
+} & Record<FefDataColumn, string>;
+
+/** One `(…)` VALUES tuple in the exact order of FEF_INSERT_COLUMN_SQL. */
+function fefValuesTuple(p: FefWriteRow): Prisma.Sql {
+  return Prisma.sql`(${Prisma.join([
+    Prisma.sql`${p.projectId}`,
+    Prisma.sql`${p.versionId}`,
+    Prisma.sql`${p.discipline}`,
+    Prisma.sql`${p.section}::"FefSection"`,
+    Prisma.sql`${p.position}`,
+    ...FEF_DATA_COLUMNS.map((c) => Prisma.sql`${p[c]}`),
+    Prisma.sql`NOW()`,
+    Prisma.sql`NOW()`,
+  ])})`;
+}
+
+// Read shape from `prisma.fefRow.findMany` that `toFefRow` consumes. Derived
+// from the same field list so it stays in sync automatically.
 type FefRowDb = {
   id: number;
-  cbsCode: string;
-  name: string;
-  description: string;
-  shopField: string;
-  weldGroupDescription: string;
-  quantity: string;
-  size: string;
-  unit: string;
-  metallurgyCode: string;
-  boreSize: string;
-  role: string;
-  crewMixId: string;
-  schedule: string;
-  taskCode: string;
-  laborHours: string;
-  laborFactor: string;
-  laborRate: string;
-  materialCost: string;
-  equipment: string;
-  notes: string;
-  sub: string;
-  area: string;
   position: number;
-};
+} & Record<FefDataColumn, string>;
 
 const toFefRow = (r: FefRowDb): FefRow => {
   const { id, cbsCode, position: _position, ...fields } = r;
@@ -161,53 +203,14 @@ export const saveFefRows = createServerFn({ method: "POST" })
         // recreate which churned every row's primary key on every keystroke
         // (the agentid stability is what keeps React keys stable during edits
         // and keeps the response payload addressable).
-        const values = persistable.map(
-          (p) => Prisma.sql`(
-            ${p.projectId}, ${p.versionId}, ${p.discipline}, ${p.section}::"FefSection", ${p.position},
-            ${p.cbsCode}, ${p.name}, ${p.description}, ${p.shopField}, ${p.weldGroupDescription},
-            ${p.quantity}, ${p.size}, ${p.unit}, ${p.metallurgyCode}, ${p.boreSize},
-            ${p.role}, ${p.crewMixId}, ${p.schedule}, ${p.taskCode}, ${p.laborHours}, ${p.laborFactor}, ${p.laborRate},
-            ${p.materialCost}, ${p.equipment}, ${p.notes}, ${p.sub}, ${p.area},
-            NOW(), NOW()
-          )`,
-        );
+        const values = persistable.map(fefValuesTuple);
 
         const saved = await prisma.$transaction(async (tx) => {
           await tx.$executeRaw`
-            INSERT INTO "FefRow" (
-              "projectId", "versionId", "discipline", "section", "position",
-              "cbsCode", "name", "description", "shopField", "weldGroupDescription",
-              "quantity", "size", "unit", "metallurgyCode", "boreSize",
-              "role", "crewMixId", "schedule", "taskCode", "laborHours", "laborFactor", "laborRate",
-              "materialCost", "equipment", "notes", "sub", "area",
-              "createdAt", "updatedAt"
-            )
+            INSERT INTO "FefRow" (${FEF_INSERT_COLUMN_SQL})
             VALUES ${Prisma.join(values)}
             ON CONFLICT ("versionId", "discipline", "section", "position")
-            DO UPDATE SET
-              "cbsCode" = EXCLUDED."cbsCode",
-              "name" = EXCLUDED."name",
-              "description" = EXCLUDED."description",
-              "shopField" = EXCLUDED."shopField",
-              "weldGroupDescription" = EXCLUDED."weldGroupDescription",
-              "quantity" = EXCLUDED."quantity",
-              "size" = EXCLUDED."size",
-              "unit" = EXCLUDED."unit",
-              "metallurgyCode" = EXCLUDED."metallurgyCode",
-              "boreSize" = EXCLUDED."boreSize",
-              "role" = EXCLUDED."role",
-              "crewMixId" = EXCLUDED."crewMixId",
-              "schedule" = EXCLUDED."schedule",
-              "taskCode" = EXCLUDED."taskCode",
-              "laborHours" = EXCLUDED."laborHours",
-              "laborFactor" = EXCLUDED."laborFactor",
-              "laborRate" = EXCLUDED."laborRate",
-              "materialCost" = EXCLUDED."materialCost",
-              "equipment" = EXCLUDED."equipment",
-              "notes" = EXCLUDED."notes",
-              "sub" = EXCLUDED."sub",
-              "area" = EXCLUDED."area",
-              "updatedAt" = NOW()
+            DO UPDATE SET ${FEF_CONFLICT_UPDATE_SQL}
           `;
           await tx.$executeRaw`
             DELETE FROM "FefRow"
@@ -268,26 +271,21 @@ export const appendTakeOffRows = createServerFn({ method: "POST" })
           where: { versionId, discipline, section: "TAKE_OFF" },
         });
 
-        const values = rows.map(
-          (p, i) => Prisma.sql`(
-              ${projectId}, ${versionId}, ${discipline}, 'TAKE_OFF'::"FefSection", ${start + i},
-              ${p.id.startsWith("__fe-blank-") ? "" : p.id}, ${p.name}, ${p.description}, ${p.shopField}, ${p.weldGroupDescription},
-              ${p.quantity}, ${p.size}, ${p.unit}, ${p.metallurgyCode}, ${p.boreSize},
-              ${p.role}, ${p.crewMixId}, ${p.schedule}, ${p.taskCode}, ${p.laborHours}, ${p.laborFactor}, ${p.laborRate},
-              ${p.materialCost}, ${p.equipment}, ${p.notes}, ${p.sub}, ${p.area},
-              NOW(), NOW()
-            )`,
-        );
+        const values = rows.map((p, i) => {
+          const { id, ...fields } = p;
+          return fefValuesTuple({
+            projectId,
+            versionId,
+            discipline,
+            section: "TAKE_OFF",
+            position: start + i,
+            cbsCode: id.startsWith("__fe-blank-") ? "" : id,
+            ...fields,
+          });
+        });
 
         await tx.$executeRaw(Prisma.sql`
-            INSERT INTO "FefRow" (
-              "projectId", "versionId", "discipline", "section", "position",
-              "cbsCode", "name", "description", "shopField", "weldGroupDescription",
-              "quantity", "size", "unit", "metallurgyCode", "boreSize",
-              "role", "crewMixId", "schedule", "taskCode", "laborHours", "laborFactor", "laborRate",
-              "materialCost", "equipment", "notes", "sub", "area",
-              "createdAt", "updatedAt"
-            )
+            INSERT INTO "FefRow" (${FEF_INSERT_COLUMN_SQL})
             VALUES ${Prisma.join(values)}
           `);
 

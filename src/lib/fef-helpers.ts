@@ -28,7 +28,42 @@ export const FEF_ROW_STRING_FIELDS = [
   "notes",
   "sub",
   "area",
+  // Reference / line-list attributes
+  "projectPhase",
+  "drawingNumber",
+  "drawingRev",
+  "processUnit",
+  "areaName",
+  "systemName",
+  "tagNumber",
+  // Spec & testing (piping/mechanical)
+  "lineSpec",
+  "paintSpec",
+  "insulation",
+  "nde",
+  "pwht",
+  "hydro",
+  "heatTrace",
+  // Location
+  "agUg",
+  "elevation",
+  // Labor adjustments
+  "siteFactor",
+  "feetAboveGrade",
+  "efficAdjust",
+  "laborFactorAdj",
+  "elevAdder",
+  "weldAdder",
 ] as const satisfies readonly (keyof FefRow)[];
+
+/**
+ * The FefRow **DB** data columns, in a stable order: `cbsCode` (persisted from
+ * the client row `id`) followed by every free-text field. This is what the
+ * write SQL (`saveFefRows`/`appendTakeOffRows`) and the version copy
+ * (`createVersion`) build their column lists from, so a new field flows through
+ * to every write path by editing only the type + FEF_ROW_STRING_FIELDS.
+ */
+export const FEF_DATA_COLUMNS = ["cbsCode", ...FEF_ROW_STRING_FIELDS] as const;
 
 /** Builds a FefRow with every field blank, then applies `partial` overrides. */
 export function makeFefRow(partial: Partial<FefRow> = {}): FefRow {

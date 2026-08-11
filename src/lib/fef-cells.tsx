@@ -16,6 +16,11 @@ import { canComputeTotalCost, makeFefRow } from "./fef-helpers";
 export const editableCellClass =
   "w-full bg-white border border-slate-200 px-2 py-1 text-sm hover:border-blue-300 focus:border-blue-400 focus:outline-none rounded";
 
+/** Read-only presentation for a display-until-edit cell — same box metrics as
+ *  `editableCellClass` so switching to the input doesn't shift layout. */
+export const displayEditCellClass =
+  "w-full bg-white border border-transparent px-2 py-1 text-sm rounded cursor-text truncate hover:border-slate-200 focus:border-blue-400 focus:outline-none";
+
 // Radix Select forbids an item value of "", so the placeholder/clear row uses
 // this sentinel and CellSelect maps it back to "" on change.
 const SELECT_CLEAR = "__clear__";
@@ -93,9 +98,14 @@ export type CellProps = {
 };
 
 /** Focus a focusable, non-disabled control inside `cell`, selecting its text
- *  if it's an input. Returns true when something was focused. */
+ *  if it's an input. Returns true when something was focused. `[data-cell-control]`
+ *  matches a display-until-edit cell's focusable wrapper — focusing it makes the
+ *  cell switch itself into edit mode (its own onFocus), so grid navigation lands
+ *  on it exactly like a real input. */
 function focusCellControl(cell: Element | undefined | null): boolean {
-  const target = cell?.querySelector<HTMLElement>("input, select, textarea");
+  const target = cell?.querySelector<HTMLElement>(
+    "input, select, textarea, [data-cell-control]",
+  );
   if (!target || (target as HTMLInputElement).disabled) return false;
   target.focus();
   if (target instanceof HTMLInputElement) target.select();
@@ -158,21 +168,38 @@ function focusAdjacentColumn(from: HTMLElement, direction: 1 | -1) {
 export function TextCell({
   value: rawValue,
   stripBlankPrefix = false,
+  autoFocus = false,
   onCommit,
+  onEditEnd,
 }: {
   value: string;
   stripBlankPrefix?: boolean;
+  /** Focus + select the input on mount (used when a display cell enters edit). */
+  autoFocus?: boolean;
   onCommit: (value: string) => void;
+  /** Called after the input blurs (commit already fired) — lets a display-until-
+   *  edit wrapper switch back to its read-only span. */
+  onEditEnd?: () => void;
 }) {
   const normalize = (v: string) =>
     stripBlankPrefix && v.startsWith("__fe-blank-") ? "" : v;
   const [value, setValue] = React.useState(() => normalize(rawValue));
+  const inputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     setValue(
       stripBlankPrefix && rawValue.startsWith("__fe-blank-") ? "" : rawValue,
     );
   }, [rawValue, stripBlankPrefix]);
+
+  React.useEffect(() => {
+    if (autoFocus && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+    // Mount-only: focus+select when this input was opened from a display cell.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     const input = e.currentTarget;
@@ -208,12 +235,60 @@ export function TextCell({
 
   return (
     <input
+      ref={inputRef}
       className={editableCellClass}
       value={value}
       onChange={(e) => setValue(e.target.value)}
-      onBlur={() => onCommit(value)}
+      onBlur={() => {
+        onCommit(value);
+        onEditEnd?.();
+      }}
       onKeyDown={handleKeyDown}
     />
+  );
+}
+
+/**
+ * Display-until-edit text cell: renders a lightweight read-only span until the
+ * cell is focused or clicked, then swaps in a real `<input>` (reusing TextCell).
+ * Keeps ~1 live input on screen instead of one per cell — the mount-cost win for
+ * very wide sheets — while preserving grid navigation: focusing the wrapper
+ * (`data-cell-control`, so `focusCellControl` finds it) enters edit mode, and
+ * on blur it returns to the span. Shift/Ctrl/Meta-clicks fall through to range
+ * selection instead of opening the editor.
+ */
+export function DisplayEditCell({ getValue, row, column, table }: CellProps) {
+  const value = getValue() as string;
+  const [editing, setEditing] = React.useState(false);
+
+  if (editing) {
+    return (
+      <TextCell
+        value={value}
+        autoFocus
+        onCommit={(v) =>
+          table.options.meta?.updateData?.(row.index, column.id, v)
+        }
+        onEditEnd={() => setEditing(false)}
+      />
+    );
+  }
+
+  return (
+    <div
+      tabIndex={0}
+      data-cell-control
+      role="textbox"
+      onFocus={() => setEditing(true)}
+      onMouseDown={(e) => {
+        // Let range selection own modifier-clicks; a plain click focuses the
+        // wrapper, whose onFocus switches to the editor.
+        if (e.shiftKey || e.ctrlKey || e.metaKey) e.preventDefault();
+      }}
+      className={displayEditCellClass}
+    >
+      {value}
+    </div>
   );
 }
 

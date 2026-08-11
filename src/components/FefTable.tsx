@@ -5,6 +5,7 @@ import type { FefRow, CbsOption } from "~/lib/types";
 import { areasByProjectQueryOptions } from "~/utils/areas";
 import {
   EditableCell,
+  DisplayEditCell,
   CbsSelectCell,
   CbsNameCell,
   CbsUomCell,
@@ -18,7 +19,9 @@ import {
   useFefTableState,
   FefTableContent,
   readOnlyCellClass,
+  LABOR_COST_GROUP,
   type FefTableMeta,
+  type ColumnGroup,
 } from "~/lib/table-utils";
 import {
   RoleSelectCell,
@@ -80,6 +83,21 @@ const takeOffColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("id", { header: "ID", cell: TakeOffIdReadOnlyCell, size: 150 }),
   columnHelper.accessor("name", { header: "Name", cell: CbsSelectCell, size: 300 }),
   columnHelper.accessor("description", { header: "Description", cell: EditableCell, size: 250 }),
+  // ── Reference (universal) ──
+  columnHelper.accessor("projectPhase", { header: "Project Phase", cell: DisplayEditCell, size: 130 }),
+  columnHelper.accessor("drawingNumber", { header: "Drawing Number", cell: DisplayEditCell, size: 140 }),
+  columnHelper.accessor("drawingRev", { header: "Rev#", cell: DisplayEditCell, size: 70 }),
+  columnHelper.accessor("areaName", { header: "Area Name", cell: DisplayEditCell, size: 140 }),
+  columnHelper.accessor("systemName", { header: "System", cell: DisplayEditCell, size: 120 }),
+  columnHelper.accessor("tagNumber", { header: "Tag Number", cell: DisplayEditCell, size: 120 }),
+  // ── Location (universal) ──
+  columnHelper.accessor("elevation", { header: "Elevation", cell: DisplayEditCell, size: 100 }),
+  // ── Labor Adjustments (universal) ──
+  columnHelper.accessor("siteFactor", { header: "Site Factor", cell: DisplayEditCell, size: 100 }),
+  columnHelper.accessor("feetAboveGrade", { header: "Feet above grade", cell: DisplayEditCell, size: 120 }),
+  columnHelper.accessor("efficAdjust", { header: "Effic Adjust", cell: DisplayEditCell, size: 110 }),
+  columnHelper.accessor("laborFactorAdj", { header: "Labor Factor", cell: DisplayEditCell, size: 110 }),
+  columnHelper.accessor("elevAdder", { header: "Elev' Adder", cell: DisplayEditCell, size: 100 }),
   columnHelper.accessor("area", { header: "Area", cell: AreaSelectCell, size: 200 }),
   columnHelper.accessor("role", { header: "Role", cell: RoleSelectCell, size: 180 }),
   columnHelper.accessor("crewMixId", { header: "Crew Mix", cell: CrewMixSelectCell, size: 180 }),
@@ -103,6 +121,36 @@ const takeOffColumns: ColumnDef<FefRow, string>[] = [
     cell: DeleteRowCell,
     size: 40,
   }),
+];
+
+/** Grouped-header bands for the generic (non-piping) take-off. Only the
+ *  universal columns exist on this sheet, so the piping-only "Spec & Testing"
+ *  group is absent. */
+const takeOffColumnGroups: ColumnGroup[] = [
+  {
+    label: "Reference",
+    columnIds: [
+      "projectPhase",
+      "drawingNumber",
+      "drawingRev",
+      "areaName",
+      "systemName",
+      "tagNumber",
+    ],
+  },
+  { label: "Location", columnIds: ["elevation"] },
+  {
+    label: "Labor Adjustments",
+    columnIds: [
+      "siteFactor",
+      "feetAboveGrade",
+      "efficAdjust",
+      "laborFactorAdj",
+      "elevAdder",
+    ],
+  },
+  // Computed output columns — chip-only toggle (was the "Show Details" button).
+  LABOR_COST_GROUP,
 ];
 
 const materialsColumns: ColumnDef<FefRow, string>[] = [
@@ -217,6 +265,7 @@ export function DisciplinePage({
       icon={icon}
       discipline={disciplineId ?? ""}
       takeOffColumns={takeOffColumns}
+      takeOffColumnGroups={takeOffColumnGroups}
       craftColumns={fieldEstimateColumns}
       supportLaborColumns={supportLaborColumns}
       takeOffMeta={takeOffMeta}

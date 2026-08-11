@@ -1,6 +1,6 @@
 import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
 import type { FefRow } from "~/lib/types";
-import { EditableCell, SizeCell, CbsSelectCell, ReadOnlyCell, TakeOffIdReadOnlyCell, CbsNameCell, CbsUomCell, DeleteRowCell, AreaSelectCell } from "~/lib/table-utils";
+import { EditableCell, DisplayEditCell, SizeCell, CbsSelectCell, ReadOnlyCell, TakeOffIdReadOnlyCell, CbsNameCell, CbsUomCell, DeleteRowCell, AreaSelectCell, LABOR_COST_GROUP, type ColumnGroup } from "~/lib/table-utils";
 import {
   ShopFieldSelectCell,
   WeldGroupSelectCell,
@@ -23,6 +23,32 @@ export const takeOffColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("id", { header: "ID", cell: TakeOffIdReadOnlyCell, size: 100 }),
   columnHelper.accessor("name", { header: "Name", cell: CbsSelectCell, size: 220 }),
   columnHelper.accessor("description", { header: "Description", cell: EditableCell, size: 180 }),
+  // ── Reference ──
+  columnHelper.accessor("projectPhase", { header: "Project Phase", cell: DisplayEditCell, size: 120 }),
+  columnHelper.accessor("drawingNumber", { header: "Drawing Number", cell: DisplayEditCell, size: 130 }),
+  columnHelper.accessor("drawingRev", { header: "Rev#", cell: DisplayEditCell, size: 60 }),
+  columnHelper.accessor("processUnit", { header: "Process Unit", cell: DisplayEditCell, size: 120 }),
+  columnHelper.accessor("areaName", { header: "Area Name", cell: DisplayEditCell, size: 130 }),
+  columnHelper.accessor("systemName", { header: "System", cell: DisplayEditCell, size: 110 }),
+  columnHelper.accessor("tagNumber", { header: "Tag Number", cell: DisplayEditCell, size: 110 }),
+  // ── Spec & Testing ──
+  columnHelper.accessor("lineSpec", { header: "Spec", cell: DisplayEditCell, size: 90 }),
+  columnHelper.accessor("paintSpec", { header: "Paint Spec / Galv.", cell: DisplayEditCell, size: 130 }),
+  columnHelper.accessor("insulation", { header: "Insulation", cell: DisplayEditCell, size: 100 }),
+  columnHelper.accessor("nde", { header: "NDE", cell: DisplayEditCell, size: 70 }),
+  columnHelper.accessor("pwht", { header: "PWHT", cell: DisplayEditCell, size: 70 }),
+  columnHelper.accessor("hydro", { header: "HYDRO", cell: DisplayEditCell, size: 80 }),
+  columnHelper.accessor("heatTrace", { header: "TRACE", cell: DisplayEditCell, size: 80 }),
+  // ── Location ──
+  columnHelper.accessor("agUg", { header: "AG / UG", cell: DisplayEditCell, size: 80 }),
+  columnHelper.accessor("elevation", { header: "Elevation", cell: DisplayEditCell, size: 90 }),
+  // ── Labor Adjustments ──
+  columnHelper.accessor("siteFactor", { header: "Site Factor", cell: DisplayEditCell, size: 90 }),
+  columnHelper.accessor("feetAboveGrade", { header: "Feet above grade", cell: DisplayEditCell, size: 110 }),
+  columnHelper.accessor("efficAdjust", { header: "Effic Adjust", cell: DisplayEditCell, size: 100 }),
+  columnHelper.accessor("laborFactorAdj", { header: "Labor Factor", cell: DisplayEditCell, size: 100 }),
+  columnHelper.accessor("elevAdder", { header: "Elev' Adder", cell: DisplayEditCell, size: 90 }),
+  columnHelper.accessor("weldAdder", { header: "Weld Adder", cell: DisplayEditCell, size: 90 }),
   columnHelper.accessor("area", { header: "Area", cell: AreaSelectCell, size: 140 }),
   columnHelper.accessor("role", { header: "Role", cell: RoleSelectCell, size: 130 }),
   columnHelper.accessor("crewMixId", { header: "Crew Mix", cell: CrewMixSelectCell, size: 140 }),
@@ -40,6 +66,52 @@ export const takeOffColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.display({ id: "totalCost", header: "Total Cost ($)", cell: TotalCostCell, size: 110 }),
   columnHelper.accessor("notes", { header: "Notes", cell: EditableCell, size: 130 }),
   columnHelper.display({ id: "delete", header: "", cell: DeleteRowCell, size: 40 }),
+];
+
+/** Grouped-header bands for the Piping take-off — includes the piping-only
+ *  Spec & Testing group and the pipe-specific columns in the other groups. */
+export const pipingTakeOffColumnGroups: ColumnGroup[] = [
+  {
+    label: "Reference",
+    columnIds: [
+      "projectPhase",
+      "drawingNumber",
+      "drawingRev",
+      "processUnit",
+      "areaName",
+      "systemName",
+      "tagNumber",
+    ],
+  },
+  {
+    label: "Spec & Testing",
+    // Opens collapsed — QA/testing attributes are entered later in the workflow.
+    defaultCollapsed: true,
+    columnIds: [
+      "lineSpec",
+      "paintSpec",
+      "insulation",
+      "nde",
+      "pwht",
+      "hydro",
+      "heatTrace",
+    ],
+  },
+  { label: "Location", columnIds: ["agUg", "elevation"] },
+  {
+    label: "Labor Adjustments",
+    defaultCollapsed: true,
+    columnIds: [
+      "siteFactor",
+      "feetAboveGrade",
+      "efficAdjust",
+      "laborFactorAdj",
+      "elevAdder",
+      "weldAdder",
+    ],
+  },
+  // Computed output columns — chip-only toggle (was the "Show Details" button).
+  LABOR_COST_GROUP,
 ];
 
 export const fieldEstimateColumns: ColumnDef<FefRow, string>[] = [

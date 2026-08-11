@@ -426,6 +426,34 @@ model FefRow {
   notes                String     @default("")
   sub                  String     @default("")
   area                 String     @default("")
+  // Reference / line-list attributes
+  projectPhase         String     @default("")
+  drawingNumber        String     @default("")
+  drawingRev           String     @default("")
+  processUnit          String     @default("")
+  /// Free-text area name (distinct from `area`, which references a defined Area).
+  areaName             String     @default("")
+  systemName           String     @default("")
+  tagNumber            String     @default("")
+  // Spec & testing (piping/mechanical)
+  lineSpec             String     @default("")
+  paintSpec            String     @default("")
+  insulation           String     @default("")
+  nde                  String     @default("")
+  pwht                 String     @default("")
+  hydro                String     @default("")
+  heatTrace            String     @default("")
+  // Location
+  agUg                 String     @default("")
+  elevation            String     @default("")
+  // Labor adjustments
+  siteFactor           String     @default("")
+  feetAboveGrade       String     @default("")
+  efficAdjust          String     @default("")
+  /// Labor-factor adjustment (distinct from `laborFactor`, the hours-per-unit).
+  laborFactorAdj       String     @default("")
+  elevAdder            String     @default("")
+  weldAdder            String     @default("")
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
 

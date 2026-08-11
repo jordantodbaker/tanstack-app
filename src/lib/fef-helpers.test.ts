@@ -164,6 +164,32 @@ describe("makeFefRow", () => {
     "notes",
     "sub",
     "area",
+    // Reference
+    "projectPhase",
+    "drawingNumber",
+    "drawingRev",
+    "processUnit",
+    "areaName",
+    "systemName",
+    "tagNumber",
+    // Spec & testing
+    "lineSpec",
+    "paintSpec",
+    "insulation",
+    "nde",
+    "pwht",
+    "hydro",
+    "heatTrace",
+    // Location
+    "agUg",
+    "elevation",
+    // Labor adjustments
+    "siteFactor",
+    "feetAboveGrade",
+    "efficAdjust",
+    "laborFactorAdj",
+    "elevAdder",
+    "weldAdder",
   ];
 
   it("returns a row with id and every string field blank", () => {

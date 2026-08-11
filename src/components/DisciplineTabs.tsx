@@ -5,21 +5,6 @@ import {
   type VisibilityState,
 } from "@tanstack/react-table";
 
-/** Columns hidden by default on the Take Off sheet; toggled together by the
- *  "Hide Details" / "Show Details" button. Hidden default keeps the wide
- *  detail columns out of sight for the common take-off workflow.
- *  `laborFactor` only exists on the Piping table — TanStack Table ignores
- *  visibility entries for columns that aren't in the current `columns`
- *  array, so listing it here is a no-op for the other disciplines. */
-const DETAILS_COL_IDS = [
-  "id",
-  "sub",
-  "unit",
-  "laborFactor",
-  "laborHours",
-  "laborRate",
-  "totalCost",
-] as const;
 import { LoadMask } from "~/components/LoadMask";
 import { tabTriggerClass } from "~/lib/fef-helpers";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
@@ -40,6 +25,7 @@ import {
   type FefTableMeta,
   type FefTableState,
   type ServerPagination,
+  type ColumnGroup,
 } from "~/lib/table-utils";
 import { isTakeOffRowInvalid, fefRowHasUserData } from "~/lib/fef-helpers";
 import { useSelectedProject } from "~/lib/selected-project";
@@ -130,6 +116,8 @@ export type DisciplineTabsProps = {
   /** Discipline id used for fefRow persistence. */
   discipline: string;
   takeOffColumns: ColumnDef<FefRow, string>[];
+  /** Grouped-header bands for the Take Off sheet (Excel-style banner row). */
+  takeOffColumnGroups?: ColumnGroup[];
   craftColumns: ColumnDef<FefRow, string>[];
   supportLaborColumns: ColumnDef<FefRow, string>[];
   takeOffMeta?: FefTableMeta;
@@ -144,6 +132,7 @@ export function DisciplineTabs({
   icon: Icon,
   discipline,
   takeOffColumns,
+  takeOffColumnGroups,
   craftColumns,
   supportLaborColumns,
   takeOffMeta,
@@ -378,21 +367,44 @@ export function DisciplineTabs({
     deleteRow: handleDeleteTakeOffRow,
   };
 
-  const [detailsVisible, setDetailsVisible] = React.useState(false);
   // "Use Crew Mix" mode swaps the Role column for the Crew Mix column and
   // hides Schedule (crew mixes already encode the rate). Toggle is local to
   // this mount — not persisted per-row or per-discipline — because it
   // controls input mode, not row data. Existing rows keep whichever
   // input (role+schedule OR crewMixId) was last written to them.
   const [useCrewMix, setUseCrewMix] = React.useState(false);
+  // Collapsed header groups — their columns are hidden. Seeded from each
+  // group's `defaultCollapsed` so a wide sheet can open focused.
+  const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(
+    () =>
+      new Set(
+        (takeOffColumnGroups ?? [])
+          .filter((g) => g.defaultCollapsed)
+          .map((g) => g.label),
+      ),
+  );
+  const toggleGroup = React.useCallback((label: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  }, []);
   const takeOffColumnVisibility = React.useMemo<VisibilityState>(
     () => ({
-      ...Object.fromEntries(DETAILS_COL_IDS.map((c) => [c, detailsVisible])),
       role: !useCrewMix,
       crewMixId: useCrewMix,
       schedule: !useCrewMix,
+      // Hide every column of a collapsed group (incl. the Labor & Cost group,
+      // which stands in for the old "Show Details" toggle).
+      ...Object.fromEntries(
+        (takeOffColumnGroups ?? [])
+          .filter((g) => collapsedGroups.has(g.label))
+          .flatMap((g) => g.columnIds.map((id) => [id, false] as const)),
+      ),
     }),
-    [detailsVisible, useCrewMix],
+    [useCrewMix, takeOffColumnGroups, collapsedGroups],
   );
 
   const [activeTab, setActiveTab] = React.useState("takeoff");
@@ -514,12 +526,31 @@ export function DisciplineTabs({
               draft={cvrDraft}
               onSubmit={handleCreateCvr}
             />
-            <button
-              onClick={() => setDetailsVisible((v) => !v)}
-              className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer"
-            >
-              {detailsVisible ? "Hide Details" : "Show Details"}
-            </button>
+            {(takeOffColumnGroups ?? []).length > 0 && (
+              <span className="text-xs font-medium text-slate-400 self-center">
+                Columns:
+              </span>
+            )}
+            {(takeOffColumnGroups ?? []).map((g) => {
+              const collapsed = collapsedGroups.has(g.label);
+              return (
+                <button
+                  key={g.label}
+                  type="button"
+                  onClick={() => toggleGroup(g.label)}
+                  aria-pressed={!collapsed}
+                  title={collapsed ? `Show ${g.label}` : `Hide ${g.label}`}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded border cursor-pointer transition-colors ${
+                    collapsed
+                      ? "border-slate-300 bg-white text-slate-500 hover:bg-slate-50"
+                      : "border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200"
+                  }`}
+                >
+                  <span className="text-slate-400">{collapsed ? "▸" : "▾"}</span>
+                  {g.label}
+                </button>
+              );
+            })}
             <button
               onClick={() => setUseCrewMix((v) => !v)}
               className={
@@ -569,6 +600,8 @@ export function DisciplineTabs({
             state={takeOffState}
             meta={takeOffWithSelection}
             columns={takeOffColumnsWithSelection}
+            columnGroups={takeOffColumnGroups}
+            onToggleGroup={toggleGroup}
             serverPagination={serverPagination}
             columnVisibility={takeOffColumnVisibility}
             minRows={20}

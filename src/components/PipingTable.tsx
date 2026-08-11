@@ -10,6 +10,7 @@ import {
   takeOffColumns,
   fieldEstimateColumns,
   supportLaborColumns,
+  pipingTakeOffColumnGroups,
 } from "~/components/Piping/columns";
 import { useSelectedProject } from "~/lib/selected-project";
 import { areasByProjectQueryOptions } from "~/utils/areas";
@@ -146,6 +147,7 @@ export function PipingDisciplinePage({
       icon={icon}
       discipline="piping"
       takeOffColumns={takeOffColumns}
+      takeOffColumnGroups={pipingTakeOffColumnGroups}
       craftColumns={fieldEstimateColumns}
       supportLaborColumns={supportLaborColumns}
       takeOffMeta={takeOffMeta}

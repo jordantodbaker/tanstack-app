@@ -9,6 +9,7 @@ import {
 } from "./users.server";
 import { allocateEntityNumberValue } from "./entityNumbers.server";
 import { ensureProjectHasVersion } from "./versions.server";
+import { FEF_DATA_COLUMNS } from "~/lib/fef-helpers";
 import { ProjectId, VersionId, parseProjectIdInput } from "~/lib/validators";
 
 /**
@@ -46,35 +47,15 @@ const toOption = (v: EstimateVersionRow): EstimateVersionOption => ({
   createdAt: v.createdAt.toISOString(),
 });
 
-// Every FefRow data column except the identity ones (id/projectId/versionId)
-// and the timestamps. Shared by the copy INSERT ... SELECT below so a new
-// FefRow column only needs adding here.
+// Every FefRow column copied when branching a version, except the identity
+// columns rewritten by the copy (projectId/versionId) and the timestamps.
+// Derived from FEF_DATA_COLUMNS so a new FefRow field flows through the copy
+// automatically — no hand-editing here.
 const FEF_COPY_COLUMNS = [
   "discipline",
   "section",
   "position",
-  "cbsCode",
-  "name",
-  "description",
-  "shopField",
-  "weldGroupDescription",
-  "quantity",
-  "size",
-  "unit",
-  "metallurgyCode",
-  "boreSize",
-  "role",
-  "crewMixId",
-  "schedule",
-  "taskCode",
-  "laborHours",
-  "laborFactor",
-  "laborRate",
-  "materialCost",
-  "equipment",
-  "notes",
-  "sub",
-  "area",
+  ...FEF_DATA_COLUMNS,
 ] as const;
 
 export const fetchVersions = createServerFn({ method: "GET" })

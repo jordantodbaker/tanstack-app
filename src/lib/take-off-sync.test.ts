@@ -1,34 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { aggregateTakeOff } from "./take-off-sync";
+import { makeFefRow } from "./fef-helpers";
 import type { FefRow } from "./types";
 
-function row(overrides: Partial<FefRow>): FefRow {
-  return {
-    id: "0",
-    name: "",
-    description: "",
-    shopField: "",
-    weldGroupDescription: "",
-    quantity: "",
-    size: "",
-    unit: "",
-    metallurgyCode: "",
-    boreSize: "",
-    role: "",
-    crewMixId: "",
-    schedule: "",
-    taskCode: "",
-    laborHours: "",
-    laborFactor: "",
-    laborRate: "",
-    materialCost: "",
-    equipment: "",
-    notes: "",
-    sub: "",
-    area: "",
-    ...overrides,
-  };
-}
+// Build on makeFefRow so every FefRow field (incl. newly added ones) is filled.
+const row = (overrides: Partial<FefRow>): FefRow =>
+  makeFefRow({ id: "0", ...overrides });
 
 describe("aggregateTakeOff", () => {
   it("returns an empty array when given no rows", () => {

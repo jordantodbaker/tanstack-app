@@ -336,10 +336,49 @@ export function useFefTableState(opts: {
   return { data, setData, columnFilters, setColumnFilters };
 }
 
+/** A labeled band of columns for the two-row grouped header. `columnIds` are
+ *  matched against leaf column ids; grouped columns must be contiguous in the
+ *  column order and must not straddle the frozen-column boundary.
+ *  `defaultCollapsed` opens the sheet with the group hidden. `banner: false`
+ *  makes it a show/hide *toggle only* (a chip, no header band) — for logical
+ *  groups whose columns aren't contiguous, like the computed Labor & Cost set. */
+export type ColumnGroup = {
+  label: string;
+  columnIds: string[];
+  defaultCollapsed?: boolean;
+  banner?: boolean;
+};
+
+/** The computed labor/cost output columns — ID, Sub, Unit, Labor Factor/Hours/
+ *  Rate, Total Cost. A non-contiguous logical group shown as a single toggle
+ *  chip (was the standalone "Show Details" button). Hidden by default so the
+ *  take-off opens as a lean input view. Columns absent on a given sheet are
+ *  simply ignored by the visibility toggle. */
+export const LABOR_COST_GROUP: ColumnGroup = {
+  label: "Labor & Cost",
+  banner: false,
+  defaultCollapsed: true,
+  columnIds: [
+    "id",
+    "sub",
+    "unit",
+    "laborFactor",
+    "laborHours",
+    "laborRate",
+    "totalCost",
+  ],
+};
+
+/** Height (px) of the grouped-header banner row; the column-header row sticks
+ *  directly below it. */
+const BANNER_HEIGHT = 28;
+
 export function FefTableContent({
   state,
   meta,
   columns,
+  columnGroups,
+  onToggleGroup,
   serverPagination,
   columnVisibility,
   onColumnVisibilityChange,
@@ -351,6 +390,12 @@ export function FefTableContent({
   state: FefTableState;
   meta?: FefTableMeta;
   columns: ColumnDef<FefRow, string>[];
+  /** When set, renders an Excel-style banner row of group labels above the
+   *  column headers. Omit for a plain single-row header. */
+  columnGroups?: ColumnGroup[];
+  /** Clicking a group banner calls this with the group label — used to collapse
+   *  the group (owner hides its columns). Omit to make banners non-interactive. */
+  onToggleGroup?: (label: string) => void;
   serverPagination?: ServerPagination;
   columnVisibility?: VisibilityState;
   onColumnVisibilityChange?: React.Dispatch<React.SetStateAction<VisibilityState>>;
@@ -520,6 +565,38 @@ export function FefTableContent({
     frozenColumnCount,
   });
 
+  // Grouped-header banner segments, computed from the *visible* leaf columns so
+  // hidden columns collapse and empty groups disappear. Consecutive non-frozen
+  // columns sharing a group label coalesce into one banner cell; frozen columns
+  // stay 1:1 with the leaf header so each keeps its own sticky-left offset.
+  const bannerSegments = (() => {
+    if (!columnGroups || columnGroups.length === 0) return null;
+    const groupOf = new Map<string, string>();
+    for (const g of columnGroups) {
+      if (g.banner === false) continue; // chip-only groups don't get a band
+      for (const id of g.columnIds) groupOf.set(id, g.label);
+    }
+    if (groupOf.size === 0) return null; // no banner groups → no banner row
+    const leaf = table.getVisibleLeafColumns();
+    const segs: {
+      label: string;
+      startIndex: number;
+      span: number;
+      frozen: boolean;
+    }[] = [];
+    for (let i = 0; i < leaf.length; i++) {
+      const label = groupOf.get(leaf[i].id) ?? "";
+      const isFrozen = i < frozenColumnCount;
+      const last = segs[segs.length - 1];
+      if (!isFrozen && last && !last.frozen && last.label === label) {
+        last.span += 1;
+      } else {
+        segs.push({ label, startIndex: i, span: 1, frozen: isFrozen });
+      }
+    }
+    return segs;
+  })();
+  const headerTop = bannerSegments ? BANNER_HEIGHT : 0;
 
   return (
     <div>
@@ -610,13 +687,59 @@ export function FefTableContent({
     >
       <table className="w-full border-collapse text-sm">
         <thead>
+          {bannerSegments && (
+            <tr className="bg-gray-200">
+              <th
+                style={{
+                  width: 44,
+                  minWidth: 44,
+                  height: BANNER_HEIGHT,
+                  top: 0,
+                }}
+                className="sticky left-0 z-30 bg-gray-200 border border-gray-300"
+              />
+              {bannerSegments.map((seg) => {
+                const fz = seg.frozen ? (frozen?.[seg.startIndex] ?? null) : null;
+                const clickable = !!seg.label && !!onToggleGroup;
+                return (
+                  <th
+                    key={seg.startIndex}
+                    colSpan={seg.span}
+                    onClick={
+                      clickable ? () => onToggleGroup(seg.label) : undefined
+                    }
+                    title={clickable ? `Collapse ${seg.label}` : undefined}
+                    style={
+                      fz
+                        ? {
+                            position: "sticky",
+                            top: 0,
+                            left: fz.left,
+                            width: fz.width,
+                            minWidth: fz.width,
+                            height: BANNER_HEIGHT,
+                            zIndex: 30,
+                          }
+                        : { top: 0, height: BANNER_HEIGHT }
+                    }
+                    className={`sticky z-20 bg-gray-200 border border-gray-300 px-2 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-600${
+                      clickable ? " cursor-pointer hover:bg-gray-300" : ""
+                    }`}
+                  >
+                    {seg.label}
+                    {clickable && <span className="ml-1 text-slate-400">▾</span>}
+                  </th>
+                );
+              })}
+            </tr>
+          )}
           {table.getHeaderGroups().map((headerGroup) => (
             <tr key={headerGroup.id} className="bg-gray-100">
               <th
                 onClick={enableRangeEditing ? onSelectAll : undefined}
                 title={enableRangeEditing ? "Select all" : undefined}
-                style={{ width: 44, minWidth: 44 }}
-                className={`sticky left-0 top-0 z-30 select-none bg-gray-100 border border-gray-300 px-1 align-bottom${
+                style={{ width: 44, minWidth: 44, top: headerTop }}
+                className={`sticky left-0 z-30 select-none bg-gray-100 border border-gray-300 px-1 align-bottom${
                   enableRangeEditing ? " cursor-pointer" : ""
                 }`}
               />
@@ -629,15 +752,15 @@ export function FefTableContent({
                     fz
                       ? {
                           position: "sticky",
-                          top: 0,
+                          top: headerTop,
                           left: fz.left,
                           width: fz.width,
                           minWidth: fz.width,
                           zIndex: 30,
                         }
-                      : { minWidth: header.column.getSize() }
+                      : { top: headerTop, minWidth: header.column.getSize() }
                   }
-                  className="sticky top-0 z-20 bg-gray-100 border border-gray-300 px-2 py-2 text-left font-semibold align-bottom"
+                  className="sticky z-20 bg-gray-100 border border-gray-300 px-2 py-2 text-left font-semibold align-bottom"
                 >
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-1 leading-tight">

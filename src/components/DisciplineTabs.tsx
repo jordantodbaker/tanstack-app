@@ -480,7 +480,7 @@ export function DisciplineTabs({
         onValueChange={handleTabChange}
         className="w-full"
       >
-        <TabsList className="w-full justify-start rounded-none border-b border-slate-200 bg-transparent p-0 pb-2 h-auto gap-2">
+        <TabsList className="w-full justify-start rounded-none border-b border-slate-200 bg-transparent p-0 pb-2 h-auto group-data-horizontal/tabs:h-auto overflow-x-visible gap-2">
           <TabsTrigger value="takeoff" className={tabTriggerClass}>
             Take Off
           </TabsTrigger>
@@ -551,49 +551,53 @@ export function DisciplineTabs({
                 </button>
               );
             })}
-            <button
-              onClick={() => setUseCrewMix((v) => !v)}
-              className={
-                useCrewMix
-                  ? "px-3 py-1 text-sm border border-[#a63434] bg-[#a63434] text-white rounded hover:bg-[#8d2a2a] cursor-pointer"
-                  : "px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer"
-              }
-            >
-              {useCrewMix ? "Use Role" : "Use Crew Mix"}
-            </button>
-            <TakeOffPasteDialog
-              cbsOptions={takeOffMeta?.cbsOptions ?? []}
-              areaOptions={takeOffMeta?.areaOptions ?? []}
-              onAppend={handlePasteAppend}
-            />
-            <button
-              type="button"
-              onClick={handleExportCsv}
-              disabled={takeOffTotals.itemCount === 0}
-              className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
-            >
-              Export CSV
-            </button>
-            <div className="ml-auto flex items-center gap-3 text-xs text-slate-600">
-              <span>
+            {/* Right-aligned cluster: mode/import/export actions + live totals. */}
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                onClick={() => setUseCrewMix((v) => !v)}
+                className={
+                  useCrewMix
+                    ? "px-3 py-1 text-sm border border-[#a63434] bg-[#a63434] text-white rounded hover:bg-[#8d2a2a] cursor-pointer"
+                    : "px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer"
+                }
+              >
+                {useCrewMix ? "Use Role" : "Use Crew Mix"}
+              </button>
+              <TakeOffPasteDialog
+                cbsOptions={takeOffMeta?.cbsOptions ?? []}
+                areaOptions={takeOffMeta?.areaOptions ?? []}
+                onAppend={handlePasteAppend}
+              />
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                disabled={takeOffTotals.itemCount === 0}
+                className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+              >
+                Export CSV
+              </button>
+              <span className="mx-1 h-5 w-px bg-slate-200" aria-hidden />
+              <div className="flex items-center gap-3 text-xs text-slate-600">
+                <span>
+                  <span className="font-semibold text-slate-800">
+                    {takeOffTotals.itemCount}
+                  </span>{" "}
+                  {takeOffTotals.itemCount === 1 ? "item" : "items"}
+                </span>
+                <span className="text-slate-300">·</span>
+                <span>
+                  <span className="font-semibold text-slate-800">
+                    {takeOffTotals.laborHours.toLocaleString(undefined, {
+                      maximumFractionDigits: 1,
+                    })}
+                  </span>{" "}
+                  hrs
+                </span>
+                <span className="text-slate-300">·</span>
                 <span className="font-semibold text-slate-800">
-                  {takeOffTotals.itemCount}
-                </span>{" "}
-                {takeOffTotals.itemCount === 1 ? "item" : "items"}
-              </span>
-              <span className="text-slate-300">·</span>
-              <span>
-                <span className="font-semibold text-slate-800">
-                  {takeOffTotals.laborHours.toLocaleString(undefined, {
-                    maximumFractionDigits: 1,
-                  })}
-                </span>{" "}
-                hrs
-              </span>
-              <span className="text-slate-300">·</span>
-              <span className="font-semibold text-slate-800">
-                {formatCurrency(takeOffTotals.laborCost)}
-              </span>
+                  {formatCurrency(takeOffTotals.laborCost)}
+                </span>
+              </div>
             </div>
           </div>
           <FefTableContent

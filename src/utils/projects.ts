@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { adminHandler, getAccessibleProjectIds } from "./users.server";
+import { ensureProjectHasVersion } from "./versions.server";
 import { parseIdInput, parseUpsertProject } from "~/lib/validators";
 
 export type ProjectOption = {
@@ -117,6 +118,9 @@ export const upsertProject = createServerFn({ method: "POST" })
           },
         });
         resultId = created.id;
+        // Every project needs an initial estimate version ("v1") so the grid
+        // and version picker have something to load.
+        await ensureProjectHasVersion(resultId);
       }
       if (data.addAreaIds.length > 0) {
         await prisma.area.updateMany({

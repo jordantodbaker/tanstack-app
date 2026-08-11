@@ -96,6 +96,7 @@ const PCO_PRIORITIES = ["LOW", "NORMAL", "HIGH", "URGENT"] as const;
 /** Positive integer ID (Prisma autoincrement). Rejects 0, negatives, floats. */
 export const Id = z.int().positive();
 export const ProjectId = Id;
+export const VersionId = Id;
 export const OptionalId = Id.optional();
 
 /** ISO 8601 datetime string (what `new Date(x).toISOString()` produces). */

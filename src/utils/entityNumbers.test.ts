@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Prisma } from "../generated/prisma/client";
 import {
   allocateEntityNumber,
+  allocateEntityNumberValue,
   allocateIfBlank,
   formatEntityNumber,
 } from "./entityNumbers.server";
@@ -40,6 +41,15 @@ describe("allocateEntityNumber", () => {
     return expect(
       allocateEntityNumber(tx, 1, "ChangeLog"),
     ).resolves.toBe("ZZ-0005");
+  });
+});
+
+describe("allocateEntityNumberValue", () => {
+  it("returns the raw integer lastValue (used for estimate version numbers)", async () => {
+    const { tx } = fakeTx({ lastValue: 3, prefix: "v", padWidth: 1 });
+    await expect(
+      allocateEntityNumberValue(tx, 1, "EstimateVersion"),
+    ).resolves.toEqual({ value: 3, prefix: "v", padWidth: 1 });
   });
 });
 

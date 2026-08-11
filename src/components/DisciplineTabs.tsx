@@ -43,6 +43,7 @@ import {
 } from "~/lib/table-utils";
 import { isTakeOffRowInvalid, fefRowHasUserData } from "~/lib/fef-helpers";
 import { useSelectedProject } from "~/lib/selected-project";
+import { useSelectedVersion } from "~/lib/selected-version";
 import { useFefRowPersistence } from "~/lib/use-fef-row-persistence";
 import { useFefUndo } from "~/lib/use-fef-undo";
 import { SaveIndicator, combineSaveStatus } from "~/components/SaveIndicator";
@@ -163,15 +164,16 @@ export function DisciplineTabs({
   const syncToFieldEstimate = useTakeOffSync(takeOffState, fieldEstimateState);
 
   const { projectId } = useSelectedProject();
+  const { versionId } = useSelectedVersion();
   const takeOffPersist = useFefRowPersistence({
-    projectId,
+    versionId,
     discipline,
     section: "TAKE_OFF",
     state: takeOffState,
     emptyRows: initialTakeOffRows,
   });
   const supportPersist = useFefRowPersistence({
-    projectId,
+    versionId,
     discipline,
     section: "SUPPORT_LABOR",
     state: supportLaborState,
@@ -247,7 +249,7 @@ export function DisciplineTabs({
   // selection since post-restore row indices may no longer line up.
   const { undo, redo, canUndo, canRedo } = useFefUndo(takeOffState, {
     enabled: !isTakeOffLoading,
-    resetKey: `${projectId}|${discipline}`,
+    resetKey: `${versionId}|${discipline}`,
   });
   const handleUndo = React.useCallback(() => {
     undo();
@@ -289,24 +291,24 @@ export function DisciplineTabs({
         });
       }
 
-      if (byDiscipline.size === 0 || projectId === null) return;
+      if (byDiscipline.size === 0 || versionId === null) return;
 
       const groups = [...byDiscipline].map(([disciplineId, discRows]) => ({
         discipline: disciplineId,
         rows: discRows,
       }));
-      appendTakeOffRows({ data: { projectId, groups } })
+      appendTakeOffRows({ data: { versionId, groups } })
         .then((routed) => {
           for (const g of routed) {
             queryClient.invalidateQueries({
-              queryKey: ["fefRows", projectId, g.discipline, "TAKE_OFF"],
+              queryKey: ["fefRows", versionId, g.discipline, "TAKE_OFF"],
             });
           }
           queryClient.invalidateQueries({
-            queryKey: qk.projectFefRowTotals(projectId),
+            queryKey: qk.projectFefRowTotals(versionId),
           });
           queryClient.invalidateQueries({
-            queryKey: qk.invalidByDiscipline(projectId),
+            queryKey: qk.invalidByDiscipline(versionId),
           });
           const total = routed.reduce((sum, g) => sum + g.count, 0);
           if (total > 0) {
@@ -324,7 +326,7 @@ export function DisciplineTabs({
           );
         });
     },
-    [discipline, projectId, takeOffState, queryClient],
+    [discipline, versionId, takeOffState, queryClient],
   );
 
   const takeOffTotals = React.useMemo(

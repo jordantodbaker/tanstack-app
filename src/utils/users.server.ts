@@ -200,6 +200,41 @@ export function projectScopedHandler<
   };
 }
 
+/**
+ * Server-side guard for a request that operates on a single estimate version.
+ * Loads the version's owning `projectId` (versions can't be reassigned across
+ * projects), then delegates to `assertProjectAccess`. Returns the resolved
+ * projectId so callers don't re-query it. Throws if the version doesn't exist.
+ */
+export async function requireVersionAccess(
+  versionId: number,
+): Promise<{ actor: CurrentUser; projectId: number }> {
+  const user = await resolveCurrentUser();
+  if (!user) throw new Error("Unauthorized: not signed in");
+  const version = await prisma.estimateVersion.findUnique({
+    where: { id: versionId },
+    select: { projectId: true },
+  });
+  if (!version) throw new Error(`Estimate version ${versionId} not found`);
+  await assertProjectAccess(user, version.projectId);
+  return { actor: user, projectId: version.projectId };
+}
+
+/**
+ * Wraps a server-fn handler whose `data` carries a `versionId`, gating it on
+ * access to the version's owning project. Mirrors `projectScopedHandler` for
+ * version-scoped endpoints (FefRow reads/writes, per-version totals/basis).
+ */
+export function versionScopedHandler<
+  I extends { versionId: number },
+  O,
+>(fn: (args: { data: I }) => Promise<O>): (args: { data: I }) => Promise<O> {
+  return async (args) => {
+    await requireVersionAccess(args.data.versionId);
+    return fn(args);
+  };
+}
+
 function toAdminUser(row: {
   id: number;
   email: string;

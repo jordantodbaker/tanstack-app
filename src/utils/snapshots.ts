@@ -16,6 +16,7 @@ import { z } from "zod";
 import {
   Id,
   ProjectId,
+  VersionId,
   parseIdInput,
   parseIdScalar,
   parseProjectIdInput,
@@ -23,6 +24,9 @@ import {
 
 const CreateSnapshotSchema = z.object({
   projectId: ProjectId,
+  // The estimate version to freeze. Its line items + basis are what get
+  // captured; the snapshot records which version it came from.
+  versionId: VersionId,
   label: z.string().trim().min(1),
   notes: z.string().optional(),
 });
@@ -97,6 +101,8 @@ export type EstimateSnapshotItem = {
 export type EstimateSnapshotDetail = {
   id: number;
   projectId: number;
+  /** The estimate version this snapshot froze; null for pre-versioning ones. */
+  versionId: number | null;
   label: string;
   notes: string;
   rowCount: number;
@@ -114,13 +120,21 @@ export const createSnapshot = createServerFn({ method: "POST" })
     if (!label) {
       throw new Error("Snapshot label is required.");
     }
+    // The version must belong to the project being snapshotted.
+    const version = await prisma.estimateVersion.findUnique({
+      where: { id: data.versionId },
+      select: { projectId: true },
+    });
+    if (!version || version.projectId !== data.projectId) {
+      throw new Error("Version does not belong to this project.");
+    }
     const [rows, basis] = await Promise.all([
       prisma.fefRow.findMany({
-        where: { projectId: data.projectId },
+        where: { versionId: data.versionId },
         select: SNAPSHOT_ROW_SELECT,
       }),
       prisma.basisInputs.findUnique({
-        where: { projectId: data.projectId },
+        where: { versionId: data.versionId },
         select: {
           estimateFactor: true,
           compositeLaborRate: true,
@@ -135,6 +149,7 @@ export const createSnapshot = createServerFn({ method: "POST" })
     const created = await prisma.estimateSnapshot.create({
       data: {
         projectId: data.projectId,
+        versionId: data.versionId,
         label,
         notes: data.notes?.trim() ?? "",
         // Prisma's Json column accepts any JSON-serializable value; the cast
@@ -212,6 +227,7 @@ export const fetchSnapshotDetail = createServerFn({ method: "GET" })
       select: {
         id: true,
         projectId: true,
+        versionId: true,
         label: true,
         notes: true,
         rowCount: true,
@@ -245,6 +261,7 @@ export const fetchSnapshotDetail = createServerFn({ method: "GET" })
     return {
       id: snap.id,
       projectId: snap.projectId,
+      versionId: snap.versionId,
       label: snap.label,
       notes: snap.notes,
       rowCount: snap.rowCount,

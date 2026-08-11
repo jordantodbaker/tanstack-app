@@ -4,21 +4,24 @@ import { useQuery } from "@tanstack/react-query";
 import { SUMMARY_DISCIPLINES } from "~/config/disciplines";
 import { formatMoney, formatCompact } from "~/lib/formatting";
 import { useSelectedProject } from "~/lib/selected-project";
+import { useSelectedVersion } from "~/lib/selected-version";
 import { projectFefRowTotalsQueryOptions } from "~/utils/projectTotals";
 import { areasByProjectQueryOptions } from "~/utils/areas";
 import {
   readProjectIdForLoader,
   tryPrefetchProjectQuery,
 } from "~/utils/projectCookie";
+import { resolveVersionIdForLoader } from "~/utils/versionCookie";
 
 export const Route = createFileRoute("/validation")({
   loader: async ({ context }) => {
     const projectId = await readProjectIdForLoader();
+    const versionId = await resolveVersionIdForLoader(projectId);
     if (projectId !== null) {
       await Promise.all([
         tryPrefetchProjectQuery(
           context.queryClient.ensureQueryData(
-            projectFefRowTotalsQueryOptions(projectId),
+            projectFefRowTotalsQueryOptions(versionId),
           ),
         ),
         tryPrefetchProjectQuery(
@@ -161,8 +164,9 @@ function StatCard({
 
 function ValidationPage() {
   const { projectId } = useSelectedProject();
+  const { versionId } = useSelectedVersion();
   const { data: dbTotals } = useQuery(
-    projectFefRowTotalsQueryOptions(projectId),
+    projectFefRowTotalsQueryOptions(versionId),
   );
   const { data: areas = [] } = useQuery(
     areasByProjectQueryOptions(projectId),

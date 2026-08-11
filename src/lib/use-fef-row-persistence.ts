@@ -2,12 +2,13 @@ import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { FefRow } from "~/lib/types";
 import type { FefTableState } from "~/lib/table-utils";
-import { useSelectedProject } from "~/lib/selected-project";
+import { useSelectedVersion } from "~/lib/selected-version";
 import {
   fefRowsQueryOptions,
   saveFefRows,
   type FefSectionKey,
 } from "~/utils/fefRows";
+import { fefRowHasUserData } from "~/lib/fef-helpers";
 import { logger } from "~/lib/logger";
 import { qk } from "~/lib/query-keys";
 import type { SaveStatus } from "~/components/SaveIndicator";
@@ -18,40 +19,67 @@ const SAVE_DEBOUNCE_MS = 500;
 const NO_ROWS: FefRow[] = [];
 
 /**
+ * A signature of the *persistable* content of a grid — the exact rows
+ * `saveFefRows` would write (blank template rows dropped), including their
+ * order (position). Two grids with the same signature persist identically, so
+ * comparing signatures lets the autosave fire only on meaningful changes and
+ * ignore no-op churn: hydration setting the loaded rows, the reset-to-empty on
+ * a key switch, and the trailing-blank auto-append all leave the signature
+ * unchanged, so none of them trigger a redundant save (or the save →
+ * setQueryData → re-hydrate cycle that redundant save can kick off).
+ */
+function persistableSignature(rows: FefRow[]): string {
+  const persistable = rows.filter(
+    (r) => !r.id.startsWith("__fe-blank-") || fefRowHasUserData(r),
+  );
+  return JSON.stringify(
+    persistable.map((r) => {
+      const { id, ...fields } = r;
+      return [id.startsWith("__fe-blank-") ? "" : id, fields];
+    }),
+  );
+}
+
+/**
  * Hydrates a FefTableState from the database on mount and persists subsequent
- * edits via debounced batch saves. No-op when projectId is null.
+ * edits via debounced batch saves. No-op when versionId is null.
  *
- * If the DB has no rows for this (project, discipline, section), falls back
+ * If the DB has no rows for this (version, discipline, section), falls back
  * to `fallbackRows` (used by Support Labor to seed from CBS items).
  */
 export function useFefRowPersistence({
-  projectId,
+  versionId,
   discipline,
   section,
   state,
   fallbackRows,
   emptyRows = NO_ROWS,
 }: {
-  projectId: number | null;
+  versionId: number | null;
   discipline: string;
   section: FefSectionKey;
   state: FefTableState;
   fallbackRows?: FefRow[];
-  /** Rows to reset the grid to when the (project, discipline, section) key
+  /** Rows to reset the grid to when the (version, discipline, section) key
    *  changes, before the new key's data hydrates. Defaults to empty; the Take
    *  Off passes a single blank row so the grid is never momentarily rowless. */
   emptyRows?: FefRow[];
 }): { isLoading: boolean; saveStatus: SaveStatus; lastSavedAt: number | null } {
   const queryClient = useQueryClient();
-  const { isHydrated: isProjectHydrated } = useSelectedProject();
-  const queryOpts = fefRowsQueryOptions({ projectId, discipline, section });
+  const { isHydrated: isVersionHydrated } = useSelectedVersion();
+  const queryOpts = fefRowsQueryOptions({ versionId, discipline, section });
   const { data: loadedRows, isError: isLoadError } = useQuery(queryOpts);
   const { data, setData } = state;
 
   const hydratedKeyRef = React.useRef<string | null>(null);
   const skipNextSaveRef = React.useRef(false);
+  // Signature of the last content we know is persisted (or was just loaded from
+  // the DB) for the current key. The autosave compares against this so it only
+  // fires on a real content change — see `persistableSignature`. `null` means
+  // "not yet established for this key" (autosave is also gated on appliedKey).
+  const lastSavedSigRef = React.useRef<string | null>(null);
   const saveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const currentKey = `${projectId}|${discipline}|${section}`;
+  const currentKey = `${versionId}|${discipline}|${section}`;
 
   const [saveStatus, setSaveStatus] = React.useState<SaveStatus>("idle");
   const [lastSavedAt, setLastSavedAt] = React.useState<number | null>(null);
@@ -74,8 +102,8 @@ export function useFefRowPersistence({
   }, [currentKey, setData]);
 
   React.useEffect(() => {
-    if (!isProjectHydrated) return;
-    if (projectId === null) {
+    if (!isVersionHydrated) return;
+    if (versionId === null) {
       setAppliedKey(currentKey);
       return;
     }
@@ -94,6 +122,7 @@ export function useFefRowPersistence({
     if (loadedRows.length > 0) {
       skipNextSaveRef.current = true;
       hydratedKeyRef.current = currentKey;
+      lastSavedSigRef.current = persistableSignature(loadedRows);
       startTransition(() => {
         setData(loadedRows);
         setAppliedKey(currentKey);
@@ -102,6 +131,10 @@ export function useFefRowPersistence({
     } else if (fallbackRows && fallbackRows.length > 0) {
       skipNextSaveRef.current = true;
       hydratedKeyRef.current = currentKey;
+      // Fallback rows (e.g. CBS-seeded Support Labor) are a client-side seed
+      // that must NOT be auto-persisted — treat them as the baseline so the
+      // first save only fires once the user actually edits one of them.
+      lastSavedSigRef.current = persistableSignature(fallbackRows);
       startTransition(() => {
         setData(fallbackRows);
         setAppliedKey(currentKey);
@@ -110,11 +143,12 @@ export function useFefRowPersistence({
     }
     // Nothing to apply. Mark "checked" so the mask hides and saves can fire,
     // but leave hydratedKeyRef unset so a later-arriving fallbackRows (e.g.
-    // deferred query) can still hydrate.
+    // deferred query) can still hydrate. The persisted baseline is empty.
+    lastSavedSigRef.current = persistableSignature([]);
     setAppliedKey(currentKey);
   }, [
-    isProjectHydrated,
-    projectId,
+    isVersionHydrated,
+    versionId,
     currentKey,
     loadedRows,
     isLoadError,
@@ -123,12 +157,20 @@ export function useFefRowPersistence({
   ]);
 
   React.useEffect(() => {
-    if (projectId === null) return;
+    if (versionId === null) return;
     if (appliedKey !== currentKey) return;
     if (skipNextSaveRef.current) {
       skipNextSaveRef.current = false;
       return;
     }
+    // Only save when the *persistable* content actually changed. This ignores
+    // the no-op churn that fires on every version switch — hydration applying
+    // the loaded rows, the reset-to-empty, and the trailing-blank auto-append
+    // all leave the signature unchanged — so switching versions no longer
+    // triggers a redundant save (and the save → setQueryData → re-hydrate cycle
+    // that redundant save could kick off). A real edit changes the signature.
+    const sig = persistableSignature(data);
+    if (sig === lastSavedSigRef.current) return;
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     const snapshot = data;
@@ -137,18 +179,19 @@ export function useFefRowPersistence({
     saveTimerRef.current = setTimeout(() => {
       setSaveStatus("saving");
       saveFefRows({
-        data: { projectId, discipline, section, rows: snapshot },
+        data: { versionId, discipline, section, rows: snapshot },
       })
         .then((saved) => {
+          lastSavedSigRef.current = sig;
           queryClient.setQueryData(
-            ["fefRows", projectId, discipline, section],
+            ["fefRows", versionId, discipline, section],
             saved,
           );
           queryClient.invalidateQueries({
-            queryKey: qk.projectFefRowTotals(projectId),
+            queryKey: qk.projectFefRowTotals(versionId),
           });
           queryClient.invalidateQueries({
-            queryKey: qk.invalidByDiscipline(projectId),
+            queryKey: qk.invalidByDiscipline(versionId),
           });
           setSaveStatus("saved");
           setLastSavedAt(Date.now());
@@ -156,7 +199,7 @@ export function useFefRowPersistence({
         .catch((err) => {
           logger.error("fef-persist save failed", {
             currentKey,
-            projectId,
+            versionId,
             discipline,
             section,
             err,
@@ -167,7 +210,7 @@ export function useFefRowPersistence({
 
     // No cleanup: timer survives unmount so SPA nav doesn't lose pending saves.
     // Browser refresh will still drop pending saves — that's a separate concern.
-  }, [projectId, discipline, section, currentKey, data, queryClient, appliedKey]);
+  }, [versionId, discipline, section, currentKey, data, queryClient, appliedKey]);
 
   return {
     isLoading: isPending || appliedKey !== currentKey,

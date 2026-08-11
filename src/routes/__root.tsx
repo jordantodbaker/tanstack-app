@@ -36,7 +36,9 @@ import { ClerkProvider, useClerk } from "@clerk/tanstack-react-start";
 import { UserButton, Show, SignIn } from "@clerk/tanstack-react-start";
 import { Sidebar } from "~/components/Sidebar";
 import { SelectedProjectProvider } from "~/lib/selected-project";
+import { SelectedVersionProvider } from "~/lib/selected-version";
 import { ProjectSelect } from "~/components/ProjectSelect";
+import { VersionSelect } from "~/components/VersionSelect";
 import { ProjectGuard } from "~/components/ProjectGuard";
 import { useCurrentUser, useIsAdmin } from "~/lib/use-current-user";
 import { Button } from "~/components/ui/button";
@@ -134,7 +136,9 @@ function RootDocument({ children }: { children: React.ReactNode }) {
           </Show>
           <Show when="signed-in">
             <SelectedProjectProvider>
-              <SignedInLayout>{children}</SignedInLayout>
+              <SelectedVersionProvider>
+                <SignedInLayout>{children}</SignedInLayout>
+              </SelectedVersionProvider>
             </SelectedProjectProvider>
           </Show>
           <Scripts />
@@ -207,11 +211,12 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
                 </span>
               </div>
             </div>
-            <div className="hidden lg:block shrink-0">
+            <div className="hidden lg:flex shrink-0 items-center gap-2">
               <ProjectSelect
                 placeholder="Select project…"
                 className="h-9 min-w-50"
               />
+              <VersionSelect className="h-9 min-w-28" />
             </div>
             <div className="shrink-0">
               <GlobalSearch />

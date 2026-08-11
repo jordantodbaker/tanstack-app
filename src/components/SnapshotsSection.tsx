@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-query";
 import { Camera, Pencil, Trash2 } from "lucide-react";
 import { useSelectedProject } from "~/lib/selected-project";
+import { useSelectedVersion } from "~/lib/selected-version";
 import {
   createSnapshot,
   deleteSnapshot,
@@ -188,12 +189,17 @@ function CreateSnapshotDialog({ projectId }: { projectId: number }) {
   const [label, setLabel] = React.useState("");
   const [notes, setNotes] = React.useState("");
   const queryClient = useQueryClient();
+  const { versionId } = useSelectedVersion();
 
   const create = useMutation({
-    mutationFn: () =>
-      createSnapshot({
-        data: { projectId, label: label.trim(), notes: notes.trim() },
-      }),
+    mutationFn: () => {
+      if (versionId === null) {
+        throw new Error("Select an estimate version to snapshot.");
+      }
+      return createSnapshot({
+        data: { projectId, versionId, label: label.trim(), notes: notes.trim() },
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["snapshots", projectId] });
       // A new snapshot becomes the budget view's latest baseline.
@@ -207,7 +213,7 @@ function CreateSnapshotDialog({ projectId }: { projectId: number }) {
   });
 
   function handleCreate() {
-    if (!label.trim()) return;
+    if (!label.trim() || versionId === null) return;
     create.mutate();
   }
 
@@ -408,13 +414,13 @@ function SnapshotDetailDialog({
     ...snapshotDetailQueryOptions(open ? snapshotId : null),
     enabled: open,
   });
-  // Live totals for the snapshot's project — drives the variance columns.
-  // Gated on the snapshot loading first so we know the projectId without
-  // depending on the page's `useSelectedProject` (snapshots may be viewed
-  // for a project other than the currently-selected one in some flows).
+  // Live totals for the snapshot's *version* — drives the variance columns
+  // ("as-snapshotted vs. that version now"). Gated on the snapshot loading
+  // first so we know the versionId. Legacy pre-versioning snapshots have a null
+  // versionId, so the live comparison is simply disabled for them.
   const { data: liveTotals } = useQuery({
-    ...projectFefRowTotalsQueryOptions(detail?.projectId ?? null),
-    enabled: open && detail != null,
+    ...projectFefRowTotalsQueryOptions(detail?.versionId ?? null),
+    enabled: open && detail != null && detail.versionId != null,
   });
 
   return (

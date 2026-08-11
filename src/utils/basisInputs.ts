@@ -2,8 +2,8 @@ import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { z } from "zod";
-import { requireProjectAccess } from "./users.server";
-import { ProjectId, parseProjectIdInput } from "~/lib/validators";
+import { requireVersionAccess } from "./users.server";
+import { VersionId, parseIdScalar } from "~/lib/validators";
 
 const BasisMilestoneSchema = z.object({
   event: z.string(),
@@ -16,7 +16,7 @@ const BasisInputsPayloadSchema = z.object({
   milestones: z.array(BasisMilestoneSchema),
 });
 const SaveBasisInputsSchema = z.object({
-  projectId: ProjectId,
+  versionId: VersionId,
   payload: BasisInputsPayloadSchema,
 });
 
@@ -39,11 +39,11 @@ const EMPTY: BasisInputsPayload = {
 };
 
 export const fetchBasisInputs = createServerFn({ method: "GET" })
-  .inputValidator(parseProjectIdInput)
+  .inputValidator(parseIdScalar)
   .handler(async ({ data }) => {
-    await requireProjectAccess(data);
+    await requireVersionAccess(data);
     const row = await prisma.basisInputs.findUnique({
-      where: { projectId: data },
+      where: { versionId: data },
     });
     if (!row) return EMPTY;
     return {
@@ -53,25 +53,25 @@ export const fetchBasisInputs = createServerFn({ method: "GET" })
     } satisfies BasisInputsPayload;
   });
 
-export const basisInputsQueryOptions = (projectId: number | null) =>
+export const basisInputsQueryOptions = (versionId: number | null) =>
   queryOptions({
-    queryKey: ["basisInputs", projectId],
+    queryKey: ["basisInputs", versionId],
     queryFn: () =>
-      projectId === null
+      versionId === null
         ? Promise.resolve(EMPTY)
-        : fetchBasisInputs({ data: projectId }),
-    enabled: projectId !== null,
+        : fetchBasisInputs({ data: versionId }),
+    enabled: versionId !== null,
   });
 
 export const saveBasisInputs = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => SaveBasisInputsSchema.parse(input))
   .handler(async ({ data }) => {
-    const { projectId, payload } = data;
-    await requireProjectAccess(projectId);
+    const { versionId, payload } = data;
+    await requireVersionAccess(versionId);
     await prisma.basisInputs.upsert({
-      where: { projectId },
+      where: { versionId },
       create: {
-        projectId,
+        versionId,
         estimateFactor: payload.estimateFactor,
         compositeLaborRate: payload.compositeLaborRate,
         milestones: payload.milestones,

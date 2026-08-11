@@ -872,11 +872,42 @@ async function seedDemoData() {
   );
   console.log(`  Created ${areas.length} areas`);
 
-  // 5. Basis inputs for the demo project.
-  await prisma.basisInputs.upsert({
-    where: { projectId: DEMO_PROJECT_ID },
+  // 5. Estimate version — all FEF rows + basis hang off this. Upsert on
+  //    (projectId, versionNumber) so re-runs reuse the same "v1".
+  const demoVersion = await prisma.estimateVersion.upsert({
+    where: {
+      projectId_versionNumber: {
+        projectId: DEMO_PROJECT_ID,
+        versionNumber: 1,
+      },
+    },
+    create: { projectId: DEMO_PROJECT_ID, versionNumber: 1, name: "" },
+    update: {},
+  });
+  const demoVersionId = demoVersion.id;
+  // Seed the version-number counter so a UI-created version becomes v2.
+  await prisma.numberSequence.upsert({
+    where: {
+      projectId_entityType: {
+        projectId: DEMO_PROJECT_ID,
+        entityType: "EstimateVersion",
+      },
+    },
     create: {
       projectId: DEMO_PROJECT_ID,
+      entityType: "EstimateVersion",
+      prefix: "v",
+      padWidth: 1,
+      lastValue: 1,
+    },
+    update: { lastValue: 1 },
+  });
+
+  // 5b. Basis inputs for the demo version.
+  await prisma.basisInputs.upsert({
+    where: { versionId: demoVersionId },
+    create: {
+      versionId: demoVersionId,
       estimateFactor: "1.08",
       compositeLaborRate: "92.50",
       milestones: [
@@ -927,6 +958,7 @@ async function seedDemoData() {
     const key = `${t.discipline}|TAKE_OFF`;
     allFefRows.push({
       projectId: DEMO_PROJECT_ID,
+      versionId: demoVersionId,
       discipline: t.discipline,
       section: "TAKE_OFF",
       position: nextPos(key),
@@ -944,6 +976,7 @@ async function seedDemoData() {
     const key = `${s.discipline}|SUPPORT_LABOR`;
     allFefRows.push({
       projectId: DEMO_PROJECT_ID,
+      versionId: demoVersionId,
       discipline: s.discipline,
       section: "SUPPORT_LABOR",
       position: nextPos(key),
@@ -961,6 +994,7 @@ async function seedDemoData() {
     const key = `${m.discipline}|MATERIALS`;
     allFefRows.push({
       projectId: DEMO_PROJECT_ID,
+      versionId: demoVersionId,
       discipline: m.discipline,
       section: "MATERIALS",
       position: nextPos(key),
@@ -987,6 +1021,9 @@ async function seedDemoData() {
     });
   });
 
+  // Clear this version's rows first so re-runs don't collide on the
+  // (versionId, discipline, section, position) unique index.
+  await prisma.fefRow.deleteMany({ where: { versionId: demoVersionId } });
   await prisma.fefRow.createMany({ data: allFefRows });
   console.log(`  Created ${allFefRows.length} FEF rows`);
 
@@ -1246,6 +1283,7 @@ async function seedDemoData() {
   const snapshot = await prisma.estimateSnapshot.create({
     data: {
       projectId: DEMO_PROJECT_ID,
+      versionId: demoVersionId,
       label: "As-bid 2026-01-15",
       notes: "Baseline submitted to owner for review on 2026-01-15.",
       fefRows: baselineRows as unknown as object,

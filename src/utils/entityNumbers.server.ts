@@ -17,7 +17,8 @@ export type NumberedEntityType =
   | "FieldChangeOrder"
   | "Rfi"
   | "Pco"
-  | "Trend";
+  | "Trend"
+  | "EstimateVersion";
 
 /**
  * Default prefix + zero-pad width per entity, used to seed a project's
@@ -39,6 +40,10 @@ export const NUMBER_DEFAULTS: Record<
   Rfi: { prefix: "RFI-", padWidth: 3 },
   Pco: { prefix: "PCO-", padWidth: 3 },
   Trend: { prefix: "TR-", padWidth: 3 },
+  // Estimate versions use the raw integer `lastValue` (see
+  // `allocateEntityNumberValue`); prefix/pad are only used if a formatted
+  // string is ever needed ("v1", "v2", …).
+  EstimateVersion: { prefix: "v", padWidth: 1 },
 };
 
 /** `${prefix}${value zero-padded to padWidth}` — e.g. ("CVR-", 7, 4) → "CVR-0007". */
@@ -66,6 +71,24 @@ export async function allocateEntityNumber(
   projectId: number,
   entityType: NumberedEntityType,
 ): Promise<string> {
+  const { value, prefix, padWidth } = await allocateEntityNumberValue(
+    tx,
+    projectId,
+    entityType,
+  );
+  return formatEntityNumber(prefix, value, padWidth);
+}
+
+/**
+ * Like `allocateEntityNumber` but returns the raw integer `lastValue` (plus the
+ * row's format fields) instead of a formatted string. Used by estimate versions,
+ * where `EstimateVersion.versionNumber` is a plain per-project integer.
+ */
+export async function allocateEntityNumberValue(
+  tx: Prisma.TransactionClient,
+  projectId: number,
+  entityType: NumberedEntityType,
+): Promise<{ value: number; prefix: string; padWidth: number }> {
   const { prefix, padWidth } = NUMBER_DEFAULTS[entityType];
   const rows = await tx.$queryRaw<
     { lastValue: number; prefix: string; padWidth: number }[]
@@ -77,7 +100,7 @@ export async function allocateEntityNumber(
     RETURNING "lastValue", "prefix", "padWidth"
   `;
   const row = rows[0];
-  return formatEntityNumber(row.prefix, row.lastValue, row.padWidth);
+  return { value: row.lastValue, prefix: row.prefix, padWidth: row.padWidth };
 }
 
 /**

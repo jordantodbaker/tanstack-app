@@ -4,6 +4,7 @@ import { DisciplineRoute } from "~/components/DisciplineRoute";
 import { disciplineById } from "~/config/disciplines";
 import { cbsItemsByL1QueryOptions } from "~/utils/cbs";
 import { readProjectIdForLoader } from "~/utils/projectCookie";
+import { resolveVersionIdForLoader } from "~/utils/versionCookie";
 import { prefetchDisciplineLoaderData } from "~/utils/disciplineLoader";
 
 export const Route = createFileRoute("/$discipline")({
@@ -12,6 +13,7 @@ export const Route = createFileRoute("/$discipline")({
     if (!config?.l1Codes) throw notFound();
 
     const projectId = await readProjectIdForLoader();
+    const versionId = await resolveVersionIdForLoader(projectId);
     await Promise.all([
       context.queryClient.ensureQueryData(
         cbsItemsByL1QueryOptions(config.l1Codes),
@@ -20,6 +22,7 @@ export const Route = createFileRoute("/$discipline")({
         context.queryClient,
         config.id,
         projectId,
+        versionId,
       ),
     ]);
 

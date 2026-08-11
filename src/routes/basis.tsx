@@ -3,7 +3,7 @@ import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { useSelectedProject } from "~/lib/selected-project";
+import { useSelectedVersion } from "~/lib/selected-version";
 import { logger } from "~/lib/logger";
 import {
   basisInputsQueryOptions,
@@ -126,9 +126,9 @@ function MilestoneTable({
 }
 
 function BasisPage() {
-  const { projectId } = useSelectedProject();
+  const { versionId } = useSelectedVersion();
   const queryClient = useQueryClient();
-  const queryOpts = basisInputsQueryOptions(projectId);
+  const queryOpts = basisInputsQueryOptions(versionId);
   const { data: loaded } = useQuery(queryOpts);
 
   const [estimateFactor, setEstimateFactor] = React.useState("");
@@ -142,9 +142,9 @@ function BasisPage() {
   const saveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   React.useEffect(() => {
-    if (projectId === null) return;
+    if (versionId === null) return;
     if (loaded === undefined) return;
-    if (hydratedKeyRef.current === projectId) return;
+    if (hydratedKeyRef.current === versionId) return;
 
     skipNextSaveRef.current = true;
     setEstimateFactor(loaded.estimateFactor);
@@ -152,12 +152,12 @@ function BasisPage() {
     setMilestones(
       loaded.milestones.length > 0 ? loaded.milestones : blankMilestones(),
     );
-    hydratedKeyRef.current = projectId;
-  }, [projectId, loaded]);
+    hydratedKeyRef.current = versionId;
+  }, [versionId, loaded]);
 
   React.useEffect(() => {
-    if (projectId === null) return;
-    if (hydratedKeyRef.current !== projectId) return;
+    if (versionId === null) return;
+    if (hydratedKeyRef.current !== versionId) return;
     if (skipNextSaveRef.current) {
       skipNextSaveRef.current = false;
       return;
@@ -166,12 +166,12 @@ function BasisPage() {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     const payload = { estimateFactor, compositeLaborRate, milestones };
     saveTimerRef.current = setTimeout(() => {
-      saveBasisInputs({ data: { projectId, payload } })
+      saveBasisInputs({ data: { versionId, payload } })
         .then(() => {
-          queryClient.setQueryData(["basisInputs", projectId], payload);
+          queryClient.setQueryData(["basisInputs", versionId], payload);
         })
         .catch((err) =>
-          logger.error("basis save failed", { projectId, err }),
+          logger.error("basis save failed", { versionId, err }),
         );
     }, SAVE_DEBOUNCE_MS);
 
@@ -179,7 +179,7 @@ function BasisPage() {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, [
-    projectId,
+    versionId,
     estimateFactor,
     compositeLaborRate,
     milestones,

@@ -13,6 +13,15 @@ vi.mock("~/lib/selected-project", () => ({
   }),
 }));
 
+// Fix the selected version too — the live-totals query is keyed by versionId.
+vi.mock("~/lib/selected-version", () => ({
+  useSelectedVersion: () => ({
+    versionId: 1,
+    setVersionId: vi.fn(),
+    isHydrated: true,
+  }),
+}));
+
 import { BudgetSection } from "./BudgetSection";
 import { budgetReconciliationQueryOptions } from "~/utils/reporting";
 import { snapshotsQueryOptions } from "~/utils/snapshots";

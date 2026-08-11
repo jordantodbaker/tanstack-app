@@ -21,7 +21,7 @@ import {
   type DisciplineConfig,
 } from "~/config/disciplines";
 import { formatMoney } from "~/lib/formatting";
-import { useSelectedProject } from "~/lib/selected-project";
+import { useSelectedVersion } from "~/lib/selected-version";
 import { projectFefRowTotalsQueryOptions } from "~/utils/projectTotals";
 import { SnapshotsSection } from "~/components/SnapshotsSection";
 import { BudgetSection } from "~/components/BudgetSection";
@@ -29,6 +29,7 @@ import {
   readProjectIdForLoader,
   tryPrefetchProjectQuery,
 } from "~/utils/projectCookie";
+import { resolveVersionIdForLoader } from "~/utils/versionCookie";
 
 /**
  * Map from a Summary-table discipline label (e.g. "Electrical") back to the
@@ -47,10 +48,11 @@ const disciplineBySummaryLabel: Record<string, DisciplineConfig> =
 export const Route = createFileRoute("/summary")({
   loader: async ({ context }) => {
     const projectId = await readProjectIdForLoader();
-    if (projectId !== null) {
+    const versionId = await resolveVersionIdForLoader(projectId);
+    if (versionId !== null) {
       await tryPrefetchProjectQuery(
         context.queryClient.ensureQueryData(
-          projectFefRowTotalsQueryOptions(projectId),
+          projectFefRowTotalsQueryOptions(versionId),
         ),
       );
     }
@@ -333,9 +335,9 @@ function SummaryTable({
 }
 
 function SummaryPage() {
-  const { projectId } = useSelectedProject();
+  const { versionId } = useSelectedVersion();
   const { data: dbTotals } = useQuery(
-    projectFefRowTotalsQueryOptions(projectId),
+    projectFefRowTotalsQueryOptions(versionId),
   );
 
   // Grout (29X) shares leading digit "2" with Concrete, so it can't be a digit

@@ -2,6 +2,7 @@ import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Scale } from "lucide-react";
 import { useSelectedProject } from "~/lib/selected-project";
+import { useSelectedVersion } from "~/lib/selected-version";
 import {
   budgetReconciliationQueryOptions,
   type BudgetReconciliationDisciplineRow,
@@ -31,8 +32,9 @@ export function BudgetSection() {
     isError,
     error,
   } = useQuery(budgetReconciliationQueryOptions(projectId, snapshotId));
+  const { versionId } = useSelectedVersion();
   const { data: liveTotals } = useQuery(
-    projectFefRowTotalsQueryOptions(projectId),
+    projectFefRowTotalsQueryOptions(versionId),
   );
 
   // Group the L1 rows under the discipline the server rolled them into, so a

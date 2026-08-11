@@ -5,14 +5,14 @@ import { prisma } from "../server/db";
 import { z } from "zod";
 import type { FefRow } from "~/lib/types";
 import { FEF_ROW_STRING_FIELDS, fefRowHasUserData } from "~/lib/fef-helpers";
-import { projectScopedHandler } from "./users.server";
+import { requireVersionAccess, versionScopedHandler } from "./users.server";
 import { logger } from "~/lib/logger";
-import { ProjectId } from "~/lib/validators";
+import { VersionId } from "~/lib/validators";
 
 const FefSectionSchema = z.enum(["TAKE_OFF", "SUPPORT_LABOR", "MATERIALS"]);
 
 const FefRowsInputSchema = z.object({
-  projectId: ProjectId,
+  versionId: VersionId,
   discipline: z.string().min(1),
   section: FefSectionSchema,
 });
@@ -31,14 +31,14 @@ const FefRowSchema = z.object(
 ) as unknown as z.ZodType<FefRow>;
 
 const SaveFefRowsSchema = z.object({
-  projectId: ProjectId,
+  versionId: VersionId,
   discipline: z.string().min(1),
   section: FefSectionSchema,
   rows: z.array(FefRowSchema),
 });
 
 const AppendTakeOffSchema = z.object({
-  projectId: ProjectId,
+  versionId: VersionId,
   groups: z.array(
     z.object({
       discipline: z.string().min(1),
@@ -87,10 +87,10 @@ const toFefRow = (r: FefRowDb): FefRow => {
 export const fetchFefRows = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => FefRowsInputSchema.parse(input))
   .handler(
-    projectScopedHandler(async ({ data }) => {
+    versionScopedHandler(async ({ data }) => {
       const rows = await prisma.fefRow.findMany({
         where: {
-          projectId: data.projectId,
+          versionId: data.versionId,
           discipline: data.discipline,
           section: data.section,
         },
@@ -101,30 +101,33 @@ export const fetchFefRows = createServerFn({ method: "GET" })
   );
 
 export const fefRowsQueryOptions = (input: {
-  projectId: number | null;
+  versionId: number | null;
   discipline: string;
   section: FefSectionKey;
 }) =>
   queryOptions({
-    queryKey: ["fefRows", input.projectId, input.discipline, input.section],
+    queryKey: ["fefRows", input.versionId, input.discipline, input.section],
     queryFn: () =>
-      input.projectId === null
+      input.versionId === null
         ? Promise.resolve([] as FefRow[])
         : fetchFefRows({
             data: {
-              projectId: input.projectId,
+              versionId: input.versionId,
               discipline: input.discipline,
               section: input.section,
             },
           }),
-    enabled: input.projectId !== null,
+    enabled: input.versionId !== null,
   });
 
 export const saveFefRows = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => SaveFefRowsSchema.parse(input))
-  .handler(
-    projectScopedHandler(async ({ data }) => {
-      const { projectId, discipline, section, rows } = data;
+  .handler(async ({ data }) => {
+    // Access + the version's owning projectId in one round-trip. FefRow keeps a
+    // denormalized projectId column (NOT NULL), so writes need it.
+    const { projectId } = await requireVersionAccess(data.versionId);
+    {
+      const { versionId, discipline, section, rows } = data;
       try {
         const persistable = rows
           .filter(
@@ -134,6 +137,7 @@ export const saveFefRows = createServerFn({ method: "POST" })
             const { id, ...fields } = r;
             return {
               projectId,
+              versionId,
               discipline,
               section,
               position: i,
@@ -144,9 +148,9 @@ export const saveFefRows = createServerFn({ method: "POST" })
 
         if (persistable.length === 0) {
           // No persistable rows from the client. Wipe any existing rows for
-          // this (project, discipline, section) and bail.
+          // this (version, discipline, section) and bail.
           await prisma.fefRow.deleteMany({
-            where: { projectId, discipline, section },
+            where: { versionId, discipline, section },
           });
           return [];
         }
@@ -159,7 +163,7 @@ export const saveFefRows = createServerFn({ method: "POST" })
         // and keeps the response payload addressable).
         const values = persistable.map(
           (p) => Prisma.sql`(
-            ${p.projectId}, ${p.discipline}, ${p.section}::"FefSection", ${p.position},
+            ${p.projectId}, ${p.versionId}, ${p.discipline}, ${p.section}::"FefSection", ${p.position},
             ${p.cbsCode}, ${p.name}, ${p.description}, ${p.shopField}, ${p.weldGroupDescription},
             ${p.quantity}, ${p.size}, ${p.unit}, ${p.metallurgyCode}, ${p.boreSize},
             ${p.role}, ${p.crewMixId}, ${p.schedule}, ${p.taskCode}, ${p.laborHours}, ${p.laborFactor}, ${p.laborRate},
@@ -171,7 +175,7 @@ export const saveFefRows = createServerFn({ method: "POST" })
         const saved = await prisma.$transaction(async (tx) => {
           await tx.$executeRaw`
             INSERT INTO "FefRow" (
-              "projectId", "discipline", "section", "position",
+              "projectId", "versionId", "discipline", "section", "position",
               "cbsCode", "name", "description", "shopField", "weldGroupDescription",
               "quantity", "size", "unit", "metallurgyCode", "boreSize",
               "role", "crewMixId", "schedule", "taskCode", "laborHours", "laborFactor", "laborRate",
@@ -179,7 +183,7 @@ export const saveFefRows = createServerFn({ method: "POST" })
               "createdAt", "updatedAt"
             )
             VALUES ${Prisma.join(values)}
-            ON CONFLICT ("projectId", "discipline", "section", "position")
+            ON CONFLICT ("versionId", "discipline", "section", "position")
             DO UPDATE SET
               "cbsCode" = EXCLUDED."cbsCode",
               "name" = EXCLUDED."name",
@@ -207,13 +211,13 @@ export const saveFefRows = createServerFn({ method: "POST" })
           `;
           await tx.$executeRaw`
             DELETE FROM "FefRow"
-            WHERE "projectId" = ${projectId}
+            WHERE "versionId" = ${versionId}
               AND "discipline" = ${discipline}
               AND "section" = ${section}::"FefSection"
               AND "position" >= ${persistable.length}
           `;
           return tx.fefRow.findMany({
-            where: { projectId, discipline, section },
+            where: { versionId, discipline, section },
             orderBy: { position: "asc" },
           });
         });
@@ -222,6 +226,7 @@ export const saveFefRows = createServerFn({ method: "POST" })
       } catch (err) {
         logger.error("saveFefRows failed", {
           projectId,
+          versionId,
           discipline,
           section,
           rowCount: rows.length,
@@ -229,8 +234,8 @@ export const saveFefRows = createServerFn({ method: "POST" })
         });
         throw err;
       }
-    }),
-  );
+    }
+  });
 
 /**
  * Append rows to the END of one or more disciplines' TAKE_OFF sheets, without
@@ -242,41 +247,41 @@ export const saveFefRows = createServerFn({ method: "POST" })
  */
 export const appendTakeOffRows = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => AppendTakeOffSchema.parse(input))
-  .handler(
-    projectScopedHandler(async ({ data }) => {
-      const { projectId, groups } = data;
-      const routed: { discipline: string; count: number }[] = [];
+  .handler(async ({ data }) => {
+    const { projectId } = await requireVersionAccess(data.versionId);
+    const { versionId, groups } = data;
+    const routed: { discipline: string; count: number }[] = [];
 
-      await prisma.$transaction(async (tx) => {
-        for (const group of groups) {
-          const { discipline } = group;
-          const rows = group.rows.filter(
-            (r) =>
-              (!r.id.startsWith("__fe-blank-") && r.id !== "") ||
-              fefRowHasUserData(r),
-          );
-          if (rows.length === 0) continue;
+    await prisma.$transaction(async (tx) => {
+      for (const group of groups) {
+        const { discipline } = group;
+        const rows = group.rows.filter(
+          (r) =>
+            (!r.id.startsWith("__fe-blank-") && r.id !== "") ||
+            fefRowHasUserData(r),
+        );
+        if (rows.length === 0) continue;
 
-          // Positions are contiguous 0..count-1 (saveFefRows keeps them so), so
-          // the next free position is the current row count.
-          const start = await tx.fefRow.count({
-            where: { projectId, discipline, section: "TAKE_OFF" },
-          });
+        // Positions are contiguous 0..count-1 (saveFefRows keeps them so), so
+        // the next free position is the current row count.
+        const start = await tx.fefRow.count({
+          where: { versionId, discipline, section: "TAKE_OFF" },
+        });
 
-          const values = rows.map(
-            (p, i) => Prisma.sql`(
-              ${projectId}, ${discipline}, 'TAKE_OFF'::"FefSection", ${start + i},
+        const values = rows.map(
+          (p, i) => Prisma.sql`(
+              ${projectId}, ${versionId}, ${discipline}, 'TAKE_OFF'::"FefSection", ${start + i},
               ${p.id.startsWith("__fe-blank-") ? "" : p.id}, ${p.name}, ${p.description}, ${p.shopField}, ${p.weldGroupDescription},
               ${p.quantity}, ${p.size}, ${p.unit}, ${p.metallurgyCode}, ${p.boreSize},
               ${p.role}, ${p.crewMixId}, ${p.schedule}, ${p.taskCode}, ${p.laborHours}, ${p.laborFactor}, ${p.laborRate},
               ${p.materialCost}, ${p.equipment}, ${p.notes}, ${p.sub}, ${p.area},
               NOW(), NOW()
             )`,
-          );
+        );
 
-          await tx.$executeRaw(Prisma.sql`
+        await tx.$executeRaw(Prisma.sql`
             INSERT INTO "FefRow" (
-              "projectId", "discipline", "section", "position",
+              "projectId", "versionId", "discipline", "section", "position",
               "cbsCode", "name", "description", "shopField", "weldGroupDescription",
               "quantity", "size", "unit", "metallurgyCode", "boreSize",
               "role", "crewMixId", "schedule", "taskCode", "laborHours", "laborFactor", "laborRate",
@@ -286,10 +291,9 @@ export const appendTakeOffRows = createServerFn({ method: "POST" })
             VALUES ${Prisma.join(values)}
           `);
 
-          routed.push({ discipline, count: rows.length });
-        }
-      });
+        routed.push({ discipline, count: rows.length });
+      }
+    });
 
-      return routed;
-    }),
-  );
+    return routed;
+  });

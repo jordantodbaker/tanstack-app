@@ -24,17 +24,18 @@ export async function prefetchDisciplineLoaderData(
   queryClient: QueryClient,
   disciplineId: string,
   projectId: number | null,
+  versionId: number | null,
 ): Promise<void> {
   const promises: Promise<unknown>[] = [
     queryClient.ensureQueryData(roleDataQueryOptions(disciplineId)),
     queryClient.ensureQueryData(crewMixDataQueryOptions()),
   ];
-  if (projectId !== null) {
+  if (versionId !== null) {
     promises.push(
       tryPrefetchProjectQuery(
         queryClient.ensureQueryData(
           fefRowsQueryOptions({
-            projectId,
+            versionId,
             discipline: disciplineId,
             section: "TAKE_OFF",
           }),
@@ -43,12 +44,17 @@ export async function prefetchDisciplineLoaderData(
       tryPrefetchProjectQuery(
         queryClient.ensureQueryData(
           fefRowsQueryOptions({
-            projectId,
+            versionId,
             discipline: disciplineId,
             section: "SUPPORT_LABOR",
           }),
         ),
       ),
+    );
+  }
+  // Allowed CBS items stay project-scoped (shared across versions).
+  if (projectId !== null) {
+    promises.push(
       tryPrefetchProjectQuery(
         queryClient.ensureQueryData(
           allowedFefCbsItemIdsQueryOptions(projectId),

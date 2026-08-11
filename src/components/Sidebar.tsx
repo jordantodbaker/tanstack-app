@@ -13,6 +13,7 @@ import {
 import React from "react";
 import { disciplines } from "~/config/disciplines";
 import { useSelectedProject } from "~/lib/selected-project";
+import { useSelectedVersion } from "~/lib/selected-version";
 import { allowedCbsL1CodesQueryOptions } from "~/utils/setup";
 import { useIsAdmin } from "~/lib/use-current-user";
 import { invalidByDisciplineQueryOptions } from "~/utils/projectTotals";
@@ -24,6 +25,7 @@ import {
 } from "~/config/recent-entities";
 import { TOP_NAV_LINKS } from "~/config/top-nav-links";
 import { ProjectSelect } from "~/components/ProjectSelect";
+import { VersionSelect } from "~/components/VersionSelect";
 
 /**
  * Order shown under the Admin section. The `to` paths must exist as routes
@@ -74,8 +76,9 @@ export function Sidebar({
   // sidebar mounts on every page, so we want it cheap; Summary/Validation
   // pages pull the full `projectFefRowTotals` payload when they actually
   // need the rest of the breakdown.
+  const { versionId } = useSelectedVersion();
   const { data: invalidByDiscipline = {} } = useQuery(
-    invalidByDisciplineQueryOptions(projectId),
+    invalidByDisciplineQueryOptions(versionId),
   );
 
   const isAdmin = useIsAdmin();
@@ -135,11 +138,12 @@ export function Sidebar({
           <div
             className={`lg:hidden border-b border-slate-200 pb-3 mb-2 ${collapsed ? "md:hidden" : ""}`}
           >
-            <div className="px-4 pb-2">
+            <div className="px-4 pb-2 space-y-2">
               <ProjectSelect
                 placeholder="Select project…"
                 className="h-9 w-full"
               />
+              <VersionSelect className="h-9 w-full" />
             </div>
             {TOP_NAV_LINKS.filter((l) => !l.adminOnly || isAdmin).map((l) => (
               <Link

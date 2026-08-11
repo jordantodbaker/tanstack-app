@@ -63,6 +63,10 @@ async function fetchNumbers(
         number: r.trendNumber,
       }));
     }
+    // Estimate versions have no legacy "number column" to parse from — their
+    // sequence is seeded by prisma/backfill-estimate-versions.ts instead.
+    case "EstimateVersion":
+      return [];
   }
 }
 

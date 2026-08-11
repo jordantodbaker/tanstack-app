@@ -284,12 +284,43 @@ model Project {
   areas              Area[]
   subcontractors     Subcontractor[]    @relation("ProjectSubcontractors")
   users              User[]             @relation("UserProjects")
-  basisInputs        BasisInputs?
+  estimateVersions   EstimateVersion[]
   estimateSnapshots  EstimateSnapshot[]
   reportingPeriods   ReportingPeriod[]
   numberSequences    NumberSequence[]
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @default(now())
+}
+
+// A named, independently-editable revision of a project's estimate. Each
+// version owns its own `FefRow` line items and `BasisInputs`; creating a new
+// version (optionally copying from an existing one) never touches the others,
+// so branches can be edited in parallel. `versionNumber` is per-project and
+// gap-free, allocated through `NumberSequence` (entityType "EstimateVersion")
+// the same way CVR/FCO/RFI numbers are. `parentVersionId` records which version
+// a copy was branched from (null for the original / blank versions). Areas and
+// the CBS allow-list stay project-scoped and are shared across versions.
+model EstimateVersion {
+  id                Int                @id @default(autoincrement())
+  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId         Int
+  versionNumber     Int
+  name              String             @default("")
+  description       String             @default("")
+  /// The version this one was copied from; null for original or blank versions.
+  parentVersion     EstimateVersion?   @relation("EstimateVersionLineage", fields: [parentVersionId], references: [id], onDelete: SetNull)
+  parentVersionId   Int?
+  childVersions     EstimateVersion[]  @relation("EstimateVersionLineage")
+  /// User.id of the creator (plain column, no FK — mirrors EstimateSnapshot).
+  createdById       Int?
+  fefRows           FefRow[]
+  basisInputs       BasisInputs?
+  estimateSnapshots EstimateSnapshot[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@unique([projectId, versionNumber])
+  @@index([projectId])
 }
 
 // Per-project, per-entity counter backing the auto-generated record numbers
@@ -360,6 +391,8 @@ model FefRow {
   id                   Int        @id @default(autoincrement())
   project              Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   projectId            Int
+  version              EstimateVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  versionId            Int
   discipline           String
   section              FefSection
   position             Int
@@ -397,20 +430,23 @@ model FefRow {
   updatedAt            DateTime   @updatedAt
 
   // Stable identity for ON CONFLICT upsert in `saveFefRows`. Positions are
-  // always sequential within a (project, discipline, section); the constraint
-  // codifies that invariant so the upsert key is well-defined.
-  @@unique([projectId, discipline, section, position])
-  @@index([projectId, discipline, section])
+  // always sequential within a (version, discipline, section); the constraint
+  // codifies that invariant so the upsert key is well-defined. Keyed by
+  // versionId (not projectId) so each estimate version has its own line items.
+  @@unique([versionId, discipline, section, position])
+  @@index([versionId, discipline, section])
 }
 
+// Estimate basis (factor / composite labor rate / milestones) for a single
+// estimate version. One row per version so branches have independent bases.
 model BasisInputs {
-  id                 Int      @id @default(autoincrement())
-  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  projectId          Int      @unique
-  estimateFactor     String   @default("")
-  compositeLaborRate String   @default("")
-  milestones         Json     @default("[]")
-  updatedAt          DateTime @updatedAt
+  id                 Int             @id @default(autoincrement())
+  version            EstimateVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  versionId          Int             @unique
+  estimateFactor     String          @default("")
+  compositeLaborRate String          @default("")
+  milestones         Json            @default("[]")
+  updatedAt          DateTime        @updatedAt
 }
 
 model PipingGroup {
@@ -982,6 +1018,11 @@ model EstimateSnapshot {
   id               Int               @id @default(autoincrement())
   project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   projectId        Int
+  /// The estimate version this snapshot froze. Nullable so pre-versioning
+  /// snapshots keep working; SetNull so deleting a version doesn't cascade
+  /// away the frozen copy that survives it.
+  version          EstimateVersion?  @relation(fields: [versionId], references: [id], onDelete: SetNull)
+  versionId        Int?
   /// Free-text identity ("v1", "as-bid 2026-04-15", "rev 2 after RFI-042").
   label            String
   notes            String            @default("")

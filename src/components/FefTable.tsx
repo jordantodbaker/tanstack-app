@@ -29,6 +29,7 @@ import {
 } from "~/components/Piping/cells";
 import { supportLaborColumns } from "~/components/Piping/columns";
 import { useSelectedProject } from "~/lib/selected-project";
+import { useSelectedVersion } from "~/lib/selected-version";
 import { useFefRowPersistence } from "~/lib/use-fef-row-persistence";
 import { DisciplineTabs } from "~/components/DisciplineTabs";
 import { SaveIndicator } from "~/components/SaveIndicator";
@@ -235,14 +236,14 @@ function MaterialsSection({
   cbsOptions?: CbsOption[];
   sectionKey?: string;
 }) {
-  const { projectId } = useSelectedProject();
+  const { versionId } = useSelectedVersion();
   const takeOffState = useFefTableState({
     initialRows,
     sectionKey,
   });
 
   const { saveStatus, lastSavedAt } = useFefRowPersistence({
-    projectId: sectionKey ? projectId : null,
+    versionId: sectionKey ? versionId : null,
     discipline: sectionKey ?? "",
     section: "MATERIALS",
     state: takeOffState,

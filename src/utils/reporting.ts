@@ -400,20 +400,28 @@ export const fetchBudgetReconciliation = createServerFn({ method: "GET" })
       // No snapshot — reconcile against the live estimate. Inlined here (rather
       // than importing a shared loader from projectTotals.ts) to keep this
       // prisma call inside the handler, so the client transform strips it and
-      // the Prisma client never reaches the browser bundle.
-      const rows = await prisma.fefRow.findMany({
+      // the Prisma client never reaches the browser bundle. "Live" is the
+      // project's latest estimate version.
+      const latestVersion = await prisma.estimateVersion.findFirst({
         where: { projectId: data.projectId },
-        select: {
-          discipline: true,
-          section: true,
-          cbsCode: true,
-          area: true,
-          quantity: true,
-          laborHours: true,
-          laborRate: true,
-          materialCost: true,
-        },
+        orderBy: { versionNumber: "desc" },
+        select: { id: true },
       });
+      const rows = latestVersion
+        ? await prisma.fefRow.findMany({
+            where: { versionId: latestVersion.id },
+            select: {
+              discipline: true,
+              section: true,
+              cbsCode: true,
+              area: true,
+              quantity: true,
+              laborHours: true,
+              laborRate: true,
+              materialCost: true,
+            },
+          })
+        : [];
       asBidTotals = accumulateProjectTotals(rows);
     }
 

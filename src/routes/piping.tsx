@@ -24,6 +24,7 @@ import {
   readProjectIdForLoader,
   tryPrefetchProjectQuery,
 } from "~/utils/projectCookie";
+import { resolveVersionIdForLoader } from "~/utils/versionCookie";
 import { makeFefRow, toCbsOption } from "~/lib/fef-helpers";
 
 const PIPING_L1 = disciplineById.piping.l1Codes!;
@@ -35,20 +36,23 @@ const SUPPORT_LABOR_L1 = ["602", "632"];
 export const Route = createFileRoute("/piping")({
   loader: async ({ context }) => {
     const projectId = await readProjectIdForLoader();
+    const versionId = await resolveVersionIdForLoader(projectId);
 
     // Field-Estimate-only data — start fetching but don't block first paint.
     // useQuery on the client picks these up when they stream in.
     context.queryClient.prefetchQuery(
       cbsItemsByL1QueryOptions(SUPPORT_LABOR_L1),
     );
-    if (projectId !== null) {
+    if (versionId !== null) {
       context.queryClient.prefetchQuery(
         fefRowsQueryOptions({
-          projectId,
+          versionId,
           discipline: "piping",
           section: "SUPPORT_LABOR",
         }),
       );
+    }
+    if (projectId !== null) {
       context.queryClient.prefetchQuery(
         allowedFefCbsItemIdsQueryOptions(projectId),
       );
@@ -61,20 +65,24 @@ export const Route = createFileRoute("/piping")({
       context.queryClient.ensureQueryData(crewMixDataQueryOptions()),
       context.queryClient.ensureQueryData(pipingFactorDataQueryOptions()),
     ];
-    if (projectId !== null) {
-      // Project-scoped prefetches are best-effort: a stale cookie projectId
-      // the user no longer has access to throws server-side; the page still
+    if (versionId !== null) {
+      // Version/project-scoped prefetches are best-effort: a stale cookie the
+      // user no longer has access to throws server-side; the page still
       // renders and ProjectGuard surfaces the not-assigned state.
       critical.push(
         tryPrefetchProjectQuery(
           context.queryClient.ensureQueryData(
             fefRowsQueryOptions({
-              projectId,
+              versionId,
               discipline: "piping",
               section: "TAKE_OFF",
             }),
           ),
         ),
+      );
+    }
+    if (projectId !== null) {
+      critical.push(
         tryPrefetchProjectQuery(
           context.queryClient.ensureQueryData(
             cbsItemsByL1FilteredQueryOptions({

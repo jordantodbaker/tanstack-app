@@ -1,14 +1,14 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
-import { requireProjectAccess } from "./users.server";
+import { requireVersionAccess } from "./users.server";
 import {
   accumulateProjectTotals,
   type ProjectFefRowTotals,
 } from "../lib/project-totals";
 import { FEF_ROW_STRING_FIELDS } from "../lib/fef-helpers";
 import { qk } from "../lib/query-keys";
-import { parseProjectIdInput } from "../lib/validators";
+import { parseIdScalar } from "../lib/validators";
 
 export type { ProjectFefRowTotals } from "../lib/project-totals";
 
@@ -40,10 +40,10 @@ const EMPTY_TOTALS: ProjectFefRowTotals = {
  * client into the browser (it broke the dashboard once already).
  */
 async function loadProjectTotals(
-  projectId: number,
+  versionId: number,
 ): Promise<ProjectFefRowTotals> {
   const rows = await prisma.fefRow.findMany({
-    where: { projectId },
+    where: { versionId },
     // All FEF free-text fields are selected: the Take Off invalid check
     // treats *any* non-empty field as "user touched this row", so any one
     // of these missing on the server side would silently under-count.
@@ -78,20 +78,20 @@ async function loadProjectTotals(
 }
 
 export const fetchProjectFefRowTotals = createServerFn({ method: "GET" })
-  .inputValidator(parseProjectIdInput)
-  .handler(async ({ data: projectId }): Promise<ProjectFefRowTotals> => {
-    await requireProjectAccess(projectId);
-    return loadProjectTotals(projectId);
+  .inputValidator(parseIdScalar)
+  .handler(async ({ data: versionId }): Promise<ProjectFefRowTotals> => {
+    await requireVersionAccess(versionId);
+    return loadProjectTotals(versionId);
   });
 
-export const projectFefRowTotalsQueryOptions = (projectId: number | null) =>
+export const projectFefRowTotalsQueryOptions = (versionId: number | null) =>
   queryOptions({
-    queryKey: qk.projectFefRowTotals(projectId),
+    queryKey: qk.projectFefRowTotals(versionId),
     queryFn: (): Promise<ProjectFefRowTotals> =>
-      projectId === null
+      versionId === null
         ? Promise.resolve(EMPTY_TOTALS)
-        : fetchProjectFefRowTotals({ data: projectId }),
-    enabled: projectId !== null,
+        : fetchProjectFefRowTotals({ data: versionId }),
+    enabled: versionId !== null,
     // Saves invalidate this query key, so refetching on a timer is wasted work.
     staleTime: Infinity,
   });
@@ -110,12 +110,12 @@ export const projectFefRowTotalsQueryOptions = (projectId: number | null) =>
  *      the not-computable predicate actually evaluates.
  */
 export const fetchInvalidByDiscipline = createServerFn({ method: "GET" })
-  .inputValidator(parseProjectIdInput)
-  .handler(async ({ data: projectId }): Promise<Record<string, number>> => {
-    await requireProjectAccess(projectId);
+  .inputValidator(parseIdScalar)
+  .handler(async ({ data: versionId }): Promise<Record<string, number>> => {
+    await requireVersionAccess(versionId);
     const rows = await prisma.fefRow.findMany({
       where: {
-        projectId,
+        versionId,
         section: "TAKE_OFF",
         // "touched" — kept in sync with the OR-shaped predicate in
         // `fef-helpers.ts:isTakeOffRowInvalid`. Both the cbsCode column and
@@ -144,13 +144,13 @@ export const fetchInvalidByDiscipline = createServerFn({ method: "GET" })
     return out;
   });
 
-export const invalidByDisciplineQueryOptions = (projectId: number | null) =>
+export const invalidByDisciplineQueryOptions = (versionId: number | null) =>
   queryOptions({
-    queryKey: qk.invalidByDiscipline(projectId),
+    queryKey: qk.invalidByDiscipline(versionId),
     queryFn: (): Promise<Record<string, number>> =>
-      projectId === null
+      versionId === null
         ? Promise.resolve({})
-        : fetchInvalidByDiscipline({ data: projectId }),
-    enabled: projectId !== null,
+        : fetchInvalidByDiscipline({ data: versionId }),
+    enabled: versionId !== null,
     staleTime: Infinity,
   });

@@ -62,6 +62,11 @@ export type FefRow = {
   agUg: string;
   elevation: string;
 
+  // ── Dimensions (Structural Steel take-off) ──────────────────────────────────
+  height: string;
+  width: string;
+  length: string;
+
   // ── Labor adjustments ───────────────────────────────────────────────────────
   siteFactor: string;
   feetAboveGrade: string;

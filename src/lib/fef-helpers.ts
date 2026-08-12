@@ -47,6 +47,10 @@ export const FEF_ROW_STRING_FIELDS = [
   // Location
   "agUg",
   "elevation",
+  // Dimensions (Structural Steel take-off)
+  "height",
+  "width",
+  "length",
   // Labor adjustments
   "siteFactor",
   "feetAboveGrade",

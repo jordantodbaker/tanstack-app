@@ -153,6 +153,36 @@ const takeOffColumnGroups: ColumnGroup[] = [
   LABOR_COST_GROUP,
 ];
 
+// ── Structural Steel only: member dimensions (Height / Width / Length) ────────
+const steelDimensionColumns: ColumnDef<FefRow, string>[] = [
+  columnHelper.accessor("height", { header: "H", cell: DisplayEditCell, size: 70 }),
+  columnHelper.accessor("width", { header: "W", cell: DisplayEditCell, size: 70 }),
+  columnHelper.accessor("length", { header: "L", cell: DisplayEditCell, size: 70 }),
+];
+const steelDimensionsGroup: ColumnGroup = {
+  label: "Dimensions",
+  columnIds: ["height", "width", "length"],
+};
+
+/** A column's leaf id — its explicit `id` or, for accessor columns, the key. */
+function columnId(c: ColumnDef<FefRow, string>): string | undefined {
+  return (
+    (c as { id?: string }).id ?? (c as { accessorKey?: string }).accessorKey
+  );
+}
+
+/** Return `base` with `extra` inserted immediately after the column `afterId`
+ *  (appended if not found). Keeps the inserted columns contiguous for banners. */
+function insertColumnsAfter(
+  base: ColumnDef<FefRow, string>[],
+  afterId: string,
+  extra: ColumnDef<FefRow, string>[],
+): ColumnDef<FefRow, string>[] {
+  const idx = base.findIndex((c) => columnId(c) === afterId);
+  if (idx < 0) return [...base, ...extra];
+  return [...base.slice(0, idx + 1), ...extra, ...base.slice(idx + 1)];
+}
+
 const materialsColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("id", { header: "ID", cell: ReadOnlyCell, size: 150 }),
   columnHelper.accessor("name", { header: "Name", cell: ReadOnlyCell, size: 300 }),
@@ -226,6 +256,24 @@ export function DisciplinePage({
     [areas],
   );
 
+  // Structural Steel gets extra member-dimension columns (H/W/L) after Quantity,
+  // plus a "Dimensions" group. Other disciplines use the base columns unchanged.
+  const isSteel = disciplineId === "steel";
+  const takeOffCols = React.useMemo(
+    () =>
+      isSteel
+        ? insertColumnsAfter(takeOffColumns, "quantity", steelDimensionColumns)
+        : takeOffColumns,
+    [isSteel],
+  );
+  const takeOffGroups = React.useMemo(() => {
+    if (!isSteel) return takeOffColumnGroups;
+    // Dimensions chip sits after the banner groups, before chip-only Labor & Cost.
+    const banner = takeOffColumnGroups.filter((g) => g.banner !== false);
+    const chipOnly = takeOffColumnGroups.filter((g) => g.banner === false);
+    return [...banner, steelDimensionsGroup, ...chipOnly];
+  }, [isSteel]);
+
   if (variant === "materials") {
     return (
       <MaterialsSection
@@ -264,8 +312,8 @@ export function DisciplinePage({
       title={title}
       icon={icon}
       discipline={disciplineId ?? ""}
-      takeOffColumns={takeOffColumns}
-      takeOffColumnGroups={takeOffColumnGroups}
+      takeOffColumns={takeOffCols}
+      takeOffColumnGroups={takeOffGroups}
       craftColumns={fieldEstimateColumns}
       supportLaborColumns={supportLaborColumns}
       takeOffMeta={takeOffMeta}

@@ -446,6 +446,10 @@ model FefRow {
   // Location
   agUg                 String     @default("")
   elevation            String     @default("")
+  // Dimensions (Structural Steel take-off)
+  height               String     @default("")
+  width                String     @default("")
+  length               String     @default("")
   // Labor adjustments
   siteFactor           String     @default("")
   feetAboveGrade       String     @default("")
@@ -517,6 +521,30 @@ model PipingFactorValue {
   pipingFactorId Int
   size           Float
   value          Float?
+}
+
+// Steel take-off (SLTO) reference data: one row per steel member designation
+// (e.g. "HP12x84", "HSS12x12x5/8") with its weight, factor, and man-hour
+// figures. Used to calculate structural-steel take-off rates — the steel
+// analogue of PipingFactor. Seeded from prisma/data/SLTO_Data.csv. Numeric
+// columns are nullable so a blank cell in the source stays null rather than 0.
+model SteelMember {
+  id              Int     @id @default(autoincrement())
+  /// Member designation — the lookup key (CSV "Member").
+  member          String  @unique
+  /// CSV "Steel Type": Extra Heavy / Heavy / Medium / Light / Misc.
+  steelType       String  @default("")
+  lbPerLf         Float? // "LB/LF" — weight per linear foot
+  factor          Float? // "Factor"
+  lbPerLfFactored Float? // "LB/LF2" — LB/LF × Factor
+  tonsPerUnit     Float? // "TNS/Unit"
+  kgPerM          Float? // "Kg/M"
+  mhPerUnit       Float? // "MH/Unit"
+  hours           Float? // "Hours"
+  sfPerLf         Float? // "SF per LF"
+  qtoUom          String  @default("") // "QTO UoM"
+  uom             String  @default("") // "UoM"
+  notes           String  @default("") // "Notes"
 }
 
 // Construction discipline role (Pipefitter, Electrician, etc.) — the

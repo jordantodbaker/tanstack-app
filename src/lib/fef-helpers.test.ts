@@ -183,6 +183,10 @@ describe("makeFefRow", () => {
     // Location
     "agUg",
     "elevation",
+    // Dimensions
+    "height",
+    "width",
+    "length",
     // Labor adjustments
     "siteFactor",
     "feetAboveGrade",

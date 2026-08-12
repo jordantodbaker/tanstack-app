@@ -167,6 +167,73 @@ function loadPipingFactors() {
   return factors;
 }
 
+/**
+ * Steel take-off reference data (SLTO_Data.csv) — one row per steel member.
+ * The source file is padded with ~1M blank/comma-only rows (Excel's row limit),
+ * so we drop lines with no real content and skip rows without a member name.
+ * Deduped by member (the unique key); numeric cells become null when blank.
+ */
+export function loadSteelMembers() {
+  const csvPath = join(__dirname, "data", "SLTO_Data.csv");
+  const lines = readFileSync(csvPath, "utf-8").split(/\r?\n/);
+
+  const num = (s: string | undefined): number | null => {
+    const t = (s ?? "").trim();
+    if (t === "") return null;
+    const n = parseFloat(t);
+    return isNaN(n) ? null : n;
+  };
+  const str = (s: string | undefined): string => (s ?? "").trim();
+
+  const byMember = new Map<
+    string,
+    {
+      member: string;
+      steelType: string;
+      lbPerLf: number | null;
+      factor: number | null;
+      lbPerLfFactored: number | null;
+      tonsPerUnit: number | null;
+      kgPerM: number | null;
+      mhPerUnit: number | null;
+      hours: number | null;
+      sfPerLf: number | null;
+      qtoUom: string;
+      uom: string;
+      notes: string;
+    }
+  >();
+
+  lines
+    .slice(1)
+    .filter((line) => /[^\s,]/.test(line)) // drop blank / comma-only padding rows
+    .forEach((line) => {
+      // Columns: Member, LB/LF, Steel Type, Factor, LB/LF2, TNS/Unit, Kg/M,
+      //          MH/Unit, Hours, SF per LF, QTO UoM, UoM, Notes
+      const cols = parseCSVLine(line);
+      const member = str(cols[0]);
+      if (member === "") return; // no member designation → not a data row
+
+      byMember.set(member, {
+        member,
+        steelType: str(cols[2]),
+        lbPerLf: num(cols[1]),
+        factor: num(cols[3]),
+        lbPerLfFactored: num(cols[4]),
+        tonsPerUnit: num(cols[5]),
+        kgPerM: num(cols[6]),
+        mhPerUnit: num(cols[7]),
+        hours: num(cols[8]),
+        sfPerLf: num(cols[9]),
+        qtoUom: str(cols[10]),
+        uom: str(cols[11]),
+        notes: str(cols[12]),
+      });
+    });
+
+  return Array.from(byMember.values());
+}
+
 function loadCompositeRates() {
   const csvPath = join(__dirname, "data", "composite_rates.csv");
   const lines = readFileSync(csvPath, "utf-8").split(/\r?\n/);
@@ -252,6 +319,7 @@ export async function seedBaseData() {
   await prisma.pipingGroup.deleteMany();
   await prisma.pipingFactorValue.deleteMany();
   await prisma.pipingFactor.deleteMany();
+  await prisma.steelMember.deleteMany();
   await prisma.crewMix.deleteMany();
   await prisma.roleRate.deleteMany();
   await prisma.role.deleteMany();
@@ -291,6 +359,14 @@ export async function seedBaseData() {
     });
   }
   console.log(`Inserted ${pipingFactorsMap.size} piping factors`);
+
+  const steelMembers = loadSteelMembers();
+  for (let i = 0; i < steelMembers.length; i += batchSize) {
+    await prisma.steelMember.createMany({
+      data: steelMembers.slice(i, i + batchSize),
+    });
+  }
+  console.log(`Inserted ${steelMembers.length} steel members`);
 
   // Seed every role into every real construction discipline (one with
   // l1Codes). Roles are scoped per-discipline in the UI; admins refine the

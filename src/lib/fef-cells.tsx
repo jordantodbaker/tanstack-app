@@ -1,6 +1,6 @@
 import React from "react";
 import { useReactTable } from "@tanstack/react-table";
-import { Trash2 } from "lucide-react";
+import { Trash2, ChevronDown } from "lucide-react";
 import type { CbsOption, FefRow } from "~/lib/types";
 import { cn, computeBoreSize } from "./utils";
 import {
@@ -33,6 +33,41 @@ const SELECT_CLEAR = "__clear__";
  * still fires. Value semantics match the old selects — `""` means "nothing
  * selected" (shows the placeholder), and the placeholder row clears back to `""`.
  */
+// Building one SelectItem element per option is the cell's dominant render cost
+// (the CBS catalog is hundreds of items). Every dropdown cell in a column shares
+// the SAME memoized `options` array (built once at the table level), so we cache
+// the built `<SelectItem>` list by that array reference in a module-level
+// WeakMap. React elements are immutable, so the one shared list renders safely
+// inside all ~25 Select instances — turning 25 per-cell builds into 1. (Entries
+// are GC'd when the options array is unreferenced; a per-cell useMemo, by
+// contrast, rebuilt the whole list on every cell mount and every tab remount.)
+const cellSelectItemsCache = new WeakMap<object, React.ReactNode>();
+function cellSelectItems(
+  options: { value: string; label: string }[],
+): React.ReactNode {
+  const cached = cellSelectItemsCache.get(options);
+  if (cached !== undefined) return cached;
+  const built = options
+    .filter((opt) => opt.value !== "")
+    .map((opt) => (
+      <SelectItem key={opt.value} value={opt.value}>
+        {opt.label}
+      </SelectItem>
+    ));
+  cellSelectItemsCache.set(options, built);
+  return built;
+}
+
+/**
+ * Dropdown cell with display-until-edit: a wide take-off page mounts ~80–100 of
+ * these, and a Radix `Select.Root` per cell is the dominant mount cost. So until
+ * the cell is focused/clicked it renders only a lightweight span (looked-up label
+ * + chevron, styled to match the closed trigger); the real Radix Select mounts
+ * only for the one cell being edited, and unmounts back to the span when the
+ * dropdown closes. The stored `onValueChange` semantics are unchanged. Grid
+ * arrow-nav intentionally skips these (the span has no `data-cell-control`), just
+ * as it skipped the old always-mounted trigger; Tab and click still reach them.
+ */
 export function CellSelect({
   value,
   options,
@@ -46,26 +81,45 @@ export function CellSelect({
   placeholder?: string;
   ariaLabel?: string;
 }) {
-  // Building one SelectItem element per option is the cell's dominant render
-  // cost (the CBS catalog is hundreds of items). Memoize on the `options` ref
-  // so re-renders from selection/scroll reuse the same elements — which also
-  // lets React bail out of re-rendering the item subtree. Callers must pass a
-  // stable `options` ref (they memoize their mapping) for this to bite.
-  const items = React.useMemo(
-    () =>
-      options
-        .filter((opt) => opt.value !== "")
-        .map((opt) => (
-          <SelectItem key={opt.value} value={opt.value}>
-            {opt.label}
-          </SelectItem>
-        )),
-    [options],
-  );
+  const [editing, setEditing] = React.useState(false);
+
+  if (!editing) {
+    const selected =
+      value !== "" ? options.find((opt) => opt.value === value) : undefined;
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={ariaLabel}
+        onFocus={() => setEditing(true)}
+        onMouseDown={(e) => {
+          // Modifier-clicks belong to range selection — block the focus (so the
+          // editor doesn't open) but let the event reach the row's range handler.
+          if (e.shiftKey || e.ctrlKey || e.metaKey) e.preventDefault();
+        }}
+        className={cn(
+          editableCellClass,
+          "flex h-auto cursor-default items-center justify-between gap-1 font-normal",
+        )}
+      >
+        <span className={cn("line-clamp-1", !selected && "text-slate-400")}>
+          {selected ? selected.label : placeholder}
+        </span>
+        <ChevronDown className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+      </div>
+    );
+  }
+
+  const items = cellSelectItems(options);
   return (
     <Select
       value={value}
+      defaultOpen
       onValueChange={(v) => onValueChange(v === SELECT_CLEAR ? "" : v)}
+      // Closing the dropdown (select / escape / click-away) returns to the span.
+      onOpenChange={(open) => {
+        if (!open) setEditing(false);
+      }}
     >
       <SelectTrigger
         aria-label={ariaLabel}

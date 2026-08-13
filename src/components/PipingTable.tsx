@@ -14,6 +14,7 @@ import {
 } from "~/components/Piping/columns";
 import { useSelectedProject } from "~/lib/selected-project";
 import { areasByProjectQueryOptions } from "~/utils/areas";
+import { EMPTY_ARRAY } from "~/lib/fef-helpers";
 
 type PipingGroupValue = {
   id: number;
@@ -105,7 +106,9 @@ export function PipingDisciplinePage({
   }, [pipingFactors]);
 
   const { projectId } = useSelectedProject();
-  const { data: areas = [] } = useQuery(areasByProjectQueryOptions(projectId));
+  const { data: areas = EMPTY_ARRAY } = useQuery(
+    areasByProjectQueryOptions(projectId),
+  );
   const areaOptions = React.useMemo(
     () =>
       areas.map((a) => ({
@@ -115,31 +118,58 @@ export function PipingDisciplinePage({
     [areas],
   );
 
-  const takeOffMeta: FefTableMeta = {
-    cbsOptions,
-    weldGroupOptions,
-    weldGroupMaterialMap,
-    roleOptions,
-    scheduleOptions,
-    roleRates,
-    crewMixOptions,
-    taskCodeOptions,
-    pipingFactorLookup,
-    areaOptions,
-  };
-  const craftMeta: FefTableMeta = {
-    cbsOptions,
-    weldGroupOptions,
-    weldGroupMaterialMap,
-  };
-  const supportMeta: FefTableMeta = {
-    cbsOptions,
-    weldGroupOptions,
-    weldGroupMaterialMap,
-    roleOptions,
-    scheduleOptions,
-    roleRates,
-  };
+  // Memoize the meta objects: `metaRev` (table-utils) keys off these arrays, so
+  // a fresh meta literal each render would re-render every row and rebuild every
+  // dropdown's option list. Stable inputs (see piping.tsx EMPTY fallbacks) keep
+  // these references steady while queries stream in.
+  const takeOffMeta = React.useMemo<FefTableMeta>(
+    () => ({
+      cbsOptions,
+      weldGroupOptions,
+      weldGroupMaterialMap,
+      roleOptions,
+      scheduleOptions,
+      roleRates,
+      crewMixOptions,
+      taskCodeOptions,
+      pipingFactorLookup,
+      areaOptions,
+    }),
+    [
+      cbsOptions,
+      weldGroupOptions,
+      weldGroupMaterialMap,
+      roleOptions,
+      scheduleOptions,
+      roleRates,
+      crewMixOptions,
+      taskCodeOptions,
+      pipingFactorLookup,
+      areaOptions,
+    ],
+  );
+  const craftMeta = React.useMemo<FefTableMeta>(
+    () => ({ cbsOptions, weldGroupOptions, weldGroupMaterialMap }),
+    [cbsOptions, weldGroupOptions, weldGroupMaterialMap],
+  );
+  const supportMeta = React.useMemo<FefTableMeta>(
+    () => ({
+      cbsOptions,
+      weldGroupOptions,
+      weldGroupMaterialMap,
+      roleOptions,
+      scheduleOptions,
+      roleRates,
+    }),
+    [
+      cbsOptions,
+      weldGroupOptions,
+      weldGroupMaterialMap,
+      roleOptions,
+      scheduleOptions,
+      roleRates,
+    ],
+  );
 
   return (
     <DisciplineTabs

@@ -141,10 +141,19 @@ export function useFefRowPersistence({
       });
       return;
     }
-    // Nothing to apply. Mark "checked" so the mask hides and saves can fire,
-    // but leave hydratedKeyRef unset so a later-arriving fallbackRows (e.g.
-    // deferred query) can still hydrate. The persisted baseline is empty.
+    // Nothing to apply (no saved rows). The persisted baseline is empty.
     lastSavedSigRef.current = persistableSignature([]);
+    // If this key can never receive fallback rows (Take Off passes none), mark
+    // it hydrated. Otherwise the first autosave's `setQueryData` makes
+    // `loadedRows` non-empty and re-enters this effect via the loadedRows>0
+    // branch — re-applying the just-saved rows over the user's in-progress edits
+    // AND spinning up a deferred `startTransition` whose `isPending` keeps the
+    // load mask up for as long as they keep typing. When fallback rows ARE
+    // expected (Support Labor seeds from CBS), leave it unset so a later-arriving
+    // fallback can still hydrate.
+    if (!fallbackRows) {
+      hydratedKeyRef.current = currentKey;
+    }
     setAppliedKey(currentKey);
   }, [
     isVersionHydrated,

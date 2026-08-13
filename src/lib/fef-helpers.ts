@@ -1,6 +1,17 @@
 import type { CbsOption, FefRow } from "./types";
 
 /**
+ * Shared stable empty array for `useQuery` fallbacks (`data = EMPTY_ARRAY`) in
+ * the take-off render path. Using one reference instead of a fresh `[]`/`?? []`
+ * each render keeps derived option lists (`areaOptions`, `cbsOptions`, …) — and
+ * therefore `metaRev` — reference-stable while queries stream in on a cold
+ * cache. A fresh `[]` there churns every dependent memo on every render, which
+ * compounded into "Maximum update depth exceeded" on the piping/steel take-offs.
+ * Typed `never[]` so it's assignable to any element type via `?? EMPTY_ARRAY`.
+ */
+export const EMPTY_ARRAY: never[] = [];
+
+/**
  * The free-text fields of a FefRow — every key except `id`. All default to
  * `""`. Keep this as the single source of truth: row factories, blank-row
  * detection, and DB serialization all iterate it, so adding a field to FefRow

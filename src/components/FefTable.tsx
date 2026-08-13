@@ -3,6 +3,7 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { FefRow, CbsOption } from "~/lib/types";
 import { areasByProjectQueryOptions } from "~/utils/areas";
+import { EMPTY_ARRAY } from "~/lib/fef-helpers";
 import {
   EditableCell,
   DisplayEditCell,
@@ -246,7 +247,9 @@ export function DisciplinePage({
   // Areas for the Take Off "Area" dropdown. Called unconditionally so it
   // sits above the materials early-return per the rules of hooks.
   const { projectId } = useSelectedProject();
-  const { data: areas = [] } = useQuery(areasByProjectQueryOptions(projectId));
+  const { data: areas = EMPTY_ARRAY } = useQuery(
+    areasByProjectQueryOptions(projectId),
+  );
   const areaOptions = React.useMemo(
     () =>
       areas.map((a) => ({

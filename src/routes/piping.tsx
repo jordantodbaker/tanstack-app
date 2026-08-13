@@ -33,6 +33,13 @@ const PIPING_CRAFT_L1 = PIPING_L1.filter(
 );
 const SUPPORT_LABOR_L1 = ["602", "632"];
 
+// Stable empty array for query fallbacks. Using one shared reference (instead of
+// a fresh `[]`/`?? []` each render) keeps the piping meta references stable while
+// queries stream in on a cold cache — without it, every query that resolves at a
+// different time churns `metaRev`/option lists and re-renders the whole grid,
+// which on cold load compounded until React hit "Maximum update depth exceeded".
+const EMPTY: never[] = [];
+
 export const Route = createFileRoute("/piping")({
   loader: async ({ context }) => {
     const projectId = await readProjectIdForLoader();
@@ -81,19 +88,20 @@ export const Route = createFileRoute("/piping")({
         ),
       );
     }
+    await Promise.all(critical);
+
+    // Name-dropdown options: the large piping CBS catalog. Not needed for the
+    // rows to render (they already carry their CBS code/name) — only to populate
+    // the Name picker — so stream it in via useQuery instead of blocking first
+    // paint. `prefetchQuery` never rejects, so no access-error guard is needed.
     if (projectId !== null) {
-      critical.push(
-        tryPrefetchProjectQuery(
-          context.queryClient.ensureQueryData(
-            cbsItemsByL1FilteredQueryOptions({
-              l1Values: PIPING_CRAFT_L1,
-              projectId,
-            }),
-          ),
-        ),
+      context.queryClient.prefetchQuery(
+        cbsItemsByL1FilteredQueryOptions({
+          l1Values: PIPING_CRAFT_L1,
+          projectId,
+        }),
       );
     }
-    await Promise.all(critical);
   },
   component: PipingPage,
   pendingComponent: PipingPending,
@@ -114,15 +122,15 @@ function PipingPending() {
 function PipingPage() {
   const { projectId } = useSelectedProject();
 
-  const { data: pipingGroups = [] } = useQuery(pipingGroupsQueryOptions());
-  const { data: supportLaborItems = [] } = useQuery(
+  const { data: pipingGroups = EMPTY } = useQuery(pipingGroupsQueryOptions());
+  const { data: supportLaborItems = EMPTY } = useQuery(
     cbsItemsByL1QueryOptions(SUPPORT_LABOR_L1),
   );
   const { data: roleData } = useQuery(roleDataQueryOptions("piping"));
-  const { data: crewMixOptions = [] } = useQuery(crewMixDataQueryOptions());
+  const { data: crewMixOptions = EMPTY } = useQuery(crewMixDataQueryOptions());
   const { data: pipingFactorData } = useQuery(pipingFactorDataQueryOptions());
 
-  const { data: items = [] } = useQuery(
+  const { data: items = EMPTY } = useQuery(
     cbsItemsByL1FilteredQueryOptions({
       l1Values: PIPING_CRAFT_L1,
       projectId,
@@ -133,7 +141,7 @@ function PipingPage() {
     enabled: projectId !== null,
   });
   const allowedIdSet = React.useMemo(
-    () => new Set(allowedIds ?? []),
+    () => new Set(allowedIds ?? EMPTY),
     [allowedIds],
   );
 
@@ -169,12 +177,12 @@ function PipingPage() {
       cbsOptions={cbsOptions}
       pipingGroups={pipingGroups}
       supportLaborInitialRows={supportLaborRows}
-      roleOptions={roleData?.roleOptions ?? []}
-      scheduleOptions={roleData?.scheduleOptions ?? []}
-      roleRates={roleData?.roleRates ?? []}
+      roleOptions={roleData?.roleOptions ?? EMPTY}
+      scheduleOptions={roleData?.scheduleOptions ?? EMPTY}
+      roleRates={roleData?.roleRates ?? EMPTY}
       crewMixOptions={crewMixOptions}
-      taskCodeOptions={pipingFactorData?.taskCodeOptions ?? []}
-      pipingFactors={pipingFactorData?.pipingFactors ?? []}
+      taskCodeOptions={pipingFactorData?.taskCodeOptions ?? EMPTY}
+      pipingFactors={pipingFactorData?.pipingFactors ?? EMPTY}
     />
   );
 }

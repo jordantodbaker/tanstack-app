@@ -36,7 +36,7 @@ import {
 import { formatMoney } from "~/lib/formatting";
 import { CVR_TRANSITIONS, availableTransitions } from "~/utils/workflow";
 import { useCurrentUser } from "~/lib/use-current-user";
-import { disciplines } from "~/config/disciplines";
+import { DISCIPLINE_FILTER_OPTIONS } from "~/config/disciplines";
 import {
   RISK_LABELS,
   StatusBadge,
@@ -67,10 +67,6 @@ import {
 import { useIsAdmin } from "~/lib/use-current-user";
 import { invalidateAdminEntity } from "~/lib/admin-invalidations";
 import { useRecordRecentView } from "~/lib/use-record-recent-view";
-
-const DISCIPLINE_OPTIONS = disciplines
-  .filter((d) => d.l1Codes && d.l1Codes.length > 0)
-  .map((d) => ({ id: d.id, label: d.label }));
 
 type FormState = Omit<UpsertChangeLogInput, "projectId">;
 
@@ -517,10 +513,7 @@ function ChangelogDialogBody({
                 onChange={(v) => update("discipline", v)}
                 options={[
                   { value: "", label: "—" },
-                  ...DISCIPLINE_OPTIONS.map((d) => ({
-                    value: d.id,
-                    label: d.label,
-                  })),
+                  ...DISCIPLINE_FILTER_OPTIONS,
                 ]}
               />
             </Labeled>

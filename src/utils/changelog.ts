@@ -2,7 +2,7 @@ import { type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { qk } from "~/lib/query-keys";
-import { serializeDate } from "~/lib/serialize";
+import { serializeDateFields } from "~/lib/serialize";
 import { invalidateEntityRecordQueries } from "~/lib/invalidate";
 import {
   fetchProjectScopedList,
@@ -20,6 +20,7 @@ import {
   parseUpsertChangeLog,
 } from "~/lib/validators";
 import { assertProjectAccess, resolveCurrentUser } from "./users.server";
+import { assertProjectUnchanged } from "./users";
 import {
   diffFields,
   recordCreate,
@@ -178,11 +179,10 @@ const toItem = (r: ChangeLogRow): ChangeLogItem => ({
   status: r.status as ChangeStatus,
   type: r.type as ChangeType,
   riskLevel: r.riskLevel as RiskLevel,
-  requestedAt: r.requestedAt.toISOString(),
-  dueDate: serializeDate(r.dueDate),
-  approvedAt: serializeDate(r.approvedAt),
-  createdAt: r.createdAt.toISOString(),
-  updatedAt: r.updatedAt.toISOString(),
+  ...serializeDateFields(r, {
+    iso: ["requestedAt", "createdAt", "updatedAt"],
+    nullable: ["dueDate", "approvedAt"],
+  }),
 });
 
 /**
@@ -223,11 +223,10 @@ const toListItem = (r: ChangeLogListRow): ChangeLogListItem => ({
   status: r.status as ChangeStatus,
   type: r.type as ChangeType,
   riskLevel: r.riskLevel as RiskLevel,
-  requestedAt: r.requestedAt.toISOString(),
-  dueDate: serializeDate(r.dueDate),
-  approvedAt: serializeDate(r.approvedAt),
-  createdAt: r.createdAt.toISOString(),
-  updatedAt: r.updatedAt.toISOString(),
+  ...serializeDateFields(r, {
+    iso: ["requestedAt", "createdAt", "updatedAt"],
+    nullable: ["dueDate", "approvedAt"],
+  }),
 });
 
 export const fetchChangeLogList = createServerFn({ method: "GET" })
@@ -414,15 +413,7 @@ export const upsertChangeLog = createServerFn({ method: "POST" })
           where: { id: data.id },
         });
         await assertProjectAccess(actor, before.projectId);
-        // Cross-project moves aren't a supported operation on the generic
-        // upsert. Disallow rather than silently dropping the input so a
-        // confused client surfaces the mismatch instead of "saving" against
-        // the wrong project.
-        if (data.projectId !== before.projectId) {
-          throw new Error(
-            "Cannot move this change item to a different project.",
-          );
-        }
+        assertProjectUnchanged("change item", data.projectId, before.projectId);
         const updated = await tx.changeLog.update({
           where: { id: data.id },
           data: editableFields,

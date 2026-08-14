@@ -2,7 +2,7 @@ import { type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { qk } from "~/lib/query-keys";
-import { serializeDate } from "~/lib/serialize";
+import { serializeDateFields } from "~/lib/serialize";
 import { invalidateEntityRecordQueries } from "~/lib/invalidate";
 import {
   fetchProjectScopedList,
@@ -25,7 +25,7 @@ import {
   requireProjectAccess,
   resolveCurrentUser,
 } from "./users.server";
-import { hasAtLeastRole } from "./users";
+import { assertProjectUnchanged, hasAtLeastRole } from "./users";
 import {
   diffFields,
   recordCreate,
@@ -110,11 +110,10 @@ const toItem = (r: TrendScalarRow): TrendItem => ({
   ...r,
   status: r.status as TrendStatus,
   priority: r.priority as TrendPriority,
-  identifiedAt: r.identifiedAt.toISOString(),
-  neededBy: serializeDate(r.neededBy),
-  closedAt: serializeDate(r.closedAt),
-  createdAt: r.createdAt.toISOString(),
-  updatedAt: r.updatedAt.toISOString(),
+  ...serializeDateFields(r, {
+    iso: ["identifiedAt", "createdAt", "updatedAt"],
+    nullable: ["neededBy", "closedAt"],
+  }),
 });
 
 /**
@@ -155,11 +154,10 @@ const toListItem = (r: TrendListRow): TrendListItem => ({
   ...r,
   status: r.status as TrendStatus,
   priority: r.priority as TrendPriority,
-  identifiedAt: r.identifiedAt.toISOString(),
-  neededBy: serializeDate(r.neededBy),
-  closedAt: serializeDate(r.closedAt),
-  createdAt: r.createdAt.toISOString(),
-  updatedAt: r.updatedAt.toISOString(),
+  ...serializeDateFields(r, {
+    iso: ["identifiedAt", "createdAt", "updatedAt"],
+    nullable: ["neededBy", "closedAt"],
+  }),
 });
 
 export const fetchTrendList = createServerFn({ method: "GET" })
@@ -319,6 +317,11 @@ export const upsertTrend = createServerFn({ method: "POST" })
         const before = await tx.trend.findUniqueOrThrow({
           where: { id: data.id },
         });
+        // Access was checked against the incoming projectId; also verify the
+        // existing row's project and reject any move, so a user with access to
+        // project A can't edit/reassign a trend that lives in project B.
+        await assertProjectAccess(actor, before.projectId);
+        assertProjectUnchanged("trend", data.projectId, before.projectId);
         const updated = await tx.trend.update({
           where: { id: data.id },
           data: payload,

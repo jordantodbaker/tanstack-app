@@ -17,13 +17,22 @@ import {
   LaborFactorInputCell,
   LaborFactorQuantityCell,
   ComputedLaborHoursCell,
+  ShapeCountCell,
+  SteelLengthCell,
+  SteelQuantityCell,
+  SteelTotalTonsCell,
   useFefTableState,
   FefTableContent,
   readOnlyCellClass,
   LABOR_COST_GROUP,
   type FefTableMeta,
   type ColumnGroup,
+  type CellProps,
 } from "~/lib/table-utils";
+import {
+  SearchableSelect,
+  type SearchableSelectOption,
+} from "~/components/SearchableSelect";
 import {
   RoleSelectCell,
   ScheduleSelectCell,
@@ -154,16 +163,69 @@ const takeOffColumnGroups: ColumnGroup[] = [
   LABOR_COST_GROUP,
 ];
 
-// ── Structural Steel only: member dimensions (Height / Width / Length) ────────
+// ── Structural Steel only: Task Code (searchable SLTO member dropdown) ────────
+/** Searchable dropdown of structural-steel members (SLTO_Data). The chosen
+ *  member designation is stored in the row's `taskCode` field — steel rows
+ *  don't otherwise use `taskCode`, so no new field/migration is needed. */
+function SteelMemberSelectCell({ getValue, row, table }: CellProps) {
+  const value = getValue() as string;
+  const options: SearchableSelectOption[] =
+    table.options.meta?.steelMemberOptions ?? EMPTY_ARRAY;
+  return (
+    <SearchableSelect
+      value={value}
+      options={options}
+      placeholder="-- Member --"
+      onSelect={(next) => {
+        // Selecting a member also stamps the row's Unit from the member's
+        // QTO UoM (SLTO_Data). Clearing the member clears the unit too.
+        const unit = next
+          ? (table.options.meta?.steelMemberUomLookup?.[next] ?? "")
+          : "";
+        table.options.meta?.updateRow?.(row.index, { taskCode: next, unit });
+      }}
+    />
+  );
+}
+
+const steelTaskCodeColumn = columnHelper.accessor("taskCode", {
+  header: "Task Code",
+  cell: SteelMemberSelectCell,
+  size: 160,
+});
+
+// ── Structural Steel only: member dimensions + shape count ────────────────────
+// H / W are plain text; L and "# of Shapes" recompute the derived Quantity
+// (Quantity = # of shapes × L) on edit.
 const steelDimensionColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("height", { header: "H", cell: DisplayEditCell, size: 70 }),
   columnHelper.accessor("width", { header: "W", cell: DisplayEditCell, size: 70 }),
-  columnHelper.accessor("length", { header: "L", cell: DisplayEditCell, size: 70 }),
+  columnHelper.accessor("length", { header: "L", cell: SteelLengthCell, size: 70 }),
+  columnHelper.accessor("shapeCount", {
+    header: "# of Shapes",
+    cell: ShapeCountCell,
+    size: 100,
+  }),
 ];
+/** Total Tons = Quantity × the selected member's TNS/Unit. Purely derived, so
+ *  it's a display column (no stored field) rendered read-only. */
+const steelTotalTonsColumn = columnHelper.display({
+  id: "totalTons",
+  header: "Total Tons",
+  cell: SteelTotalTonsCell,
+  size: 100,
+});
 const steelDimensionsGroup: ColumnGroup = {
   label: "Dimensions",
-  columnIds: ["height", "width", "length"],
+  columnIds: ["height", "width", "length", "shapeCount", "totalTons"],
 };
+
+/** Steel Quantity is derived (# of shapes × L), so it renders read-only —
+ *  replaces the base editable Quantity column on the steel sheet. */
+const steelQuantityColumn = columnHelper.accessor("quantity", {
+  header: "Quantity",
+  cell: SteelQuantityCell,
+});
 
 /** A column's leaf id — its explicit `id` or, for accessor columns, the key. */
 function columnId(c: ColumnDef<FefRow, string>): string | undefined {
@@ -230,6 +292,9 @@ export function DisciplinePage({
   scheduleOptions,
   roleRates,
   crewMixOptions,
+  steelMemberOptions,
+  steelMemberUomLookup,
+  steelMemberTonsLookup,
 }: {
   title?: string;
   disciplineId?: string;
@@ -243,6 +308,9 @@ export function DisciplinePage({
   scheduleOptions?: string[];
   roleRates?: { roleName: string; schedule: string; rate: number }[];
   crewMixOptions?: FefTableMeta["crewMixOptions"];
+  steelMemberOptions?: FefTableMeta["steelMemberOptions"];
+  steelMemberUomLookup?: FefTableMeta["steelMemberUomLookup"];
+  steelMemberTonsLookup?: FefTableMeta["steelMemberTonsLookup"];
 }) {
   // Areas for the Take Off "Area" dropdown. Called unconditionally so it
   // sits above the materials early-return per the rules of hooks.
@@ -262,13 +330,21 @@ export function DisciplinePage({
   // Structural Steel gets extra member-dimension columns (H/W/L) after Quantity,
   // plus a "Dimensions" group. Other disciplines use the base columns unchanged.
   const isSteel = disciplineId === "steel";
-  const takeOffCols = React.useMemo(
-    () =>
-      isSteel
-        ? insertColumnsAfter(takeOffColumns, "quantity", steelDimensionColumns)
-        : takeOffColumns,
-    [isSteel],
-  );
+  const takeOffCols = React.useMemo(() => {
+    if (!isSteel) return takeOffColumns;
+    // Quantity is derived on steel, so swap it for the read-only cell. Then add
+    // Task Code (SLTO member picker) after Description and the H/W/L + # of
+    // Shapes dimension columns after Quantity.
+    const withSteelQty = takeOffColumns.map((c) =>
+      columnId(c) === "quantity" ? steelQuantityColumn : c,
+    );
+    let cols = insertColumnsAfter(withSteelQty, "description", [
+      steelTaskCodeColumn,
+    ]);
+    cols = insertColumnsAfter(cols, "quantity", steelDimensionColumns);
+    cols = insertColumnsAfter(cols, "shapeCount", [steelTotalTonsColumn]);
+    return cols;
+  }, [isSteel]);
   const takeOffGroups = React.useMemo(() => {
     if (!isSteel) return takeOffColumnGroups;
     // Dimensions chip sits after the banner groups, before chip-only Labor & Cost.
@@ -300,6 +376,9 @@ export function DisciplinePage({
     ...laborMeta,
     areaOptions,
     crewMixOptions,
+    steelMemberOptions,
+    steelMemberUomLookup,
+    steelMemberTonsLookup,
   };
   // cbsOptions powers the searchable CBS picker on the Support Labor Name
   // column (client-filtered from the discipline's catalog).

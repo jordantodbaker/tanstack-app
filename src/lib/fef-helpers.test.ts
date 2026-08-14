@@ -187,6 +187,7 @@ describe("makeFefRow", () => {
     "height",
     "width",
     "length",
+    "shapeCount",
     // Labor adjustments
     "siteFactor",
     "feetAboveGrade",

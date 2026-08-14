@@ -450,6 +450,7 @@ model FefRow {
   height               String     @default("")
   width                String     @default("")
   length               String     @default("")
+  shapeCount           String     @default("")
   // Labor adjustments
   siteFactor           String     @default("")
   feetAboveGrade       String     @default("")

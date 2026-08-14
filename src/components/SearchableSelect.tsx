@@ -1,6 +1,12 @@
 import React from "react";
 import { editableCellClass } from "~/lib/table-utils";
 
+/** Cap the number of option rows rendered at once. Some lists (e.g. the ~1,100
+ *  structural-steel members) are far too large to mount in full — the user
+ *  narrows them by typing. Matches past the cap still filter; they're just not
+ *  all rendered until the query trims the set below the cap. */
+const MAX_VISIBLE = 100;
+
 export type SearchableSelectOption = {
   value: string;
   label: string;
@@ -72,6 +78,11 @@ export function SearchableSelect({
     setSearch("");
   }
 
+  const visible = filtered.length > MAX_VISIBLE
+    ? filtered.slice(0, MAX_VISIBLE)
+    : filtered;
+  const hiddenCount = filtered.length - visible.length;
+
   const selected = options.find((o) => o.value === value);
 
   return (
@@ -115,7 +126,7 @@ export function SearchableSelect({
                 {loading ? "Searching…" : "No matches"}
               </li>
             ) : (
-              filtered.map((opt) => (
+              visible.map((opt) => (
                 <li key={opt.value}>
                   <button
                     type="button"
@@ -129,6 +140,11 @@ export function SearchableSelect({
                   </button>
                 </li>
               ))
+            )}
+            {hiddenCount > 0 && (
+              <li className="px-2 py-1 text-xs text-slate-400">
+                +{hiddenCount} more — type to narrow…
+              </li>
             )}
           </ul>
         </div>

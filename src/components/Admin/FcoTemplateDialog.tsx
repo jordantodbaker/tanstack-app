@@ -13,7 +13,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Labeled, NativeSelect } from "~/components/ui/form-helpers";
 import { useFormDialog } from "~/lib/use-form-dialog";
 import { CbsMultiSelect } from "~/components/CbsMultiSelect";
-import { disciplines } from "~/config/disciplines";
+import { DISCIPLINE_FILTER_OPTIONS } from "~/config/disciplines";
 import {
   FCO_ORIGIN_TYPES,
   FCO_PRIORITIES,
@@ -28,10 +28,6 @@ import type {
   FcoTemplateAdminItem,
   UpsertFcoTemplateInput,
 } from "~/utils/fcoTemplates";
-
-const DISCIPLINE_OPTIONS = disciplines
-  .filter((d) => d.l1Codes && d.l1Codes.length > 0)
-  .map((d) => ({ id: d.id, label: d.label }));
 
 type FormState = UpsertFcoTemplateInput;
 
@@ -172,10 +168,7 @@ export function FcoTemplateDialog({
                 onChange={(v) => update("discipline", v)}
                 options={[
                   { value: "", label: "— Any discipline —" },
-                  ...DISCIPLINE_OPTIONS.map((d) => ({
-                    value: d.id,
-                    label: d.label,
-                  })),
+                  ...DISCIPLINE_FILTER_OPTIONS,
                 ]}
               />
             </Labeled>

@@ -72,6 +72,35 @@ export const disciplineById = Object.fromEntries(
   disciplines.map((d) => [d.id, d]),
 );
 
+/**
+ * Disciplines that have a take-off (a non-empty `l1Codes`) — the set offered in
+ * discipline pickers and list filters. Single source for what used to be a
+ * `disciplines.filter((d) => d.l1Codes?.length)` copy-pasted into every entity
+ * dialog and log route.
+ */
+export const FEF_DISCIPLINES: DisciplineConfig[] = disciplines.filter(
+  (d) => d.l1Codes !== undefined && d.l1Codes.length > 0,
+);
+
+/**
+ * `{ value, label }` options for discipline dropdowns — both the entity-dialog
+ * selects and the log-page filter bars. Prepend the call site's own head option
+ * (`{ value: "", label: "—" }` in dialogs, `"All disciplines"` in filters).
+ */
+export const DISCIPLINE_FILTER_OPTIONS: { value: string; label: string }[] =
+  FEF_DISCIPLINES.map((d) => ({ value: d.id, label: d.label }));
+
+/** Searchable-select variant (adds a lowercased `searchText`). */
+export const DISCIPLINE_SEARCH_OPTIONS: {
+  value: string;
+  label: string;
+  searchText: string;
+}[] = FEF_DISCIPLINES.map((d) => ({
+  value: d.id,
+  label: d.label,
+  searchText: d.label.toLowerCase(),
+}));
+
 // The Summary page aggregates all CBS items by the first digit of their L1
 // code. This map names the canonical discipline for each digit-bucket so the
 // summary table shows a consistent label per row.

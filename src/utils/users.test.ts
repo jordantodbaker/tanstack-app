@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ROLE_LABELS,
   ROLE_RANK,
+  assertProjectUnchanged,
   hasAtLeastRole,
   type UserRole,
 } from "./users";
@@ -65,5 +66,26 @@ describe("ROLE_LABELS", () => {
     for (const role of ALL_ROLES) {
       expect(ROLE_LABELS[role].length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("assertProjectUnchanged", () => {
+  it("allows an in-place edit (same project)", () => {
+    expect(() => assertProjectUnchanged("RFI", 42, 42)).not.toThrow();
+  });
+
+  it("rejects a cross-project move", () => {
+    // The security-critical case: the update targets a record in project 7
+    // but the request claims project 42. This must be refused so a user with
+    // access only to 42 cannot edit/reassign a record that lives in 7.
+    expect(() => assertProjectUnchanged("RFI", 42, 7)).toThrow(
+      /different project/,
+    );
+  });
+
+  it("names the entity in the error message", () => {
+    expect(() => assertProjectUnchanged("PCO", 1, 2)).toThrow(
+      "Cannot move this PCO to a different project.",
+    );
   });
 });

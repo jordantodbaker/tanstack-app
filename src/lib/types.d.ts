@@ -66,6 +66,8 @@ export type FefRow = {
   height: string;
   width: string;
   length: string;
+  /** Number of shapes; Quantity is derived as shapeCount × length. */
+  shapeCount: string;
 
   // ── Labor adjustments ───────────────────────────────────────────────────────
   siteFactor: string;

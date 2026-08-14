@@ -62,6 +62,7 @@ export const FEF_ROW_STRING_FIELDS = [
   "height",
   "width",
   "length",
+  "shapeCount",
   // Labor adjustments
   "siteFactor",
   "feetAboveGrade",

@@ -2,7 +2,7 @@ import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { qk } from "~/lib/query-keys";
-import { serializeDate } from "~/lib/serialize";
+import { serializeDateFields } from "~/lib/serialize";
 import { invalidateEntityRecordQueries } from "~/lib/invalidate";
 import {
   fetchProjectScopedList,
@@ -27,6 +27,7 @@ import {
   requireProjectAccess,
   resolveCurrentUser,
 } from "./users.server";
+import { assertProjectUnchanged } from "./users";
 import {
   diffFields,
   recordCreate,
@@ -148,13 +149,16 @@ const toItem = (r: PcoWithLinks): PcoItem => {
     ...rest,
     status: rest.status as PcoStatus,
     priority: rest.priority as PcoPriority,
-    submittedAt: serializeDate(rest.submittedAt),
-    approvedAt: serializeDate(rest.approvedAt),
-    invoicedAt: serializeDate(rest.invoicedAt),
-    paidAt: serializeDate(rest.paidAt),
-    closedAt: serializeDate(rest.closedAt),
-    createdAt: rest.createdAt.toISOString(),
-    updatedAt: rest.updatedAt.toISOString(),
+    ...serializeDateFields(rest, {
+      iso: ["createdAt", "updatedAt"],
+      nullable: [
+        "submittedAt",
+        "approvedAt",
+        "invoicedAt",
+        "paidAt",
+        "closedAt",
+      ],
+    }),
     linkedCvrs,
   };
 };
@@ -206,13 +210,16 @@ const toListItem = (r: PcoListRow): PcoListItem => {
     ...rest,
     status: rest.status as PcoStatus,
     priority: rest.priority as PcoPriority,
-    submittedAt: serializeDate(rest.submittedAt),
-    approvedAt: serializeDate(rest.approvedAt),
-    invoicedAt: serializeDate(rest.invoicedAt),
-    paidAt: serializeDate(rest.paidAt),
-    closedAt: serializeDate(rest.closedAt),
-    createdAt: rest.createdAt.toISOString(),
-    updatedAt: rest.updatedAt.toISOString(),
+    ...serializeDateFields(rest, {
+      iso: ["createdAt", "updatedAt"],
+      nullable: [
+        "submittedAt",
+        "approvedAt",
+        "invoicedAt",
+        "paidAt",
+        "closedAt",
+      ],
+    }),
     linkedCvrs,
   };
 };
@@ -439,6 +446,11 @@ export const upsertPco = createServerFn({ method: "POST" })
         const before = await tx.pco.findUniqueOrThrow({
           where: { id: data.id },
         });
+        // Access was checked against the incoming projectId; also verify the
+        // existing row's project and reject any move, so a user with access to
+        // project A can't edit/reassign a PCO that lives in project B.
+        await assertProjectAccess(actor, before.projectId);
+        assertProjectUnchanged("PCO", data.projectId, before.projectId);
         const updated = await tx.pco.update({
           where: { id: data.id },
           data: payload,

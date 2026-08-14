@@ -2,7 +2,7 @@ import { type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { qk } from "~/lib/query-keys";
-import { serializeDate } from "~/lib/serialize";
+import { serializeDateFields } from "~/lib/serialize";
 import { invalidateEntityRecordQueries } from "~/lib/invalidate";
 import {
   fetchProjectScopedList,
@@ -20,7 +20,8 @@ import {
   parseTransitionInput,
   parseUpsertRfi,
 } from "~/lib/validators";
-import { requireProjectAccess } from "./users.server";
+import { assertProjectAccess, requireProjectAccess } from "./users.server";
+import { assertProjectUnchanged } from "./users";
 import { diffFields, recordCreate, recordDelete, recordUpdate } from "./audit.server";
 import { applyWorkflowTransition } from "./workflow.server";
 import { RFI_TRANSITIONS } from "./workflow";
@@ -104,12 +105,10 @@ const toItem = (r: RfiWithLinks): RfiItem => {
     ...rest,
     status: rest.status as RfiStatus,
     priority: rest.priority as RfiPriority,
-    dueDate: serializeDate(rest.dueDate),
-    initiatedAt: rest.initiatedAt.toISOString(),
-    answeredAt: serializeDate(rest.answeredAt),
-    closedAt: serializeDate(rest.closedAt),
-    createdAt: rest.createdAt.toISOString(),
-    updatedAt: rest.updatedAt.toISOString(),
+    ...serializeDateFields(rest, {
+      iso: ["initiatedAt", "createdAt", "updatedAt"],
+      nullable: ["dueDate", "answeredAt", "closedAt"],
+    }),
     linkedFcos,
   };
 };
@@ -157,12 +156,10 @@ const toListItem = (r: RfiListRow): RfiListItem => {
     ...rest,
     status: rest.status as RfiStatus,
     priority: rest.priority as RfiPriority,
-    dueDate: serializeDate(rest.dueDate),
-    initiatedAt: rest.initiatedAt.toISOString(),
-    answeredAt: serializeDate(rest.answeredAt),
-    closedAt: serializeDate(rest.closedAt),
-    createdAt: rest.createdAt.toISOString(),
-    updatedAt: rest.updatedAt.toISOString(),
+    ...serializeDateFields(rest, {
+      iso: ["initiatedAt", "createdAt", "updatedAt"],
+      nullable: ["dueDate", "answeredAt", "closedAt"],
+    }),
     linkedFcos,
   };
 };
@@ -306,6 +303,11 @@ export const upsertRfi = createServerFn({ method: "POST" })
         const before = await tx.rfi.findUniqueOrThrow({
           where: { id: data.id },
         });
+        // Access was checked against the incoming projectId; also verify the
+        // existing row's project and reject any move, so a user with access to
+        // project A can't edit/reassign an RFI that lives in project B.
+        await assertProjectAccess(actor, before.projectId);
+        assertProjectUnchanged("RFI", data.projectId, before.projectId);
         const updated = await tx.rfi.update({
           where: { id: data.id },
           data: payload,

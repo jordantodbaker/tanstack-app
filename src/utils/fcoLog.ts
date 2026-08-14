@@ -1,7 +1,7 @@
 import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
-import { serializeDate } from "~/lib/serialize";
+import { serializeDateFields } from "~/lib/serialize";
 import { invalidateEntityRecordQueries } from "~/lib/invalidate";
 import {
   fetchProjectScopedList,
@@ -25,6 +25,7 @@ import {
   requireProjectAccess,
   resolveCurrentUser,
 } from "./users.server";
+import { assertProjectUnchanged } from "./users";
 import {
   diffFields,
   recordCreate,
@@ -162,11 +163,10 @@ const toItem = (r: Row): FcoItem => {
     status: rest.status as FcoStatus,
     originType: rest.originType as FcoOriginType,
     priority: rest.priority as FcoPriority,
-    initiatedAt: rest.initiatedAt.toISOString(),
-    neededBy: serializeDate(rest.neededBy),
-    closedAt: serializeDate(rest.closedAt),
-    createdAt: rest.createdAt.toISOString(),
-    updatedAt: rest.updatedAt.toISOString(),
+    ...serializeDateFields(rest, {
+      iso: ["initiatedAt", "createdAt", "updatedAt"],
+      nullable: ["neededBy", "closedAt"],
+    }),
     linkedCvrNumber: linkedCvr?.cvrNumber ?? null,
     linkedCvrTitle: linkedCvr?.title ?? null,
     linkedRfiNumber: linkedRfi?.rfiNumber ?? null,
@@ -221,11 +221,10 @@ const toListItem = (r: FcoListRow): FcoListItem => {
     status: rest.status as FcoStatus,
     originType: rest.originType as FcoOriginType,
     priority: rest.priority as FcoPriority,
-    initiatedAt: rest.initiatedAt.toISOString(),
-    neededBy: serializeDate(rest.neededBy),
-    closedAt: serializeDate(rest.closedAt),
-    createdAt: rest.createdAt.toISOString(),
-    updatedAt: rest.updatedAt.toISOString(),
+    ...serializeDateFields(rest, {
+      iso: ["initiatedAt", "createdAt", "updatedAt"],
+      nullable: ["neededBy", "closedAt"],
+    }),
     linkedCvrNumber: linkedCvr?.cvrNumber ?? null,
     linkedCvrTitle: linkedCvr?.title ?? null,
     linkedRfiNumber: linkedRfi?.rfiNumber ?? null,
@@ -411,13 +410,7 @@ export const upsertFco = createServerFn({ method: "POST" })
           where: { id: data.id },
         });
         await assertProjectAccess(actor, before.projectId);
-        // Cross-project moves aren't a supported operation on the generic
-        // upsert. Disallow rather than silently dropping the input.
-        if (data.projectId !== before.projectId) {
-          throw new Error(
-            "Cannot move this FCO to a different project.",
-          );
-        }
+        assertProjectUnchanged("FCO", data.projectId, before.projectId);
         const updated = await tx.fieldChangeOrder.update({
           where: { id: data.id },
           data: editableFields,

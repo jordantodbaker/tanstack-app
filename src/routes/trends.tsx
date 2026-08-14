@@ -15,6 +15,7 @@ import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useListFilters } from "~/lib/use-list-filters";
 import { matchesListFilters } from "~/lib/list-filtering";
+import { isPast } from "~/lib/dates";
 import {
   trendListQueryOptions,
   trendListFullQueryOptions,
@@ -51,7 +52,10 @@ import {
   readProjectIdForLoader,
   tryPrefetchProjectQuery,
 } from "~/utils/projectCookie";
-import { disciplineById } from "~/config/disciplines";
+import {
+  disciplineById,
+  DISCIPLINE_FILTER_OPTIONS,
+} from "~/config/disciplines";
 import { formatAreaLabel } from "~/utils/areaLabels";
 import { formatMoney } from "~/lib/formatting";
 import { SelectProjectBanner } from "~/components/SelectProjectBanner";
@@ -78,13 +82,6 @@ export const Route = createFileRoute("/trends")({
     typeof s.q === "string" ? { q: s.q } : {},
   component: TrendLogPage,
 });
-
-function isPast(iso: string | null, now: Date): boolean {
-  if (!iso) return false;
-  const startOfToday = new Date(now);
-  startOfToday.setHours(0, 0, 0, 0);
-  return new Date(iso) < startOfToday;
-}
 
 function TrendLogPage() {
   const { projectId } = useSelectedProject();
@@ -291,9 +288,7 @@ function TrendLogPage() {
           onChange={setDisciplineFilter}
           options={[
             { value: "", label: "All disciplines" },
-            ...Object.values(disciplineById)
-              .filter((d) => d.l1Codes && d.l1Codes.length > 0)
-              .map((d) => ({ value: d.id, label: d.label })),
+            ...DISCIPLINE_FILTER_OPTIONS,
           ]}
         />
         <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">

@@ -50,7 +50,10 @@ import {
   readProjectIdForLoader,
   tryPrefetchProjectQuery,
 } from "~/utils/projectCookie";
-import { disciplineById } from "~/config/disciplines";
+import {
+  disciplineById,
+  DISCIPLINE_FILTER_OPTIONS,
+} from "~/config/disciplines";
 import { formatMoney } from "~/lib/formatting";
 import { fcoCsvColumns } from "~/utils/fcoLogCsv";
 import { ExportCsvButton } from "~/components/ExportCsvButton";
@@ -280,9 +283,7 @@ function FcoLogPage() {
           onChange={setDisciplineFilter}
           options={[
             { value: "", label: "All disciplines" },
-            ...Object.values(disciplineById)
-              .filter((d) => d.l1Codes && d.l1Codes.length > 0)
-              .map((d) => ({ value: d.id, label: d.label })),
+            ...DISCIPLINE_FILTER_OPTIONS,
           ]}
         />
         <FilterSelect

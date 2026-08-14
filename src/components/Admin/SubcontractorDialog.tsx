@@ -14,20 +14,12 @@ import { Labeled } from "~/components/ui/form-helpers";
 import { SearchableMultiSelect } from "~/components/SearchableMultiSelect";
 import type { SearchableSelectOption } from "~/components/SearchableSelect";
 import { useFormDialog } from "~/lib/use-form-dialog";
-import { disciplines } from "~/config/disciplines";
+import { DISCIPLINE_SEARCH_OPTIONS } from "~/config/disciplines";
 import { projectsQueryOptions } from "~/utils/projects";
 import type {
   SubcontractorItem,
   UpsertSubcontractorInput,
 } from "~/utils/subcontractors";
-
-const DISCIPLINE_OPTIONS: SearchableSelectOption[] = disciplines
-  .filter((d) => d.l1Codes && d.l1Codes.length > 0)
-  .map((d) => ({
-    value: d.id,
-    label: d.label,
-    searchText: d.label.toLowerCase(),
-  }));
 
 type FormState = UpsertSubcontractorInput;
 
@@ -144,7 +136,7 @@ export function SubcontractorDialog({
           >
             <SearchableMultiSelect
               values={form.disciplines}
-              options={DISCIPLINE_OPTIONS}
+              options={DISCIPLINE_SEARCH_OPTIONS}
               placeholder="-- Select disciplines --"
               onChange={(v) => update("disciplines", v)}
             />

@@ -36,6 +36,24 @@ export function hasAtLeastRole(role: UserRole, minimum: UserRole): boolean {
   return ROLE_RANK[role] >= ROLE_RANK[minimum];
 }
 
+/**
+ * Guards the update branch of a project-scoped upsert against a cross-project
+ * move. The generic upsert may edit a record in place but must never relocate
+ * it to a different project — callers verify access to the *existing* project
+ * separately (see `assertProjectAccess`); this rejects the reassignment itself
+ * so a confused (or malicious) client can't rewrite the row against the wrong
+ * project. `label` names the entity in the error, e.g. "RFI" or "change item".
+ */
+export function assertProjectUnchanged(
+  label: string,
+  incomingProjectId: number,
+  existingProjectId: number,
+): void {
+  if (incomingProjectId !== existingProjectId) {
+    throw new Error(`Cannot move this ${label} to a different project.`);
+  }
+}
+
 /** Human-readable labels. Add an entry when adding a new UserRole. */
 export const ROLE_LABELS: Record<UserRole, string> = {
   USER: "User",

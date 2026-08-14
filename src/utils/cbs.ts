@@ -20,10 +20,6 @@ const CbsItemsByL1FilteredSchema = z.object({
   projectId: Id.nullable(),
 });
 
-export const fetchCbsItems = createServerFn({ method: "GET" }).handler(() => {
-  return prisma.cbsItem.findMany({ orderBy: { id: "asc" } });
-});
-
 /**
  * Resolve pasted CBS codes against the WHOLE catalog (not one discipline's
  * subset) so Excel paste can accept codes from any discipline. Matches each
@@ -197,12 +193,6 @@ export const fetchCbsItemsByL1EndsWith = createServerFn({ method: "GET" })
         accountDescription: true,
       },
     });
-  });
-
-export const cbsItemsQueryOptions = () =>
-  queryOptions({
-    queryKey: ["cbsItems"],
-    queryFn: () => fetchCbsItems(),
   });
 
 /**

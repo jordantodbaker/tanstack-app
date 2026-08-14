@@ -57,6 +57,13 @@ type RoleRate = { roleName: string; schedule: string; rate: number };
 
 export type TaskCodeOption = { code: string; taskDefinition: string };
 export type AreaSelectOption = { value: string; label: string };
+/** Shape shared with `SearchableSelectOption` (kept local to avoid a table-utils
+ *  ↔ SearchableSelect import cycle). */
+export type SearchableSelectOptionMeta = {
+  value: string;
+  label: string;
+  searchText?: string;
+};
 export type CrewMixOption = {
   id: number;
   name: string;
@@ -76,6 +83,14 @@ export type FefTableMeta = {
   roleRates?: RoleRate[];
   crewMixOptions?: CrewMixOption[];
   taskCodeOptions?: TaskCodeOption[];
+  /** Structural-steel members (SLTO_Data) for the steel-only Task Code
+   *  searchable dropdown, pre-mapped to `{ value, label, searchText }`. */
+  steelMemberOptions?: SearchableSelectOptionMeta[];
+  /** Member designation → QTO UoM (SLTO_Data); fills the Unit column when a
+   *  steel Task Code is selected. */
+  steelMemberUomLookup?: Record<string, string>;
+  /** Member designation → TNS/Unit (SLTO_Data); Total Tons = Quantity × this. */
+  steelMemberTonsLookup?: Record<string, number>;
   pipingFactorLookup?: Map<
     string,
     { unit: string; values: Map<number, number> }
@@ -444,6 +459,9 @@ export function FefTableContent({
       meta?.roleRates,
       meta?.crewMixOptions,
       meta?.taskCodeOptions,
+      meta?.steelMemberOptions,
+      meta?.steelMemberUomLookup,
+      meta?.steelMemberTonsLookup,
       meta?.pipingFactorLookup,
       meta?.areaOptions,
       columnVisibility,
@@ -520,6 +538,9 @@ export function FefTableContent({
       scheduleSelectOptions,
       crewMixSelectOptions,
       taskCodeOptions: meta?.taskCodeOptions ?? [],
+      steelMemberOptions: meta?.steelMemberOptions ?? [],
+      steelMemberUomLookup: meta?.steelMemberUomLookup,
+      steelMemberTonsLookup: meta?.steelMemberTonsLookup,
       pipingFactorLookup: meta?.pipingFactorLookup,
       areaOptions: meta?.areaOptions ?? [],
       selectedRowIndices: meta?.selectedRowIndices,

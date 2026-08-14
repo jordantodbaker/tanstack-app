@@ -7,6 +7,7 @@ import { roleDataQueryOptions } from "~/utils/roles";
 import { crewMixDataQueryOptions } from "~/utils/crewMixes";
 import { useSelectedProject } from "~/lib/selected-project";
 import { allowedFefCbsItemIdsQueryOptions } from "~/utils/setup";
+import { steelMembersQueryOptions } from "~/utils/steel";
 import { toCbsOption, makeFefRow } from "~/lib/fef-helpers";
 
 type CbsItem = {
@@ -47,6 +48,41 @@ export function DisciplineRoute({
   const scheduleOptions = roleData?.scheduleOptions;
   const roleRates = roleData?.roleRates;
   const { data: crewMixOptions } = useQuery(crewMixDataQueryOptions());
+
+  // Structural Steel only: SLTO members feed the Task Code searchable dropdown.
+  const isSteel = disciplineId === "steel";
+  const { data: steelMembers } = useQuery({
+    ...steelMembersQueryOptions(),
+    enabled: isSteel,
+  });
+  const steelMemberOptions = React.useMemo(
+    () =>
+      (steelMembers ?? []).map((m) => ({
+        value: m.member,
+        label: m.member,
+        searchText: m.member.toLowerCase(),
+      })),
+    [steelMembers],
+  );
+  // member → QTO UoM, used to fill the Unit column on Task Code selection.
+  const steelMemberUomLookup = React.useMemo(
+    () =>
+      Object.fromEntries(
+        (steelMembers ?? []).map((m) => [m.member, m.qtoUom]),
+      ),
+    [steelMembers],
+  );
+  // member → TNS/Unit, used to compute Total Tons (only members that have one).
+  const steelMemberTonsLookup = React.useMemo(
+    () =>
+      Object.fromEntries(
+        (steelMembers ?? [])
+          .filter((m) => m.tonsPerUnit != null)
+          .map((m) => [m.member, m.tonsPerUnit as number]),
+      ),
+    [steelMembers],
+  );
+
   const { projectId } = useSelectedProject();
   const { data: allowedIds } = useQuery({
     ...allowedFefCbsItemIdsQueryOptions(projectId ?? 0),
@@ -95,6 +131,9 @@ export function DisciplineRoute({
       scheduleOptions={scheduleOptions}
       roleRates={roleRates}
       crewMixOptions={crewMixOptions}
+      steelMemberOptions={steelMemberOptions}
+      steelMemberUomLookup={steelMemberUomLookup}
+      steelMemberTonsLookup={steelMemberTonsLookup}
     />
   );
 }

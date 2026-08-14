@@ -311,8 +311,19 @@ export function TextCell({
  * on blur it returns to the span. Shift/Ctrl/Meta-clicks fall through to range
  * selection instead of opening the editor.
  */
-export function DisplayEditCell({ getValue, row, column, table }: CellProps) {
-  const value = getValue() as string;
+/**
+ * Display-until-edit shell: renders `value` as a lightweight focusable span
+ * until the user focuses it, then swaps to a real text editor that reports the
+ * committed value via `onCommit`. Kept generic so cells with custom commit
+ * logic (e.g. the steel dimensions that recompute Quantity) can reuse it.
+ */
+export function DisplayEditControl({
+  value,
+  onCommit,
+}: {
+  value: string;
+  onCommit: (v: string) => void;
+}) {
   const [editing, setEditing] = React.useState(false);
 
   if (editing) {
@@ -320,9 +331,7 @@ export function DisplayEditCell({ getValue, row, column, table }: CellProps) {
       <TextCell
         value={value}
         autoFocus
-        onCommit={(v) =>
-          table.options.meta?.updateData?.(row.index, column.id, v)
-        }
+        onCommit={onCommit}
         onEditEnd={() => setEditing(false)}
       />
     );
@@ -343,6 +352,17 @@ export function DisplayEditCell({ getValue, row, column, table }: CellProps) {
     >
       {value}
     </div>
+  );
+}
+
+export function DisplayEditCell({ getValue, row, column, table }: CellProps) {
+  return (
+    <DisplayEditControl
+      value={getValue() as string}
+      onCommit={(v) =>
+        table.options.meta?.updateData?.(row.index, column.id, v)
+      }
+    />
   );
 }
 
@@ -469,11 +489,38 @@ function effectiveLaborFactor(storedFactor: string): string {
 
 /** Derived labor hours = quantity × labor factor, formatted to 1dp. Returns
  *  "" when either input isn't a positive finite number. */
-function computeLaborHours(quantity: string, factor: string): string {
+export function computeLaborHours(quantity: string, factor: string): string {
   const q = parseFloat(quantity);
   const f = parseFloat(factor);
   if (!Number.isFinite(q) || !Number.isFinite(f)) return "";
   return (q * f).toFixed(1);
+}
+
+/** Structural-steel Quantity = # of shapes × length (L). Returns "" when
+ *  either input isn't a finite number, and strips trailing-zero float noise
+ *  (e.g. `3 × 20.1` renders `60.3`, not `60.29999…`). */
+export function computeSteelQuantity(
+  shapeCount: string,
+  length: string,
+): string {
+  const n = parseFloat(shapeCount);
+  const l = parseFloat(length);
+  if (!Number.isFinite(n) || !Number.isFinite(l)) return "";
+  return String(Math.round(n * l * 10000) / 10000);
+}
+
+/** Structural-steel Total Tons = Quantity × the member's TNS/Unit (SLTO_Data).
+ *  Quantity is itself derived (# of shapes × L), so this recomputes from the
+ *  same inputs. Returns "" when the quantity is blank or the member has no
+ *  tons-per-unit figure. */
+export function computeTotalTons(
+  shapeCount: string,
+  length: string,
+  tonsPerUnit: number | null | undefined,
+): string {
+  const qty = parseFloat(computeSteelQuantity(shapeCount, length));
+  if (!Number.isFinite(qty) || tonsPerUnit == null) return "";
+  return String(Math.round(qty * tonsPerUnit * 10000) / 10000);
 }
 
 /**
@@ -543,6 +590,74 @@ export function ComputedLaborHoursCell({ row }: CellProps) {
         row.original.quantity,
         effectiveLaborFactor(row.original.laborFactor),
       )}
+    </span>
+  );
+}
+
+// ── Structural Steel Quantity = # of shapes × length (L) ─────────────────────
+// The steel take-off derives Quantity instead of typing it: editing either
+// "# of Shapes" or "L" recomputes Quantity (and, since Quantity drives labor,
+// the row's laborHours) via updateRow. Both editors use the display-until-edit
+// shell to match the H/W/L dimension cells.
+
+/** Editable "# of Shapes" (steel). Recomputes Quantity = count × L. */
+export function ShapeCountCell({ getValue, row, table }: CellProps) {
+  return (
+    <DisplayEditControl
+      value={getValue() as string}
+      onCommit={(v) => {
+        const quantity = computeSteelQuantity(v, row.original.length);
+        table.options.meta?.updateRow?.(row.index, {
+          shapeCount: v,
+          quantity,
+          laborHours: computeLaborHours(
+            quantity,
+            effectiveLaborFactor(row.original.laborFactor),
+          ),
+        });
+      }}
+    />
+  );
+}
+
+/** Editable "L" (length, steel). Recomputes Quantity = # of shapes × L. */
+export function SteelLengthCell({ getValue, row, table }: CellProps) {
+  return (
+    <DisplayEditControl
+      value={getValue() as string}
+      onCommit={(v) => {
+        const quantity = computeSteelQuantity(row.original.shapeCount, v);
+        table.options.meta?.updateRow?.(row.index, {
+          length: v,
+          quantity,
+          laborHours: computeLaborHours(
+            quantity,
+            effectiveLaborFactor(row.original.laborFactor),
+          ),
+        });
+      }}
+    />
+  );
+}
+
+/** Read-only Quantity for steel — always shows # of shapes × L, recomputed on
+ *  render so rows saved before this derivation still display correctly. */
+export function SteelQuantityCell({ row }: CellProps) {
+  return (
+    <span className={readOnlyCellClass}>
+      {computeSteelQuantity(row.original.shapeCount, row.original.length)}
+    </span>
+  );
+}
+
+/** Read-only Total Tons for steel — Quantity × the selected member's TNS/Unit,
+ *  looked up from `steelMemberTonsLookup` by the row's Task Code. */
+export function SteelTotalTonsCell({ row, table }: CellProps) {
+  const { shapeCount, length, taskCode } = row.original;
+  const tonsPerUnit = table.options.meta?.steelMemberTonsLookup?.[taskCode];
+  return (
+    <span className={readOnlyCellClass}>
+      {computeTotalTons(shapeCount, length, tonsPerUnit)}
     </span>
   );
 }

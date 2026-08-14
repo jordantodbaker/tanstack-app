@@ -30,6 +30,15 @@ declare module "@tanstack/react-table" {
     scheduleSelectOptions?: { value: string; label: string }[];
     crewMixSelectOptions?: { value: string; label: string }[];
     taskCodeOptions?: { code: string; taskDefinition: string }[];
+    // Structural-steel members (SLTO_Data) for the steel-only Task Code
+    // searchable dropdown. Pre-mapped to `{ value, label, searchText }`.
+    steelMemberOptions?: { value: string; label: string; searchText?: string }[];
+    // Member designation → QTO UoM (SLTO_Data), used to fill the Unit column
+    // when a steel Task Code is selected.
+    steelMemberUomLookup?: Record<string, string>;
+    // Member designation → TNS/Unit (SLTO_Data), used to compute Total Tons
+    // (= Quantity × TNS/Unit) on the steel take-off.
+    steelMemberTonsLookup?: Record<string, number>;
     pipingFactorLookup?: Map<string, { unit: string; values: Map<number, number> }>;
     areaOptions?: { value: string; label: string }[];
     selectedRowIndices?: Set<number>;

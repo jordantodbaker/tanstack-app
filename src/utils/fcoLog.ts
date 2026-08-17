@@ -32,6 +32,8 @@ import {
   recordDelete,
   recordUpdate,
 } from "./audit.server";
+import { createLinkedCvr } from "./promote.server";
+import type { RiskLevel } from "./changelog";
 import { FCO_TRANSITIONS } from "./workflow";
 import { FCO_STATUS_LABELS } from "./fcoLogLabels";
 import {
@@ -88,6 +90,18 @@ export type FcoOriginType = (typeof FCO_ORIGIN_TYPES)[number];
 
 export const FCO_PRIORITIES = ["LOW", "NORMAL", "HIGH", "URGENT"] as const;
 export type FcoPriority = (typeof FCO_PRIORITIES)[number];
+
+/** Map an FCO's priority to the risk level of the CVR it escalates into
+ *  (`promoteFcoToCvr`). NORMAL (and any unlisted value) → MEDIUM. */
+export function priorityToRiskLevel(priority: FcoPriority): RiskLevel {
+  return priority === "URGENT"
+    ? "CRITICAL"
+    : priority === "HIGH"
+      ? "HIGH"
+      : priority === "LOW"
+        ? "LOW"
+        : "MEDIUM";
+}
 
 export const FCO_OPEN_STATUSES: FcoStatus[] = [
   "DRAFT",
@@ -538,47 +552,25 @@ export const promoteFcoToCvr = createServerFn({ method: "POST" })
         where: { id: data.fcoId },
       });
       await assertProjectAccess(actor, fco.projectId);
-      const cvr = await tx.changeLog.create({
-        data: {
-          projectId: fco.projectId,
-          // Mint a real CVR number from the project sequence; the FCO it came
-          // from is recorded in `notes` below.
-          cvrNumber: await allocateEntityNumber(tx, fco.projectId, "ChangeLog"),
-          title: fco.title,
-          description:
-            fco.description ||
-            fco.reasonNarrative ||
-            `Promoted from FCO ${fco.fcoNumber}`,
-          status: "REQUESTED",
-          type: "SCOPE",
-          discipline: fco.discipline,
-          cbsCodes: fco.cbsCodes,
-          originator: fco.initiatedBy,
-          costImpact: fco.estimatedCost,
-          scheduleDaysImpact: 0,
-          laborHoursImpact: fco.estimatedHours,
-          riskLevel:
-            fco.priority === "URGENT"
-              ? "CRITICAL"
-              : fco.priority === "HIGH"
-                ? "HIGH"
-                : fco.priority === "LOW"
-                  ? "LOW"
-                  : "MEDIUM",
-          reasonCode: fco.originType,
-          requestedAt: new Date(),
-          notes: `Linked from FCO ${fco.fcoNumber || `#${fco.id}`}`,
-          // Carry the FCO's area through to the new CVR so the change keeps
-          // its location context after escalation.
-          area: fco.locationArea,
-          createdById: actor.id,
-        },
-      });
-      await recordCreate(tx, {
-        entityType: "ChangeLog",
-        entityId: cvr.id,
-        projectId: cvr.projectId,
-        actor,
+      const cvr = await createLinkedCvr(tx, actor, fco.projectId, {
+        title: fco.title,
+        description:
+          fco.description ||
+          fco.reasonNarrative ||
+          `Promoted from FCO ${fco.fcoNumber}`,
+        status: "REQUESTED",
+        discipline: fco.discipline,
+        cbsCodes: fco.cbsCodes,
+        originator: fco.initiatedBy,
+        costImpact: fco.estimatedCost,
+        scheduleDaysImpact: 0,
+        laborHoursImpact: fco.estimatedHours,
+        riskLevel: priorityToRiskLevel(fco.priority),
+        reasonCode: fco.originType,
+        notes: `Linked from FCO ${fco.fcoNumber || `#${fco.id}`}`,
+        // Carry the FCO's area through to the new CVR so the change keeps
+        // its location context after escalation.
+        area: fco.locationArea,
       });
 
       const updatedFco = await tx.fieldChangeOrder.update({

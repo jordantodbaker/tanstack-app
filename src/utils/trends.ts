@@ -33,9 +33,10 @@ import {
   recordUpdate,
 } from "./audit.server";
 import { applyWorkflowTransition } from "./workflow.server";
+import { createLinkedCvr } from "./promote.server";
 import { TREND_TRANSITIONS } from "./workflow";
 import { TREND_STATUS_LABELS } from "./trendLabels";
-import { allocateEntityNumber, allocateIfBlank } from "./entityNumbers.server";
+import { allocateIfBlank } from "./entityNumbers.server";
 import {
   flushNotificationEmails,
   type PendingNotificationEmail,
@@ -453,41 +454,22 @@ export const promoteTrendToCvr = createServerFn({ method: "POST" })
     }
 
     return prisma.$transaction(async (tx) => {
-      const cvr = await tx.changeLog.create({
-        data: {
-          projectId: trend.projectId,
-          // Mint a real CVR number from the project sequence; the source trend
-          // is recorded in `notes` below.
-          cvrNumber: await allocateEntityNumber(
-            tx,
-            trend.projectId,
-            "ChangeLog",
-          ),
-          title: trend.title,
-          description: trend.description,
-          // CVR opens for the team to refine before submitting for approval;
-          // schema default (REQUESTED) is the right starting state.
-          type: "SCOPE",
-          discipline: trend.discipline,
-          cbsCodes: trend.cbsCodes,
-          originator: actor.email,
-          costImpact: trend.costLikely,
-          scheduleDaysImpact: trend.scheduleDaysImpact,
-          laborHoursImpact: 0,
-          riskLevel: "MEDIUM",
-          reasonCode: "",
-          requestedAt: new Date(),
-          dueDate: trend.neededBy,
-          notes: `Promoted from Trend ${trend.trendNumber || `#${trend.id}`}`,
-          area: trend.locationArea,
-          createdById: actor.id,
-        },
-      });
-      await recordCreate(tx, {
-        entityType: "ChangeLog",
-        entityId: cvr.id,
-        projectId: cvr.projectId,
-        actor,
+      // `status` is intentionally omitted so the CVR opens in the schema
+      // default (REQUESTED) for the team to refine before submitting.
+      const cvr = await createLinkedCvr(tx, actor, trend.projectId, {
+        title: trend.title,
+        description: trend.description,
+        discipline: trend.discipline,
+        cbsCodes: trend.cbsCodes,
+        originator: actor.email,
+        costImpact: trend.costLikely,
+        scheduleDaysImpact: trend.scheduleDaysImpact,
+        laborHoursImpact: 0,
+        riskLevel: "MEDIUM",
+        reasonCode: "",
+        dueDate: trend.neededBy,
+        notes: `Promoted from Trend ${trend.trendNumber || `#${trend.id}`}`,
+        area: trend.locationArea,
       });
       const updatedTrend = await tx.trend.update({
         where: { id: trend.id },

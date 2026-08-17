@@ -526,25 +526,18 @@ export function FefTableContent({
     onColumnVisibilityChange,
     state: { columnFilters, pagination, ...(columnVisibility !== undefined && { columnVisibility }) },
     meta: {
-      cbsOptions: meta?.cbsOptions ?? [],
-      weldGroupOptions: meta?.weldGroupOptions ?? [],
-      weldGroupMaterialMap: meta?.weldGroupMaterialMap ?? {},
-      roleOptions: meta?.roleOptions ?? [],
-      scheduleOptions: meta?.scheduleOptions ?? [],
-      roleRates: meta?.roleRates ?? [],
-      crewMixOptions: meta?.crewMixOptions ?? [],
+      // Pass every caller-supplied field through untouched — the option lists,
+      // the steel/piping lookups, areaOptions, and the selection state all live
+      // on `meta`. Cells default these locally (`?? []` / `?? {}` / `?.`), so no
+      // per-field defaults are needed here: a new `FefTableMeta` field flows
+      // through automatically without editing this literal.
+      ...meta,
+      // Option lists pre-mapped to `{ value, label }` once per grid (computed
+      // just above) so a page of dropdown cells doesn't each re-map the source.
       cbsSelectOptions,
       roleSelectOptions,
       scheduleSelectOptions,
       crewMixSelectOptions,
-      taskCodeOptions: meta?.taskCodeOptions ?? [],
-      steelMemberOptions: meta?.steelMemberOptions ?? [],
-      steelMemberUomLookup: meta?.steelMemberUomLookup,
-      steelMemberTonsLookup: meta?.steelMemberTonsLookup,
-      pipingFactorLookup: meta?.pipingFactorLookup,
-      areaOptions: meta?.areaOptions ?? [],
-      selectedRowIndices: meta?.selectedRowIndices,
-      onToggleRowSelected: meta?.onToggleRowSelected,
       updateData: (rowIndex: number, columnId: string, value: string) => {
         debug("updateData", { rowIndex, columnId, value });
         setData((old) =>

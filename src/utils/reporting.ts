@@ -7,6 +7,7 @@ import {
   resolveCurrentUser,
 } from "./users.server";
 import { hasAtLeastRole } from "./users";
+import { bacByBucket } from "~/lib/bac-buckets";
 import {
   accumulateProjectTotals,
   type ProjectFefRowTotals,
@@ -97,24 +98,17 @@ const disciplineLabelById: Record<string, string> = Object.fromEntries(
 );
 
 /**
- * Aggregate a snapshot's L1 buckets into BAC per **discipline** — the EVM
- * bucket scheme. Walks every L1 bucket and attributes its labor + materials to
- * the owning discipline (`L1_TO_DISCIPLINE`), falling back to the digit's
- * canonical discipline for any L1 not explicitly listed (so no cost is dropped).
- * Using L1 (not the leading digit) is what lets Grout (29X) carry its own EVM
- * bucket instead of folding into Concrete's digit "2".
+ * BAC per **discipline** — the EVM bucket scheme. Attributes each L1's cost to
+ * its owning discipline (`L1_TO_DISCIPLINE`), falling back to the digit's
+ * canonical discipline for any L1 not explicitly listed (so no cost is
+ * dropped). Using L1 (not the leading digit) is what lets Grout (29X) carry its
+ * own EVM bucket instead of folding into Concrete's digit "2".
  */
 function bacByDiscipline(totals: ProjectFefRowTotals): Record<string, number> {
-  const out: Record<string, number> = {};
-  const add = (l1: string, amount: number) => {
-    if (amount === 0) return;
-    const disc = L1_TO_DISCIPLINE[l1] ?? DIGIT_TO_DISCIPLINE[l1[0]];
-    if (!disc) return;
-    out[disc] = (out[disc] ?? 0) + amount;
-  };
-  for (const [l1, v] of Object.entries(totals.laborByL1)) add(l1, v);
-  for (const [l1, v] of Object.entries(totals.materialsByL1)) add(l1, v);
-  return out;
+  return bacByBucket(
+    totals,
+    (l1) => L1_TO_DISCIPLINE[l1] ?? DIGIT_TO_DISCIPLINE[l1[0]],
+  );
 }
 
 /** A cached snapshot total is usable only if it carries the L1 buckets the
@@ -124,6 +118,28 @@ function hasL1Buckets(totals: unknown): totals is ProjectFefRowTotals {
     totals !== null &&
     typeof totals === "object" &&
     "laborByL1" in (totals as Record<string, unknown>)
+  );
+}
+
+/**
+ * The L1-bucketed totals for a baseline snapshot: its cached `totals` when they
+ * carry the L1 buckets, otherwise a recompute from the snapshot's frozen
+ * `fefRows` (legacy / pre-`byL1` caches). New snapshots never hit the recompute.
+ *
+ * For a single snapshot only — `fetchEvmTimeSeries` batches the recompute across
+ * many periods in one query instead of calling this per row.
+ */
+async function resolveBaselineTotals(snapshot: {
+  id: number;
+  totals: unknown;
+}): Promise<ProjectFefRowTotals> {
+  if (hasL1Buckets(snapshot.totals)) return snapshot.totals;
+  const legacy = await prisma.estimateSnapshot.findUniqueOrThrow({
+    where: { id: snapshot.id },
+    select: { fefRows: true },
+  });
+  return accumulateProjectTotals(
+    (legacy.fefRows as unknown as ProjectTotalsRow[]) ?? [],
   );
 }
 
@@ -197,10 +213,10 @@ export const fetchReportingPeriods = createServerFn({ method: "GET" })
  * the same reason the revisions one is: PV/EV/AC don't depend on trends;
  * only AFC/VAFC are approximate against historical state.
  */
-async function loadTrendForecastByBucket(
-  projectId: number,
-): Promise<Record<string, number>> {
-  const trends = await prisma.trend.findMany({
+/** The active (IDENTIFIED + PROBABLE) trends for a project, carrying the fields
+ *  both forecast bucketings need. One query shared by the two aggregations. */
+async function loadActiveTrends(projectId: number) {
+  return prisma.trend.findMany({
     where: { projectId, status: { in: TREND_ACTIVE_STATUSES } },
     select: {
       status: true,
@@ -210,19 +226,48 @@ async function loadTrendForecastByBucket(
       discipline: true,
     },
   });
-  const forecast: Record<string, number> = {};
+}
+
+// Explicit (not `Awaited<ReturnType<typeof loadActiveTrends>>`) on purpose: a
+// `typeof` on a prisma-using function is a module-scope value reference that
+// keeps the prisma import alive in the client transform (see check-client-leak).
+type ActiveTrend = {
+  status: string;
+  probability: number;
+  costLikely: number;
+  cbsCodes: string[];
+  discipline: string;
+};
+
+/** Sum each trend's probability-weighted forecast into the bucket `bucketOf`
+ *  returns. Returning `null` drops the trend; a "" bucket collects the
+ *  unattributed. Shared by the by-bucket and by-L1 forecasts. */
+function sumTrendForecast(
+  trends: ActiveTrend[],
+  bucketOf: (t: ActiveTrend) => string | null,
+): Record<string, number> {
+  const out: Record<string, number> = {};
   for (const t of trends) {
-    const bucket = resolveCvrBucket(t);
-    if (!bucket) continue;
     const contrib = trendForecastContribution({
       status: t.status as TrendStatus,
       probability: t.probability,
       costLikely: t.costLikely,
     });
     if (contrib === 0) continue;
-    forecast[bucket] = (forecast[bucket] ?? 0) + contrib;
+    const bucket = bucketOf(t);
+    if (bucket === null) continue;
+    out[bucket] = (out[bucket] ?? 0) + contrib;
   }
-  return forecast;
+  return out;
+}
+
+async function loadTrendForecastByBucket(
+  projectId: number,
+): Promise<Record<string, number>> {
+  return sumTrendForecast(
+    await loadActiveTrends(projectId),
+    (t) => resolveCvrBucket(t) || null,
+  );
 }
 
 // Sum of APPROVED/EXECUTED CVR cost impacts grouped by their resolved digit
@@ -287,16 +332,9 @@ async function loadCvrChangeByL1(projectId: number): Promise<{
 }
 
 /** As-bid BAC per L1 (3-char parent CBS) = labor + materials. The L1-keyed
- *  sibling of `bacByDiscipline`, matching the estimate's `*ByL1` totals. */
+ *  sibling of `bacByDiscipline` — every L1 is its own bucket (identity key). */
 function bacByL1(totals: ProjectFefRowTotals): Record<string, number> {
-  const out: Record<string, number> = {};
-  const add = (l1: string, amount: number) => {
-    if (amount === 0) return;
-    out[l1] = (out[l1] ?? 0) + amount;
-  };
-  for (const [l1, v] of Object.entries(totals.laborByL1)) add(l1, v);
-  for (const [l1, v] of Object.entries(totals.materialsByL1)) add(l1, v);
-  return out;
+  return bacByBucket(totals, (l1) => l1);
 }
 
 /** Pending-trend forecast per L1 (trends carry no cost buildup, so the whole
@@ -304,23 +342,10 @@ function bacByL1(totals: ProjectFefRowTotals): Record<string, number> {
 async function loadTrendForecastByL1(
   projectId: number,
 ): Promise<Record<string, number>> {
-  const trends = await prisma.trend.findMany({
-    where: { projectId, status: { in: TREND_ACTIVE_STATUSES } },
-    select: { status: true, probability: true, costLikely: true, cbsCodes: true },
-  });
-  const out: Record<string, number> = {};
-  for (const t of trends) {
-    const contrib = trendForecastContribution({
-      status: t.status as TrendStatus,
-      probability: t.probability,
-      costLikely: t.costLikely,
-    });
-    if (contrib === 0) continue;
+  return sumTrendForecast(await loadActiveTrends(projectId), (t) => {
     const code = t.cbsCodes[0] ?? "";
-    const l1 = code.length >= 3 ? code.slice(0, 3) : "";
-    out[l1] = (out[l1] ?? 0) + contrib;
-  }
-  return out;
+    return code.length >= 3 ? code.slice(0, 3) : "";
+  });
 }
 
 export type BudgetReconciliationDisciplineRow = BudgetReconciliationRow & {
@@ -384,18 +409,7 @@ export const fetchBudgetReconciliation = createServerFn({ method: "GET" })
     if (snap && snap.projectId === data.projectId) {
       baselineSnapshotId = snap.id;
       baselineLabel = snap.label;
-      if (hasL1Buckets(snap.totals)) {
-        asBidTotals = snap.totals;
-      } else {
-        // Legacy / pre-`byL1` cache — recompute from the frozen rows.
-        const legacy = await prisma.estimateSnapshot.findUniqueOrThrow({
-          where: { id: snap.id },
-          select: { fefRows: true },
-        });
-        asBidTotals = accumulateProjectTotals(
-          (legacy.fefRows as unknown as ProjectTotalsRow[]) ?? [],
-        );
-      }
+      asBidTotals = await resolveBaselineTotals(snap);
     } else {
       // No snapshot — reconcile against the live estimate. Inlined here (rather
       // than importing a shared loader from projectTotals.ts) to keep this
@@ -619,22 +633,10 @@ export const fetchPeriodWithEvm = createServerFn({ method: "GET" })
     });
     await requireProjectAccess(period.projectId);
 
-    // 1. BAC by bucket — read the cached aggregator output. Legacy snapshots
-    // (created before the `totals` column existed) fall through to the
-    // recompute path. New snapshots never hit it.
-    let baselineTotals: ProjectFefRowTotals;
-    if (hasL1Buckets(period.baselineSnapshot.totals)) {
-      baselineTotals = period.baselineSnapshot.totals;
-    } else {
-      // Legacy (no cached totals) OR a pre-`byL1` cache — recompute from the
-      // frozen fefRows so the L1 buckets the discipline aggregation needs exist.
-      const legacy = await prisma.estimateSnapshot.findUniqueOrThrow({
-        where: { id: period.baselineSnapshot.id },
-        select: { fefRows: true },
-      });
-      const rows = (legacy.fefRows as unknown as ProjectTotalsRow[]) ?? [];
-      baselineTotals = accumulateProjectTotals(rows);
-    }
+    // 1. BAC by bucket — the cached aggregator output, or a recompute from the
+    // frozen rows for legacy snapshots (created before the `totals` column).
+    // New snapshots never hit the recompute.
+    const baselineTotals = await resolveBaselineTotals(period.baselineSnapshot);
 
     // 2/3. CVR-driven budget revisions + probability-weighted pending-trend
     //    forecast, per bucket. Independent reads — run them in parallel.

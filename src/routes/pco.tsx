@@ -16,6 +16,7 @@ import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useListFilters } from "~/lib/use-list-filters";
 import { matchesListFilters } from "~/lib/list-filtering";
+import { makeFilteredExport } from "~/lib/filtered-export";
 import {
   pcoListQueryOptions,
   pcoListFullQueryOptions,
@@ -246,12 +247,11 @@ function PcoLogPage() {
             Showing {filtered.length} of {items.length}
           </span>
           <ExportCsvButton
-            getItems={async () => {
-              const full = await queryClient.fetchQuery(
-                pcoListFullQueryOptions(projectId),
-              );
-              return full.filter(matchesFilters);
-            }}
+            getItems={makeFilteredExport(
+              queryClient,
+              pcoListFullQueryOptions(projectId),
+              matchesFilters,
+            )}
             disabled={filtered.length === 0}
             columns={pcoCsvColumns()}
             filenamePrefix="pco-export"

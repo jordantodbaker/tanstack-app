@@ -15,6 +15,7 @@ import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useListFilters } from "~/lib/use-list-filters";
 import { matchesListFilters } from "~/lib/list-filtering";
+import { makeFilteredExport } from "~/lib/filtered-export";
 import { isPast } from "~/lib/dates";
 import {
   trendListQueryOptions,
@@ -296,12 +297,11 @@ function TrendLogPage() {
             Showing {filtered.length} of {items.length}
           </span>
           <ExportCsvButton
-            getItems={async () => {
-              const full = await queryClient.fetchQuery(
-                trendListFullQueryOptions(projectId),
-              );
-              return full.filter(matchesFilters);
-            }}
+            getItems={makeFilteredExport(
+              queryClient,
+              trendListFullQueryOptions(projectId),
+              matchesFilters,
+            )}
             disabled={filtered.length === 0}
             columns={trendCsvColumns(areaLabel)}
             filenamePrefix="trend-export"

@@ -15,6 +15,7 @@ import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useListFilters } from "~/lib/use-list-filters";
 import { matchesListFilters } from "~/lib/list-filtering";
+import { makeFilteredExport } from "~/lib/filtered-export";
 import { isPast } from "~/lib/dates";
 import {
   rfiListQueryOptions,
@@ -274,12 +275,11 @@ function RfiLogPage() {
             Showing {filtered.length} of {items.length}
           </span>
           <ExportCsvButton
-            getItems={async () => {
-              const full = await queryClient.fetchQuery(
-                rfiListFullQueryOptions(projectId),
-              );
-              return full.filter(matchesFilters);
-            }}
+            getItems={makeFilteredExport(
+              queryClient,
+              rfiListFullQueryOptions(projectId),
+              matchesFilters,
+            )}
             disabled={filtered.length === 0}
             columns={rfiCsvColumns(areaLabel)}
             filenamePrefix="rfi-export"

@@ -16,6 +16,7 @@ import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useListFilters } from "~/lib/use-list-filters";
 import { matchesListFilters } from "~/lib/list-filtering";
+import { makeFilteredExport } from "~/lib/filtered-export";
 import {
   FCO_STATUSES,
   FCO_OPEN_STATUSES,
@@ -304,16 +305,14 @@ function FcoLogPage() {
             Showing {filtered.length} of {items.length}
           </span>
           <ExportCsvButton
-            getItems={async () => {
-              // List payload is slim — narrative columns the CSV wants only
-              // ship via the full endpoint. Pull it on demand here, then
-              // re-apply the active filters so the export matches what the
-              // user sees in the table.
-              const full = await queryClient.fetchQuery(
-                fcoListFullQueryOptions(projectId),
-              );
-              return full.filter(matchesFilters);
-            }}
+            // List payload is slim — the CSV's narrative columns only ship via
+            // the full endpoint, pulled on demand and re-filtered to match the
+            // table (see makeFilteredExport).
+            getItems={makeFilteredExport(
+              queryClient,
+              fcoListFullQueryOptions(projectId),
+              matchesFilters,
+            )}
             disabled={filtered.length === 0}
             columns={fcoCsvColumns(areaLabel)}
             filenamePrefix="fco-export"

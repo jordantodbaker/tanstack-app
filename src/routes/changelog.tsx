@@ -7,6 +7,7 @@ import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useListFilters } from "~/lib/use-list-filters";
 import { matchesListFilters } from "~/lib/list-filtering";
+import { makeFilteredExport } from "~/lib/filtered-export";
 import {
   changeLogListQueryOptions,
   changeLogListFullQueryOptions,
@@ -245,12 +246,11 @@ function ChangelogPage() {
           Showing {filtered.length} of {items.length}
         </span>
         <ExportCsvButton
-          getItems={async () => {
-            const full = await queryClient.fetchQuery(
-              changeLogListFullQueryOptions(projectId),
-            );
-            return full.filter(matchesFilters);
-          }}
+          getItems={makeFilteredExport(
+            queryClient,
+            changeLogListFullQueryOptions(projectId),
+            matchesFilters,
+          )}
           disabled={filtered.length === 0}
           columns={cvrCsvColumns(areaLabel)}
           filenamePrefix="cvr-export"

@@ -37,8 +37,8 @@ import {
   type FcoPriority,
   type UpsertFcoInput,
 } from "~/utils/fcoLog";
-import { FCO_TRANSITIONS, availableTransitions } from "~/utils/workflow";
-import { useCurrentUser } from "~/lib/use-current-user";
+import { FCO_TRANSITIONS } from "~/utils/workflow";
+import { useEntityWorkflow } from "~/lib/use-entity-workflow";
 import { WorkflowActions } from "~/components/WorkflowActions";
 import { DISCIPLINE_FILTER_OPTIONS } from "~/config/disciplines";
 import {
@@ -299,20 +299,16 @@ function FcoDialogBody({
     }
   }
 
-  const { data: currentUser } = useCurrentUser();
-  const isOriginator =
-    !!currentUser &&
-    initial?.createdById !== null &&
-    initial?.createdById === currentUser.id;
-  const transitions =
-    initial && currentUser && onTransition
-      ? availableTransitions(
-          FCO_TRANSITIONS,
-          initial.status,
-          currentUser.role,
-          isOriginator,
-        )
-      : [];
+  const { transitions, handlePromote } = useEntityWorkflow({
+    transitionMap: FCO_TRANSITIONS,
+    initial,
+    onTransition,
+    onPromote,
+    promoteConfirmMessage:
+      "Promote this FCO to a new CVR in the Change Log? The FCO will be linked and marked Linked-to-CVR.",
+    setBusy,
+    closeDialog,
+  });
 
   // `open` is implicitly true — this component only mounts when the outer
   // dialog is open and the full record has loaded.
@@ -344,23 +340,6 @@ function FcoDialogBody({
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
     update(key, items);
-  }
-
-  async function handlePromote() {
-    if (!initial?.id || !onPromote) return;
-    if (
-      !confirm(
-        "Promote this FCO to a new CVR in the Change Log? The FCO will be linked and marked Linked-to-CVR.",
-      )
-    )
-      return;
-    setBusy(true);
-    try {
-      await onPromote(initial.id);
-      closeDialog();
-    } finally {
-      setBusy(false);
-    }
   }
 
   const canPromote =

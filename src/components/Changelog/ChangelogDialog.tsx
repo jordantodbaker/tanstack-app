@@ -34,8 +34,8 @@ import {
   type CvrLineItemDto,
 } from "~/utils/cvrLineItems";
 import { formatMoney } from "~/lib/formatting";
-import { CVR_TRANSITIONS, availableTransitions } from "~/utils/workflow";
-import { useCurrentUser } from "~/lib/use-current-user";
+import { CVR_TRANSITIONS } from "~/utils/workflow";
+import { useEntityWorkflow } from "~/lib/use-entity-workflow";
 import { DISCIPLINE_FILTER_OPTIONS } from "~/config/disciplines";
 import {
   RISK_LABELS,
@@ -293,20 +293,13 @@ function ChangelogDialogBody({
     }
   }
 
-  const { data: currentUser } = useCurrentUser();
-  const isOriginator =
-    !!currentUser &&
-    initial?.createdById !== null &&
-    initial?.createdById === currentUser.id;
-  const transitions =
-    initial && currentUser && onTransition
-      ? availableTransitions(
-          CVR_TRANSITIONS,
-          initial.status,
-          currentUser.role,
-          isOriginator,
-        )
-      : [];
+  const { transitions } = useEntityWorkflow({
+    transitionMap: CVR_TRANSITIONS,
+    initial,
+    onTransition,
+    setBusy,
+    closeDialog,
+  });
 
 
   // Areas for the selected project — populates the Area dropdown. CVRs may

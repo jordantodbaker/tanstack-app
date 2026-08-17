@@ -24,8 +24,8 @@ import {
   type RfiPriority,
   type UpsertRfiInput,
 } from "~/utils/rfis";
-import { RFI_TRANSITIONS, availableTransitions } from "~/utils/workflow";
-import { useCurrentUser } from "~/lib/use-current-user";
+import { RFI_TRANSITIONS } from "~/utils/workflow";
+import { useEntityWorkflow } from "~/lib/use-entity-workflow";
 import { useRecordRecentView } from "~/lib/use-record-recent-view";
 import { WorkflowActions } from "~/components/WorkflowActions";
 import { DISCIPLINE_FILTER_OPTIONS } from "~/config/disciplines";
@@ -203,42 +203,21 @@ function RfiDialogBody({
       : null,
   );
 
-  async function handlePromote() {
-    if (!initial?.id || !onPromote) return;
-    if (
-      !confirm(
-        "Promote this RFI to a new FCO? The FCO will be pre-populated with the RFI's discipline, area, and drawings, and linked back to this RFI.",
-      )
-    )
-      return;
-    setBusy(true);
-    try {
-      await onPromote(initial.id);
-      closeDialog();
-    } finally {
-      setBusy(false);
-    }
-  }
+  const { transitions, handlePromote } = useEntityWorkflow({
+    transitionMap: RFI_TRANSITIONS,
+    initial,
+    onTransition,
+    onPromote,
+    promoteConfirmMessage:
+      "Promote this RFI to a new FCO? The FCO will be pre-populated with the RFI's discipline, area, and drawings, and linked back to this RFI.",
+    setBusy,
+    closeDialog,
+  });
 
   // Promotion is allowed once the RFI is anything but VOID. One RFI can
   // spawn multiple FCOs; no uniqueness gate.
   const canPromote =
     initial && initial.status !== "VOID" && onPromote && projectId !== null;
-
-  const { data: currentUser } = useCurrentUser();
-  const isOriginator =
-    !!currentUser &&
-    initial?.createdById !== null &&
-    initial?.createdById === currentUser?.id;
-  const transitions =
-    initial && currentUser && onTransition
-      ? availableTransitions(
-          RFI_TRANSITIONS,
-          initial.status,
-          currentUser.role,
-          isOriginator,
-        )
-      : [];
 
   // `open` is implicitly true — this component only mounts when the outer
   // dialog is open and the full record has loaded.

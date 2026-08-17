@@ -18,8 +18,8 @@ import {
   type PcoPriority,
   type UpsertPcoInput,
 } from "~/utils/pco";
-import { PCO_TRANSITIONS, availableTransitions } from "~/utils/workflow";
-import { useCurrentUser } from "~/lib/use-current-user";
+import { PCO_TRANSITIONS } from "~/utils/workflow";
+import { useEntityWorkflow } from "~/lib/use-entity-workflow";
 import { useRecordRecentView } from "~/lib/use-record-recent-view";
 import { WorkflowActions } from "~/components/WorkflowActions";
 import { PCO_PRIORITY_LABELS } from "~/utils/pcoLabels";
@@ -171,20 +171,13 @@ function PcoDialogBody({
       : null,
   );
 
-  const { data: currentUser } = useCurrentUser();
-  const isOriginator =
-    !!currentUser &&
-    initial?.createdById !== null &&
-    initial?.createdById === currentUser?.id;
-  const transitions =
-    initial && currentUser && onTransition
-      ? availableTransitions(
-          PCO_TRANSITIONS,
-          initial.status,
-          currentUser.role,
-          isOriginator,
-        )
-      : [];
+  const { transitions } = useEntityWorkflow({
+    transitionMap: PCO_TRANSITIONS,
+    initial,
+    onTransition,
+    setBusy,
+    closeDialog,
+  });
 
   const { data: eligibleCvrs = [] } = useQuery({
     ...pcoEligibleCvrsQueryOptions(projectId, initial?.id ?? null),

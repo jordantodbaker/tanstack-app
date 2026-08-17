@@ -24,8 +24,8 @@ import {
   type TrendPriority,
   type UpsertTrendInput,
 } from "~/utils/trends";
-import { TREND_TRANSITIONS, availableTransitions } from "~/utils/workflow";
-import { useCurrentUser } from "~/lib/use-current-user";
+import { TREND_TRANSITIONS } from "~/utils/workflow";
+import { useEntityWorkflow } from "~/lib/use-entity-workflow";
 import { useRecordRecentView } from "~/lib/use-record-recent-view";
 import { hasAtLeastRole } from "~/utils/users";
 import { WorkflowActions } from "~/components/WorkflowActions";
@@ -201,20 +201,17 @@ function TrendDialogBody({
       : null,
   );
 
-  const { data: currentUser } = useCurrentUser();
-  const isOriginator =
-    !!currentUser &&
-    initial?.createdById !== null &&
-    initial?.createdById === currentUser?.id;
-  const transitions =
-    initial && currentUser && onTransition
-      ? availableTransitions(
-          TREND_TRANSITIONS,
-          initial.status,
-          currentUser.role,
-          isOriginator,
-        )
-      : [];
+  const { currentUser, isOriginator, transitions, handlePromote } =
+    useEntityWorkflow({
+      transitionMap: TREND_TRANSITIONS,
+      initial,
+      onTransition,
+      onPromote,
+      promoteConfirmMessage:
+        "Promote this trend to a CVR? A new CVR will be created with the trend's likely cost as its cost impact, and the trend will be marked Converted.",
+      setBusy,
+      closeDialog,
+    });
 
   // Promote-to-CVR is available from IDENTIFIED or PROBABLE, gated to
   // APPROVER+. The server re-checks role and originator; this hide is UX.
@@ -225,23 +222,6 @@ function TrendDialogBody({
     hasAtLeastRole(currentUser.role, "APPROVER") &&
     !isOriginator &&
     (initial.status === "IDENTIFIED" || initial.status === "PROBABLE");
-
-  async function handlePromote() {
-    if (!initial?.id || !onPromote) return;
-    if (
-      !confirm(
-        "Promote this trend to a CVR? A new CVR will be created with the trend's likely cost as its cost impact, and the trend will be marked Converted.",
-      )
-    )
-      return;
-    setBusy(true);
-    try {
-      await onPromote(initial.id);
-      closeDialog();
-    } finally {
-      setBusy(false);
-    }
-  }
 
   // `open` is implicitly true — only mounted when outer is open + full loaded.
   const { data: areas = [] } = useQuery({

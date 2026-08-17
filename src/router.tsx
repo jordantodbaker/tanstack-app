@@ -14,7 +14,19 @@ export function getRouter() {
     void import('./instrument.client').then((m) => m.initSentryClient())
   }
 
-  const queryClient = new QueryClient()
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        // Treat data as fresh for 30s by default so remounts and window
+        // refocus don't refetch queries that haven't changed. Queries with
+        // different needs override this: reference data uses `Infinity`, the
+        // notification badge sets its own 30s + `refetchInterval`. Mutations
+        // still update the UI immediately — `invalidateQueries` ignores
+        // `staleTime`. Matches `defaultPreloadStaleTime` below.
+        staleTime: 30 * 1000,
+      },
+    },
+  })
 
   const router = createRouter({
     routeTree,

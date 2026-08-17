@@ -11,6 +11,7 @@ import {
   parseUpsertFcoTemplate,
   parseInstantiateFcoTemplate,
 } from "~/lib/validators";
+import { pickFields } from "~/lib/pick";
 import type { FcoOriginType, FcoPriority } from "./fcoLog";
 
 /**
@@ -106,24 +107,8 @@ export const fetchFcoTemplatesAdmin = createServerFn({ method: "GET" }).handler(
       id: r.id,
       name: r.name,
       templateDescription: r.templateDescription,
-      title: r.title,
-      description: r.description,
-      originType: r.originType as FcoOriginType,
-      priority: r.priority as FcoPriority,
-      discipline: r.discipline,
-      cbsCodes: r.cbsCodes,
-      locationArea: r.locationArea,
-      drawingRefs: r.drawingRefs,
-      rfiNumbers: r.rfiNumbers,
-      initiatedBy: r.initiatedBy,
-      fieldContact: r.fieldContact,
-      estimatedCost: r.estimatedCost,
-      estimatedHours: r.estimatedHours,
-      workStopped: r.workStopped,
-      photosUrl: r.photosUrl,
-      reasonNarrative: r.reasonNarrative,
-      notes: r.notes,
       usageCount: r.usageCount,
+      ...(pickFields(r, FCO_TEMPLATE_FIELDS) as FcoTemplateFieldSet),
     }));
   }),
 );
@@ -141,31 +126,20 @@ export type UpsertFcoTemplateInput = {
   templateDescription: string;
 } & FcoTemplateFieldSet;
 
+/** The DB payload for a create/update — the templatable fields (derived from
+ *  `FCO_TEMPLATE_FIELDS`) plus the trimmed name/description. Shared by
+ *  `upsertFcoTemplate` and `saveAsFcoTemplate` so the field list lives once. */
+const fcoTemplatePayload = (data: UpsertFcoTemplateInput) => ({
+  name: data.name.trim(),
+  templateDescription: data.templateDescription.trim(),
+  ...pickFields(data, FCO_TEMPLATE_FIELDS),
+});
+
 export const upsertFcoTemplate = createServerFn({ method: "POST" })
   .inputValidator(parseUpsertFcoTemplate)
   .handler(
     adminHandler(async ({ data }): Promise<{ ok: true }> => {
-      const payload = {
-        name: data.name.trim(),
-        templateDescription: data.templateDescription.trim(),
-        title: data.title,
-        description: data.description,
-        originType: data.originType,
-        priority: data.priority,
-        discipline: data.discipline,
-        cbsCodes: data.cbsCodes,
-        locationArea: data.locationArea,
-        drawingRefs: data.drawingRefs,
-        rfiNumbers: data.rfiNumbers,
-        initiatedBy: data.initiatedBy,
-        fieldContact: data.fieldContact,
-        estimatedCost: data.estimatedCost,
-        estimatedHours: data.estimatedHours,
-        workStopped: data.workStopped,
-        photosUrl: data.photosUrl,
-        reasonNarrative: data.reasonNarrative,
-        notes: data.notes,
-      };
+      const payload = fcoTemplatePayload(data);
       if (data.id) {
         await prisma.fcoTemplate.update({
           where: { id: data.id },
@@ -202,25 +176,7 @@ export const instantiateFcoTemplate = createServerFn({ method: "POST" })
       where: { id: data.id },
       data: { usageCount: { increment: 1 } },
     });
-    return {
-      title: row.title,
-      description: row.description,
-      originType: row.originType as FcoOriginType,
-      priority: row.priority as FcoPriority,
-      discipline: row.discipline,
-      cbsCodes: row.cbsCodes,
-      locationArea: row.locationArea,
-      drawingRefs: row.drawingRefs,
-      rfiNumbers: row.rfiNumbers,
-      initiatedBy: row.initiatedBy,
-      fieldContact: row.fieldContact,
-      estimatedCost: row.estimatedCost,
-      estimatedHours: row.estimatedHours,
-      workStopped: row.workStopped,
-      photosUrl: row.photosUrl,
-      reasonNarrative: row.reasonNarrative,
-      notes: row.notes,
-    };
+    return pickFields(row, FCO_TEMPLATE_FIELDS) as FcoTemplateFieldSet;
   });
 
 export const saveAsFcoTemplate = createServerFn({ method: "POST" })
@@ -228,27 +184,7 @@ export const saveAsFcoTemplate = createServerFn({ method: "POST" })
   .handler(
     adminHandler(async ({ data }): Promise<{ ok: true; id: number }> => {
       const created = await prisma.fcoTemplate.create({
-        data: {
-          name: data.name.trim(),
-          templateDescription: data.templateDescription.trim(),
-          title: data.title,
-          description: data.description,
-          originType: data.originType,
-          priority: data.priority,
-          discipline: data.discipline,
-          cbsCodes: data.cbsCodes,
-          locationArea: data.locationArea,
-          drawingRefs: data.drawingRefs,
-          rfiNumbers: data.rfiNumbers,
-          initiatedBy: data.initiatedBy,
-          fieldContact: data.fieldContact,
-          estimatedCost: data.estimatedCost,
-          estimatedHours: data.estimatedHours,
-          workStopped: data.workStopped,
-          photosUrl: data.photosUrl,
-          reasonNarrative: data.reasonNarrative,
-          notes: data.notes,
-        },
+        data: fcoTemplatePayload(data),
       });
       return { ok: true, id: created.id };
     }),

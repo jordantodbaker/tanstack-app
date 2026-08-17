@@ -11,6 +11,7 @@ import {
   parseUpsertCvrTemplate,
   parseInstantiateCvrTemplate,
 } from "~/lib/validators";
+import { pickFields } from "~/lib/pick";
 import type { ChangeType, RiskLevel } from "./changelog";
 
 /**
@@ -111,20 +112,8 @@ export const fetchCvrTemplatesAdmin = createServerFn({ method: "GET" }).handler(
       id: r.id,
       name: r.name,
       templateDescription: r.templateDescription,
-      title: r.title,
-      description: r.description,
-      type: r.type as ChangeType,
-      discipline: r.discipline,
-      cbsCodes: r.cbsCodes,
-      originator: r.originator,
-      costImpact: r.costImpact,
-      scheduleDaysImpact: r.scheduleDaysImpact,
-      laborHoursImpact: r.laborHoursImpact,
-      riskLevel: r.riskLevel as RiskLevel,
-      reasonCode: r.reasonCode,
-      notes: r.notes,
-      area: r.area,
       usageCount: r.usageCount,
+      ...(pickFields(r, CVR_TEMPLATE_FIELDS) as CvrTemplateFieldSet),
     }));
   }),
 );
@@ -142,27 +131,20 @@ export type UpsertCvrTemplateInput = {
   templateDescription: string;
 } & CvrTemplateFieldSet;
 
+/** The DB payload for a create/update — the templatable fields (derived from
+ *  `CVR_TEMPLATE_FIELDS`) plus the trimmed name/description. Shared by
+ *  `upsertCvrTemplate` and `saveAsCvrTemplate` so the field list lives once. */
+const cvrTemplatePayload = (data: UpsertCvrTemplateInput) => ({
+  name: data.name.trim(),
+  templateDescription: data.templateDescription.trim(),
+  ...pickFields(data, CVR_TEMPLATE_FIELDS),
+});
+
 export const upsertCvrTemplate = createServerFn({ method: "POST" })
   .inputValidator(parseUpsertCvrTemplate)
   .handler(
     adminHandler(async ({ data }): Promise<{ ok: true }> => {
-      const payload = {
-        name: data.name.trim(),
-        templateDescription: data.templateDescription.trim(),
-        title: data.title,
-        description: data.description,
-        type: data.type,
-        discipline: data.discipline,
-        cbsCodes: data.cbsCodes,
-        originator: data.originator,
-        costImpact: data.costImpact,
-        scheduleDaysImpact: data.scheduleDaysImpact,
-        laborHoursImpact: data.laborHoursImpact,
-        riskLevel: data.riskLevel,
-        reasonCode: data.reasonCode,
-        notes: data.notes,
-        area: data.area,
-      };
+      const payload = cvrTemplatePayload(data);
       if (data.id) {
         await prisma.cvrTemplate.update({
           where: { id: data.id },
@@ -206,21 +188,7 @@ export const instantiateCvrTemplate = createServerFn({ method: "POST" })
       where: { id: data.id },
       data: { usageCount: { increment: 1 } },
     });
-    return {
-      title: row.title,
-      description: row.description,
-      type: row.type as ChangeType,
-      discipline: row.discipline,
-      cbsCodes: row.cbsCodes,
-      originator: row.originator,
-      costImpact: row.costImpact,
-      scheduleDaysImpact: row.scheduleDaysImpact,
-      laborHoursImpact: row.laborHoursImpact,
-      riskLevel: row.riskLevel as RiskLevel,
-      reasonCode: row.reasonCode,
-      notes: row.notes,
-      area: row.area,
-    };
+    return pickFields(row, CVR_TEMPLATE_FIELDS) as CvrTemplateFieldSet;
   });
 
 /**
@@ -233,23 +201,7 @@ export const saveAsCvrTemplate = createServerFn({ method: "POST" })
   .handler(
     adminHandler(async ({ data }): Promise<{ ok: true; id: number }> => {
       const created = await prisma.cvrTemplate.create({
-        data: {
-          name: data.name.trim(),
-          templateDescription: data.templateDescription.trim(),
-          title: data.title,
-          description: data.description,
-          type: data.type,
-          discipline: data.discipline,
-          cbsCodes: data.cbsCodes,
-          originator: data.originator,
-          costImpact: data.costImpact,
-          scheduleDaysImpact: data.scheduleDaysImpact,
-          laborHoursImpact: data.laborHoursImpact,
-          riskLevel: data.riskLevel,
-          reasonCode: data.reasonCode,
-          notes: data.notes,
-          area: data.area,
-        },
+        data: cvrTemplatePayload(data),
       });
       return { ok: true, id: created.id };
     }),

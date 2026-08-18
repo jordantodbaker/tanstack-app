@@ -1,12 +1,25 @@
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { SUMMARY_DISCIPLINES } from "~/config/disciplines";
 import { formatMoney, formatCompact } from "~/lib/formatting";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useSelectedVersion } from "~/lib/selected-version";
 import { projectFefRowTotalsQueryOptions } from "~/utils/projectTotals";
 import { areasByProjectQueryOptions } from "~/utils/areas";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "~/components/ui/accordion";
+import { Checkbox } from "~/components/ui/checkbox";
+import { DEVELOPMENT_DOC_ITEMS } from "~/config/development-docs";
+import {
+  devDocChecklistQueryOptions,
+  saveDevDocChecklist,
+} from "~/utils/devDocs";
+import { logger } from "~/lib/logger";
 import {
   readProjectIdForLoader,
   tryPrefetchProjectQuery,
@@ -29,6 +42,15 @@ export const Route = createFileRoute("/validation")({
             areasByProjectQueryOptions(projectId),
           ),
         ),
+        ...(versionId !== null
+          ? [
+              tryPrefetchProjectQuery(
+                context.queryClient.ensureQueryData(
+                  devDocChecklistQueryOptions(versionId),
+                ),
+              ),
+            ]
+          : []),
       ]);
     }
   },
@@ -201,7 +223,7 @@ function ValidationPage() {
     .filter((s) => s.value > 0);
 
   return (
-    <main className="p-4 max-w-5xl space-y-8">
+    <main className="p-4 max-w-5xl space-y-6">
       <h1 className="text-2xl font-bold">Validation</h1>
 
       {/* ── Summary cards ── */}
@@ -211,11 +233,20 @@ function ValidationPage() {
         <StatCard label="Grand Total" value={grandTotal} color="#111827" />
       </div>
 
-      {/* ── Donut + legend ── */}
-      <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-800 mb-4">
-          Disciplines vs. Indirects
-        </h2>
+      <Accordion
+        type="multiple"
+        defaultValue={[
+          "disc-vs-indirect",
+          "distribution",
+          "breakdown",
+          "relationships",
+          "validation",
+        ]}
+      >
+        {/* ── Metrics ── */}
+        <AccordionItem value="disc-vs-indirect">
+          <AccordionTrigger>Disciplines vs. Indirects</AccordionTrigger>
+          <AccordionContent>
         <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-10">
           <DonutChart slices={donutSlices} total={grandTotal} />
           <div className="space-y-5 min-w-48">
@@ -244,13 +275,12 @@ function ValidationPage() {
             })}
           </div>
         </div>
-      </div>
+          </AccordionContent>
+        </AccordionItem>
 
-      {/* ── Discipline distribution donut ── */}
-      <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-800 mb-1">
-          Discipline Distribution
-        </h2>
+        <AccordionItem value="distribution">
+          <AccordionTrigger>Discipline Distribution</AccordionTrigger>
+          <AccordionContent>
         <p className="text-sm text-slate-500 mb-5">
           Share of total discipline cost by discipline
         </p>
@@ -291,13 +321,12 @@ function ValidationPage() {
             </div>
           </div>
         )}
-      </div>
+          </AccordionContent>
+        </AccordionItem>
 
-      {/* ── Discipline breakdown ── */}
-      <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-800 mb-1">
-          Discipline Breakdown
-        </h2>
+        <AccordionItem value="breakdown">
+          <AccordionTrigger>Discipline Breakdown</AccordionTrigger>
+          <AccordionContent>
         <p className="text-sm text-slate-500 mb-5">
           Labor and material costs per discipline
         </p>
@@ -388,13 +417,120 @@ function ValidationPage() {
             </div>
           </div>
         )}
-      </div>
+          </AccordionContent>
+        </AccordionItem>
 
-      <DisciplineAreaRelationships
-        byArea={dbTotals?.byArea ?? []}
-        areas={areas}
-      />
+        <AccordionItem value="relationships">
+          <AccordionTrigger>Discipline &times; Area Relationships</AccordionTrigger>
+          <AccordionContent>
+            <DisciplineAreaRelationships
+              byArea={dbTotals?.byArea ?? []}
+              areas={areas}
+            />
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* ── Validation ── */}
+        <AccordionItem value="validation">
+          <AccordionTrigger>Validation</AccordionTrigger>
+          <AccordionContent>
+            <DocumentationForDevelopment versionId={versionId} />
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </main>
+  );
+}
+
+/**
+ * "Documentation for Development" — a grouped checkbox list persisted per
+ * estimate version. Mirrors the basis page's debounced-save pattern: hydrate
+ * local state once per version, then save the checked-key set (debounced) on
+ * change; `invalidate`-free because the writer owns the cache via setQueryData.
+ */
+function DocumentationForDevelopment({
+  versionId,
+}: {
+  versionId: number | null;
+}) {
+  const queryClient = useQueryClient();
+  const { data } = useQuery(devDocChecklistQueryOptions(versionId));
+
+  const [checked, setChecked] = React.useState<Set<string>>(new Set());
+  const hydratedKeyRef = React.useRef<number | null>(null);
+  const skipNextSaveRef = React.useRef(false);
+  const saveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Hydrate once per version from the loaded checklist.
+  React.useEffect(() => {
+    if (versionId === null || data === undefined) return;
+    if (hydratedKeyRef.current === versionId) return;
+    skipNextSaveRef.current = true;
+    setChecked(new Set(data.checkedKeys));
+    hydratedKeyRef.current = versionId;
+  }, [versionId, data]);
+
+  // Debounced save on change (skips the hydration write).
+  React.useEffect(() => {
+    if (versionId === null || hydratedKeyRef.current !== versionId) return;
+    if (skipNextSaveRef.current) {
+      skipNextSaveRef.current = false;
+      return;
+    }
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    const checkedKeys = [...checked];
+    saveTimerRef.current = setTimeout(() => {
+      saveDevDocChecklist({ data: { versionId, checkedKeys } })
+        .then(() =>
+          queryClient.setQueryData(["devDocChecklist", versionId], {
+            checkedKeys,
+          }),
+        )
+        .catch((err) =>
+          logger.error("dev-doc checklist save failed", { versionId, err }),
+        );
+    }, 500);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [versionId, checked, queryClient]);
+
+  const toggle = (key: string) =>
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  if (versionId === null) {
+    return (
+      <p className="text-sm text-slate-400">
+        Select a project and version to track development documentation.
+      </p>
+    );
+  }
+
+  return (
+    <fieldset>
+      <legend className="text-sm font-semibold text-slate-700 mb-3">
+        Documentation for Development
+      </legend>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-1">
+        {DEVELOPMENT_DOC_ITEMS.map((item) => (
+          <label
+            key={item.key}
+            className="flex items-center gap-2.5 py-1.5 text-sm text-slate-700 cursor-pointer"
+          >
+            <Checkbox
+              checked={checked.has(item.key)}
+              onCheckedChange={() => toggle(item.key)}
+            />
+            <span>{item.label}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 
@@ -465,10 +601,7 @@ function DisciplineAreaRelationships({
   const sortedRows = [...rows].sort((a, b) => rowTotal(b) - rowTotal(a));
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-      <h2 className="text-lg font-semibold text-slate-800 mb-1">
-        Discipline × Area Relationships
-      </h2>
+    <>
       <p className="text-sm text-slate-500 mb-5">
         Where cost is incurred — direct discipline cost and indirect support
         labor by area. Empty cells mean no cost recorded.
@@ -560,7 +693,7 @@ function DisciplineAreaRelationships({
           </table>
         </div>
       )}
-    </div>
+    </>
   );
 }
 

@@ -315,6 +315,7 @@ model EstimateVersion {
   createdById       Int?
   fefRows           FefRow[]
   basisInputs       BasisInputs?
+  devDocChecklist   DevelopmentDocChecklist?
   estimateSnapshots EstimateSnapshot[]
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
@@ -480,6 +481,17 @@ model BasisInputs {
   compositeLaborRate String          @default("")
   milestones         Json            @default("[]")
   updatedAt          DateTime        @updatedAt
+}
+
+/// "Documentation for Development" checklist on the Validation page — one per
+/// estimate version. Stores only the keys (from DEVELOPMENT_DOC_ITEMS) of the
+/// items that are checked.
+model DevelopmentDocChecklist {
+  id          Int             @id @default(autoincrement())
+  version     EstimateVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  versionId   Int             @unique
+  checkedKeys String[]        @default([])
+  updatedAt   DateTime        @updatedAt
 }
 
 model PipingGroup {

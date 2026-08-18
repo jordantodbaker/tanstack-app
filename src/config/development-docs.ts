@@ -31,3 +31,24 @@ export const DEVELOPMENT_DOC_ITEMS: DevelopmentDocItem[] = [
   },
   { key: "other", label: "Other" },
 ];
+
+/**
+ * Yes/No readiness checks in the Validation section — a checked box means
+ * "Yes". Persisted in the same `checkedKeys` set as the documentation items
+ * (keys are distinct, so there's no collision).
+ */
+export const ESTIMATE_READINESS_ITEMS: DevelopmentDocItem[] = [
+  {
+    key: "readiness-bulk-materials-10pct",
+    label:
+      "Are bulk materials greater than 10% of TFC based on vendor quote?",
+  },
+  {
+    key: "readiness-tagged-equipment-vendor-quote",
+    label: "Is tagged equipment based on vendor quotes?",
+  },
+  {
+    key: "readiness-lead-times-in-schedule",
+    label: "Are material lead times accounted for in the EPC schedule?",
+  },
+];

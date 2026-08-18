@@ -15,7 +15,10 @@ import {
 } from "~/components/ui/accordion";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Textarea } from "~/components/ui/textarea";
-import { DEVELOPMENT_DOC_ITEMS } from "~/config/development-docs";
+import {
+  DEVELOPMENT_DOC_ITEMS,
+  ESTIMATE_READINESS_ITEMS,
+} from "~/config/development-docs";
 import {
   devDocChecklistQueryOptions,
   saveDevDocChecklist,
@@ -523,6 +526,29 @@ function ValidationSection({ versionId }: { versionId: number | null }) {
         </legend>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-1">
           {DEVELOPMENT_DOC_ITEMS.map((item) => (
+            <label
+              key={item.key}
+              className="flex items-center gap-2.5 py-1.5 text-sm text-slate-700 cursor-pointer"
+            >
+              <Checkbox
+                checked={checked.has(item.key)}
+                onCheckedChange={() => toggle(item.key)}
+              />
+              <span>{item.label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset className="border-t border-gray-200 pt-5">
+        <legend className="text-sm font-semibold text-slate-700 mb-1">
+          Estimate Readiness
+        </legend>
+        <p className="text-sm text-slate-500 mb-2">
+          Check each item confirmed as “Yes”.
+        </p>
+        <div className="space-y-0.5">
+          {ESTIMATE_READINESS_ITEMS.map((item) => (
             <label
               key={item.key}
               className="flex items-center gap-2.5 py-1.5 text-sm text-slate-700 cursor-pointer"

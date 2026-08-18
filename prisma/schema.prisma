@@ -487,11 +487,15 @@ model BasisInputs {
 /// estimate version. Stores only the keys (from DEVELOPMENT_DOC_ITEMS) of the
 /// items that are checked.
 model DevelopmentDocChecklist {
-  id          Int             @id @default(autoincrement())
-  version     EstimateVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
-  versionId   Int             @unique
-  checkedKeys String[]        @default([])
-  updatedAt   DateTime        @updatedAt
+  id               Int             @id @default(autoincrement())
+  version          EstimateVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  versionId        Int             @unique
+  checkedKeys      String[]        @default([])
+  /// Free-text notes for the Validation section's Escalation / Contingency
+  /// prompts (how the escalation factor and contingency were derived).
+  escalationNotes  String          @default("")
+  contingencyNotes String          @default("")
+  updatedAt        DateTime        @updatedAt
 }
 
 model PipingGroup {

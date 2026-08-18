@@ -14,6 +14,7 @@ import {
   AccordionContent,
 } from "~/components/ui/accordion";
 import { Checkbox } from "~/components/ui/checkbox";
+import { Textarea } from "~/components/ui/textarea";
 import { DEVELOPMENT_DOC_ITEMS } from "~/config/development-docs";
 import {
   devDocChecklistQueryOptions,
@@ -434,7 +435,7 @@ function ValidationPage() {
         <AccordionItem value="validation">
           <AccordionTrigger>Validation</AccordionTrigger>
           <AccordionContent>
-            <DocumentationForDevelopment versionId={versionId} />
+            <ValidationSection versionId={versionId} />
           </AccordionContent>
         </AccordionItem>
       </Accordion>
@@ -443,30 +444,31 @@ function ValidationPage() {
 }
 
 /**
- * "Documentation for Development" — a grouped checkbox list persisted per
- * estimate version. Mirrors the basis page's debounced-save pattern: hydrate
- * local state once per version, then save the checked-key set (debounced) on
- * change; `invalidate`-free because the writer owns the cache via setQueryData.
+ * The Validation accordion section, persisted per estimate version: the
+ * "Documentation for Development" checkbox group plus the Escalation and
+ * Contingency free-text notes. Mirrors the basis page's debounced-save pattern —
+ * hydrate local state once per version, then save (debounced) on change;
+ * `invalidate`-free because the writer owns the cache via setQueryData.
  */
-function DocumentationForDevelopment({
-  versionId,
-}: {
-  versionId: number | null;
-}) {
+function ValidationSection({ versionId }: { versionId: number | null }) {
   const queryClient = useQueryClient();
   const { data } = useQuery(devDocChecklistQueryOptions(versionId));
 
   const [checked, setChecked] = React.useState<Set<string>>(new Set());
+  const [escalation, setEscalation] = React.useState("");
+  const [contingency, setContingency] = React.useState("");
   const hydratedKeyRef = React.useRef<number | null>(null);
   const skipNextSaveRef = React.useRef(false);
   const saveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Hydrate once per version from the loaded checklist.
+  // Hydrate once per version from the loaded record.
   React.useEffect(() => {
     if (versionId === null || data === undefined) return;
     if (hydratedKeyRef.current === versionId) return;
     skipNextSaveRef.current = true;
     setChecked(new Set(data.checkedKeys));
+    setEscalation(data.escalationNotes);
+    setContingency(data.contingencyNotes);
     hydratedKeyRef.current = versionId;
   }, [versionId, data]);
 
@@ -478,22 +480,24 @@ function DocumentationForDevelopment({
       return;
     }
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    const checkedKeys = [...checked];
+    const payload = {
+      checkedKeys: [...checked],
+      escalationNotes: escalation,
+      contingencyNotes: contingency,
+    };
     saveTimerRef.current = setTimeout(() => {
-      saveDevDocChecklist({ data: { versionId, checkedKeys } })
+      saveDevDocChecklist({ data: { versionId, ...payload } })
         .then(() =>
-          queryClient.setQueryData(["devDocChecklist", versionId], {
-            checkedKeys,
-          }),
+          queryClient.setQueryData(["devDocChecklist", versionId], payload),
         )
         .catch((err) =>
-          logger.error("dev-doc checklist save failed", { versionId, err }),
+          logger.error("validation section save failed", { versionId, err }),
         );
     }, 500);
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [versionId, checked, queryClient]);
+  }, [versionId, checked, escalation, contingency, queryClient]);
 
   const toggle = (key: string) =>
     setChecked((prev) => {
@@ -512,25 +516,54 @@ function DocumentationForDevelopment({
   }
 
   return (
-    <fieldset>
-      <legend className="text-sm font-semibold text-slate-700 mb-3">
-        Documentation for Development
-      </legend>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-1">
-        {DEVELOPMENT_DOC_ITEMS.map((item) => (
-          <label
-            key={item.key}
-            className="flex items-center gap-2.5 py-1.5 text-sm text-slate-700 cursor-pointer"
-          >
-            <Checkbox
-              checked={checked.has(item.key)}
-              onCheckedChange={() => toggle(item.key)}
-            />
-            <span>{item.label}</span>
-          </label>
-        ))}
+    <div className="space-y-6">
+      <fieldset>
+        <legend className="text-sm font-semibold text-slate-700 mb-3">
+          Documentation for Development
+        </legend>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-1">
+          {DEVELOPMENT_DOC_ITEMS.map((item) => (
+            <label
+              key={item.key}
+              className="flex items-center gap-2.5 py-1.5 text-sm text-slate-700 cursor-pointer"
+            >
+              <Checkbox
+                checked={checked.has(item.key)}
+                onCheckedChange={() => toggle(item.key)}
+              />
+              <span>{item.label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <div className="border-t border-gray-200 pt-5">
+        <h3 className="text-sm font-semibold text-slate-700">Escalation</h3>
+        <p className="text-sm text-slate-500 mt-0.5 mb-2">
+          How is escalation factor and applied: Across project as shown in Basis
+        </p>
+        <Textarea
+          value={escalation}
+          onChange={(e) => setEscalation(e.target.value)}
+          rows={3}
+          placeholder="Describe how the escalation factor was derived and applied…"
+        />
       </div>
-    </fieldset>
+
+      <div className="border-t border-gray-200 pt-5">
+        <h3 className="text-sm font-semibold text-slate-700">Contingency</h3>
+        <p className="text-sm text-slate-500 mt-0.5 mb-2">
+          How was contingency calculated? Rule of thumb is 6% used for $1MM
+          Project
+        </p>
+        <Textarea
+          value={contingency}
+          onChange={(e) => setContingency(e.target.value)}
+          rows={3}
+          placeholder="Describe how contingency was calculated…"
+        />
+      </div>
+    </div>
   );
 }
 

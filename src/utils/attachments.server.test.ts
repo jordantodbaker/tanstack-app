@@ -1,10 +1,29 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// The three IO helpers talk to Vercel Blob. Replace the SDK with spies so we can
+// assert the *private-access contract* (the security-relevant change) without a
+// real store or `BLOB_READ_WRITE_TOKEN`. Hoisted so `vi.mock` (itself hoisted
+// above the imports) can close over the handles.
+const { blobPut, blobGet, blobDel } = vi.hoisted(() => ({
+  blobPut: vi.fn(),
+  blobGet: vi.fn(),
+  blobDel: vi.fn(),
+}));
+vi.mock("@vercel/blob", () => ({
+  put: blobPut,
+  get: blobGet,
+  del: blobDel,
+}));
+
 import {
   ALLOWED_MIME_TYPES,
   MAX_ATTACHMENT_BYTES,
   buildStorageKey,
+  deleteAttachmentFile,
+  readAttachmentFile,
   sanitizeFilename,
   validateUpload,
+  writeAttachmentFile,
 } from "./attachments.server";
 
 describe("sanitizeFilename", () => {
@@ -137,5 +156,91 @@ describe("validateUpload", () => {
     ]) {
       expect(ALLOWED_MIME_TYPES.has(mime)).toBe(true);
     }
+  });
+});
+
+describe("writeAttachmentFile", () => {
+  beforeEach(() => blobPut.mockReset());
+
+  it("uploads as a PRIVATE object with an unguessable suffix and returns the URL", async () => {
+    blobPut.mockResolvedValue({ url: "https://blob.example/xyz-drawing.pdf" });
+    const url = await writeAttachmentFile(
+      "attachments/7/ChangeLog/42/abc-drawing.pdf",
+      Buffer.from("PDF-BYTES"),
+      "application/pdf",
+    );
+
+    expect(url).toBe("https://blob.example/xyz-drawing.pdf");
+    // The regression this guards against is a silent revert to `access:"public"`,
+    // which would make every leaked attachment URL readable without the token.
+    expect(blobPut).toHaveBeenCalledWith(
+      "attachments/7/ChangeLog/42/abc-drawing.pdf",
+      expect.any(Buffer),
+      { access: "private", addRandomSuffix: true, contentType: "application/pdf" },
+    );
+  });
+});
+
+describe("readAttachmentFile", () => {
+  beforeEach(() => blobGet.mockReset());
+
+  it("reads the private object with the store credentials and returns the bytes", async () => {
+    blobGet.mockResolvedValue({
+      statusCode: 200,
+      stream: new Uint8Array([1, 2, 3, 4]),
+    });
+    const buf = await readAttachmentFile("https://blob.example/xyz");
+
+    expect(buf).toEqual(Buffer.from([1, 2, 3, 4]));
+    // Must pass `access:"private"` — a plain fetch (or public get) 403s on the
+    // private object.
+    expect(blobGet).toHaveBeenCalledWith("https://blob.example/xyz", {
+      access: "private",
+    });
+  });
+
+  it("throws when the blob is missing (get resolves null)", async () => {
+    blobGet.mockResolvedValue(null);
+    await expect(readAttachmentFile("gone")).rejects.toThrow(
+      "Attachment not found in storage.",
+    );
+  });
+
+  it("throws with the status when the fetch is non-200", async () => {
+    blobGet.mockResolvedValue({ statusCode: 403, stream: new Uint8Array() });
+    await expect(readAttachmentFile("forbidden")).rejects.toThrow(
+      "Attachment fetch failed (status 403).",
+    );
+  });
+});
+
+describe("deleteAttachmentFile", () => {
+  beforeEach(() => blobDel.mockReset());
+
+  it("deletes the blob", async () => {
+    blobDel.mockResolvedValue(undefined);
+    await expect(deleteAttachmentFile("key")).resolves.toBeUndefined();
+    expect(blobDel).toHaveBeenCalledWith("key");
+  });
+
+  // Use mockImplementationOnce (not the persistent mockImplementation) for the
+  // throwing cases: a throwing impl left on the spy lingers in its call-tracking
+  // state and Vitest's async unhandled-rejection detector flags it during the
+  // *next* test — failing both, even though `deleteAttachmentFile` catches the
+  // error here. The "once" impl is consumed by the single call and leaves
+  // nothing behind. (The resolve cases above don't need this — a resolved mock
+  // never trips the detector.)
+  it("treats an already-gone blob as non-fatal so the row delete still proceeds", async () => {
+    blobDel.mockImplementationOnce(() => {
+      throw new Error("Vercel Blob: blob not found");
+    });
+    await expect(deleteAttachmentFile("key")).resolves.toBeUndefined();
+  });
+
+  it("rethrows any other error rather than silently leaking the object", async () => {
+    blobDel.mockImplementationOnce(() => {
+      throw new Error("network timeout");
+    });
+    await expect(deleteAttachmentFile("key")).rejects.toThrow("network timeout");
   });
 });

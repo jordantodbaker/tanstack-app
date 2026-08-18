@@ -6,14 +6,19 @@ import type { CurrentUser } from "./users";
 // so these tests run in the plain unit suite — no database, no Clerk env. The
 // mock handles must be created through `vi.hoisted` because `vi.mock` is hoisted
 // above the imports.
-const { userFindFirst, userFindUnique, authFn } = vi.hoisted(() => ({
-  userFindFirst: vi.fn(),
-  userFindUnique: vi.fn(),
-  authFn: vi.fn(),
-}));
+const { userFindFirst, userFindUnique, estimateVersionFindUnique, authFn } =
+  vi.hoisted(() => ({
+    userFindFirst: vi.fn(),
+    userFindUnique: vi.fn(),
+    estimateVersionFindUnique: vi.fn(),
+    authFn: vi.fn(),
+  }));
 
 vi.mock("../server/db", () => ({
-  prisma: { user: { findFirst: userFindFirst, findUnique: userFindUnique } },
+  prisma: {
+    user: { findFirst: userFindFirst, findUnique: userFindUnique },
+    estimateVersion: { findUnique: estimateVersionFindUnique },
+  },
 }));
 
 vi.mock("@clerk/tanstack-react-start/server", () => ({
@@ -21,7 +26,11 @@ vi.mock("@clerk/tanstack-react-start/server", () => ({
   clerkClient: vi.fn(),
 }));
 
-import { assertProjectAccess, requireProjectAccess } from "./users.server";
+import {
+  assertProjectAccess,
+  requireProjectAccess,
+  requireVersionAccess,
+} from "./users.server";
 
 const admin: CurrentUser = {
   id: 1,
@@ -85,6 +94,62 @@ describe("requireProjectAccess", () => {
     userFindFirst.mockResolvedValue(null); // not assigned to project 8
     await expect(requireProjectAccess(8)).rejects.toThrow(
       "Forbidden: no access to project 8",
+    );
+  });
+});
+
+describe("requireVersionAccess", () => {
+  beforeEach(() => {
+    authFn.mockReset();
+    userFindUnique.mockReset();
+    userFindFirst.mockReset();
+    estimateVersionFindUnique.mockReset();
+  });
+
+  it("throws when nobody is signed in", async () => {
+    authFn.mockResolvedValue({ userId: null });
+    await expect(requireVersionAccess(5)).rejects.toThrow(
+      "Unauthorized: not signed in",
+    );
+    // Never even looks the version up if the caller isn't authenticated.
+    expect(estimateVersionFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("throws when the version does not exist", async () => {
+    authFn.mockResolvedValue({ userId: user.clerkId });
+    userFindUnique.mockResolvedValue(user);
+    estimateVersionFindUnique.mockResolvedValue(null);
+    await expect(requireVersionAccess(5)).rejects.toThrow(
+      "Estimate version 5 not found",
+    );
+  });
+
+  it("resolves the version's project and returns actor + projectId for an admin", async () => {
+    authFn.mockResolvedValue({ userId: admin.clerkId });
+    userFindUnique.mockResolvedValue(admin);
+    estimateVersionFindUnique.mockResolvedValue({ projectId: 12 });
+
+    await expect(requireVersionAccess(5)).resolves.toEqual({
+      actor: admin,
+      projectId: 12,
+    });
+    // The guard looks the version up by id and reads only its owning project.
+    expect(estimateVersionFindUnique).toHaveBeenCalledWith({
+      where: { id: 5 },
+      select: { projectId: true },
+    });
+    // Admin bypass: no per-project membership query.
+    expect(userFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("enforces project access — a non-admin without the version's project is rejected", async () => {
+    authFn.mockResolvedValue({ userId: user.clerkId });
+    userFindUnique.mockResolvedValue(user);
+    estimateVersionFindUnique.mockResolvedValue({ projectId: 9 });
+    userFindFirst.mockResolvedValue(null); // not assigned to project 9
+
+    await expect(requireVersionAccess(5)).rejects.toThrow(
+      "Forbidden: no access to project 9",
     );
   });
 });

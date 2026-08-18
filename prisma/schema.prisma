@@ -480,6 +480,10 @@ model BasisInputs {
   estimateFactor     String          @default("")
   compositeLaborRate String          @default("")
   milestones         Json            @default("[]")
+  /// Per-discipline manpower plan: `[{ discipline, durationWeeks, avgHeadcount }]`.
+  /// Keyed by discipline id (config/disciplines-data.ts); total headcount is
+  /// derived (duration × average) on read, never stored.
+  manpower           Json            @default("[]")
   updatedAt          DateTime        @updatedAt
 }
 

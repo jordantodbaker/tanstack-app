@@ -157,6 +157,7 @@ export const createVersion = createServerFn({ method: "POST" })
               estimateFactor: basis.estimateFactor,
               compositeLaborRate: basis.compositeLaborRate,
               milestones: basis.milestones as object,
+              manpower: basis.manpower as object,
             },
           });
         }

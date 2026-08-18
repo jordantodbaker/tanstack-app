@@ -910,12 +910,35 @@ async function seedDemoData() {
       versionId: demoVersionId,
       estimateFactor: "1.08",
       compositeLaborRate: "92.50",
+      // Shape must match `BasisMilestone` (utils/basisInputs.ts): the Basis
+      // page keys rows by `event` and renders a start/end date pair.
       milestones: [
-        { label: "Mobilization", date: "2026-01-15" },
-        { label: "Foundations complete", date: "2026-03-31" },
-        { label: "Mechanical complete", date: "2026-07-31" },
-        { label: "Pre-commissioning", date: "2026-10-15" },
-        { label: "Substantial completion", date: "2026-12-15" },
+        { event: "Assess", startDate: "2026-01-05", endDate: "2026-01-30" },
+        { event: "Select", startDate: "2026-02-02", endDate: "2026-03-13" },
+        { event: "Define", startDate: "2026-03-16", endDate: "2026-05-15" },
+        {
+          event: "Detailed Engineering",
+          startDate: "2026-05-18",
+          endDate: "2026-08-14",
+        },
+        {
+          event: "Construction",
+          startDate: "2026-08-17",
+          endDate: "2026-11-20",
+        },
+        {
+          event: "Commissioning",
+          startDate: "2026-11-23",
+          endDate: "2026-12-11",
+        },
+        { event: "Closeout", startDate: "2026-12-14", endDate: "2026-12-31" },
+      ],
+      manpower: [
+        { discipline: "civil", durationWeeks: "12", avgHeadcount: "8" },
+        { discipline: "concrete", durationWeeks: "10", avgHeadcount: "12" },
+        { discipline: "steel", durationWeeks: "8", avgHeadcount: "10" },
+        { discipline: "piping", durationWeeks: "16", avgHeadcount: "14" },
+        { discipline: "electric", durationWeeks: "14", avgHeadcount: "6" },
       ],
     },
     update: {

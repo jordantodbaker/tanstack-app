@@ -5,9 +5,11 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { useSelectedVersion } from "~/lib/selected-version";
 import { logger } from "~/lib/logger";
+import { FEF_DISCIPLINES } from "~/config/disciplines";
 import {
   basisInputsQueryOptions,
   saveBasisInputs,
+  type BasisManpower,
   type BasisMilestone,
 } from "~/utils/basisInputs";
 
@@ -35,12 +37,151 @@ function diffDays(start: string, end: string): number | null {
   return Math.round(ms / 86400000);
 }
 
-function blankMilestones(): BasisMilestone[] {
-  return MILESTONE_EVENTS.map((event) => ({
-    event,
-    startDate: "",
-    endDate: "",
-  }));
+/**
+ * One row per canonical milestone event, filled in from whatever was saved for
+ * that event. Merging by name (rather than trusting the stored array) keeps the
+ * Event column populated when the persisted JSON is stale — e.g. rows from the
+ * pre-rename `{ label, date }` shape, which carry no `event` at all.
+ */
+function milestoneRows(saved: BasisMilestone[]): BasisMilestone[] {
+  const byEvent = new Map(
+    (saved ?? [])
+      .filter((row) => row && typeof row.event === "string")
+      .map((row) => [row.event, row]),
+  );
+  return MILESTONE_EVENTS.map((event) => {
+    const row = byEvent.get(event);
+    return {
+      event,
+      startDate: row?.startDate ?? "",
+      endDate: row?.endDate ?? "",
+    };
+  });
+}
+
+const MANPOWER_DISCIPLINE_LABELS: Record<string, string> = Object.fromEntries(
+  FEF_DISCIPLINES.map((d) => [d.id, d.label]),
+);
+
+/**
+ * One manpower row per take-off discipline, reusing whatever was saved for that
+ * discipline id. Keying by id (not row order) means the table picks up new
+ * disciplines and drops retired ones without stranding the entered numbers.
+ */
+function manpowerRows(saved: BasisManpower[]): BasisManpower[] {
+  const byDiscipline = new Map(saved.map((row) => [row.discipline, row]));
+  return FEF_DISCIPLINES.map(
+    (d) =>
+      byDiscipline.get(d.id) ?? {
+        discipline: d.id,
+        durationWeeks: "",
+        avgHeadcount: "",
+      },
+  );
+}
+
+/** Total headcount = duration (weeks) × average headcount. */
+function totalHeadcount(row: BasisManpower): number | null {
+  const weeks = Number(row.durationWeeks);
+  const avg = Number(row.avgHeadcount);
+  if (!row.durationWeeks || !row.avgHeadcount) return null;
+  if (!Number.isFinite(weeks) || !Number.isFinite(avg)) return null;
+  return weeks * avg;
+}
+
+function formatHeadcount(value: number): string {
+  return value.toLocaleString(undefined, { maximumFractionDigits: 1 });
+}
+
+function ManpowerTable({
+  rows,
+  setRows,
+}: {
+  rows: BasisManpower[];
+  setRows: React.Dispatch<React.SetStateAction<BasisManpower[]>>;
+}) {
+  function updateRow(
+    index: number,
+    field: "durationWeeks" | "avgHeadcount",
+    value: string,
+  ) {
+    setRows((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)),
+    );
+  }
+
+  const grandTotal = rows.reduce((sum, row) => sum + (totalHeadcount(row) ?? 0), 0);
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="bg-gray-100">
+            <th className="border border-gray-300 px-3 py-2 text-left font-semibold">
+              Discipline
+            </th>
+            <th className="border border-gray-300 px-3 py-2 text-left font-semibold">
+              Duration (Weeks)
+            </th>
+            <th className="border border-gray-300 px-3 py-2 text-left font-semibold">
+              Average Headcount
+            </th>
+            <th className="border border-gray-300 px-3 py-2 text-left font-semibold">
+              Total Headcount
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => {
+            const total = totalHeadcount(row);
+            return (
+              <tr
+                key={row.discipline}
+                className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}
+              >
+                <td className="border border-gray-300 px-3 py-2 font-medium text-slate-700 whitespace-nowrap">
+                  {MANPOWER_DISCIPLINE_LABELS[row.discipline] ?? row.discipline}
+                </td>
+                <td className="border border-gray-300 px-1 py-1">
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={row.durationWeeks}
+                    onChange={(e) => updateRow(i, "durationWeeks", e.target.value)}
+                    placeholder="0"
+                    className="w-full px-2 py-1 text-sm text-right tabular-nums bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-500 rounded"
+                  />
+                </td>
+                <td className="border border-gray-300 px-1 py-1">
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={row.avgHeadcount}
+                    onChange={(e) => updateRow(i, "avgHeadcount", e.target.value)}
+                    placeholder="0"
+                    className="w-full px-2 py-1 text-sm text-right tabular-nums bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-500 rounded"
+                  />
+                </td>
+                <td className="border border-gray-300 px-3 py-2 text-right tabular-nums text-slate-600">
+                  {total !== null ? formatHeadcount(total) : ""}
+                </td>
+              </tr>
+            );
+          })}
+          <tr className="bg-gray-100 font-semibold">
+            <td className="border border-gray-300 px-3 py-2 text-slate-700">Total</td>
+            <td className="border border-gray-300 px-3 py-2" />
+            <td className="border border-gray-300 px-3 py-2" />
+            <td className="border border-gray-300 px-3 py-2 text-right tabular-nums text-slate-700">
+              {grandTotal > 0 ? formatHeadcount(grandTotal) : ""}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function MilestoneTable({
@@ -133,8 +274,11 @@ function BasisPage() {
 
   const [estimateFactor, setEstimateFactor] = React.useState("");
   const [compositeLaborRate, setCompositeLaborRate] = React.useState("");
-  const [milestones, setMilestones] = React.useState<BasisMilestone[]>(
-    blankMilestones,
+  const [milestones, setMilestones] = React.useState<BasisMilestone[]>(() =>
+    milestoneRows([]),
+  );
+  const [manpower, setManpower] = React.useState<BasisManpower[]>(() =>
+    manpowerRows([]),
   );
 
   const hydratedKeyRef = React.useRef<number | null>(null);
@@ -149,9 +293,8 @@ function BasisPage() {
     skipNextSaveRef.current = true;
     setEstimateFactor(loaded.estimateFactor);
     setCompositeLaborRate(loaded.compositeLaborRate);
-    setMilestones(
-      loaded.milestones.length > 0 ? loaded.milestones : blankMilestones(),
-    );
+    setMilestones(milestoneRows(loaded.milestones));
+    setManpower(manpowerRows(loaded.manpower));
     hydratedKeyRef.current = versionId;
   }, [versionId, loaded]);
 
@@ -164,7 +307,7 @@ function BasisPage() {
     }
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    const payload = { estimateFactor, compositeLaborRate, milestones };
+    const payload = { estimateFactor, compositeLaborRate, milestones, manpower };
     saveTimerRef.current = setTimeout(() => {
       saveBasisInputs({ data: { versionId, payload } })
         .then(() => {
@@ -183,6 +326,7 @@ function BasisPage() {
     estimateFactor,
     compositeLaborRate,
     milestones,
+    manpower,
     queryClient,
   ]);
 
@@ -225,6 +369,13 @@ function BasisPage() {
           Schedule Information / Milestones
         </h2>
         <MilestoneTable rows={milestones} setRows={setMilestones} />
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold text-slate-800 border-b border-slate-200 pb-2">
+          Manpower
+        </h2>
+        <ManpowerTable rows={manpower} setRows={setManpower} />
       </section>
     </main>
   );

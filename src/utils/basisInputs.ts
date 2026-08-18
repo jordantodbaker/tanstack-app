@@ -10,10 +10,16 @@ const BasisMilestoneSchema = z.object({
   startDate: z.string(),
   endDate: z.string(),
 });
+const BasisManpowerSchema = z.object({
+  discipline: z.string(),
+  durationWeeks: z.string(),
+  avgHeadcount: z.string(),
+});
 const BasisInputsPayloadSchema = z.object({
   estimateFactor: z.string(),
   compositeLaborRate: z.string(),
   milestones: z.array(BasisMilestoneSchema),
+  manpower: z.array(BasisManpowerSchema),
 });
 const SaveBasisInputsSchema = z.object({
   versionId: VersionId,
@@ -26,16 +32,25 @@ export type BasisMilestone = {
   endDate: string;
 };
 
+/** One row of the Manpower table. `discipline` is a discipline id. */
+export type BasisManpower = {
+  discipline: string;
+  durationWeeks: string;
+  avgHeadcount: string;
+};
+
 export type BasisInputsPayload = {
   estimateFactor: string;
   compositeLaborRate: string;
   milestones: BasisMilestone[];
+  manpower: BasisManpower[];
 };
 
 const EMPTY: BasisInputsPayload = {
   estimateFactor: "",
   compositeLaborRate: "",
   milestones: [],
+  manpower: [],
 };
 
 export const fetchBasisInputs = createServerFn({ method: "GET" })
@@ -50,6 +65,7 @@ export const fetchBasisInputs = createServerFn({ method: "GET" })
       estimateFactor: row.estimateFactor,
       compositeLaborRate: row.compositeLaborRate,
       milestones: (row.milestones as BasisMilestone[]) ?? [],
+      manpower: (row.manpower as BasisManpower[]) ?? [],
     } satisfies BasisInputsPayload;
   });
 
@@ -75,11 +91,13 @@ export const saveBasisInputs = createServerFn({ method: "POST" })
         estimateFactor: payload.estimateFactor,
         compositeLaborRate: payload.compositeLaborRate,
         milestones: payload.milestones,
+        manpower: payload.manpower,
       },
       update: {
         estimateFactor: payload.estimateFactor,
         compositeLaborRate: payload.compositeLaborRate,
         milestones: payload.milestones,
+        manpower: payload.manpower,
       },
     });
     return { ok: true };

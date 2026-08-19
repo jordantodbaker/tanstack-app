@@ -16,6 +16,7 @@
  */
 import type { CbsOption, FefRow } from "./types";
 import { makeFefRow } from "./fef-helpers";
+import { cleanNumber, computeLaborHours, normalizeCode } from "./fef-derive";
 import { disciplineForL1 } from "~/utils/cvr-bucket";
 
 /** Column headers, in the order the parser reads them. Shown in the dialog. */
@@ -41,38 +42,12 @@ export type ParsedTakeOffPaste = {
   unmatchedCodes: string[];
 };
 
-const DEFAULT_LABOR_FACTOR = "1";
-
-/** Strip thousands separators, currency symbols, and surrounding whitespace
- *  from a pasted numeric cell so "1,200" / "$45.00" compute correctly. Leaves
- *  the value as a string (the grid stores strings); non-numeric text is
- *  returned trimmed so the user still sees what they pasted. */
-function cleanNumber(raw: string): string {
-  const cleaned = raw.replace(/[$,\s]/g, "");
-  return cleaned === "" ? "" : cleaned;
-}
-
-/** quantity × (factor || 1), to 1dp; "" when either isn't a finite number. */
-function computeLaborHours(quantity: string, factor: string): string {
-  const q = parseFloat(quantity);
-  const f = parseFloat(factor !== "" ? factor : DEFAULT_LABOR_FACTOR);
-  if (!Number.isFinite(q) || !Number.isFinite(f)) return "";
-  return (q * f).toFixed(1);
-}
-
 /** True when the first row looks like a pasted header rather than data. */
 function isHeaderLine(cells: string[]): boolean {
   const first = (cells[0] ?? "").toLowerCase().replace(/\s+/g, "");
   return (
     first === "cbscode" || first === "code" || first === "cbs" || first === "id"
   );
-}
-
-/** Normalize a code for matching: drop hyphens/whitespace, lowercase. Lets a
- *  pasted code match whether it's the display code ("601-10-0000-00-L") or the
- *  cost code, with or without hyphens. */
-function normalizeCode(code: string): string {
-  return code.replace(/[-\s]/g, "").toLowerCase();
 }
 
 type RawPastedRow = {

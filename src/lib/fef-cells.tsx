@@ -12,6 +12,12 @@ import {
 } from "~/components/ui/select";
 import { aggregateTakeOff } from "./take-off-sync";
 import { canComputeTotalCost, makeFefRow } from "./fef-helpers";
+import {
+  computeLaborHours,
+  computeSteelQuantity,
+  DEFAULT_LABOR_FACTOR,
+  effectiveLaborFactor,
+} from "./fef-derive";
 
 export const editableCellClass =
   "w-full bg-white border border-slate-200 px-2 py-1 text-sm hover:border-blue-300 focus:border-blue-400 focus:outline-none rounded";
@@ -472,42 +478,7 @@ export function ReadOnlyCell({ getValue }: { getValue: () => unknown }) {
   );
 }
 
-/**
- * Default Labor Factor when a row hasn't been explicitly set. 1.0 → labor
- * hours equals quantity, which is the lowest-surprise baseline for users
- * who don't know what factor to enter.
- */
-const DEFAULT_LABOR_FACTOR = "1";
-
-/**
- * Resolves a row's effective labor factor: the row-stored value if the user
- * typed one, otherwise the hardcoded `DEFAULT_LABOR_FACTOR`.
- */
-function effectiveLaborFactor(storedFactor: string): string {
-  return storedFactor !== "" ? storedFactor : DEFAULT_LABOR_FACTOR;
-}
-
-/** Derived labor hours = quantity × labor factor, formatted to 1dp. Returns
- *  "" when either input isn't a positive finite number. */
-export function computeLaborHours(quantity: string, factor: string): string {
-  const q = parseFloat(quantity);
-  const f = parseFloat(factor);
-  if (!Number.isFinite(q) || !Number.isFinite(f)) return "";
-  return (q * f).toFixed(1);
-}
-
-/** Structural-steel Quantity = # of shapes × length (L). Returns "" when
- *  either input isn't a finite number, and strips trailing-zero float noise
- *  (e.g. `3 × 20.1` renders `60.3`, not `60.29999…`). */
-export function computeSteelQuantity(
-  shapeCount: string,
-  length: string,
-): string {
-  const n = parseFloat(shapeCount);
-  const l = parseFloat(length);
-  if (!Number.isFinite(n) || !Number.isFinite(l)) return "";
-  return String(Math.round(n * l * 10000) / 10000);
-}
+export { computeLaborHours, computeSteelQuantity } from "./fef-derive";
 
 /** Structural-steel Total Tons = Quantity × the member's TNS/Unit (SLTO_Data).
  *  Quantity is itself derived (# of shapes × L), so this recomputes from the
@@ -540,10 +511,7 @@ export function LaborFactorInputCell({ getValue, row, table }: CellProps) {
         // Storing the default verbatim is wasteful — leave the row empty
         // so a future change to `DEFAULT_LABOR_FACTOR` still flows through.
         const persisted = next === DEFAULT_LABOR_FACTOR ? "" : next;
-        const newLaborHours = computeLaborHours(
-          row.original.quantity,
-          effectiveLaborFactor(persisted),
-        );
+        const newLaborHours = computeLaborHours(row.original.quantity, persisted);
         table.options.meta?.updateRow?.(row.index, {
           laborFactor: persisted,
           laborHours: newLaborHours,
@@ -564,10 +532,7 @@ export function LaborFactorQuantityCell({ getValue, row, table }: CellProps) {
     <TextCell
       value={getValue() as string}
       onCommit={(v) => {
-        const newLaborHours = computeLaborHours(
-          v,
-          effectiveLaborFactor(row.original.laborFactor),
-        );
+        const newLaborHours = computeLaborHours(v, row.original.laborFactor);
         table.options.meta?.updateRow?.(row.index, {
           quantity: v,
           laborHours: newLaborHours,
@@ -586,10 +551,7 @@ export function LaborFactorQuantityCell({ getValue, row, table }: CellProps) {
 export function ComputedLaborHoursCell({ row }: CellProps) {
   return (
     <span className={readOnlyCellClass}>
-      {computeLaborHours(
-        row.original.quantity,
-        effectiveLaborFactor(row.original.laborFactor),
-      )}
+      {computeLaborHours(row.original.quantity, row.original.laborFactor)}
     </span>
   );
 }
@@ -610,10 +572,7 @@ export function ShapeCountCell({ getValue, row, table }: CellProps) {
         table.options.meta?.updateRow?.(row.index, {
           shapeCount: v,
           quantity,
-          laborHours: computeLaborHours(
-            quantity,
-            effectiveLaborFactor(row.original.laborFactor),
-          ),
+          laborHours: computeLaborHours(quantity, row.original.laborFactor),
         });
       }}
     />
@@ -630,10 +589,7 @@ export function SteelLengthCell({ getValue, row, table }: CellProps) {
         table.options.meta?.updateRow?.(row.index, {
           length: v,
           quantity,
-          laborHours: computeLaborHours(
-            quantity,
-            effectiveLaborFactor(row.original.laborFactor),
-          ),
+          laborHours: computeLaborHours(quantity, row.original.laborFactor),
         });
       }}
     />

@@ -1050,6 +1050,11 @@ function useGridRangeEditing({
       areaOptions: meta?.areaOptions ?? [],
       cbsOptions: meta?.cbsOptions ?? [],
       crewMixOptions: meta?.crewMixOptions ?? [],
+      // Sheet-specific lookups; present only on the sheet that uses them, which
+      // is also how a range write tells a piping row from a steel one.
+      pipingFactorLookup: meta?.pipingFactorLookup,
+      weldGroupMaterialMap: meta?.weldGroupMaterialMap,
+      steelMemberUomLookup: meta?.steelMemberUomLookup,
     }),
     [
       meta?.roleOptions,
@@ -1058,6 +1063,9 @@ function useGridRangeEditing({
       meta?.areaOptions,
       meta?.cbsOptions,
       meta?.crewMixOptions,
+      meta?.pipingFactorLookup,
+      meta?.weldGroupMaterialMap,
+      meta?.steelMemberUomLookup,
     ],
   );
 

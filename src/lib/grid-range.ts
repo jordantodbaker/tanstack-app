@@ -7,18 +7,39 @@
  * Coordinates are absolute row indices into the `FefRow[]` data array and
  * visible-column indices (position within `table.getVisibleLeafColumns()`).
  *
- * Only a defined set of columns are *writable* by range operations
- * (`RANGE_WRITABLE_COLUMNS`) — the free-text/numeric fields, the Area / Role /
- * Schedule pickers, the CBS-item Name picker, and the Crew Mix picker. Each
- * write mirrors its cell editor's side-effects: Quantity/Labor Factor recompute
- * Labor Hours; Role/Schedule re-resolve the Labor Rate; a Name (CBS code or
- * name) stamps id/name/unit; a Crew Mix snapshots the averaged wage onto the
- * Labor Rate and clears Role/Schedule. The derived (Labor Hours, Total Cost, ID,
- * Unit) and checkbox (Sub) columns are copy-only: they still serialize on copy
- * so a whole row exports to Excel, but paste/fill/clear skip them.
+ * Every column the take-off sheets give an editor is *writable* by range
+ * operations (`RANGE_WRITABLE_COLUMNS`): the free-text/numeric fields, the Sub
+ * checkbox, the Area / Role / Schedule / Crew Mix pickers, the CBS-item Name
+ * picker, the steel dimensions, and the piping Size / Task Code / Shop-Field /
+ * Weld Group pickers. Each write mirrors its cell editor's side-effects:
+ * Quantity/Labor Factor recompute Labor Hours (through the piping factor table
+ * on the piping sheet); # of Shapes / L recompute the steel Quantity;
+ * Role/Schedule re-resolve the Labor Rate; a Name (CBS code or name) stamps
+ * id/name/unit; a Crew Mix snapshots the averaged wage onto the Labor Rate and
+ * clears Role/Schedule; Shop-Field / Weld Group re-derive the metallurgy code
+ * and re-match the CBS item. Purely derived columns (Labor Hours, Total Cost,
+ * ID, Unit, Total Tons) stay copy-only: they still serialize on copy so a whole
+ * row exports to Excel, but paste/fill/clear skip them.
+ *
+ * A column with an editor but no entry in `RANGE_WRITABLE_COLUMNS` silently
+ * ignores Ctrl+D / paste / Delete, so new take-off columns must be added here
+ * as well as to the column defs.
  */
 import type { CbsOption, FefRow } from "./types";
 import { crewMixAverageRate } from "./crew-mix-rate";
+import {
+  cleanNumber,
+  computeLaborHours,
+  computeSteelQuantity,
+  DEFAULT_LABOR_FACTOR,
+  normalizeCode,
+} from "./fef-derive";
+import {
+  deriveLaborHours,
+  pipingCostCode,
+  type PipingFactorLookup,
+} from "./piping-derive";
+import { computeBoreSize } from "./utils";
 import { fefRowHasUserData } from "./fef-helpers";
 
 export type CellCoord = { row: number; col: number };
@@ -63,12 +84,58 @@ export type WriteCtx = {
   areaOptions: AreaOption[];
   cbsOptions: CbsOption[];
   crewMixOptions: CrewMixLookup[];
+  /** Piping (task code, size) → labor factor; absent on non-piping sheets. */
+  pipingFactorLookup?: PipingFactorLookup;
+  /** Piping weld-group classification → shop/install metallurgy codes. */
+  weldGroupMaterialMap?: Record<string, { shopCode: string; installCode: string }>;
+  /** Structural-steel member designation → QTO UoM (SLTO_Data). */
+  steelMemberUomLookup?: Record<string, string>;
 };
 
-/** Columns a range paste / fill / clear is allowed to write. */
-export const RANGE_WRITABLE_COLUMNS: ReadonlySet<string> = new Set([
+/** Free-text / numeric columns that store exactly what's written, with no
+ *  coupled field to recompute. Shared by the generic and piping take-offs
+ *  (each sheet shows the subset its discipline needs). */
+const PLAIN_TEXT_COLUMNS: ReadonlySet<string> = new Set([
   "description",
   "notes",
+  // Reference / line list
+  "projectPhase",
+  "drawingNumber",
+  "drawingRev",
+  "processUnit",
+  "areaName",
+  "systemName",
+  "tagNumber",
+  // Spec & testing (piping)
+  "lineSpec",
+  "paintSpec",
+  "insulation",
+  "nde",
+  "pwht",
+  "hydro",
+  "heatTrace",
+  // Location
+  "agUg",
+  "elevation",
+  // Labor adjustments
+  "siteFactor",
+  "feetAboveGrade",
+  "efficAdjust",
+  "laborFactorAdj",
+  "elevAdder",
+  "weldAdder",
+  // Steel dimensions that feed nothing (H / W are informational)
+  "height",
+  "width",
+]);
+
+/** Columns a range paste / fill / clear is allowed to write: every column the
+ *  take-off sheets give an editor, whether it stores its text verbatim or
+ *  resolves through a picker. Keep in step with the cell set in
+ *  FefTable.tsx / Piping/columns.ts — a column missing here silently
+ *  ignores Ctrl+D, paste, and Delete. */
+export const RANGE_WRITABLE_COLUMNS: ReadonlySet<string> = new Set([
+  ...PLAIN_TEXT_COLUMNS,
   "quantity",
   "laborFactor",
   "area",
@@ -76,58 +143,179 @@ export const RANGE_WRITABLE_COLUMNS: ReadonlySet<string> = new Set([
   "schedule",
   "name",
   "crewMixId",
+  "sub",
+  // Steel: Quantity is derived from these two.
+  "length",
+  "shapeCount",
+  // Piping pickers (and the steel member picker, which shares "taskCode").
+  "size",
+  "taskCode",
+  "shopField",
+  "weldGroupDescription",
 ]);
 
-const DEFAULT_LABOR_FACTOR = "1";
+/**
+ * Prebuilt lookup tables over a `WriteCtx`'s option lists.
+ *
+ * Every select column used to resolve with `Array.find` *per cell*: a paste or
+ * fill over the Name column re-scanned the discipline's whole CBS catalog
+ * (~1,800 items on piping) for every row, re-normalizing each option's code as
+ * it went. The tables below are built once per ctx and turn each resolution
+ * into a hash lookup.
+ *
+ * Match semantics are preserved exactly, which is why the first insert for a
+ * key wins: `Array.find` returns the earliest matching option, so a duplicate
+ * code or label later in the list must not displace it.
+ */
+type WriteIndex = {
+  /** Normalized display code -> item. */
+  cbsByDisplayCode: Map<string, CbsOption>;
+  /** Normalized cost code -> item (items without a cost code are skipped). */
+  cbsByCostCode: Map<string, CbsOption>;
+  /** Lowercased item name -> item. */
+  cbsByName: Map<string, CbsOption>;
+  /** Verbatim cost code -> item, for the piping metallurgy+bore lookup, which
+   *  matches case-sensitively and must not go through `normalizeCode`. */
+  cbsByExactCostCode: Map<string, CbsOption>;
+  /** Trimmed + lowercased area id *or* label -> the stored area id. */
+  areaIdByText: Map<string, string>;
+  /** Area id -> its display label (the copy / sort read path). */
+  areaLabelById: Map<string, string>;
+  roleByLowerName: Map<string, string>;
+  scheduleByLowerName: Map<string, string>;
+  /** `role\u0000schedule` -> composite rate. */
+  rateByRoleSchedule: Map<string, number>;
+  crewById: Map<string, CrewMixLookup>;
+  crewByLowerName: Map<string, CrewMixLookup>;
+  /** Lowercased weld-group classification -> its stored (cased) key. */
+  weldGroupByLowerName: Map<string, string>;
+  /** Crew mix id -> its averaged labor rate, filled on first use. The average
+   *  depends only on the mix and the rate table, so a fill-down over 500 rows
+   *  computes it once instead of 500 times. */
+  crewRateById: Map<string, string>;
+};
 
-/** Strip thousands separators / currency / whitespace from a pasted number,
- *  matching the paste-dialog parser so "1,200" and "$45.00" compute. */
-function cleanNumber(raw: string): string {
-  return raw.replace(/[$,\s]/g, "");
+/**
+ * One index per ctx identity, keyed weakly so an index dies with its ctx.
+ *
+ * The invariant this relies on: **a `WriteCtx` and its option arrays are never
+ * mutated in place.** `writeCtx` (table-utils.tsx) is a `useMemo` over the
+ * option arrays, and those arrays come straight from queries, so a content
+ * change always produces a new ctx object — and therefore a fresh index.
+ * Pushing into `ctx.cbsOptions` instead of replacing it would leave a stale
+ * index behind.
+ */
+const WRITE_INDEXES = new WeakMap<WriteCtx, WriteIndex>();
+
+/** First insert wins - mirrors `Array.find` returning the earliest match. */
+function setFirst<V>(map: Map<string, V>, key: string, value: V): void {
+  if (!map.has(key)) map.set(key, value);
 }
 
-/** quantity × (factor || 1), to 1dp; "" when either isn't finite. Mirrors the
- *  grid's own Labor Hours derivation. */
-function computeLaborHours(quantity: string, factor: string): string {
-  const q = parseFloat(quantity);
-  const f = parseFloat(factor !== "" ? factor : DEFAULT_LABOR_FACTOR);
-  if (!Number.isFinite(q) || !Number.isFinite(f)) return "";
-  return (q * f).toFixed(1);
+/** Composite key for the (role, schedule) rate table. NUL can't occur in
+ *  either half, so it can't collide the way a "-" or "|" join could. */
+function rateKey(role: string, schedule: string): string {
+  return `${role}\u0000${schedule}`;
 }
 
-/** Normalize a CBS code for matching: drop hyphens/whitespace, lowercase — so a
- *  pasted code matches whether it's the display code or cost code, with or
- *  without hyphens. Mirrors the paste-dialog parser. */
-function normalizeCode(code: string): string {
-  return code.replace(/[-\s]/g, "").toLowerCase();
+function buildWriteIndex(ctx: WriteCtx): WriteIndex {
+  const idx: WriteIndex = {
+    cbsByDisplayCode: new Map(),
+    cbsByCostCode: new Map(),
+    cbsByName: new Map(),
+    cbsByExactCostCode: new Map(),
+    areaIdByText: new Map(),
+    areaLabelById: new Map(),
+    roleByLowerName: new Map(),
+    scheduleByLowerName: new Map(),
+    rateByRoleSchedule: new Map(),
+    crewById: new Map(),
+    crewByLowerName: new Map(),
+    weldGroupByLowerName: new Map(),
+    crewRateById: new Map(),
+  };
+
+  for (const o of ctx.cbsOptions) {
+    setFirst(idx.cbsByDisplayCode, normalizeCode(o.displayCode), o);
+    if (o.costCode) {
+      setFirst(idx.cbsByCostCode, normalizeCode(o.costCode), o);
+      setFirst(idx.cbsByExactCostCode, o.costCode, o);
+    }
+    setFirst(idx.cbsByName, o.name.toLowerCase(), o);
+  }
+  for (const o of ctx.areaOptions) {
+    // Id before label, per option: `find` tested both on each option before
+    // moving to the next, so an earlier option's label beats a later one's id.
+    setFirst(idx.areaIdByText, o.value.trim().toLowerCase(), o.value);
+    setFirst(idx.areaIdByText, o.label.trim().toLowerCase(), o.value);
+    setFirst(idx.areaLabelById, o.value, o.label);
+  }
+  for (const r of ctx.roleOptions) {
+    setFirst(idx.roleByLowerName, r.toLowerCase(), r);
+  }
+  for (const sch of ctx.scheduleOptions) {
+    setFirst(idx.scheduleByLowerName, sch.toLowerCase(), sch);
+  }
+  for (const r of ctx.roleRates) {
+    setFirst(idx.rateByRoleSchedule, rateKey(r.roleName, r.schedule), r.rate);
+  }
+  for (const c of ctx.crewMixOptions) {
+    setFirst(idx.crewById, String(c.id), c);
+    setFirst(idx.crewByLowerName, c.name.toLowerCase(), c);
+  }
+  for (const k of Object.keys(ctx.weldGroupMaterialMap ?? {})) {
+    setFirst(idx.weldGroupByLowerName, k.toLowerCase(), k);
+  }
+
+  return idx;
+}
+
+function indexFor(ctx: WriteCtx): WriteIndex {
+  let idx = WRITE_INDEXES.get(ctx);
+  if (!idx) {
+    idx = buildWriteIndex(ctx);
+    WRITE_INDEXES.set(ctx, idx);
+  }
+  return idx;
 }
 
 /** Resolve pasted text to a CBS item: display code, then cost code (both
  *  hyphen-insensitive), then an exact item name (case-insensitive). */
-function resolveCbs(raw: string, options: CbsOption[]): CbsOption | undefined {
+function resolveCbs(raw: string, idx: WriteIndex): CbsOption | undefined {
   const norm = normalizeCode(raw);
   if (norm === "") return undefined;
-  const byDisplay = options.find((o) => normalizeCode(o.displayCode) === norm);
-  if (byDisplay) return byDisplay;
-  const byCost = options.find(
-    (o) => o.costCode && normalizeCode(o.costCode) === norm,
+  return (
+    idx.cbsByDisplayCode.get(norm) ??
+    idx.cbsByCostCode.get(norm) ??
+    idx.cbsByName.get(raw.trim().toLowerCase())
   );
-  if (byCost) return byCost;
-  const lower = raw.trim().toLowerCase();
-  return options.find((o) => o.name.toLowerCase() === lower);
 }
 
 /** Resolve pasted text to a crew mix: its id, then its name (case-insensitive). */
 function resolveCrewMix(
   raw: string,
-  options: CrewMixLookup[],
+  idx: WriteIndex,
 ): CrewMixLookup | undefined {
   const t = raw.trim();
   if (t === "") return undefined;
-  return (
-    options.find((o) => String(o.id) === t) ??
-    options.find((o) => o.name.toLowerCase() === t.toLowerCase())
-  );
+  return idx.crewById.get(t) ?? idx.crewByLowerName.get(t.toLowerCase());
+}
+
+/** A crew mix's averaged labor rate as the row stores it. Computed once per mix
+ *  per ctx - the average depends only on the mix and the rate table, never on
+ *  the row being written. */
+function crewMixRate(
+  mix: CrewMixLookup,
+  ctx: WriteCtx,
+  idx: WriteIndex,
+): string {
+  const key = String(mix.id);
+  const cached = idx.crewRateById.get(key);
+  if (cached !== undefined) return cached;
+  const avg = crewMixAverageRate(mix.members, mix.schedule, ctx.roleRates);
+  const rate = avg > 0 ? avg.toFixed(2) : "";
+  idx.crewRateById.set(key, rate);
+  return rate;
 }
 
 /** Resolve the composite labor rate for a (role, schedule) pair, returning the
@@ -136,14 +324,65 @@ function resolveCrewMix(
 function applyRoleRate(
   changed: { role?: string; schedule?: string },
   current: { role: string; schedule: string },
-  roleRates: RoleRate[],
+  idx: WriteIndex,
 ): Partial<FefRow> {
   const role = changed.role ?? current.role;
   const schedule = changed.schedule ?? current.schedule;
-  const match = roleRates.find(
-    (r) => r.roleName === role && r.schedule === schedule,
-  );
-  return { ...changed, laborRate: match ? String(match.rate) : "" };
+  const rate = idx.rateByRoleSchedule.get(rateKey(role, schedule));
+  return { ...changed, laborRate: rate !== undefined ? String(rate) : "" };
+}
+
+/** True when this sheet's rows derive Labor Hours from the piping factor table
+ *  (task code + size) rather than quantity × labor factor. */
+function isPipingSheet(ctx: WriteCtx): boolean {
+  return ctx.pipingFactorLookup !== undefined;
+}
+
+/** Labor Hours for a row after a range write, using whichever derivation the
+ *  sheet's own cell editors use. */
+function laborHoursFor(row: FefRow, ctx: WriteCtx): string {
+  return isPipingSheet(ctx)
+    ? deriveLaborHours(row, ctx.pipingFactorLookup)
+    : computeLaborHours(row.quantity, row.laborFactor);
+}
+
+/** The id/name/unit stamp a piping row picks up from its metallurgy code +
+ *  bore size, or `{}` when nothing matches (leave the existing item alone). */
+function cbsStamp(
+  metallurgyCode: string,
+  boreSize: string,
+  idx: WriteIndex,
+): Partial<FefRow> {
+  const code = pipingCostCode(metallurgyCode, boreSize);
+  const match = code === null ? undefined : idx.cbsByExactCostCode.get(code);
+  return match
+    ? { id: match.displayCode, name: match.name, unit: match.uom }
+    : {};
+}
+
+/** Metallurgy code for a (weld group, shop/field) pair — "" when either half
+ *  is missing or the classification isn't in the material map. */
+function metallurgyFor(
+  weldGroupDescription: string,
+  shopField: string,
+  ctx: WriteCtx,
+): string {
+  const entry = weldGroupDescription
+    ? ctx.weldGroupMaterialMap?.[weldGroupDescription]
+    : undefined;
+  if (!entry || !shopField) return "";
+  return shopField === "Shop" ? entry.shopCode : entry.installCode;
+}
+
+/** Parse a Sub checkbox cell. Accepts the stored "true" (fill-down) and the
+ *  serialized "Yes" (clipboard round-trip); anything else is unresolvable. */
+function parseSub(raw: string): string | null {
+  const t = raw.trim().toLowerCase();
+  if (t === "") return "";
+  if (t === "true" || t === "yes" || t === "y" || t === "x" || t === "1")
+    return "true";
+  if (t === "false" || t === "no" || t === "n" || t === "0") return "";
+  return null;
 }
 
 /**
@@ -158,13 +397,86 @@ export function resolveCellWrite(
   row: FefRow,
   ctx: WriteCtx,
 ): Partial<FefRow> | null {
+  const idx = indexFor(ctx);
   switch (colId) {
-    case "description":
-    case "notes":
-      return { [colId]: raw } as Partial<FefRow>;
+    case "sub": {
+      const parsed = parseSub(raw);
+      return parsed === null ? null : { sub: parsed };
+    }
     case "quantity": {
       const q = cleanNumber(raw);
-      return { quantity: q, laborHours: computeLaborHours(q, row.laborFactor) };
+      return { quantity: q, laborHours: laborHoursFor({ ...row, quantity: q }, ctx) };
+    }
+    case "length":
+    case "shapeCount": {
+      // Steel: Quantity is derived (# of shapes × L), so writing either input
+      // recomputes it — and Labor Hours with it. Mirrors SteelLengthCell /
+      // ShapeCountCell.
+      const v = cleanNumber(raw);
+      const next = { ...row, [colId]: v } as FefRow;
+      const quantity = computeSteelQuantity(next.shapeCount, next.length);
+      return {
+        [colId]: v,
+        quantity,
+        laborHours: laborHoursFor({ ...next, quantity }, ctx),
+      } as Partial<FefRow>;
+    }
+    case "size": {
+      // Piping: Size drives the bore size, the factor lookup (Labor Hours) and
+      // the CBS match. Mirrors PipingSizeCell.
+      const v = cleanNumber(raw);
+      const boreSize = computeBoreSize(v);
+      return {
+        size: v,
+        boreSize,
+        laborHours: laborHoursFor({ ...row, size: v }, ctx),
+        ...cbsStamp(row.metallurgyCode, boreSize, idx),
+      };
+    }
+    case "taskCode": {
+      const code = raw.trim();
+      if (code === "")
+        return { taskCode: "", unit: "", laborHours: laborHoursFor({ ...row, taskCode: "" }, ctx) };
+      // "taskCode" is the piping task code on the piping sheet and the SLTO
+      // member designation on structural steel; both stamp Unit from their own
+      // lookup. Reject a code neither table knows rather than writing a value
+      // the picker itself could never have produced.
+      const pipingEntry = ctx.pipingFactorLookup?.get(code);
+      if (pipingEntry) {
+        return {
+          taskCode: code,
+          unit: pipingEntry.unit,
+          laborHours: deriveLaborHours({ ...row, taskCode: code }, ctx.pipingFactorLookup),
+          ...cbsStamp(row.metallurgyCode, row.boreSize, idx),
+        };
+      }
+      const steelUom = ctx.steelMemberUomLookup?.[code];
+      return steelUom === undefined ? null : { taskCode: code, unit: steelUom };
+    }
+    case "shopField": {
+      const v = raw.trim() === "" ? "" : raw.trim().toLowerCase() === "shop" ? "Shop" : raw.trim().toLowerCase() === "field" ? "Field" : null;
+      if (v === null) return null;
+      const metallurgyCode = metallurgyFor(row.weldGroupDescription, v, ctx);
+      return {
+        shopField: v,
+        metallurgyCode,
+        ...cbsStamp(metallurgyCode, row.boreSize, idx),
+      };
+    }
+    case "weldGroupDescription": {
+      const t = raw.trim();
+      if (t === "")
+        return { weldGroupDescription: "", metallurgyCode: "" };
+      // Match the stored classification case-insensitively; an unknown one is
+      // unresolvable (the picker only offers mapped classifications).
+      const match = idx.weldGroupByLowerName.get(t.toLowerCase());
+      if (match === undefined) return null;
+      const metallurgyCode = metallurgyFor(match, row.shopField, ctx);
+      return {
+        weldGroupDescription: match,
+        metallurgyCode,
+        ...cbsStamp(metallurgyCode, row.boreSize, idx),
+      };
     }
     case "laborFactor": {
       const f = cleanNumber(raw).trim();
@@ -173,32 +485,26 @@ export function resolveCellWrite(
       const persisted = f === DEFAULT_LABOR_FACTOR ? "" : f;
       return {
         laborFactor: persisted,
-        laborHours: computeLaborHours(row.quantity, persisted),
+        laborHours: laborHoursFor({ ...row, laborFactor: persisted }, ctx),
       };
     }
     case "area": {
       if (raw.trim() === "") return { area: "" };
-      const norm = (s: string) => s.trim().toLowerCase();
-      const match = ctx.areaOptions.find(
-        (o) => norm(o.value) === norm(raw) || norm(o.label) === norm(raw),
-      );
-      return match ? { area: match.value } : null;
+      const match = idx.areaIdByText.get(raw.trim().toLowerCase());
+      return match !== undefined ? { area: match } : null;
     }
     case "role": {
-      if (raw.trim() === "") return applyRoleRate({ role: "" }, row, ctx.roleRates);
-      const match = ctx.roleOptions.find(
-        (o) => o.toLowerCase() === raw.trim().toLowerCase(),
-      );
-      return match ? applyRoleRate({ role: match }, row, ctx.roleRates) : null;
+      if (raw.trim() === "") return applyRoleRate({ role: "" }, row, idx);
+      const match = idx.roleByLowerName.get(raw.trim().toLowerCase());
+      return match !== undefined
+        ? applyRoleRate({ role: match }, row, idx)
+        : null;
     }
     case "schedule": {
-      if (raw.trim() === "")
-        return applyRoleRate({ schedule: "" }, row, ctx.roleRates);
-      const match = ctx.scheduleOptions.find(
-        (o) => o.toLowerCase() === raw.trim().toLowerCase(),
-      );
-      return match
-        ? applyRoleRate({ schedule: match }, row, ctx.roleRates)
+      if (raw.trim() === "") return applyRoleRate({ schedule: "" }, row, idx);
+      const match = idx.scheduleByLowerName.get(raw.trim().toLowerCase());
+      return match !== undefined
+        ? applyRoleRate({ schedule: match }, row, idx)
         : null;
     }
     case "name": {
@@ -206,7 +512,7 @@ export function resolveCellWrite(
       // code in `id`. Clearing removes the whole item; a resolvable code/name
       // stamps id + name + unit (matching CbsSelectCell / CbsSearchSelectCell).
       if (raw.trim() === "") return { id: "", name: "", unit: "" };
-      const match = resolveCbs(raw, ctx.cbsOptions);
+      const match = resolveCbs(raw, idx);
       return match
         ? { id: match.displayCode, name: match.name, unit: match.uom }
         : null;
@@ -216,18 +522,19 @@ export function resolveCellWrite(
       // rates at its schedule and clear role/schedule so the row's rate source
       // is unambiguous.
       if (raw.trim() === "") return { crewMixId: "", laborRate: "" };
-      const match = resolveCrewMix(raw, ctx.crewMixOptions);
+      const match = resolveCrewMix(raw, idx);
       if (!match) return null;
-      const avg = crewMixAverageRate(match.members, match.schedule, ctx.roleRates);
       return {
         crewMixId: String(match.id),
-        laborRate: avg > 0 ? avg.toFixed(2) : "",
+        laborRate: crewMixRate(match, ctx, idx),
         role: "",
         schedule: "",
       };
     }
     default:
-      return null;
+      return PLAIN_TEXT_COLUMNS.has(colId)
+        ? ({ [colId]: raw } as Partial<FefRow>)
+        : null;
   }
 }
 
@@ -237,6 +544,7 @@ export function resolveCellWrite(
  * some are writable on paste. Select columns emit their display label.
  */
 export function readCellText(colId: string, row: FefRow, ctx: WriteCtx): string {
+  const idx = indexFor(ctx);
   switch (colId) {
     case "__select":
     case "delete":
@@ -253,12 +561,10 @@ export function readCellText(colId: string, row: FefRow, ctx: WriteCtx): string 
         : "";
     }
     case "area": {
-      const match = ctx.areaOptions.find((o) => o.value === row.area);
-      return match ? match.label : row.area;
+      return idx.areaLabelById.get(row.area) ?? row.area;
     }
     case "crewMixId": {
-      const match = ctx.crewMixOptions.find((o) => String(o.id) === row.crewMixId);
-      return match ? match.name : "";
+      return idx.crewById.get(row.crewMixId)?.name ?? "";
     }
     default: {
       const v = (row as Record<string, unknown>)[colId];

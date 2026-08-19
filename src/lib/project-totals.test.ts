@@ -430,6 +430,25 @@ describe("accumulateProjectTotals", () => {
       expect(totals.invalidByDiscipline).toEqual({ piping: 2, civil: 1 });
     });
 
+    // Regression: this count only sees the fields its caller passes, and both
+    // the row shape here and the server's `select` were hand-written lists that
+    // stopped at the fields existing when they were written. A row touched only
+    // through a newer column (Drawing Number, a labor adjustment, a steel
+    // dimension…) read as untouched, so the Summary badge under-counted while
+    // the sidebar — which tests every field in SQL — counted it. Both now derive
+    // from FEF_ROW_STRING_FIELDS. The property names below are literals on
+    // purpose: excess-property checking is what fails here if the row shape
+    // stops covering a field.
+    it("counts rows touched only through the newer columns", () => {
+      const totals = accumulateProjectTotals([
+        row({ section: "TAKE_OFF", discipline: "piping", ...BLANK, drawingNumber: "P-101" }),
+        row({ section: "TAKE_OFF", discipline: "piping", ...BLANK, lineSpec: "CS150" }),
+        row({ section: "TAKE_OFF", discipline: "civil", ...BLANK, siteFactor: "1.2" }),
+        row({ section: "TAKE_OFF", discipline: "steel", ...BLANK, shapeCount: "3" }),
+      ]);
+      expect(totals.invalidByDiscipline).toEqual({ piping: 2, civil: 1, steel: 1 });
+    });
+
     it("ignores SUPPORT_LABOR and MATERIALS rows", () => {
       const totals = accumulateProjectTotals([
         row({

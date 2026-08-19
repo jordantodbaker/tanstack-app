@@ -8,23 +8,21 @@ import {
   type CellProps,
 } from "~/lib/table-utils";
 import { computeBoreSize } from "~/lib/utils";
+import {
+  deriveLaborHours,
+  laborFactorFor,
+  lookupCbsItem,
+} from "~/lib/piping-derive";
 import { crewMixAverageRate } from "~/lib/crew-mix-rate";
 import {
   SearchableSelect,
   type SearchableSelectOption,
 } from "~/components/SearchableSelect";
 
-function lookupCbsItem(
-  metallurgyCode: string,
-  boreSize: string,
-  cbsOptions: CbsOption[],
-): CbsOption | undefined {
-  if (!metallurgyCode || !boreSize) return undefined;
-  const code = `${metallurgyCode}${boreSize}ST0000C`;
-  return cbsOptions.find((o) => o.costCode === code);
-}
-
 export { ReadOnlyCell, TakeOffIdCell } from "~/lib/table-utils";
+// Re-exported so existing importers (and cells.test.ts) keep their import path
+// while the derivation itself lives in the React-free lib module.
+export { deriveLaborHours } from "~/lib/piping-derive";
 
 /**
  * Searchable CBS-item picker for a Name column. Client-filters the discipline's
@@ -294,42 +292,6 @@ export function CrewMixSelectCell({ row, table }: CellProps) {
       }}
     />
   );
-}
-
-type PipingFactorLookup = Map<
-  string,
-  { unit: string; values: Map<number, number> }
->;
-
-function laborFactorFor(
-  row: Pick<FefRow, "taskCode" | "size">,
-  lookup: PipingFactorLookup | undefined,
-): number | undefined {
-  if (!lookup || !row.taskCode || row.size === "") return undefined;
-  const size = parseFloat(row.size);
-  if (isNaN(size)) return undefined;
-  return lookup.get(row.taskCode)?.values.get(size);
-}
-
-/**
- * Derives the labor-hours string a Take Off row should hold given its
- * current `taskCode`, `size`, and `quantity`. Returns `""` when the inputs
- * can't produce a value (missing factor, blank quantity, non-numeric qty).
- *
- * Lives here because the derivation needs to fire on the same event that
- * changes one of those three fields — the previous "compute on view, write
- * via useEffect" pattern in `LaborHoursCell` was issuing a debounced save
- * for every loaded row whose stored value didn't bit-match the recomputed
- * one, so just opening the take-off triggered a fan-out of saves.
- */
-export function deriveLaborHours(
-  row: Pick<FefRow, "taskCode" | "size" | "quantity">,
-  lookup: PipingFactorLookup | undefined,
-): string {
-  const factor = laborFactorFor(row, lookup);
-  const qty = parseFloat(row.quantity);
-  if (factor === undefined || isNaN(qty) || row.quantity === "") return "";
-  return (factor * qty).toFixed(1);
 }
 
 export function LaborFactorCell({ row, table }: CellProps) {

@@ -316,6 +316,239 @@ describe("applyFillDown", () => {
   });
 });
 
+describe("fill-down over the non-derived take-off columns", () => {
+  // The reference / spec / labor-adjustment columns are plain text: they were
+  // silently skipped by Ctrl+D until they were added to RANGE_WRITABLE_COLUMNS.
+  const PLAIN = [
+    "projectPhase",
+    "drawingNumber",
+    "drawingRev",
+    "processUnit",
+    "areaName",
+    "systemName",
+    "tagNumber",
+    "lineSpec",
+    "paintSpec",
+    "insulation",
+    "nde",
+    "pwht",
+    "hydro",
+    "heatTrace",
+    "agUg",
+    "elevation",
+    "siteFactor",
+    "feetAboveGrade",
+    "efficAdjust",
+    "laborFactorAdj",
+    "elevAdder",
+    "weldAdder",
+    "height",
+    "width",
+  ] as const;
+
+  it.each(PLAIN)("fills %s down the selection", (colId) => {
+    const data = [makeFefRow({ [colId]: "SRC" }), makeFefRow(), makeFefRow()];
+    const next = applyFillDown(data, [colId], range(0, 0, 2, 0), ctx);
+    expect(next[1][colId]).toBe("SRC");
+    expect(next[2][colId]).toBe("SRC");
+  });
+
+  it("fills the Sub checkbox, and round-trips its serialized 'Yes'", () => {
+    const data = [makeFefRow({ sub: "true" }), makeFefRow(), makeFefRow()];
+    const next = applyFillDown(data, ["sub"], range(0, 0, 2, 0), ctx);
+    expect(next[1].sub).toBe("true");
+    expect(next[2].sub).toBe("true");
+    // Clipboard text ("Yes") resolves to the same stored value.
+    expect(resolveCellWrite("sub", "Yes", makeFefRow(), ctx)).toEqual({
+      sub: "true",
+    });
+    expect(resolveCellWrite("sub", "", makeFefRow({ sub: "true" }), ctx)).toEqual({
+      sub: "",
+    });
+    // Anything else is unresolvable — leave the cell alone.
+    expect(resolveCellWrite("sub", "maybe", makeFefRow(), ctx)).toBeNull();
+  });
+
+  it("recomputes steel Quantity when # of Shapes or L is filled down", () => {
+    const data = [
+      makeFefRow({ shapeCount: "3", length: "20", quantity: "60" }),
+      makeFefRow({ length: "10" }),
+    ];
+    const next = applyFillDown(data, ["shapeCount"], range(0, 0, 1, 0), ctx);
+    expect(next[1].shapeCount).toBe("3");
+    expect(next[1].quantity).toBe("30"); // 3 × 10
+    expect(next[1].laborHours).toBe("30.0"); // × default factor 1
+  });
+});
+
+describe("piping-sheet range writes", () => {
+  const pipingCtx: WriteCtx = {
+    ...ctx,
+    pipingFactorLookup: new Map([
+      ["WLD-CS", { unit: "EA", values: new Map([[4, 0.5], [6, 0.75]]) }],
+    ]),
+    weldGroupMaterialMap: {
+      "CS 150#": { shopCode: "SHOPCS", installCode: "FLDCS" },
+    },
+  };
+
+  it("derives Labor Hours from the factor table, not quantity × labor factor", () => {
+    const row = makeFefRow({ taskCode: "WLD-CS", size: "4", quantity: "10" });
+    expect(resolveCellWrite("quantity", "20", row, pipingCtx)).toEqual({
+      quantity: "20",
+      laborHours: "10.0", // 20 × 0.5, the (WLD-CS, 4") factor
+    });
+  });
+
+  it("fills Size down, recomputing bore size and Labor Hours per row", () => {
+    const data = [
+      makeFefRow({ taskCode: "WLD-CS", size: "6", quantity: "2" }),
+      makeFefRow({ taskCode: "WLD-CS", quantity: "8" }),
+    ];
+    const next = applyFillDown(data, ["size"], range(0, 0, 1, 0), pipingCtx);
+    expect(next[1].size).toBe("6");
+    expect(next[1].boreSize).toBe("MB");
+    expect(next[1].laborHours).toBe("6.0"); // 8 × 0.75
+  });
+
+  it("fills Task Code down, stamping the factor table's Unit", () => {
+    const data = [makeFefRow({ taskCode: "WLD-CS", size: "4" }), makeFefRow({ size: "4", quantity: "4" })];
+    const next = applyFillDown(data, ["taskCode"], range(0, 0, 1, 0), pipingCtx);
+    expect(next[1].taskCode).toBe("WLD-CS");
+    expect(next[1].unit).toBe("EA");
+    expect(next[1].laborHours).toBe("2.0"); // 4 × 0.5
+  });
+
+  it("rejects a Task Code neither the piping nor the steel table knows", () => {
+    expect(resolveCellWrite("taskCode", "NOPE", makeFefRow(), pipingCtx)).toBeNull();
+  });
+
+  it("stamps the steel member's UoM when the sheet is structural steel", () => {
+    const steelCtx: WriteCtx = { ...ctx, steelMemberUomLookup: { W12X26: "LF" } };
+    expect(resolveCellWrite("taskCode", "W12X26", makeFefRow(), steelCtx)).toEqual({
+      taskCode: "W12X26",
+      unit: "LF",
+    });
+  });
+
+  it("re-derives the metallurgy code when Shop/Field or Weld Group is filled", () => {
+    const row = makeFefRow({ weldGroupDescription: "CS 150#" });
+    expect(resolveCellWrite("shopField", "Shop", row, pipingCtx)).toEqual({
+      shopField: "Shop",
+      metallurgyCode: "SHOPCS",
+    });
+    expect(
+      resolveCellWrite("weldGroupDescription", "cs 150#", makeFefRow({ shopField: "Field" }), pipingCtx),
+    ).toEqual({
+      weldGroupDescription: "CS 150#",
+      metallurgyCode: "FLDCS",
+    });
+    // An unmapped classification is unresolvable rather than half-written.
+    expect(
+      resolveCellWrite("weldGroupDescription", "SS 300#", row, pipingCtx),
+    ).toBeNull();
+  });
+});
+
+describe("indexed option lookups", () => {
+  // The resolvers moved from Array.find to prebuilt Maps. Array.find returns
+  // the EARLIEST match, so duplicate keys must still resolve to the first
+  // option in the list, not the last one inserted.
+  it("resolves a duplicated code or name to the first matching option", () => {
+    const dupCtx: WriteCtx = {
+      ...ctx,
+      cbsOptions: [
+        {
+          displayCode: "700-10-0000-00-L",
+          costCode: "70010DUP",
+          name: "Conduit",
+          uom: "LF",
+          displayDescription: null,
+        },
+        {
+          // Same display code, cost code and name as the entry above.
+          displayCode: "700-10-0000-00-L",
+          costCode: "70010DUP",
+          name: "Conduit",
+          uom: "EA",
+          displayDescription: null,
+        },
+      ],
+    };
+    // Whichever key the lookup goes through, the first option (uom "LF") wins.
+    for (const raw of ["700-10-0000-00-L", "70010dup", "conduit"]) {
+      expect(resolveCellWrite("name", raw, makeFefRow(), dupCtx)).toEqual({
+        id: "700-10-0000-00-L",
+        name: "Conduit",
+        unit: "LF",
+      });
+    }
+  });
+
+  it("keeps the area id-before-label precedence across options", () => {
+    // Option A's label collides with option B's id. Array.find tested both
+    // fields on each option in turn, so A wins.
+    const collideCtx: WriteCtx = {
+      ...ctx,
+      areaOptions: [
+        { value: "10", label: "20" },
+        { value: "20", label: "Turbine" },
+      ],
+    };
+    expect(resolveCellWrite("area", "20", makeFefRow(), collideCtx)).toEqual({
+      area: "10",
+    });
+  });
+
+  it("matches area, role and schedule case-insensitively, and rejects unknowns", () => {
+    expect(resolveCellWrite("area", "  a-200 — TURBINE ", makeFefRow(), ctx)).toEqual({
+      area: "2",
+    });
+    expect(resolveCellWrite("role", "welder", makeFefRow(), ctx)).toEqual({
+      role: "Welder",
+      laborRate: "",
+    });
+    expect(resolveCellWrite("role", "Plumber", makeFefRow(), ctx)).toBeNull();
+    expect(resolveCellWrite("schedule", "ot", makeFefRow({ role: "Welder" }), ctx)).toEqual({
+      schedule: "OT",
+      laborRate: "90",
+    });
+    expect(resolveCellWrite("schedule", "Nights", makeFefRow(), ctx)).toBeNull();
+  });
+
+  it("builds one index per ctx, not one per row", () => {
+    // Each ctx counts how often its option list is read. Building the index
+    // reads it once; the per-cell resolvers must not read it at all.
+    let scans = 0;
+    const countingCtx = (): WriteCtx => ({
+      ...ctx,
+      get cbsOptions() {
+        scans++;
+        return ctx.cbsOptions;
+      },
+    });
+    const data = [
+      makeFefRow({ id: "601-10-0000-00-L" }),
+      makeFefRow(),
+      makeFefRow(),
+      makeFefRow(),
+    ];
+    const sel = range(0, 0, 3, 0);
+
+    const first = countingCtx();
+    const next1 = applyFillDown(data, ["name"], sel, first);
+    expect(next1[3].name).toBe("3in Elbow"); // the fill really resolved
+    expect(scans).toBe(1); // one build for four rows
+
+    applyFillDown(data, ["name"], sel, first); // same ctx — index reused
+    serializeRange(data, ["name"], sel, first); // read path too
+    expect(scans).toBe(1);
+
+    applyFillDown(data, ["name"], sel, countingCtx()); // new ctx — rebuilt
+    expect(scans).toBe(2);
+  });
+});
+
 describe("sortRows", () => {
   const rows = [
     makeFefRow({ description: "Beta", quantity: "20" }),

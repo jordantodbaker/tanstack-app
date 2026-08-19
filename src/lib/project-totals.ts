@@ -10,7 +10,7 @@ export type AreaTotals = {
   indirect: number;
 };
 
-import { isTakeOffRowInvalid } from "./fef-helpers";
+import { FEF_ROW_STRING_FIELDS, isTakeOffRowInvalid } from "./fef-helpers";
 
 export type ProjectFefRowTotals = {
   laborByDigit: Record<string, number>;
@@ -76,35 +76,35 @@ export const DISCIPLINE_TO_DIGIT: Record<string, string> = {
   contingency: "9",
 };
 
+/** The FEF fields the arithmetic here needs on every row. */
+type TotalsNumericField =
+  | "quantity"
+  | "laborHours"
+  | "laborRate"
+  | "materialCost";
+
+/**
+ * A FefRow as this aggregator sees it: the bucketing keys, the numeric fields
+ * it sums, and *every* remaining free-text field as optional.
+ *
+ * The free-text fields are derived from `FEF_ROW_STRING_FIELDS` rather than
+ * listed by hand: any one of them being non-empty is what marks a row "the user
+ * started this" in the Take Off invalid check, so a field missing from this
+ * shape (or from the caller's `select`) silently under-counts invalid rows.
+ * That drifted once already — the hand-written list stopped at the fields that
+ * existed when it was written.
+ */
 export type ProjectTotalsRow = {
   discipline: string;
   section: string;
   cbsCode: string | null;
-  quantity: string;
-  laborHours: string;
-  laborRate: string;
-  materialCost: string;
-  /** FefRow.area — the assigned area id as a string, "" when unassigned. */
-  area?: string;
-  // The remaining FEF free-text fields. Any one of them being non-empty
-  // signals "user touched this row" in the Take Off invalid check, so they
-  // need to be available on the server-side payload.
-  name?: string;
-  description?: string;
-  shopField?: string;
-  weldGroupDescription?: string;
-  size?: string;
-  unit?: string;
-  metallurgyCode?: string;
-  boreSize?: string;
-  role?: string;
-  crewMixId?: string;
-  schedule?: string;
-  taskCode?: string;
-  equipment?: string;
-  notes?: string;
-  sub?: string;
-};
+} & Record<TotalsNumericField, string> &
+  Partial<
+    Record<
+      Exclude<(typeof FEF_ROW_STRING_FIELDS)[number], TotalsNumericField>,
+      string
+    >
+  >;
 
 export function accumulateProjectTotals(
   rows: ProjectTotalsRow[],

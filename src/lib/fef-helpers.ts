@@ -114,12 +114,23 @@ export function toCbsOption(item: CbsItemFields): CbsOption {
   };
 }
 
+/**
+ * Total Cost = laborHours × laborRate, so it's computable only when both parse
+ * as numbers and the hours are positive. The one definition of that rule —
+ * the invalid-row badge (client and server) and the Total Cost cell all route
+ * through it, so they can't disagree about which rows are incomplete.
+ */
+export function isTotalCostComputable(
+  laborHours: string,
+  laborRate: string,
+): boolean {
+  const hours = parseFloat(laborHours);
+  const rate = parseFloat(laborRate);
+  return !isNaN(hours) && hours > 0 && !isNaN(rate) && laborRate !== "";
+}
+
 export function canComputeTotalCost(row: FefRow): boolean {
-  const hours = parseFloat(row.laborHours);
-  const rate = parseFloat(row.laborRate);
-  return (
-    !isNaN(hours) && hours > 0 && !isNaN(rate) && row.laborRate !== ""
-  );
+  return isTotalCostComputable(row.laborHours, row.laborRate);
 }
 
 /**
@@ -160,11 +171,7 @@ export function isTakeOffRowInvalid(row: TakeOffValidationInput): boolean {
   });
   if (!idIsRealCode && !cbsTouched && !anyFieldTouched) return false;
 
-  const hours = parseFloat(row.laborHours);
-  const rate = parseFloat(row.laborRate);
-  const canCompute =
-    !isNaN(hours) && hours > 0 && !isNaN(rate) && row.laborRate !== "";
-  return !canCompute;
+  return !isTotalCostComputable(row.laborHours, row.laborRate);
 }
 
 export const tabTriggerClass =

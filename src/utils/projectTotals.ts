@@ -6,7 +6,11 @@ import {
   accumulateProjectTotals,
   type ProjectFefRowTotals,
 } from "../lib/project-totals";
-import { FEF_ROW_STRING_FIELDS } from "../lib/fef-helpers";
+import {
+  FEF_DATA_COLUMNS,
+  FEF_ROW_STRING_FIELDS,
+  isTotalCostComputable,
+} from "../lib/fef-helpers";
 import { qk } from "../lib/query-keys";
 import { parseIdScalar } from "../lib/validators";
 
@@ -32,6 +36,19 @@ const EMPTY_TOTALS: ProjectFefRowTotals = {
 };
 
 /**
+ * Columns the aggregator reads, derived from `FEF_DATA_COLUMNS` (cbsCode plus
+ * every free-text field) rather than listed by hand. The Take Off invalid check
+ * treats *any* non-empty field as "the user started this row", so a field
+ * missing here silently under-counts — which is exactly what happened while
+ * this was a hand-maintained list and the FefRow shape kept growing.
+ */
+const TOTALS_SELECT = Object.fromEntries([
+  ["discipline", true],
+  ["section", true],
+  ...FEF_DATA_COLUMNS.map((c) => [c, true]),
+]) as Record<"discipline" | "section" | (typeof FEF_DATA_COLUMNS)[number], true>;
+
+/**
  * Plain (no-auth) loader: every FefRow for the project → aggregated totals.
  * Module-private and called only by `fetchProjectFefRowTotals`'s handler, so
  * the tanstack-start client transform dead-strips it (and the prisma import)
@@ -44,35 +61,7 @@ async function loadProjectTotals(
 ): Promise<ProjectFefRowTotals> {
   const rows = await prisma.fefRow.findMany({
     where: { versionId },
-    // All FEF free-text fields are selected: the Take Off invalid check
-    // treats *any* non-empty field as "user touched this row", so any one
-    // of these missing on the server side would silently under-count.
-    select: {
-      discipline: true,
-      section: true,
-      cbsCode: true,
-      area: true,
-      name: true,
-      description: true,
-      shopField: true,
-      weldGroupDescription: true,
-      quantity: true,
-      size: true,
-      unit: true,
-      metallurgyCode: true,
-      boreSize: true,
-      role: true,
-      crewMixId: true,
-      schedule: true,
-      taskCode: true,
-      laborHours: true,
-      laborFactor: true,
-      laborRate: true,
-      materialCost: true,
-      equipment: true,
-      notes: true,
-      sub: true,
-    },
+    select: TOTALS_SELECT,
   });
   return accumulateProjectTotals(rows);
 }
@@ -129,15 +118,9 @@ export const fetchInvalidByDiscipline = createServerFn({ method: "GET" })
     });
     const out: Record<string, number> = {};
     for (const r of rows) {
-      // "not computable" half of `isTakeOffRowInvalid` — see comment there.
-      const hours = parseFloat(r.laborHours);
-      const rate = parseFloat(r.laborRate);
-      const canCompute =
-        !isNaN(hours) &&
-        hours > 0 &&
-        !isNaN(rate) &&
-        r.laborRate !== "";
-      if (!canCompute && r.discipline) {
+      // The SQL WHERE above covers the "user started this row" half of
+      // `isTakeOffRowInvalid`; this is the "Total Cost isn't computable" half.
+      if (!isTotalCostComputable(r.laborHours, r.laborRate) && r.discipline) {
         out[r.discipline] = (out[r.discipline] ?? 0) + 1;
       }
     }

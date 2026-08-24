@@ -22,14 +22,17 @@ import {
 } from "~/lib/validators";
 import {
   assertProjectAccess,
-  requireProjectAccess,
+  projectIdScopedHandler,
   resolveCurrentUser,
 } from "./users.server";
 import { assertProjectUnchanged } from "./users";
 import {
+  deleteProjectScopedRecord,
+  transitionProjectScopedRecord,
+} from "./entity-writes.server";
+import {
   diffFields,
   recordCreate,
-  recordDelete,
   recordUpdate,
 } from "./audit.server";
 import { createLinkedCvr } from "./promote.server";
@@ -37,14 +40,9 @@ import type { RiskLevel } from "./changelog";
 import { FCO_TRANSITIONS } from "./workflow";
 import { FCO_STATUS_LABELS } from "./fcoLogLabels";
 import {
-  applyWorkflowTransition,
   type WorkflowTransitionConfig,
 } from "./workflow.server";
 import { allocateEntityNumber, allocateIfBlank } from "./entityNumbers.server";
-import {
-  flushNotificationEmails,
-  type PendingNotificationEmail,
-} from "./notification-email.server";
 
 const FCO_STATUSES_NEEDING_REVIEW = new Set<string>([
   "SUBMITTED",
@@ -477,64 +475,32 @@ export const upsertFco = createServerFn({ method: "POST" })
  */
 export const transitionFco = createServerFn({ method: "POST" })
   .inputValidator(parseTransitionInput)
-  .handler(async ({ data }): Promise<FcoItem> => {
-    const actor = await resolveCurrentUser();
-    if (!actor) throw new Error("Unauthorized: not signed in");
-    // Read `before` and write `updated` with the linked-relation include so
-    // both ends of the workflow transition carry the relations needed by
-    // toItem. Eliminates the post-tx re-fetch round-trip that previously
-    // followed this transaction. `applyWorkflowTransition`'s Row generic
-    // infers to the with-relations shape; the audit diff (config.auditFields)
-    // names scalar columns only, which are still valid keys on the wider row.
-    const pendingEmails: PendingNotificationEmail[] = [];
-    const row = await prisma.$transaction(async (tx) => {
-      const before = await tx.fieldChangeOrder.findUniqueOrThrow({
-        where: { id: data.id },
-        include: linkedRelationsInclude,
-      });
-      await assertProjectAccess(actor, before.projectId);
-      return applyWorkflowTransition({
-        tx,
-        before,
-        actor,
-        action: data.action,
-        comment: data.comment,
-        config: FCO_WORKFLOW_CONFIG,
-        updateRow: (payload) =>
-          tx.fieldChangeOrder.update({
-            where: { id: data.id },
-            data: payload,
-            include: linkedRelationsInclude,
-          }),
-        pendingEmails,
-      });
-    });
-    // After commit: send email copies (no-op unless email is configured).
-    await flushNotificationEmails(pendingEmails);
-    return toItem(row);
-  });
+  // The `include` is applied to both the `before` read and the update, so the
+  // row leaving the transaction already carries the relations `toItem` needs —
+  // no post-commit re-fetch. `applyWorkflowTransition`'s Row generic infers to
+  // the with-relations shape; the audit diff (config.auditFields) names scalar
+  // columns only, which are still valid keys on the wider row.
+  .handler(({ data }): Promise<FcoItem> =>
+    transitionProjectScopedRecord({
+      id: data.id,
+      action: data.action,
+      comment: data.comment,
+      pickDelegate: (tx) => tx.fieldChangeOrder,
+      include: linkedRelationsInclude,
+      config: FCO_WORKFLOW_CONFIG,
+      toItem,
+    }),
+  );
 
 export const deleteFco = createServerFn({ method: "POST" })
   .inputValidator(parseIdInput)
-  .handler(async ({ data }): Promise<{ ok: true }> => {
-    const actor = await resolveCurrentUser();
-    if (!actor) throw new Error("Unauthorized: not signed in");
-    await prisma.$transaction(async (tx) => {
-      const row = await tx.fieldChangeOrder.findUniqueOrThrow({
-        where: { id: data.id },
-        select: { projectId: true },
-      });
-      await assertProjectAccess(actor, row.projectId);
-      await tx.fieldChangeOrder.delete({ where: { id: data.id } });
-      await recordDelete(tx, {
-        entityType: "FieldChangeOrder",
-        entityId: data.id,
-        projectId: row.projectId,
-        actor,
-      });
-    });
-    return { ok: true };
-  });
+  .handler(({ data }): Promise<{ ok: true }> =>
+    deleteProjectScopedRecord({
+      id: data.id,
+      entityType: "FieldChangeOrder",
+      pickDelegate: (tx) => tx.fieldChangeOrder,
+    }),
+  );
 
 /**
  * Promote an FCO to a CVR in the Change Log. Creates a new ChangeLog row
@@ -599,17 +565,18 @@ export const promoteFcoToCvr = createServerFn({ method: "POST" })
 export const fetchCvrOptions = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
   .handler(
-    async ({
-      data: projectId,
-    }): Promise<{ id: number; cvrNumber: string; title: string }[]> => {
-      await requireProjectAccess(projectId);
-      const rows = await prisma.changeLog.findMany({
-        where: { projectId },
-        select: { id: true, cvrNumber: true, title: true },
-        orderBy: [{ requestedAt: "desc" }],
-      });
-      return rows;
-    },
+    projectIdScopedHandler(
+      async ({
+        data: projectId,
+      }): Promise<{ id: number; cvrNumber: string; title: string }[]> => {
+        const rows = await prisma.changeLog.findMany({
+          where: { projectId },
+          select: { id: true, cvrNumber: true, title: true },
+          orderBy: [{ requestedAt: "desc" }],
+        });
+        return rows;
+      },
+    ),
   );
 
 export const cvrOptionsQueryOptions = (projectId: number | null) =>

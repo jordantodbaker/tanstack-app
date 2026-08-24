@@ -11,7 +11,7 @@ import { computeBoreSize } from "~/lib/utils";
 import {
   deriveLaborHours,
   laborFactorFor,
-  lookupCbsItem,
+  resolveCbsStamp,
 } from "~/lib/piping-derive";
 import { crewMixAverageRate } from "~/lib/crew-mix-rate";
 import {
@@ -23,6 +23,10 @@ export { ReadOnlyCell, TakeOffIdCell } from "~/lib/table-utils";
 // Re-exported so existing importers (and cells.test.ts) keep their import path
 // while the derivation itself lives in the React-free lib module.
 export { deriveLaborHours } from "~/lib/piping-derive";
+
+/** Resolves a composed piping cost code against a cell's CBS option list. */
+const finder = (cbsOptions: CbsOption[]) => (costCode: string) =>
+  cbsOptions.find((o) => o.costCode === costCode);
 
 /**
  * Searchable CBS-item picker for a Name column. Client-filters the discipline's
@@ -95,27 +99,49 @@ export function ShopFieldSelectCell({ getValue, row, table }: CellProps) {
               ? entry.shopCode
               : entry.installCode
             : "";
-        const cbsMatch = lookupCbsItem(
+        const stamp = resolveCbsStamp(
           metallurgyCode,
           rowData.boreSize,
-          table.options.meta?.cbsOptions ?? [],
+          finder(table.options.meta?.cbsOptions ?? []),
         );
         table.options.meta?.updateRow?.(row.index, {
           shopField: newShopField,
           metallurgyCode,
-          ...(cbsMatch
-            ? {
-                id: cbsMatch.displayCode,
-                name: cbsMatch.name,
-                unit: cbsMatch.uom,
-              }
-            : {}),
+          ...(stamp ?? {}),
         });
       }}
     >
       <option value="">-- Select --</option>
       <option value="Shop">Shop</option>
       <option value="Field">Field</option>
+    </select>
+  );
+}
+
+/**
+ * Fabricate / Erect — the two field work types the install (63x) cost codes
+ * separate, each item carrying an "-ER-" and an "-FB-" variant. Stored on the
+ * row so the Field-side CBS resolution can pick between them; it has no
+ * bearing on a Shop row, whose codes make no such split.
+ */
+export function FabricateErectSelectCell({ getValue, row, table }: CellProps) {
+  const value = getValue() as string;
+  return (
+    <select
+      aria-label="Fabricate / Erect"
+      className={editableCellClass}
+      value={value}
+      onChange={(e) => {
+        table.options.meta?.updateData?.(
+          row.index,
+          "fabricateErect",
+          e.target.value,
+        );
+      }}
+    >
+      <option value="">-- Select --</option>
+      <option value="Fabricate">Fabricate</option>
+      <option value="Erect">Erect</option>
     </select>
   );
 }
@@ -145,21 +171,15 @@ export function WeldGroupSelectCell({ getValue, row, table }: CellProps) {
               ? entry.shopCode
               : entry.installCode
             : "";
-        const cbsMatch = lookupCbsItem(
+        const stamp = resolveCbsStamp(
           metallurgyCode,
           rowData.boreSize,
-          table.options.meta?.cbsOptions ?? [],
+          finder(table.options.meta?.cbsOptions ?? []),
         );
         table.options.meta?.updateRow?.(row.index, {
           weldGroupDescription: classification,
           metallurgyCode,
-          ...(cbsMatch
-            ? {
-                id: cbsMatch.displayCode,
-                name: cbsMatch.name,
-                unit: cbsMatch.uom,
-              }
-            : {}),
+          ...(stamp ?? {}),
         });
       }}
     />
@@ -193,6 +213,26 @@ export function SubCheckboxCell({ row, table }: CellProps) {
         }
       />
     </div>
+  );
+}
+
+/**
+ * Read-only Pipe Category: SB / MB / LB / XB for the row's nominal size.
+ *
+ * These are the same bands `computeBoreSize` feeds into the bore segment of a
+ * piping cost code, so the column doubles as a read-out of which bore series
+ * the row's CBS item came from — a 30" line shows XB and resolves against the
+ * "-XB-" codes. One band table, so the two can't disagree.
+ *
+ * Derived on view rather than stored: it carries no row field of its own, so
+ * it can never drift from the Size beside it and never triggers a save — see
+ * `LaborHoursCell` for what storing a view-time derivation used to cost.
+ */
+export function PipeCategoryCell({ row }: CellProps) {
+  return (
+    <span className={readOnlyCellClass}>
+      {computeBoreSize(row.original.size)}
+    </span>
   );
 }
 
@@ -344,28 +384,23 @@ export function TaskCodeSelectCell({ getValue, row, table }: CellProps) {
           { ...rowData, taskCode: newCode },
           pipingFactorLookup,
         );
-        // Re-resolve CBS using the row's current shopField + weldGroup +
-        // boreSize. Task code isn't itself in the lookup formula, but
-        // users expect any of the four trigger inputs (Shop / Weld /
-        // Task / Size) to refresh the matched item — so a task-code
-        // change re-runs the lookup with existing inputs and overrides
-        // id/name/unit if a match is now available.
-        const cbsMatch = lookupCbsItem(
+        // Re-resolve CBS from the row's current metallurgy + bore. The task
+        // code is not itself part of the cost code, so this can only pick up a
+        // match the row's *other* inputs have since made available — or drop
+        // one they have invalidated.
+        const stamp = resolveCbsStamp(
           rowData.metallurgyCode,
           rowData.boreSize,
-          table.options.meta?.cbsOptions ?? [],
+          finder(table.options.meta?.cbsOptions ?? []),
         );
         table.options.meta?.updateRow?.(row.index, {
           taskCode: newCode,
-          unit,
           laborHours,
-          ...(cbsMatch
-            ? {
-                id: cbsMatch.displayCode,
-                name: cbsMatch.name,
-                unit: cbsMatch.uom,
-              }
-            : {}),
+          ...(stamp ?? {}),
+          // A resolved CBS item's UoM wins; with no item to take one from,
+          // the unit falls back to the task code's own from the factor table
+          // rather than being cleared along with the rest of the stamp.
+          unit: stamp?.id ? stamp.unit : unit,
         });
       }}
     />
@@ -379,10 +414,10 @@ export function PipingSizeCell({ getValue, row, table }: CellProps) {
       onCommit={(value) => {
         const boreSize = computeBoreSize(value);
         const rowData = table.getRowModel().rows[row.index].original;
-        const cbsMatch = lookupCbsItem(
+        const stamp = resolveCbsStamp(
           rowData.metallurgyCode,
           boreSize,
-          table.options.meta?.cbsOptions ?? [],
+          finder(table.options.meta?.cbsOptions ?? []),
         );
         const laborHours = deriveLaborHours(
           { ...rowData, size: value },
@@ -392,13 +427,7 @@ export function PipingSizeCell({ getValue, row, table }: CellProps) {
           size: value,
           boreSize,
           laborHours,
-          ...(cbsMatch
-            ? {
-                id: cbsMatch.displayCode,
-                name: cbsMatch.name,
-                unit: cbsMatch.uom,
-              }
-            : {}),
+          ...(stamp ?? {}),
         });
       }}
     />

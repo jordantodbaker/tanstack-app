@@ -14,9 +14,9 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useListFilters } from "~/lib/use-list-filters";
+import { computeRfiStats } from "~/lib/list-stats";
 import { matchesListFilters } from "~/lib/list-filtering";
 import { makeFilteredExport } from "~/lib/filtered-export";
-import { isPast } from "~/lib/dates";
 import {
   rfiListQueryOptions,
   rfiListFullQueryOptions,
@@ -26,7 +26,6 @@ import {
   promoteRfiToFco,
   invalidateRfiQueries,
   RFI_STATUSES,
-  RFI_OPEN_STATUSES,
   type RfiItem,
   type RfiListItem,
   type RfiStatus,
@@ -41,7 +40,7 @@ import {
 import { RfiDialog } from "~/components/Rfi/RfiDialog";
 import {
   FilterSelect,
-  StatCard,
+  StatCardRow,
   TableEmptyState,
   Th,
 } from "~/components/ui/list-page";
@@ -164,22 +163,7 @@ function RfiLogPage() {
     invalidate,
   });
 
-  const stats = React.useMemo(() => {
-    const now = new Date();
-    const openCount = items.filter((i) =>
-      RFI_OPEN_STATUSES.includes(i.status),
-    ).length;
-    const awaitingClose = items.filter((i) => i.status === "ANSWERED").length;
-    const pastDue = items.filter(
-      (i) => RFI_OPEN_STATUSES.includes(i.status) && isPast(i.dueDate, now),
-    ).length;
-    const suspectsImpact = items.filter(
-      (i) =>
-        RFI_OPEN_STATUSES.includes(i.status) &&
-        (i.suspectsCostImpact || i.suspectsScheduleImpact),
-    ).length;
-    return { openCount, awaitingClose, pastDue, suspectsImpact };
-  }, [items]);
+  const stats = React.useMemo(() => computeRfiStats(items, new Date()), [items]);
 
   const projectScoped = projectId !== null;
 
@@ -231,12 +215,37 @@ function RfiLogPage() {
         </SelectProjectBanner>
       )}
 
-      <RfiStatsCards
-        total={items.length}
-        openCount={stats.openCount}
-        awaitingClose={stats.awaitingClose}
-        pastDue={stats.pastDue}
-        suspectsImpact={stats.suspectsImpact}
+      <StatCardRow
+        cards={[
+          {
+            label: "Total RFIs",
+            value: items.length.toString(),
+            icon: ListChecks,
+          },
+          {
+            label: "Open",
+            value: stats.openCount.toString(),
+            tone: "amber",
+            icon: Hourglass,
+          },
+          {
+            label: "Awaiting close",
+            value: stats.awaitingClose.toString(),
+            tone: "violet",
+          },
+          {
+            label: "Past due",
+            value: stats.pastDue.toString(),
+            tone: stats.pastDue > 0 ? "red" : "slate",
+            icon: CalendarClock,
+          },
+          {
+            label: "Suspects impact",
+            value: stats.suspectsImpact.toString(),
+            tone: stats.suspectsImpact > 0 ? "red" : "slate",
+            icon: AlertTriangle,
+          },
+        ]}
       />
 
       <div className="flex items-center gap-2 flex-wrap rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
@@ -300,49 +309,6 @@ function RfiLogPage() {
         {...bulk.table}
       />
     </main>
-  );
-}
-
-function RfiStatsCards({
-  total,
-  openCount,
-  awaitingClose,
-  pastDue,
-  suspectsImpact,
-}: {
-  total: number;
-  openCount: number;
-  awaitingClose: number;
-  pastDue: number;
-  suspectsImpact: number;
-}) {
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-      <StatCard label="Total RFIs" value={total.toString()} icon={ListChecks} />
-      <StatCard
-        label="Open"
-        value={openCount.toString()}
-        tone="amber"
-        icon={Hourglass}
-      />
-      <StatCard
-        label="Awaiting close"
-        value={awaitingClose.toString()}
-        tone="violet"
-      />
-      <StatCard
-        label="Past due"
-        value={pastDue.toString()}
-        tone={pastDue > 0 ? "red" : "slate"}
-        icon={CalendarClock}
-      />
-      <StatCard
-        label="Suspects impact"
-        value={suspectsImpact.toString()}
-        tone={suspectsImpact > 0 ? "red" : "slate"}
-        icon={AlertTriangle}
-      />
-    </div>
   );
 }
 

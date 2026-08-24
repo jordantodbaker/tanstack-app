@@ -146,6 +146,7 @@ describe("makeFefRow", () => {
     "name",
     "description",
     "shopField",
+    "fabricateErect",
     "weldGroupDescription",
     "quantity",
     "size",

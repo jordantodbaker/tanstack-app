@@ -36,7 +36,7 @@ import {
 } from "./fef-derive";
 import {
   deriveLaborHours,
-  pipingCostCode,
+  resolveCbsStamp,
   type PipingFactorLookup,
 } from "./piping-derive";
 import { computeBoreSize } from "./utils";
@@ -151,6 +151,7 @@ export const RANGE_WRITABLE_COLUMNS: ReadonlySet<string> = new Set([
   "size",
   "taskCode",
   "shopField",
+  "fabricateErect",
   "weldGroupDescription",
 ]);
 
@@ -347,17 +348,18 @@ function laborHoursFor(row: FefRow, ctx: WriteCtx): string {
 }
 
 /** The id/name/unit stamp a piping row picks up from its metallurgy code +
- *  bore size, or `{}` when nothing matches (leave the existing item alone). */
+ *  bore size — `{}` only when the inputs are too incomplete to look anything
+ *  up. A lookup that ran and matched nothing clears the row's item, exactly as
+ *  the cell editors do; see `resolveCbsStamp`. */
 function cbsStamp(
   metallurgyCode: string,
   boreSize: string,
   idx: WriteIndex,
 ): Partial<FefRow> {
-  const code = pipingCostCode(metallurgyCode, boreSize);
-  const match = code === null ? undefined : idx.cbsByExactCostCode.get(code);
-  return match
-    ? { id: match.displayCode, name: match.name, unit: match.uom }
-    : {};
+  const stamp = resolveCbsStamp(metallurgyCode, boreSize, (code) =>
+    idx.cbsByExactCostCode.get(code),
+  );
+  return stamp ?? {};
 }
 
 /** Metallurgy code for a (weld group, shop/field) pair — "" when either half
@@ -443,11 +445,14 @@ export function resolveCellWrite(
       // the picker itself could never have produced.
       const pipingEntry = ctx.pipingFactorLookup?.get(code);
       if (pipingEntry) {
+        const stamp = cbsStamp(row.metallurgyCode, row.boreSize, idx);
         return {
           taskCode: code,
-          unit: pipingEntry.unit,
           laborHours: deriveLaborHours({ ...row, taskCode: code }, ctx.pipingFactorLookup),
-          ...cbsStamp(row.metallurgyCode, row.boreSize, idx),
+          ...stamp,
+          // Mirrors TaskCodeSelectCell: the CBS item's UoM wins when one
+          // resolved, otherwise the task code's own unit stands.
+          unit: stamp.id ? (stamp.unit ?? pipingEntry.unit) : pipingEntry.unit,
         };
       }
       const steelUom = ctx.steelMemberUomLookup?.[code];
@@ -462,6 +467,15 @@ export function resolveCellWrite(
         metallurgyCode,
         ...cbsStamp(metallurgyCode, row.boreSize, idx),
       };
+    }
+    case "fabricateErect": {
+      // Same shape as shopField: a two-option picker, so a paste has to land on
+      // one of them or resolve to nothing rather than writing free text the
+      // dropdown itself could never have produced.
+      const t = raw.trim().toLowerCase();
+      const v =
+        t === "" ? "" : t === "fabricate" ? "Fabricate" : t === "erect" ? "Erect" : null;
+      return v === null ? null : { fabricateErect: v };
     }
     case "weldGroupDescription": {
       const t = raw.trim();

@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { z } from "zod";
-import { requireProjectAccess } from "./users.server";
+import { projectScopedHandler, requireProjectAccess } from "./users.server";
 import { emitCommentNotification } from "./notifications.server";
 import {
   flushNotificationEmails,
@@ -96,21 +96,22 @@ async function readParentRecord(
 
 export const fetchComments = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => CommentsInputSchema.parse(input))
-  .handler(async ({ data }): Promise<CommentItem[]> => {
-    await requireProjectAccess(data.projectId);
-    if (!isCommentEntityType(data.entityType)) return [];
-    const rows = await prisma.comment.findMany({
-      where: {
-        entityType: data.entityType,
-        entityId: data.entityId,
-        projectId: data.projectId,
-      },
-      // Oldest first — conversation order. The compose box at the bottom
-      // means the freshest message sits next to where the user is typing.
-      orderBy: { createdAt: "asc" },
-    });
-    return rows.map(toItem);
-  });
+  .handler(
+    projectScopedHandler(async ({ data }): Promise<CommentItem[]> => {
+      if (!isCommentEntityType(data.entityType)) return [];
+      const rows = await prisma.comment.findMany({
+        where: {
+          entityType: data.entityType,
+          entityId: data.entityId,
+          projectId: data.projectId,
+        },
+        // Oldest first — conversation order. The compose box at the bottom
+        // means the freshest message sits next to where the user is typing.
+        orderBy: { createdAt: "asc" },
+      });
+      return rows.map(toItem);
+    }),
+  );
 
 export const commentsQueryOptions = (input: {
   entityType: CommentEntityType;

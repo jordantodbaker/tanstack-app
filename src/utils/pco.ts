@@ -24,24 +24,22 @@ import {
 } from "~/lib/validators";
 import {
   assertProjectAccess,
+  projectScopedHandler,
   requireProjectAccess,
-  resolveCurrentUser,
 } from "./users.server";
 import { assertProjectUnchanged } from "./users";
 import {
+  deleteProjectScopedRecord,
+  transitionProjectScopedRecord,
+} from "./entity-writes.server";
+import {
   diffFields,
   recordCreate,
-  recordDelete,
   recordUpdate,
 } from "./audit.server";
-import { applyWorkflowTransition } from "./workflow.server";
 import { PCO_TRANSITIONS } from "./workflow";
 import { PCO_STATUS_LABELS } from "./pcoLabels";
 import { allocateIfBlank } from "./entityNumbers.server";
-import {
-  flushNotificationEmails,
-  type PendingNotificationEmail,
-} from "./notification-email.server";
 
 /**
  * SERVER-SIDE PCO module. PCOs (Prime / Owner Change Orders) bundle one or
@@ -293,30 +291,31 @@ const PcoEligibleCvrsInputSchema = z.object({
 });
 export const fetchPcoEligibleCvrs = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => PcoEligibleCvrsInputSchema.parse(input))
-  .handler(async ({ data }): Promise<PcoEligibleCvr[]> => {
-    await requireProjectAccess(data.projectId);
-    const rows = await prisma.changeLog.findMany({
-      where: {
-        projectId: data.projectId,
-        status: { in: ["APPROVED", "EXECUTED"] },
-        OR: [
-          { linkedPcoId: null },
-          ...(data.currentPcoId !== null
-            ? [{ linkedPcoId: data.currentPcoId }]
-            : []),
-        ],
-      },
-      select: {
-        id: true,
-        cvrNumber: true,
-        title: true,
-        status: true,
-        costImpact: true,
-      },
-      orderBy: { requestedAt: "desc" },
-    });
-    return rows.map((r) => ({ ...r, status: r.status as string }));
-  });
+  .handler(
+    projectScopedHandler(async ({ data }): Promise<PcoEligibleCvr[]> => {
+      const rows = await prisma.changeLog.findMany({
+        where: {
+          projectId: data.projectId,
+          status: { in: ["APPROVED", "EXECUTED"] },
+          OR: [
+            { linkedPcoId: null },
+            ...(data.currentPcoId !== null
+              ? [{ linkedPcoId: data.currentPcoId }]
+              : []),
+          ],
+        },
+        select: {
+          id: true,
+          cvrNumber: true,
+          title: true,
+          status: true,
+          costImpact: true,
+        },
+        orderBy: { requestedAt: "desc" },
+      });
+      return rows.map((r) => ({ ...r, status: r.status as string }));
+    }),
+  );
 
 export const pcoEligibleCvrsQueryOptions = (
   projectId: number | null,
@@ -576,112 +575,78 @@ const PCO_STATUSES_NEEDING_REVIEW: ReadonlySet<string> = new Set([
 
 export const transitionPco = createServerFn({ method: "POST" })
   .inputValidator(parseTransitionInput)
-  .handler(async ({ data }): Promise<PcoItem> => {
-    const pre = await prisma.pco.findUniqueOrThrow({
-      where: { id: data.id },
-      select: { projectId: true },
-    });
-    const actor = await requireProjectAccess(pre.projectId);
-    // Apply the workflow transition with the `linkedCvrs` include on both
-    // before and update so the row exiting the transaction already carries
-    // the relation needed by toItem. Eliminates the post-tx re-fetch.
-    const pendingEmails: PendingNotificationEmail[] = [];
-    const row = await prisma.$transaction(async (tx) => {
-      const before = await tx.pco.findUniqueOrThrow({
-        where: { id: data.id },
-        include: linkedCvrsInclude,
-      });
-      return applyWorkflowTransition({
-        tx,
-        before,
-        actor,
-        action: data.action,
-        comment: data.comment,
-        pendingEmails,
-        config: {
-          entityType: "Pco",
-          transitionMap: PCO_TRANSITIONS,
-          statusLabels: PCO_STATUS_LABELS,
-          statusesNeedingReview: PCO_STATUSES_NEEDING_REVIEW,
-          auditFields: [
-            "status",
-            "submittedAt",
-            "approvedAt",
-            "invoicedAt",
-            "paidAt",
-            "closedAt",
-          ],
-          buildTitle: (r) =>
-            r.pcoNumber ? `${r.pcoNumber} — ${r.title}` : r.title,
-          // Stamp the matching timestamp on each transition so list views
-          // can show "submitted on" / "approved on" / etc. without a
-          // separate UPDATE round-trip. `approvedAmount` is also
-          // initialized to `requestedAmount` on first APPROVED if the user
-          // hasn't already set it — saves a step in the common "owner
-          // accepted as-is" case.
-          extraUpdateData: (transition) => {
-            switch (transition.to) {
-              case "SUBMITTED":
-                // Submit can happen from DRAFT (first submission) or from
-                // NEGOTIATING (resubmit). Only stamp the first one — leave
-                // resubmits alone so submittedAt reflects the original ask.
-                return before.submittedAt
-                  ? {}
-                  : { submittedAt: new Date() };
-              case "APPROVED":
-                return {
-                  approvedAt: new Date(),
-                  ...(before.approvedAmount === 0
-                    ? { approvedAmount: before.requestedAmount }
-                    : {}),
-                };
-              case "INVOICED":
-                return { invoicedAt: new Date() };
-              case "CLOSED":
-                return { paidAt: new Date(), closedAt: new Date() };
-              default:
-                return {};
-            }
-          },
+  // The `linkedCvrs` include is applied to both the before-read and the
+  // update, so the row exiting the transaction already carries the relation
+  // `toItem` needs — no post-commit re-fetch.
+  .handler(({ data }): Promise<PcoItem> =>
+    transitionProjectScopedRecord({
+      id: data.id,
+      action: data.action,
+      comment: data.comment,
+      pickDelegate: (tx) => tx.pco,
+      include: linkedCvrsInclude,
+      // Config is a function of `before` here: the timestamp stamping below
+      // depends on the record's prior state, not just the transition.
+      config: (before) => ({
+        entityType: "Pco",
+        transitionMap: PCO_TRANSITIONS,
+        statusLabels: PCO_STATUS_LABELS,
+        statusesNeedingReview: PCO_STATUSES_NEEDING_REVIEW,
+        auditFields: [
+          "status",
+          "submittedAt",
+          "approvedAt",
+          "invoicedAt",
+          "paidAt",
+          "closedAt",
+        ],
+        buildTitle: (r) =>
+          r.pcoNumber ? `${r.pcoNumber} — ${r.title}` : r.title,
+        // Stamp the matching timestamp on each transition so list views can
+        // show "submitted on" / "approved on" / etc. without a separate
+        // UPDATE round-trip. `approvedAmount` is also initialized to
+        // `requestedAmount` on first APPROVED if the user hasn't already set
+        // it — saves a step in the common "owner accepted as-is" case.
+        extraUpdateData: (transition) => {
+          switch (transition.to) {
+            case "SUBMITTED":
+              // Submit can happen from DRAFT (first submission) or from
+              // NEGOTIATING (resubmit). Only stamp the first one — leave
+              // resubmits alone so submittedAt reflects the original ask.
+              return before.submittedAt ? {} : { submittedAt: new Date() };
+            case "APPROVED":
+              return {
+                approvedAt: new Date(),
+                ...(before.approvedAmount === 0
+                  ? { approvedAmount: before.requestedAmount }
+                  : {}),
+              };
+            case "INVOICED":
+              return { invoicedAt: new Date() };
+            case "CLOSED":
+              return { paidAt: new Date(), closedAt: new Date() };
+            default:
+              return {};
+          }
         },
-        updateRow: (data) =>
-          tx.pco.update({
-            where: { id: before.id },
-            data,
-            include: linkedCvrsInclude,
-          }),
-      });
-    });
-    // After commit: send email copies (no-op unless email is configured).
-    await flushNotificationEmails(pendingEmails);
-    return toItem(row);
-  });
+      }),
+      toItem,
+    }),
+  );
 
 export const deletePco = createServerFn({ method: "POST" })
   .inputValidator(parseIdInput)
-  .handler(async ({ data }): Promise<{ ok: true }> => {
-    const row = await prisma.pco.findUniqueOrThrow({
-      where: { id: data.id },
-      select: { projectId: true },
-    });
-    const actor = await resolveCurrentUser();
-    if (!actor) throw new Error("Unauthorized: not signed in");
-    await assertProjectAccess(actor, row.projectId);
-    await prisma.$transaction(async (tx) => {
-      // Schema's SetNull on ChangeLog.linkedPco handles the cascade — any
-      // attached CVRs end up unlinked rather than orphaned. The audit
-      // event below records the PCO delete; CVR unlinking shows up
-      // separately as their own audit if we ever surface that lookup.
-      await tx.pco.delete({ where: { id: data.id } });
-      await recordDelete(tx, {
-        entityType: "Pco",
-        entityId: data.id,
-        projectId: row.projectId,
-        actor,
-      });
-    });
-    return { ok: true };
-  });
+  // Schema's SetNull on ChangeLog.linkedPco handles the cascade — any
+  // attached CVRs end up unlinked rather than orphaned. The audit event
+  // records the PCO delete; CVR unlinking shows up separately as their own
+  // audit if we ever surface that lookup.
+  .handler(({ data }): Promise<{ ok: true }> =>
+    deleteProjectScopedRecord({
+      id: data.id,
+      entityType: "Pco",
+      pickDelegate: (tx) => tx.pco,
+    }),
+  );
 
 /**
  * Cache-bust set fired after every PCO mutation. A PCO upsert can re-link

@@ -1,3 +1,4 @@
+import type { Prisma } from "../generated/prisma/client";
 import { prisma } from "../server/db";
 import { serializeDate } from "~/lib/serialize";
 import { type ChangeStatus } from "./changelog";
@@ -269,35 +270,17 @@ export async function runScheduledReminders(
     });
     if (reminders.length === 0) continue;
 
-    // Single transaction per project so a partial failure rolls back the
-    // notifications + log together. Failure for one project shouldn't kill
-    // the whole run; the caller catches at the outer level.
+    // Flatten every reminder's rows up front so the transaction below is two
+    // `createMany` calls per project rather than two per reminder. Same rows,
+    // same order — a project firing 20 reminders drops from 40 round-trips to
+    // 2, which is what keeps the transaction (and its locks) short.
+    const notificationRows: Prisma.NotificationCreateManyInput[] = [];
+    const reminderLogRows: Prisma.ReminderLogCreateManyInput[] = [];
     const pendingEmails: PendingNotificationEmail[] = [];
-    await prisma.$transaction(async (tx) => {
-      for (const r of reminders) {
-        await tx.notification.createMany({
-          data: r.recipientUserIds.map((userId) => ({
-            userId,
-            projectId: r.projectId,
-            entityType: r.entityType,
-            entityId: r.entityId,
-            title: r.title,
-            message: r.message,
-            actorEmail: SYSTEM_ACTOR_EMAIL,
-          })),
-        });
-        await tx.reminderLog.createMany({
-          data: r.recipientUserIds.map((userId) => ({
-            reminderType: r.reminderType,
-            entityType: r.entityType,
-            entityId: r.entityId,
-            projectId: r.projectId,
-            recipientUserId: userId,
-            sentAt: now,
-          })),
-        });
-        pendingEmails.push({
-          recipientUserIds: r.recipientUserIds,
+    for (const r of reminders) {
+      for (const userId of r.recipientUserIds) {
+        notificationRows.push({
+          userId,
           projectId: r.projectId,
           entityType: r.entityType,
           entityId: r.entityId,
@@ -305,8 +288,33 @@ export async function runScheduledReminders(
           message: r.message,
           actorEmail: SYSTEM_ACTOR_EMAIL,
         });
-        notificationsCreated += r.recipientUserIds.length;
+        reminderLogRows.push({
+          reminderType: r.reminderType,
+          entityType: r.entityType,
+          entityId: r.entityId,
+          projectId: r.projectId,
+          recipientUserId: userId,
+          sentAt: now,
+        });
       }
+      pendingEmails.push({
+        recipientUserIds: r.recipientUserIds,
+        projectId: r.projectId,
+        entityType: r.entityType,
+        entityId: r.entityId,
+        title: r.title,
+        message: r.message,
+        actorEmail: SYSTEM_ACTOR_EMAIL,
+      });
+      notificationsCreated += r.recipientUserIds.length;
+    }
+
+    // Single transaction per project so a partial failure rolls back the
+    // notifications + log together. Failure for one project shouldn't kill
+    // the whole run; the caller catches at the outer level.
+    await prisma.$transaction(async (tx) => {
+      await tx.notification.createMany({ data: notificationRows });
+      await tx.reminderLog.createMany({ data: reminderLogRows });
     });
     // After this project's reminders commit, send email copies (no-op unless
     // email is configured). Per-project so a slow send doesn't hold a DB

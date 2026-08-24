@@ -4,6 +4,7 @@ import { prisma } from "../server/db";
 import { z } from "zod";
 import {
   requireAdmin,
+  projectIdScopedHandler,
   requireProjectAccess,
   versionScopedHandler,
 } from "./users.server";
@@ -60,23 +61,26 @@ const FEF_COPY_COLUMNS = [
 
 export const fetchVersions = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
-  .handler(async ({ data: projectId }): Promise<EstimateVersionOption[]> => {
-    await requireProjectAccess(projectId);
-    await ensureProjectHasVersion(projectId);
-    const rows = await prisma.estimateVersion.findMany({
-      where: { projectId },
-      orderBy: { versionNumber: "asc" },
-      select: {
-        id: true,
-        versionNumber: true,
-        name: true,
-        description: true,
-        parentVersionId: true,
-        createdAt: true,
+  .handler(
+    projectIdScopedHandler(
+      async ({ data: projectId }): Promise<EstimateVersionOption[]> => {
+        await ensureProjectHasVersion(projectId);
+        const rows = await prisma.estimateVersion.findMany({
+          where: { projectId },
+          orderBy: { versionNumber: "asc" },
+          select: {
+            id: true,
+            versionNumber: true,
+            name: true,
+            description: true,
+            parentVersionId: true,
+            createdAt: true,
+          },
+        });
+        return rows.map(toOption);
       },
-    });
-    return rows.map(toOption);
-  });
+    ),
+  );
 
 export const versionsQueryOptions = (projectId: number | null) =>
   queryOptions({

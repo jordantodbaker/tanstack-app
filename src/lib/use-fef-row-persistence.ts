@@ -73,6 +73,11 @@ export function useFefRowPersistence({
 
   const hydratedKeyRef = React.useRef<string | null>(null);
   const skipNextSaveRef = React.useRef(false);
+  // The key whose server-side contents this client has actually seen. Only a
+  // save for that key may authorize a wipe (`allowClear`); until the load
+  // settles, an empty grid is this hook's own blank slate, not a sheet the
+  // user emptied — and `saveFefRows` refuses to delete on that basis.
+  const serverSyncedKeyRef = React.useRef<string | null>(null);
   // Signature of the last content we know is persisted (or was just loaded from
   // the DB) for the current key. The autosave compares against this so it only
   // fires on a real content change — see `persistableSignature`. `null` means
@@ -98,6 +103,14 @@ export function useFefRowPersistence({
   emptyRowsRef.current = emptyRows;
   React.useEffect(() => {
     skipNextSaveRef.current = true;
+    // Both of these describe the *previous* key and must not outlive it. In
+    // particular `hydratedKeyRef` short-circuits the hydration effect below, so
+    // leaving it set means a key that leaves and comes back (a version
+    // re-resolve, say) is marked "already hydrated" while `data` is the blank
+    // slate this effect just installed — and the stale `lastSavedSigRef` then
+    // makes that blank slate look like the user deleting every row.
+    hydratedKeyRef.current = null;
+    lastSavedSigRef.current = null;
     setData(emptyRowsRef.current);
   }, [currentKey, setData]);
 
@@ -114,6 +127,9 @@ export function useFefRowPersistence({
       if (isLoadError) setAppliedKey(currentKey);
       return;
     }
+    // `loadedRows` is defined, so the query for *this* key resolved: what the
+    // server holds is now known, and a later empty save can be trusted.
+    serverSyncedKeyRef.current = currentKey;
     if (hydratedKeyRef.current === currentKey) {
       setAppliedKey(currentKey);
       return;
@@ -168,6 +184,10 @@ export function useFefRowPersistence({
   React.useEffect(() => {
     if (versionId === null) return;
     if (appliedKey !== currentKey) return;
+    // No baseline for this key yet — the load errored, so what the server holds
+    // is unknown. Whatever the grid happens to show is not an edit of it, and
+    // saving would overwrite the sheet with a blank slate.
+    if (lastSavedSigRef.current === null) return;
     if (skipNextSaveRef.current) {
       skipNextSaveRef.current = false;
       return;
@@ -188,7 +208,13 @@ export function useFefRowPersistence({
     saveTimerRef.current = setTimeout(() => {
       setSaveStatus("saving");
       saveFefRows({
-        data: { versionId, discipline, section, rows: snapshot },
+        data: {
+          versionId,
+          discipline,
+          section,
+          rows: snapshot,
+          allowClear: serverSyncedKeyRef.current === currentKey,
+        },
       })
         .then((saved) => {
           lastSavedSigRef.current = sig;

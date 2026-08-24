@@ -611,6 +611,7 @@ export function DisciplineTabs({
             minRows={20}
             getRowInvalid={isTakeOffRowInvalidLive}
             enableRangeEditing
+            columnWidthKey={`takeoff:${discipline}`}
             frozenColumnCount={2}
           />
         </TabsContent>

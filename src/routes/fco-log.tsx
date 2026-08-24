@@ -15,11 +15,11 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useListFilters } from "~/lib/use-list-filters";
+import { computeFcoStats } from "~/lib/list-stats";
 import { matchesListFilters } from "~/lib/list-filtering";
 import { makeFilteredExport } from "~/lib/filtered-export";
 import {
   FCO_STATUSES,
-  FCO_OPEN_STATUSES,
   fcoListQueryOptions,
   fcoListFullQueryOptions,
   upsertFco,
@@ -42,7 +42,7 @@ import {
 import { FcoDialog } from "~/components/FCOLog/FcoDialog";
 import {
   FilterSelect,
-  StatCard,
+  StatCardRow,
   TableEmptyState,
   Th,
 } from "~/components/ui/list-page";
@@ -175,22 +175,7 @@ function FcoLogPage() {
     invalidate,
   });
 
-  const stats = React.useMemo(() => {
-    const openCount = items.filter((i) =>
-      FCO_OPEN_STATUSES.includes(i.status),
-    ).length;
-    const linkedCount = items.filter((i) => i.linkedCvrId !== null).length;
-    const urgentCount = items.filter(
-      (i) =>
-        (i.priority === "URGENT" || i.priority === "HIGH" || i.workStopped) &&
-        FCO_OPEN_STATUSES.includes(i.status),
-    ).length;
-    const workStopped = items.filter(
-      (i) => i.workStopped && FCO_OPEN_STATUSES.includes(i.status),
-    ).length;
-    const totalCost = items.reduce((acc, i) => acc + i.estimatedCost, 0);
-    return { openCount, linkedCount, urgentCount, workStopped, totalCost };
-  }, [items]);
+  const stats = React.useMemo(() => computeFcoStats(items), [items]);
 
   const projectScoped = projectId !== null;
 
@@ -246,13 +231,43 @@ function FcoLogPage() {
         </SelectProjectBanner>
       )}
 
-      <FcoStatsCards
-        total={items.length}
-        openCount={stats.openCount}
-        linkedCount={stats.linkedCount}
-        urgentCount={stats.urgentCount}
-        workStopped={stats.workStopped}
-        totalCost={stats.totalCost}
+      <StatCardRow
+        cards={[
+          {
+            label: "Total FCOs",
+            value: items.length.toString(),
+            icon: ListChecks,
+          },
+          {
+            label: "Open",
+            value: stats.openCount.toString(),
+            tone: "amber",
+            icon: Hourglass,
+          },
+          {
+            label: "Urgent / High",
+            value: stats.urgentCount.toString(),
+            tone: "red",
+            icon: AlertTriangle,
+          },
+          {
+            label: "Work Stopped",
+            value: stats.workStopped.toString(),
+            tone: stats.workStopped > 0 ? "red" : "slate",
+            icon: AlertTriangle,
+          },
+          {
+            label: "Linked to CVR",
+            value: stats.linkedCount.toString(),
+            tone: "violet",
+            icon: LinkIcon,
+          },
+          {
+            label: "Est. Cost Impact",
+            value: `$${formatMoney(stats.totalCost)}`,
+            tone: stats.totalCost >= 0 ? "slate" : "red",
+          },
+        ]}
       />
 
       {/* Filter bar */}
@@ -333,57 +348,6 @@ function FcoLogPage() {
         {...bulk.table}
       />
     </main>
-  );
-}
-
-function FcoStatsCards({
-  total,
-  openCount,
-  linkedCount,
-  urgentCount,
-  workStopped,
-  totalCost,
-}: {
-  total: number;
-  openCount: number;
-  linkedCount: number;
-  urgentCount: number;
-  workStopped: number;
-  totalCost: number;
-}) {
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
-      <StatCard label="Total FCOs" value={total.toString()} icon={ListChecks} />
-      <StatCard
-        label="Open"
-        value={openCount.toString()}
-        tone="amber"
-        icon={Hourglass}
-      />
-      <StatCard
-        label="Urgent / High"
-        value={urgentCount.toString()}
-        tone="red"
-        icon={AlertTriangle}
-      />
-      <StatCard
-        label="Work Stopped"
-        value={workStopped.toString()}
-        tone={workStopped > 0 ? "red" : "slate"}
-        icon={AlertTriangle}
-      />
-      <StatCard
-        label="Linked to CVR"
-        value={linkedCount.toString()}
-        tone="violet"
-        icon={LinkIcon}
-      />
-      <StatCard
-        label="Est. Cost Impact"
-        value={`$${formatMoney(totalCost)}`}
-        tone={totalCost >= 0 ? "slate" : "red"}
-      />
-    </div>
   );
 }
 

@@ -401,6 +401,11 @@ model FefRow {
   name                 String     @default("")
   description          String     @default("")
   shopField            String     @default("")
+  /// "Fabricate" | "Erect" (or "" when unset). Distinguishes the two field
+  /// work types the install cost codes separate — the 63x catalog carries an
+  /// -ER- and an -FB- variant of each item — so it only carries meaning on a
+  /// row whose `shopField` is "Field".
+  fabricateErect       String     @default("")
   weldGroupDescription String     @default("")
   quantity             String     @default("")
   size                 String     @default("")
@@ -1218,4 +1223,12 @@ model CbsItem {
 
   // Hot path: discipline routes filter by `l1 IN (...)` on every load.
   @@index([l1])
+
+  // `searchCbsCodeOptions` runs `WHERE displayCode ILIKE '%q%' OR name ILIKE
+  // '%q%'` on every keystroke in the entity-dialog CBS pickers. A leading
+  // wildcard can't use a B-tree, so without these the ~5k-row catalog is a
+  // sequential scan per keystroke — the same treatment the five change-
+  // pipeline tables already get.
+  @@index([displayCode(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
 }

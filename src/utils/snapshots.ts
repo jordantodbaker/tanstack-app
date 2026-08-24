@@ -3,6 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import {
   assertProjectAccess,
+  projectIdScopedHandler,
   requireProjectAccess,
   resolveCurrentUser,
 } from "./users.server";
@@ -174,47 +175,52 @@ export const createSnapshot = createServerFn({ method: "POST" })
 
 export const fetchSnapshots = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
-  .handler(async ({ data: projectId }): Promise<EstimateSnapshotItem[]> => {
-    await requireProjectAccess(projectId);
-    const snaps = await prisma.estimateSnapshot.findMany({
-      where: { projectId },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        label: true,
-        notes: true,
-        rowCount: true,
-        createdById: true,
-        createdAt: true,
+  .handler(
+    projectIdScopedHandler(
+      async ({ data: projectId }): Promise<EstimateSnapshotItem[]> => {
+        const snaps = await prisma.estimateSnapshot.findMany({
+          where: { projectId },
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            label: true,
+            notes: true,
+            rowCount: true,
+            createdById: true,
+            createdAt: true,
+          },
+        });
+        // Resolve creator emails in one query. `createdById` is a plain int with
+        // no FK so a deleted user shows up as null in the list, mirroring the
+        // audit/notifications convention.
+        const userIds = Array.from(
+          new Set(
+            snaps
+              .map((s) => s.createdById)
+              .filter((id): id is number => id !== null),
+          ),
+        );
+        const users = userIds.length
+          ? await prisma.user.findMany({
+              where: { id: { in: userIds } },
+              select: { id: true, email: true },
+            })
+          : [];
+        const emailById = new Map(users.map((u) => [u.id, u.email]));
+        return snaps.map((s) => ({
+          id: s.id,
+          label: s.label,
+          notes: s.notes,
+          rowCount: s.rowCount,
+          createdByEmail:
+            s.createdById !== null
+              ? (emailById.get(s.createdById) ?? null)
+              : null,
+          createdAt: s.createdAt.toISOString(),
+        }));
       },
-    });
-    // Resolve creator emails in one query. `createdById` is a plain int with
-    // no FK so a deleted user shows up as null in the list, mirroring the
-    // audit/notifications convention.
-    const userIds = Array.from(
-      new Set(
-        snaps
-          .map((s) => s.createdById)
-          .filter((id): id is number => id !== null),
-      ),
-    );
-    const users = userIds.length
-      ? await prisma.user.findMany({
-          where: { id: { in: userIds } },
-          select: { id: true, email: true },
-        })
-      : [];
-    const emailById = new Map(users.map((u) => [u.id, u.email]));
-    return snaps.map((s) => ({
-      id: s.id,
-      label: s.label,
-      notes: s.notes,
-      rowCount: s.rowCount,
-      createdByEmail:
-        s.createdById !== null ? (emailById.get(s.createdById) ?? null) : null,
-      createdAt: s.createdAt.toISOString(),
-    }));
-  });
+    ),
+  );
 
 export const fetchSnapshotDetail = createServerFn({ method: "GET" })
   .inputValidator(parseIdScalar)

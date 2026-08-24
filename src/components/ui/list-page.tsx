@@ -39,6 +39,47 @@ export function StatCard({
   );
 }
 
+export type StatCardSpec = {
+  label: string;
+  value: string;
+  tone?: StatTone;
+  icon?: React.ElementType;
+};
+
+/**
+ * The stat-card strip every list page shows above its table. Each of the five
+ * change-pipeline routes had its own `*StatsCards` component: the same grid
+ * wrapper, a row of `StatCard`s, and a hand-written props interface threading
+ * every number through one field at a time. Taking an array collapses all of
+ * that — routes now pass their computed stats straight in.
+ *
+ * The widest breakpoint follows the card count, which reproduces exactly what
+ * the routes rendered before: the five-card pages (CVR / RFI / PCO) went wide
+ * at `lg`, the six-card pages (FCO / Trend) at `xl`. Other counts fall back to
+ * the `sm` three-column layout rather than inventing a breakpoint.
+ */
+const WIDE_GRID_CLASS: Record<number, string> = {
+  5: "lg:grid-cols-5",
+  6: "xl:grid-cols-6",
+};
+
+export function StatCardRow({ cards }: { cards: StatCardSpec[] }) {
+  const wide = WIDE_GRID_CLASS[cards.length] ?? "";
+  return (
+    <div className={`grid grid-cols-2 sm:grid-cols-3 ${wide} gap-3`}>
+      {cards.map((c) => (
+        <StatCard
+          key={c.label}
+          label={c.label}
+          value={c.value}
+          tone={c.tone}
+          icon={c.icon}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function FilterSelect({
   label,
   value,

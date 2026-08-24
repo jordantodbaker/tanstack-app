@@ -39,6 +39,16 @@ const SaveFefRowsSchema = z.object({
   discipline: z.string().min(1),
   section: FefSectionSchema,
   rows: z.array(FefRowSchema),
+  /**
+   * Confirms an empty `rows` really means "the user emptied this sheet".
+   *
+   * A save carrying no persistable rows deletes the whole (version, discipline,
+   * section) — which is correct when someone deletes every row, and catastrophic
+   * when a grid submits an empty sheet it never actually loaded. A client that
+   * hasn't established what the server holds for a sheet must not send this, and
+   * without it an empty save is refused rather than obeyed.
+   */
+  allowClear: z.boolean().optional(),
 });
 
 const AppendTakeOffSchema = z.object({
@@ -188,9 +198,42 @@ export const saveFefRows = createServerFn({ method: "POST" })
             };
           });
 
+        // Diagnostic: three sheets of work have gone missing with the save
+        // reporting success, so record what each request actually carried.
+        logger.info("saveFefRows received", {
+          versionId,
+          discipline,
+          section,
+          receivedRows: rows.length,
+          persistableRows: persistable.length,
+          firstRowId: rows[0]?.id ?? null,
+        });
+
         if (persistable.length === 0) {
-          // No persistable rows from the client. Wipe any existing rows for
-          // this (version, discipline, section) and bail.
+          const existing = await prisma.fefRow.findMany({
+            where: { versionId, discipline, section },
+            orderBy: { position: "asc" },
+          });
+          // Deleting a populated sheet is only ever right when the client knew
+          // what was there. Refuse otherwise and hand back what's on disk, so
+          // the caller's cache re-syncs to reality instead of to its own blank.
+          if (existing.length > 0 && !data.allowClear) {
+            logger.error("saveFefRows refused an unconfirmed sheet wipe", {
+              versionId,
+              discipline,
+              section,
+              existingRows: existing.length,
+            });
+            return existing.map(toFefRow);
+          }
+          if (existing.length > 0) {
+            logger.warn("saveFefRows clearing a sheet", {
+              versionId,
+              discipline,
+              section,
+              deletedRows: existing.length,
+            });
+          }
           await prisma.fefRow.deleteMany({
             where: { versionId, discipline, section },
           });

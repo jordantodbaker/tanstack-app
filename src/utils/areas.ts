@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
-import { adminHandler, requireProjectAccess } from "./users.server";
+import { adminHandler, projectIdScopedHandler } from "./users.server";
 import {
   parseIdInput,
   parseProjectIdInput,
@@ -41,14 +41,15 @@ export const areasQueryOptions = () =>
 /** Lightweight area list for a single project, used to populate dropdowns. */
 export const fetchAreasByProject = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
-  .handler(async ({ data: projectId }) => {
-    await requireProjectAccess(projectId);
-    return prisma.area.findMany({
-      where: { projectId },
-      orderBy: { displayId: "asc" },
-      select: { id: true, displayId: true, name: true },
-    });
-  });
+  .handler(
+    projectIdScopedHandler(async ({ data: projectId }) => {
+      return prisma.area.findMany({
+        where: { projectId },
+        orderBy: { displayId: "asc" },
+        select: { id: true, displayId: true, name: true },
+      });
+    }),
+  );
 
 export const areasByProjectQueryOptions = (projectId: number | null) =>
   queryOptions({

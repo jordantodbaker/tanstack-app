@@ -22,15 +22,14 @@ import {
 } from "~/lib/validators";
 import { assertProjectAccess, requireProjectAccess } from "./users.server";
 import { assertProjectUnchanged } from "./users";
-import { diffFields, recordCreate, recordDelete, recordUpdate } from "./audit.server";
-import { applyWorkflowTransition } from "./workflow.server";
+import {
+  deleteProjectScopedRecord,
+  transitionProjectScopedRecord,
+} from "./entity-writes.server";
+import { diffFields, recordCreate, recordUpdate } from "./audit.server";
 import { RFI_TRANSITIONS } from "./workflow";
 import { RFI_STATUS_LABELS } from "./rfiLabels";
 import { allocateEntityNumber, allocateIfBlank } from "./entityNumbers.server";
-import {
-  flushNotificationEmails,
-  type PendingNotificationEmail,
-} from "./notification-email.server";
 
 export const RFI_STATUSES = [
   "DRAFT",
@@ -358,58 +357,36 @@ const RFI_STATUSES_NEEDING_REVIEW: ReadonlySet<string> = new Set();
 
 export const transitionRfi = createServerFn({ method: "POST" })
   .inputValidator(parseTransitionInput)
-  .handler(async ({ data }): Promise<RfiItem> => {
-    const pre = await prisma.rfi.findUniqueOrThrow({
-      where: { id: data.id },
-      select: { projectId: true },
-    });
-    const actor = await requireProjectAccess(pre.projectId);
-    // Apply the workflow transition with the `linkedFcos` include on both
-    // the before-read and the update so the row exiting the transaction
-    // already has the relation needed by toItem. Eliminates the post-tx
-    // re-fetch round-trip that previously followed this transaction.
-    const pendingEmails: PendingNotificationEmail[] = [];
-    const row = await prisma.$transaction(async (tx) => {
-      const before = await tx.rfi.findUniqueOrThrow({
-        where: { id: data.id },
-        include: linkedFcosInclude,
-      });
-      return applyWorkflowTransition({
-        tx,
-        before,
-        actor,
-        action: data.action,
-        comment: data.comment,
-        pendingEmails,
-        config: {
-          entityType: "Rfi",
-          transitionMap: RFI_TRANSITIONS,
-          statusLabels: RFI_STATUS_LABELS,
-          statusesNeedingReview: RFI_STATUSES_NEEDING_REVIEW,
-          auditFields: ["status", "answeredBy", "answeredAt", "closedAt"],
-          buildTitle: (r) => `${r.rfiNumber || `RFI #${r.id}`} — ${r.subject}`,
-          // Stamp the responder + answeredAt when landing in ANSWERED; the
-          // closedAt timestamp when landing in CLOSED. Saves a separate
-          // UPDATE round-trip after the workflow action.
-          extraUpdateData: (transition, actor) =>
-            transition.to === "ANSWERED"
-              ? { answeredBy: actor.email, answeredAt: new Date() }
-              : transition.to === "CLOSED"
-                ? { closedAt: new Date() }
-                : {},
-        },
-        updateRow: (data) =>
-          tx.rfi.update({
-            where: { id: before.id },
-            data,
-            include: linkedFcosInclude,
-          }),
-      });
-    });
-    // After commit: send email copies (no-op unless email is configured).
-    await flushNotificationEmails(pendingEmails);
-    return toItem(row);
-  });
+  // The `linkedFcos` include is applied to both the before-read and the
+  // update, so the row exiting the transaction already has the relation
+  // `toItem` needs — no post-commit re-fetch.
+  .handler(({ data }): Promise<RfiItem> =>
+    transitionProjectScopedRecord({
+      id: data.id,
+      action: data.action,
+      comment: data.comment,
+      pickDelegate: (tx) => tx.rfi,
+      include: linkedFcosInclude,
+      config: {
+        entityType: "Rfi",
+        transitionMap: RFI_TRANSITIONS,
+        statusLabels: RFI_STATUS_LABELS,
+        statusesNeedingReview: RFI_STATUSES_NEEDING_REVIEW,
+        auditFields: ["status", "answeredBy", "answeredAt", "closedAt"],
+        buildTitle: (r) => `${r.rfiNumber || `RFI #${r.id}`} — ${r.subject}`,
+        // Stamp the responder + answeredAt when landing in ANSWERED; the
+        // closedAt timestamp when landing in CLOSED. Saves a separate
+        // UPDATE round-trip after the workflow action.
+        extraUpdateData: (transition, actor) =>
+          transition.to === "ANSWERED"
+            ? { answeredBy: actor.email, answeredAt: new Date() }
+            : transition.to === "CLOSED"
+              ? { closedAt: new Date() }
+              : {},
+      },
+      toItem,
+    }),
+  );
 
 /**
  * Promote an RFI to an FCO in the Field Change Order log. Creates a new
@@ -506,23 +483,13 @@ export const promoteRfiToFco = createServerFn({ method: "POST" })
 
 export const deleteRfi = createServerFn({ method: "POST" })
   .inputValidator(parseIdInput)
-  .handler(async ({ data }): Promise<{ ok: true }> => {
-    const row = await prisma.rfi.findUniqueOrThrow({
-      where: { id: data.id },
-      select: { projectId: true },
-    });
-    const actor = await requireProjectAccess(row.projectId);
-    await prisma.$transaction(async (tx) => {
-      await tx.rfi.delete({ where: { id: data.id } });
-      await recordDelete(tx, {
-        entityType: "Rfi",
-        entityId: data.id,
-        projectId: row.projectId,
-        actor,
-      });
-    });
-    return { ok: true };
-  });
+  .handler(({ data }): Promise<{ ok: true }> =>
+    deleteProjectScopedRecord({
+      id: data.id,
+      entityType: "Rfi",
+      pickDelegate: (tx) => tx.rfi,
+    }),
+  );
 
 /**
  * Cache-bust set fired after every RFI mutation. `promoteRfiToFco` mints

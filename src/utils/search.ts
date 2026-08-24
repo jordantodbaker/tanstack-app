@@ -3,7 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { qk } from "~/lib/query-keys";
 import { parseSearchInput } from "~/lib/validators";
-import { requireProjectAccess } from "./users.server";
+import { projectScopedHandler } from "./users.server";
 
 /**
  * Cross-entity command-palette search. Searches the five change-pipeline
@@ -134,123 +134,124 @@ const TAKE_PER_ENTITY = 6;
 
 export const searchProject = createServerFn({ method: "GET" })
   .inputValidator(parseSearchInput)
-  .handler(async ({ data }): Promise<SearchResult[]> => {
-    const { projectId, query } = data;
-    await requireProjectAccess(projectId);
+  .handler(
+    projectScopedHandler(async ({ data }): Promise<SearchResult[]> => {
+      const { projectId, query } = data;
 
-    const ilike = { contains: query, mode: "insensitive" as const };
-    const orderBy = { updatedAt: "desc" as const };
+      const ilike = { contains: query, mode: "insensitive" as const };
+      const orderBy = { updatedAt: "desc" as const };
 
-    const [cvrs, fcos, rfis, pcos, trends] = await Promise.all([
-      prisma.changeLog.findMany({
-        where: {
-          projectId,
-          OR: [
-            { cvrNumber: ilike },
-            { title: ilike },
-            { description: ilike },
-            { notes: ilike },
-          ],
-        },
-        select: {
-          id: true,
-          cvrNumber: true,
-          title: true,
-          status: true,
-          discipline: true,
-        },
-        orderBy,
-        take: TAKE_PER_ENTITY,
-      }),
-      prisma.fieldChangeOrder.findMany({
-        where: {
-          projectId,
-          OR: [
-            { fcoNumber: ilike },
-            { title: ilike },
-            { description: ilike },
-            { reasonNarrative: ilike },
-            { notes: ilike },
-          ],
-        },
-        select: {
-          id: true,
-          fcoNumber: true,
-          title: true,
-          status: true,
-          discipline: true,
-        },
-        orderBy,
-        take: TAKE_PER_ENTITY,
-      }),
-      prisma.rfi.findMany({
-        where: {
-          projectId,
-          OR: [
-            { rfiNumber: ilike },
-            { subject: ilike },
-            { question: ilike },
-          ],
-        },
-        select: {
-          id: true,
-          rfiNumber: true,
-          subject: true,
-          status: true,
-          discipline: true,
-        },
-        orderBy,
-        take: TAKE_PER_ENTITY,
-      }),
-      prisma.pco.findMany({
-        where: {
-          projectId,
-          OR: [
-            { pcoNumber: ilike },
-            { ownerReference: ilike },
-            { title: ilike },
-            { description: ilike },
-          ],
-        },
-        select: {
-          id: true,
-          pcoNumber: true,
-          title: true,
-          status: true,
-        },
-        orderBy,
-        take: TAKE_PER_ENTITY,
-      }),
-      prisma.trend.findMany({
-        where: {
-          projectId,
-          OR: [
-            { trendNumber: ilike },
-            { title: ilike },
-            { description: ilike },
-            { reasonNarrative: ilike },
-          ],
-        },
-        select: {
-          id: true,
-          trendNumber: true,
-          title: true,
-          status: true,
-          discipline: true,
-        },
-        orderBy,
-        take: TAKE_PER_ENTITY,
-      }),
-    ]);
+      const [cvrs, fcos, rfis, pcos, trends] = await Promise.all([
+        prisma.changeLog.findMany({
+          where: {
+            projectId,
+            OR: [
+              { cvrNumber: ilike },
+              { title: ilike },
+              { description: ilike },
+              { notes: ilike },
+            ],
+          },
+          select: {
+            id: true,
+            cvrNumber: true,
+            title: true,
+            status: true,
+            discipline: true,
+          },
+          orderBy,
+          take: TAKE_PER_ENTITY,
+        }),
+        prisma.fieldChangeOrder.findMany({
+          where: {
+            projectId,
+            OR: [
+              { fcoNumber: ilike },
+              { title: ilike },
+              { description: ilike },
+              { reasonNarrative: ilike },
+              { notes: ilike },
+            ],
+          },
+          select: {
+            id: true,
+            fcoNumber: true,
+            title: true,
+            status: true,
+            discipline: true,
+          },
+          orderBy,
+          take: TAKE_PER_ENTITY,
+        }),
+        prisma.rfi.findMany({
+          where: {
+            projectId,
+            OR: [
+              { rfiNumber: ilike },
+              { subject: ilike },
+              { question: ilike },
+            ],
+          },
+          select: {
+            id: true,
+            rfiNumber: true,
+            subject: true,
+            status: true,
+            discipline: true,
+          },
+          orderBy,
+          take: TAKE_PER_ENTITY,
+        }),
+        prisma.pco.findMany({
+          where: {
+            projectId,
+            OR: [
+              { pcoNumber: ilike },
+              { ownerReference: ilike },
+              { title: ilike },
+              { description: ilike },
+            ],
+          },
+          select: {
+            id: true,
+            pcoNumber: true,
+            title: true,
+            status: true,
+          },
+          orderBy,
+          take: TAKE_PER_ENTITY,
+        }),
+        prisma.trend.findMany({
+          where: {
+            projectId,
+            OR: [
+              { trendNumber: ilike },
+              { title: ilike },
+              { description: ilike },
+              { reasonNarrative: ilike },
+            ],
+          },
+          select: {
+            id: true,
+            trendNumber: true,
+            title: true,
+            status: true,
+            discipline: true,
+          },
+          orderBy,
+          take: TAKE_PER_ENTITY,
+        }),
+      ]);
 
-    return [
-      ...cvrs.map(mapCvrResult),
-      ...fcos.map(mapFcoResult),
-      ...rfis.map(mapRfiResult),
-      ...pcos.map(mapPcoResult),
-      ...trends.map(mapTrendResult),
-    ];
-  });
+      return [
+        ...cvrs.map(mapCvrResult),
+        ...fcos.map(mapFcoResult),
+        ...rfis.map(mapRfiResult),
+        ...pcos.map(mapPcoResult),
+        ...trends.map(mapTrendResult),
+      ];
+    }),
+  );
 
 export const searchQueryOptions = (projectId: number | null, query: string) =>
   queryOptions({

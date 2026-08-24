@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { z } from "zod";
-import { requireProjectAccess } from "./users.server";
+import { projectScopedHandler } from "./users.server";
 import { Id, ProjectId } from "~/lib/validators";
 
 const AuditEventsInputSchema = z.object({
@@ -36,23 +36,24 @@ export type AuditEventItem = {
  */
 export const fetchAuditEvents = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => AuditEventsInputSchema.parse(input))
-  .handler(async ({ data }): Promise<AuditEventItem[]> => {
-    await requireProjectAccess(data.projectId);
-    const rows = await prisma.auditEvent.findMany({
-      where: { entityType: data.entityType, entityId: data.entityId },
-      orderBy: { createdAt: "desc" },
-    });
-    return rows.map((r) => ({
-      id: r.id,
-      action: r.action as AuditEventAction,
-      field: r.field,
-      oldValue: r.oldValue,
-      newValue: r.newValue,
-      note: r.note,
-      actorEmail: r.actorEmail,
-      createdAt: r.createdAt.toISOString(),
-    }));
-  });
+  .handler(
+    projectScopedHandler(async ({ data }): Promise<AuditEventItem[]> => {
+      const rows = await prisma.auditEvent.findMany({
+        where: { entityType: data.entityType, entityId: data.entityId },
+        orderBy: { createdAt: "desc" },
+      });
+      return rows.map((r) => ({
+        id: r.id,
+        action: r.action as AuditEventAction,
+        field: r.field,
+        oldValue: r.oldValue,
+        newValue: r.newValue,
+        note: r.note,
+        actorEmail: r.actorEmail,
+        createdAt: r.createdAt.toISOString(),
+      }));
+    }),
+  );
 
 export const auditEventsQueryOptions = (input: {
   entityType: string;

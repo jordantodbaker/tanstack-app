@@ -16,6 +16,15 @@ export default defineConfig({
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     // Integration tests need a real DB and run via vitest.integration.config.ts.
     exclude: [...configDefaults.exclude, "**/*.integration.test.ts"],
+    // Worker threads instead of vitest's default child-process `forks` pool.
+    // The suite's actual assertions run in ~5s; the rest is per-file worker
+    // startup, and process spawning on Windows is expensive enough to dominate
+    // the whole run (~105s on forks vs ~28s on threads for the same 66 files).
+    // Safe here because nothing in the unit suite depends on process-level
+    // isolation — every module touching prisma/Clerk is mocked, and the
+    // DB-backed tests live in the integration config, which keeps the default
+    // pool since it mutates a shared database serially.
+    pool: "threads",
     setupFiles: ["./vitest.setup.ts"],
     coverage: {
       provider: "v8",

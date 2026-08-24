@@ -384,11 +384,34 @@ describe("fill-down over the non-derived take-off columns", () => {
 describe("piping-sheet range writes", () => {
   const pipingCtx: WriteCtx = {
     ...ctx,
+    // Mirrors the real catalog's shapes: the shop code carries a "…ST0000C"
+    // item, the install code carries a bore rollup instead and no "ST0000C" at
+    // all. "NOCODE" stands for a metallurgy code the catalog doesn't cover.
+    cbsOptions: [
+      ...ctx.cbsOptions,
+      {
+        displayCode: "SHOPCS-MB-ST00-00-C",
+        costCode: "SHOPCSMBST0000C",
+        name: "Shop Fab CS Medium Bore Standard",
+        uom: "LF",
+        displayDescription: null,
+        subReporting: null,
+      },
+      {
+        displayCode: "FLDCS-MB-0000-MB-C",
+        costCode: "FLDCSMB0000MBC",
+        name: "Install CS Medium Bore",
+        uom: "LF",
+        displayDescription: null,
+        subReporting: null,
+      },
+    ],
     pipingFactorLookup: new Map([
       ["WLD-CS", { unit: "EA", values: new Map([[4, 0.5], [6, 0.75]]) }],
     ]),
     weldGroupMaterialMap: {
       "CS 150#": { shopCode: "SHOPCS", installCode: "FLDCS" },
+      "XS 150#": { shopCode: "SHOPCS", installCode: "NOCODE" },
     },
   };
 
@@ -429,6 +452,106 @@ describe("piping-sheet range writes", () => {
       taskCode: "W12X26",
       unit: "LF",
     });
+  });
+
+  it("stamps the CBS item once metallurgy and bore both resolve", () => {
+    const row = makeFefRow({ weldGroupDescription: "CS 150#", boreSize: "MB" });
+    expect(resolveCellWrite("shopField", "Shop", row, pipingCtx)).toEqual({
+      shopField: "Shop",
+      metallurgyCode: "SHOPCS",
+      id: "SHOPCS-MB-ST00-00-C",
+      name: "Shop Fab CS Medium Bore Standard",
+      unit: "LF",
+    });
+  });
+
+  it("re-stamps a Shop row switched to Field with the install-series item", () => {
+    // The install series is keyed differently from the shop series, so this
+    // only resolves because the lookup tries every catalog shape.
+    const row = makeFefRow({
+      weldGroupDescription: "CS 150#",
+      boreSize: "MB",
+      id: "SHOPCS-MB-ST00-00-C",
+      name: "Shop Fab CS Medium Bore Standard",
+      unit: "LF",
+    });
+    expect(resolveCellWrite("shopField", "Field", row, pipingCtx)).toEqual({
+      shopField: "Field",
+      metallurgyCode: "FLDCS",
+      id: "FLDCS-MB-0000-MB-C",
+      name: "Install CS Medium Bore",
+      unit: "LF",
+    });
+  });
+
+  it("clears the CBS item when no catalog shape matches", () => {
+    // Keeping the shop item would leave the row reading "Field" while still
+    // carrying a "Shop Fab …" cost code — and that then saves.
+    const row = makeFefRow({
+      weldGroupDescription: "XS 150#",
+      boreSize: "MB",
+      id: "SHOPCS-MB-ST00-00-C",
+      name: "Shop Fab CS Medium Bore Standard",
+      unit: "LF",
+    });
+    expect(resolveCellWrite("shopField", "Field", row, pipingCtx)).toEqual({
+      shopField: "Field",
+      metallurgyCode: "NOCODE",
+      id: "",
+      name: "",
+      unit: "",
+    });
+  });
+
+  it("keeps a hand-picked item when the inputs can't compose a code yet", () => {
+    // No bore size, so nothing was looked up — the Name the estimator chose
+    // by hand must survive an unrelated edit.
+    const row = makeFefRow({
+      weldGroupDescription: "CS 150#",
+      id: "601-10-0000-00-L",
+      name: "3in Elbow",
+      unit: "EA",
+    });
+    expect(resolveCellWrite("shopField", "Field", row, pipingCtx)).toEqual({
+      shopField: "Field",
+      metallurgyCode: "FLDCS",
+    });
+  });
+
+  it("falls back to the task code's own Unit when the CBS lookup clears", () => {
+    const row = makeFefRow({
+      weldGroupDescription: "XS 150#",
+      boreSize: "MB",
+      metallurgyCode: "NOCODE",
+      size: "4",
+      quantity: "10",
+    });
+    const next = resolveCellWrite("taskCode", "WLD-CS", row, pipingCtx);
+    // The stamp cleared (no Field code in the catalog), but Unit still carries
+    // the factor table's value rather than being blanked with the rest.
+    expect(next).toEqual({
+      taskCode: "WLD-CS",
+      laborHours: "5.0",
+      id: "",
+      name: "",
+      unit: "EA",
+    });
+  });
+
+  it("normalizes a Fabricate / Erect fill to the picker's own two options", () => {
+    const row = makeFefRow();
+    expect(resolveCellWrite("fabricateErect", "erect", row, pipingCtx)).toEqual({
+      fabricateErect: "Erect",
+    });
+    expect(resolveCellWrite("fabricateErect", "  FABRICATE ", row, pipingCtx)).toEqual({
+      fabricateErect: "Fabricate",
+    });
+    // Blank clears the cell; anything else is a value the dropdown could never
+    // have produced, so the write is refused rather than stored as free text.
+    expect(resolveCellWrite("fabricateErect", "", row, pipingCtx)).toEqual({
+      fabricateErect: "",
+    });
+    expect(resolveCellWrite("fabricateErect", "Weld", row, pipingCtx)).toBeNull();
   });
 
   it("re-derives the metallurgy code when Shop/Field or Weld Group is filled", () => {

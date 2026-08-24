@@ -3,6 +3,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import {
   assertProjectAccess,
+  projectIdScopedHandler,
+  projectScopedHandler,
   requireProjectAccess,
   resolveCurrentUser,
 } from "./users.server";
@@ -159,42 +161,47 @@ export type PeriodWithEvm = {
 
 export const fetchReportingPeriods = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
-  .handler(async ({ data: projectId }): Promise<ReportingPeriodItem[]> => {
-    await requireProjectAccess(projectId);
-    const periods = await prisma.reportingPeriod.findMany({
-      where: { projectId },
-      orderBy: { dataDate: "desc" },
-      include: {
-        baselineSnapshot: { select: { label: true } },
-        _count: { select: { measurements: true } },
+  .handler(
+    projectIdScopedHandler(
+      async ({ data: projectId }): Promise<ReportingPeriodItem[]> => {
+        const periods = await prisma.reportingPeriod.findMany({
+          where: { projectId },
+          orderBy: { dataDate: "desc" },
+          include: {
+            baselineSnapshot: { select: { label: true } },
+            _count: { select: { measurements: true } },
+          },
+        });
+        const userIds = Array.from(
+          new Set(
+            periods
+              .map((p) => p.createdById)
+              .filter((id): id is number => id !== null),
+          ),
+        );
+        const users = userIds.length
+          ? await prisma.user.findMany({
+              where: { id: { in: userIds } },
+              select: { id: true, email: true },
+            })
+          : [];
+        const emailById = new Map(users.map((u) => [u.id, u.email]));
+        return periods.map((p) => ({
+          id: p.id,
+          label: p.label,
+          dataDate: p.dataDate.toISOString(),
+          baselineSnapshotId: p.baselineSnapshotId,
+          baselineLabel: p.baselineSnapshot.label,
+          measurementCount: p._count.measurements,
+          createdByEmail:
+            p.createdById !== null
+              ? (emailById.get(p.createdById) ?? null)
+              : null,
+          createdAt: p.createdAt.toISOString(),
+        }));
       },
-    });
-    const userIds = Array.from(
-      new Set(
-        periods
-          .map((p) => p.createdById)
-          .filter((id): id is number => id !== null),
-      ),
-    );
-    const users = userIds.length
-      ? await prisma.user.findMany({
-          where: { id: { in: userIds } },
-          select: { id: true, email: true },
-        })
-      : [];
-    const emailById = new Map(users.map((u) => [u.id, u.email]));
-    return periods.map((p) => ({
-      id: p.id,
-      label: p.label,
-      dataDate: p.dataDate.toISOString(),
-      baselineSnapshotId: p.baselineSnapshotId,
-      baselineLabel: p.baselineSnapshot.label,
-      measurementCount: p._count.measurements,
-      createdByEmail:
-        p.createdById !== null ? (emailById.get(p.createdById) ?? null) : null,
-      createdAt: p.createdAt.toISOString(),
-    }));
-  });
+    ),
+  );
 
 /**
  * Bucketed pending-trend forecast — sums `probability × costLikely` of
@@ -380,121 +387,133 @@ export const fetchBudgetReconciliation = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) =>
     BudgetReconciliationInputSchema.parse(input),
   )
-  .handler(async ({ data }): Promise<ProjectBudgetReconciliation> => {
-    await requireProjectAccess(data.projectId);
+  .handler(
+    projectScopedHandler(
+      async ({ data }): Promise<ProjectBudgetReconciliation> => {
+        // The baseline-snapshot lookup and the project-wide approved-CVR / trend
+        // loads are independent — run all three in parallel rather than serially.
+        // (Resolving the as-bid totals from `snap` may add one more await on the
+        // rare legacy/no-snapshot paths below.)
+        const [snap, cvrChange, trendByL1] = await Promise.all([
+          data.baselineSnapshotId
+            ? prisma.estimateSnapshot.findUnique({
+                where: { id: data.baselineSnapshotId },
+                select: {
+                  id: true,
+                  projectId: true,
+                  label: true,
+                  totals: true,
+                },
+              })
+            : prisma.estimateSnapshot.findFirst({
+                where: { projectId: data.projectId },
+                orderBy: { createdAt: "desc" },
+                select: {
+                  id: true,
+                  projectId: true,
+                  label: true,
+                  totals: true,
+                },
+              }),
+          loadCvrChangeByL1(data.projectId),
+          loadTrendForecastByL1(data.projectId),
+        ]);
+        const { approved: approvedByL1, pending: pendingByL1 } = cvrChange;
 
-    // The baseline-snapshot lookup and the project-wide approved-CVR / trend
-    // loads are independent — run all three in parallel rather than serially.
-    // (Resolving the as-bid totals from `snap` may add one more await on the
-    // rare legacy/no-snapshot paths below.)
-    const [snap, cvrChange, trendByL1] = await Promise.all([
-      data.baselineSnapshotId
-        ? prisma.estimateSnapshot.findUnique({
-            where: { id: data.baselineSnapshotId },
-            select: { id: true, projectId: true, label: true, totals: true },
-          })
-        : prisma.estimateSnapshot.findFirst({
+        let baselineSnapshotId: number | null = null;
+        let baselineLabel: string | null = null;
+        let asBidTotals: ProjectFefRowTotals;
+        if (snap && snap.projectId === data.projectId) {
+          baselineSnapshotId = snap.id;
+          baselineLabel = snap.label;
+          asBidTotals = await resolveBaselineTotals(snap);
+        } else {
+          // No snapshot — reconcile against the live estimate. Inlined here (rather
+          // than importing a shared loader from projectTotals.ts) to keep this
+          // prisma call inside the handler, so the client transform strips it and
+          // the Prisma client never reaches the browser bundle. "Live" is the
+          // project's latest estimate version.
+          const latestVersion = await prisma.estimateVersion.findFirst({
             where: { projectId: data.projectId },
-            orderBy: { createdAt: "desc" },
-            select: { id: true, projectId: true, label: true, totals: true },
-          }),
-      loadCvrChangeByL1(data.projectId),
-      loadTrendForecastByL1(data.projectId),
-    ]);
-    const { approved: approvedByL1, pending: pendingByL1 } = cvrChange;
+            orderBy: { versionNumber: "desc" },
+            select: { id: true },
+          });
+          const rows = latestVersion
+            ? await prisma.fefRow.findMany({
+                where: { versionId: latestVersion.id },
+                select: {
+                  discipline: true,
+                  section: true,
+                  cbsCode: true,
+                  area: true,
+                  quantity: true,
+                  laborHours: true,
+                  laborRate: true,
+                  materialCost: true,
+                },
+              })
+            : [];
+          asBidTotals = accumulateProjectTotals(rows);
+        }
 
-    let baselineSnapshotId: number | null = null;
-    let baselineLabel: string | null = null;
-    let asBidTotals: ProjectFefRowTotals;
-    if (snap && snap.projectId === data.projectId) {
-      baselineSnapshotId = snap.id;
-      baselineLabel = snap.label;
-      asBidTotals = await resolveBaselineTotals(snap);
-    } else {
-      // No snapshot — reconcile against the live estimate. Inlined here (rather
-      // than importing a shared loader from projectTotals.ts) to keep this
-      // prisma call inside the handler, so the client transform strips it and
-      // the Prisma client never reaches the browser bundle. "Live" is the
-      // project's latest estimate version.
-      const latestVersion = await prisma.estimateVersion.findFirst({
-        where: { projectId: data.projectId },
-        orderBy: { versionNumber: "desc" },
-        select: { id: true },
-      });
-      const rows = latestVersion
-        ? await prisma.fefRow.findMany({
-            where: { versionId: latestVersion.id },
-            select: {
-              discipline: true,
-              section: true,
-              cbsCode: true,
-              area: true,
-              quantity: true,
-              laborHours: true,
-              laborRate: true,
-              materialCost: true,
-            },
-          })
-        : [];
-      asBidTotals = accumulateProjectTotals(rows);
-    }
+        const asBidByL1 = bacByL1(asBidTotals);
 
-    const asBidByL1 = bacByL1(asBidTotals);
+        const l1 = computeBudgetReconciliation({
+          asBidByBucket: asBidByL1,
+          approvedByBucket: approvedByL1,
+          pendingByBucket: pendingByL1,
+          trendByBucket: trendByL1,
+        });
+        // Discipline view is the L1 view rolled up — so a discipline's row is
+        // exactly the sum of its accounts (internally consistent), and more precise
+        // than EVM's whole-cost-on-first-code attribution.
+        const disc = computeBudgetReconciliation({
+          asBidByBucket: rollUpL1ToDiscipline(asBidByL1),
+          approvedByBucket: rollUpL1ToDiscipline(approvedByL1),
+          pendingByBucket: rollUpL1ToDiscipline(pendingByL1),
+          trendByBucket: rollUpL1ToDiscipline(trendByL1),
+        });
 
-    const l1 = computeBudgetReconciliation({
-      asBidByBucket: asBidByL1,
-      approvedByBucket: approvedByL1,
-      pendingByBucket: pendingByL1,
-      trendByBucket: trendByL1,
-    });
-    // Discipline view is the L1 view rolled up — so a discipline's row is
-    // exactly the sum of its accounts (internally consistent), and more precise
-    // than EVM's whole-cost-on-first-code attribution.
-    const disc = computeBudgetReconciliation({
-      asBidByBucket: rollUpL1ToDiscipline(asBidByL1),
-      approvedByBucket: rollUpL1ToDiscipline(approvedByL1),
-      pendingByBucket: rollUpL1ToDiscipline(pendingByL1),
-      trendByBucket: rollUpL1ToDiscipline(trendByL1),
-    });
+        // Enrich each L1 row with its CBS account name so the UI can show
+        // "611 — High Alloy SS…" instead of a bare code. One row per L1
+        // (`distinct`); L1s not in the catalog (e.g. ad-hoc CVR codes) get null.
+        const l1Codes = l1.byBucket
+          .map((r) => r.bucket)
+          .filter((b): b is string => b !== "");
+        const nameRows = l1Codes.length
+          ? await prisma.cbsItem.findMany({
+              where: { l1: { in: l1Codes } },
+              select: { l1: true, accountDescription: true, name: true },
+              distinct: ["l1"],
+              orderBy: { id: "asc" },
+            })
+          : [];
+        // Prefer the account description; fall back to the item name for the rare
+        // L1 whose accountDescription is blank. null only when the L1 isn't in the
+        // catalog at all (e.g. an ad-hoc CVR code) — the UI flags that case.
+        const nameByL1 = new Map(
+          nameRows.map((r) => [r.l1, r.accountDescription || r.name || null]),
+        );
 
-    // Enrich each L1 row with its CBS account name so the UI can show
-    // "611 — High Alloy SS…" instead of a bare code. One row per L1
-    // (`distinct`); L1s not in the catalog (e.g. ad-hoc CVR codes) get null.
-    const l1Codes = l1.byBucket
-      .map((r) => r.bucket)
-      .filter((b): b is string => b !== "");
-    const nameRows = l1Codes.length
-      ? await prisma.cbsItem.findMany({
-          where: { l1: { in: l1Codes } },
-          select: { l1: true, accountDescription: true, name: true },
-          distinct: ["l1"],
-          orderBy: { id: "asc" },
-        })
-      : [];
-    // Prefer the account description; fall back to the item name for the rare
-    // L1 whose accountDescription is blank. null only when the L1 isn't in the
-    // catalog at all (e.g. an ad-hoc CVR code) — the UI flags that case.
-    const nameByL1 = new Map(
-      nameRows.map((r) => [r.l1, r.accountDescription || r.name || null]),
-    );
-
-    return {
-      baselineSnapshotId,
-      baselineLabel,
-      byL1: l1.byBucket.map((r) => ({
-        ...r,
-        name: r.bucket ? (nameByL1.get(r.bucket) ?? null) : null,
-      })),
-      byDiscipline: disc.byBucket.map((r) => ({
-        ...r,
-        disciplineLabel:
-          r.bucket === ""
-            ? "Unattributed"
-            : (disciplineLabelById[r.bucket] ?? r.bucket),
-      })),
-      total: l1.total,
-    };
-  });
+        return {
+          baselineSnapshotId,
+          baselineLabel,
+          byL1: l1.byBucket.map((r) => ({
+            ...r,
+            name: r.bucket ? (nameByL1.get(r.bucket) ?? null) : null,
+          })),
+          byDiscipline: disc.byBucket.map((r) => ({
+            ...r,
+            disciplineLabel:
+              r.bucket === ""
+                ? "Unattributed"
+                : (disciplineLabelById[r.bucket] ?? r.bucket),
+          })),
+          total: l1.total,
+        };
+      },
+    ),
+  );
 
 export const budgetReconciliationQueryOptions = (
   projectId: number | null,
@@ -705,16 +724,19 @@ export const periodWithEvmQueryOptions = (periodId: number | null) =>
 /** Latest period for the project — used by the dashboard EVM card. */
 export const fetchLatestPeriodWithEvm = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
-  .handler(async ({ data: projectId }): Promise<PeriodWithEvm | null> => {
-    await requireProjectAccess(projectId);
-    const latest = await prisma.reportingPeriod.findFirst({
-      where: { projectId },
-      orderBy: { dataDate: "desc" },
-      select: { id: true },
-    });
-    if (!latest) return null;
-    return fetchPeriodWithEvm({ data: latest.id });
-  });
+  .handler(
+    projectIdScopedHandler(
+      async ({ data: projectId }): Promise<PeriodWithEvm | null> => {
+        const latest = await prisma.reportingPeriod.findFirst({
+          where: { projectId },
+          orderBy: { dataDate: "desc" },
+          select: { id: true },
+        });
+        if (!latest) return null;
+        return fetchPeriodWithEvm({ data: latest.id });
+      },
+    ),
+  );
 
 export const latestPeriodWithEvmQueryOptions = (projectId: number | null) =>
   queryOptions({
@@ -752,75 +774,78 @@ export type EvmTimeSeriesPoint = {
  */
 export const fetchEvmTimeSeries = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
-  .handler(async ({ data: projectId }): Promise<EvmTimeSeriesPoint[]> => {
-    await requireProjectAccess(projectId);
-    const periods = await prisma.reportingPeriod.findMany({
-      where: { projectId },
-      orderBy: { dataDate: "asc" },
-      include: {
-        baselineSnapshot: { select: { id: true, totals: true } },
-        measurements: true,
+  .handler(
+    projectIdScopedHandler(
+      async ({ data: projectId }): Promise<EvmTimeSeriesPoint[]> => {
+        const periods = await prisma.reportingPeriod.findMany({
+          where: { projectId },
+          orderBy: { dataDate: "asc" },
+          include: {
+            baselineSnapshot: { select: { id: true, totals: true } },
+            measurements: true,
+          },
+        });
+        if (periods.length === 0) return [];
+
+        // Project dates + the project-wide CVR/trend buckets are independent of
+        // each other — fetch them in parallel rather than three serial round-trips.
+        const [project, revisionsByBucket, trendForecastByBucket] =
+          await Promise.all([
+            prisma.project.findUniqueOrThrow({
+              where: { id: projectId },
+              select: { startDate: true, endDate: true },
+            }),
+            loadRevisionsByBucket(projectId),
+            loadTrendForecastByBucket(projectId),
+          ]);
+
+        // Resolve any legacy snapshots (no cached `totals`) up front — one extra
+        // query each. Almost always empty; only matters for snapshots created
+        // before the cache column existed.
+        const missingTotalsIds = Array.from(
+          new Set(
+            periods
+              .filter((p) => !hasL1Buckets(p.baselineSnapshot.totals))
+              .map((p) => p.baselineSnapshot.id),
+          ),
+        );
+        const legacyTotalsById = new Map<number, ProjectFefRowTotals>();
+        if (missingTotalsIds.length > 0) {
+          const legacy = await prisma.estimateSnapshot.findMany({
+            where: { id: { in: missingTotalsIds } },
+            select: { id: true, fefRows: true },
+          });
+          for (const s of legacy) {
+            const rows = (s.fefRows as unknown as ProjectTotalsRow[]) ?? [];
+            legacyTotalsById.set(s.id, accumulateProjectTotals(rows));
+          }
+        }
+
+        return periods.map((p) => {
+          const baselineTotals: ProjectFefRowTotals = hasL1Buckets(
+            p.baselineSnapshot.totals,
+          )
+            ? p.baselineSnapshot.totals
+            : (legacyTotalsById.get(p.baselineSnapshot.id) ?? EMPTY_TOTALS);
+          const { total } = computePeriodEvm({
+            bacByBucket: bacByDiscipline(baselineTotals),
+            revisionsByBucket,
+            trendForecastByBucket,
+            measurements: p.measurements,
+            projectStartDate: project.startDate,
+            projectEndDate: project.endDate,
+            dataDate: p.dataDate.toISOString(),
+          });
+          return {
+            periodId: p.id,
+            label: p.label,
+            dataDate: p.dataDate.toISOString(),
+            total,
+          };
+        });
       },
-    });
-    if (periods.length === 0) return [];
-
-    // Project dates + the project-wide CVR/trend buckets are independent of
-    // each other — fetch them in parallel rather than three serial round-trips.
-    const [project, revisionsByBucket, trendForecastByBucket] =
-      await Promise.all([
-        prisma.project.findUniqueOrThrow({
-          where: { id: projectId },
-          select: { startDate: true, endDate: true },
-        }),
-        loadRevisionsByBucket(projectId),
-        loadTrendForecastByBucket(projectId),
-      ]);
-
-    // Resolve any legacy snapshots (no cached `totals`) up front — one extra
-    // query each. Almost always empty; only matters for snapshots created
-    // before the cache column existed.
-    const missingTotalsIds = Array.from(
-      new Set(
-        periods
-          .filter((p) => !hasL1Buckets(p.baselineSnapshot.totals))
-          .map((p) => p.baselineSnapshot.id),
-      ),
-    );
-    const legacyTotalsById = new Map<number, ProjectFefRowTotals>();
-    if (missingTotalsIds.length > 0) {
-      const legacy = await prisma.estimateSnapshot.findMany({
-        where: { id: { in: missingTotalsIds } },
-        select: { id: true, fefRows: true },
-      });
-      for (const s of legacy) {
-        const rows = (s.fefRows as unknown as ProjectTotalsRow[]) ?? [];
-        legacyTotalsById.set(s.id, accumulateProjectTotals(rows));
-      }
-    }
-
-    return periods.map((p) => {
-      const baselineTotals: ProjectFefRowTotals = hasL1Buckets(
-        p.baselineSnapshot.totals,
-      )
-        ? p.baselineSnapshot.totals
-        : (legacyTotalsById.get(p.baselineSnapshot.id) ?? EMPTY_TOTALS);
-      const { total } = computePeriodEvm({
-        bacByBucket: bacByDiscipline(baselineTotals),
-        revisionsByBucket,
-        trendForecastByBucket,
-        measurements: p.measurements,
-        projectStartDate: project.startDate,
-        projectEndDate: project.endDate,
-        dataDate: p.dataDate.toISOString(),
-      });
-      return {
-        periodId: p.id,
-        label: p.label,
-        dataDate: p.dataDate.toISOString(),
-        total,
-      };
-    });
-  });
+    ),
+  );
 
 // Local empty-totals constant for the legacy-snapshot fallback in
 // `fetchEvmTimeSeries`. Same shape `EMPTY_TOTALS` in projectTotals.ts uses,

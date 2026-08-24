@@ -1,17 +1,33 @@
 import { QueryClient } from '@tanstack/react-query'
+import { createClientOnlyFn } from '@tanstack/react-start'
 import { createRouter } from '@tanstack/react-router'
 import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query'
 import { routeTree } from './routeTree.gen'
 import { DefaultCatchBoundary } from './components/DefaultCatchBoundary'
 import { NotFound } from './components/NotFound'
 
+/**
+ * Load and start the browser Sentry SDK, on the client only.
+ *
+ * Two guards, for two different things:
+ *
+ * `createClientOnlyFn` is what satisfies the framework's import-protection
+ * plugin. The plugin walks the import graph statically, so a dynamic import
+ * of a `*.client.*` module from server-reachable code — which `router.tsx`
+ * is — is denied no matter what runtime check surrounds it. Wrapping the
+ * import in this body takes it out of the server graph.
+ *
+ * The `import.meta.env.SSR` check at the call site is what keeps SSR alive:
+ * a client-only function *throws* when called on the server rather than
+ * quietly doing nothing, so the server must not call it at all.
+ */
+const initSentryClientOnce = createClientOnlyFn(() => {
+  void import('./instrument.client').then((m) => m.initSentryClient())
+})
+
 export function getRouter() {
-  // Initialize the browser Sentry SDK once, on the client only. `import.meta.env.SSR`
-  // is statically replaced by Vite, so the server build eliminates this whole branch —
-  // and with it the dynamic import, which keeps the `*.client.*` module out of the
-  // server graph (the framework's import-protection plugin forbids it there).
   if (!import.meta.env.SSR) {
-    void import('./instrument.client').then((m) => m.initSentryClient())
+    initSentryClientOnce()
   }
 
   const queryClient = new QueryClient({

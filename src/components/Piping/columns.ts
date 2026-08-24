@@ -3,6 +3,7 @@ import type { FefRow } from "~/lib/types";
 import { EditableCell, DisplayEditCell, SizeCell, CbsSelectCell, ReadOnlyCell, TakeOffIdReadOnlyCell, CbsNameCell, CbsUomCell, DeleteRowCell, AreaSelectCell, LABOR_COST_GROUP, type ColumnGroup } from "~/lib/table-utils";
 import {
   ShopFieldSelectCell,
+  FabricateErectSelectCell,
   WeldGroupSelectCell,
   TotalCostCell,
   RoleSelectCell,
@@ -15,6 +16,7 @@ import {
   SubCheckboxCell,
   CrewMixSelectCell,
   CbsSearchSelectCell,
+  PipeCategoryCell,
 } from "~/components/Piping/cells";
 
 const columnHelper = createColumnHelper<FefRow>();
@@ -54,6 +56,7 @@ export const takeOffColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("crewMixId", { header: "Crew Mix", cell: CrewMixSelectCell, size: 140 }),
   columnHelper.accessor("schedule", { header: "Schedule", cell: ScheduleSelectCell, size: 100 }),
   columnHelper.accessor("shopField", { header: "Shop / Field", cell: ShopFieldSelectCell, size: 90 }),
+  columnHelper.accessor("fabricateErect", { header: "Fabricate / Erect", cell: FabricateErectSelectCell, size: 120 }),
   columnHelper.accessor("weldGroupDescription", { header: "Weld Group Description", cell: WeldGroupSelectCell, size: 160 }),
   columnHelper.accessor("taskCode", { header: "Task Code", cell: TaskCodeSelectCell, size: 110 }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: PipingQuantityCell, size: 90 }),
@@ -121,6 +124,8 @@ export const fieldEstimateColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("weldGroupDescription", { header: "Weld Group Description", cell: ReadOnlyCell, size: 220 }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: ReadOnlyCell }),
   columnHelper.accessor("size", { header: "Size", cell: ReadOnlyCell }),
+  // Derived from Size, not stored — a display column so nothing persists it.
+  columnHelper.display({ id: "pipeCategory", header: "Pipe Category", cell: PipeCategoryCell, size: 110 }),
   columnHelper.accessor("sub", { header: "Sub", cell: SubCheckboxCell, size: 60 }),
   columnHelper.accessor("unit", { header: "Unit", cell: CbsUomCell }),
   columnHelper.accessor("laborHours", { header: "Labor Hours", cell: ReadOnlyCell }),

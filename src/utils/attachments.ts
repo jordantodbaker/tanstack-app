@@ -3,7 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { z } from "zod";
 import { hasAtLeastRole } from "./users";
-import { requireProjectAccess } from "./users.server";
+import { projectScopedHandler, requireProjectAccess } from "./users.server";
 import { Id, ProjectId, parseIdInput } from "~/lib/validators";
 
 const AttachmentsInputSchema = z.object({
@@ -125,19 +125,20 @@ async function assertEntityInProject(
 
 export const fetchAttachments = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => AttachmentsInputSchema.parse(input))
-  .handler(async ({ data }): Promise<AttachmentItem[]> => {
-    await requireProjectAccess(data.projectId);
-    if (!isAttachmentEntityType(data.entityType)) return [];
-    const rows = await prisma.attachment.findMany({
-      where: {
-        entityType: data.entityType,
-        entityId: data.entityId,
-        projectId: data.projectId,
-      },
-      orderBy: { createdAt: "desc" },
-    });
-    return rows.map(toItem);
-  });
+  .handler(
+    projectScopedHandler(async ({ data }): Promise<AttachmentItem[]> => {
+      if (!isAttachmentEntityType(data.entityType)) return [];
+      const rows = await prisma.attachment.findMany({
+        where: {
+          entityType: data.entityType,
+          entityId: data.entityId,
+          projectId: data.projectId,
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      return rows.map(toItem);
+    }),
+  );
 
 export const attachmentsQueryOptions = (input: {
   entityType: AttachmentEntityType;

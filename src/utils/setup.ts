@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { prisma } from "../server/db";
-import { adminHandler, requireProjectAccess } from "./users.server";
+import { adminHandler, projectIdScopedHandler } from "./users.server";
 import { Id, ProjectId, parseProjectIdInput } from "../lib/validators";
 
 const UpdateAllowedFefCbsItemsSchema = z.object({
@@ -43,14 +43,15 @@ export const setupCbsItemsQueryOptions = () =>
 
 export const fetchAllowedFefCbsItemIds = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
-  .handler(async ({ data: projectId }) => {
-    await requireProjectAccess(projectId);
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      select: { allowedFefCbsItems: { select: { id: true } } },
-    });
-    return project?.allowedFefCbsItems.map((i) => i.id) ?? [];
-  });
+  .handler(
+    projectIdScopedHandler(async ({ data: projectId }) => {
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { allowedFefCbsItems: { select: { id: true } } },
+      });
+      return project?.allowedFefCbsItems.map((i) => i.id) ?? [];
+    }),
+  );
 
 export const allowedFefCbsItemIdsQueryOptions = (projectId: number) =>
   queryOptions({
@@ -61,17 +62,18 @@ export const allowedFefCbsItemIdsQueryOptions = (projectId: number) =>
 
 export const fetchAllowedCbsL1Codes = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
-  .handler(async ({ data: projectId }) => {
-    await requireProjectAccess(projectId);
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      select: { allowedFefCbsItems: { select: { l1: true } } },
-    });
-    if (!project) return [];
-    const set = new Set<string>();
-    for (const item of project.allowedFefCbsItems) set.add(item.l1);
-    return Array.from(set);
-  });
+  .handler(
+    projectIdScopedHandler(async ({ data: projectId }) => {
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { allowedFefCbsItems: { select: { l1: true } } },
+      });
+      if (!project) return [];
+      const set = new Set<string>();
+      for (const item of project.allowedFefCbsItems) set.add(item.l1);
+      return Array.from(set);
+    }),
+  );
 
 export const allowedCbsL1CodesQueryOptions = (projectId: number) =>
   queryOptions({

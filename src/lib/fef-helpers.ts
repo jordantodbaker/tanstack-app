@@ -21,6 +21,7 @@ export const FEF_ROW_STRING_FIELDS = [
   "name",
   "description",
   "shopField",
+  "fabricateErect",
   "weldGroupDescription",
   "quantity",
   "size",

@@ -6,6 +6,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useListFilters } from "~/lib/use-list-filters";
+import { computeCvrStats } from "~/lib/list-stats";
 import { matchesListFilters } from "~/lib/list-filtering";
 import { makeFilteredExport } from "~/lib/filtered-export";
 import {
@@ -16,7 +17,6 @@ import {
   transitionChangeLog,
   invalidateChangeLogQueries,
   CHANGE_STATUSES,
-  CVR_OPEN_STATUSES,
   type ChangeLogItem,
   type ChangeLogListItem,
   type ChangeStatus,
@@ -31,7 +31,7 @@ import {
 import { ChangelogDialog } from "~/components/Changelog/ChangelogDialog";
 import {
   FilterSelect,
-  StatCard,
+  StatCardRow,
   TableEmptyState,
   Th,
 } from "~/components/ui/list-page";
@@ -149,17 +149,7 @@ function ChangelogPage() {
     invalidate,
   });
 
-  const stats = React.useMemo(() => {
-    const totalCost = items.reduce((acc, i) => acc + i.costImpact, 0);
-    const approvedCost = items
-      .filter((i) => i.status === "APPROVED" || i.status === "EXECUTED")
-      .reduce((acc, i) => acc + i.costImpact, 0);
-    const openCount = items.filter((i) =>
-      CVR_OPEN_STATUSES.includes(i.status),
-    ).length;
-    const executedCount = items.filter((i) => i.status === "EXECUTED").length;
-    return { totalCost, approvedCost, openCount, executedCount };
-  }, [items]);
+  const stats = React.useMemo(() => computeCvrStats(items), [items]);
 
   const projectScoped = projectId !== null;
 
@@ -202,12 +192,26 @@ function ChangelogPage() {
         </SelectProjectBanner>
       )}
 
-      <StatsCards
-        total={items.length}
-        openCount={stats.openCount}
-        executedCount={stats.executedCount}
-        totalCost={stats.totalCost}
-        approvedCost={stats.approvedCost}
+      <StatCardRow
+        cards={[
+          { label: "Total Items", value: items.length.toString() },
+          { label: "Open", value: stats.openCount.toString(), tone: "amber" },
+          {
+            label: "Executed",
+            value: stats.executedCount.toString(),
+            tone: "violet",
+          },
+          {
+            label: "Total Cost Impact",
+            value: `$${formatMoney(stats.totalCost)}`,
+            tone: stats.totalCost >= 0 ? "slate" : "red",
+          },
+          {
+            label: "Approved Cost",
+            value: `$${formatMoney(stats.approvedCost)}`,
+            tone: "emerald",
+          },
+        ]}
       />
 
       {/* Filter bar */}
@@ -268,46 +272,6 @@ function ChangelogPage() {
         {...bulk.table}
       />
     </main>
-  );
-}
-
-function StatsCards({
-  total,
-  openCount,
-  executedCount,
-  totalCost,
-  approvedCost,
-}: {
-  total: number;
-  openCount: number;
-  executedCount: number;
-  totalCost: number;
-  approvedCost: number;
-}) {
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-      <StatCard label="Total Items" value={total.toString()} />
-      <StatCard
-        label="Open"
-        value={openCount.toString()}
-        tone="amber"
-      />
-      <StatCard
-        label="Executed"
-        value={executedCount.toString()}
-        tone="violet"
-      />
-      <StatCard
-        label="Total Cost Impact"
-        value={`$${formatMoney(totalCost)}`}
-        tone={totalCost >= 0 ? "slate" : "red"}
-      />
-      <StatCard
-        label="Approved Cost"
-        value={`$${formatMoney(approvedCost)}`}
-        tone="emerald"
-      />
-    </div>
   );
 }
 

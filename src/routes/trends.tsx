@@ -14,9 +14,9 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useListFilters } from "~/lib/use-list-filters";
+import { computeTrendStats } from "~/lib/list-stats";
 import { matchesListFilters } from "~/lib/list-filtering";
 import { makeFilteredExport } from "~/lib/filtered-export";
-import { isPast } from "~/lib/dates";
 import {
   trendListQueryOptions,
   trendListFullQueryOptions,
@@ -27,7 +27,6 @@ import {
   trendForecastContribution,
   invalidateTrendQueries,
   TREND_STATUSES,
-  TREND_ACTIVE_STATUSES,
   type TrendItem,
   type TrendListItem,
   type TrendStatus,
@@ -44,7 +43,7 @@ import {
 import { TrendDialog } from "~/components/Trend/TrendDialog";
 import {
   FilterSelect,
-  StatCard,
+  StatCardRow,
   TableEmptyState,
   Th,
 } from "~/components/ui/list-page";
@@ -169,37 +168,7 @@ function TrendLogPage() {
     invalidate,
   });
 
-  const stats = React.useMemo(() => {
-    const now = new Date();
-    const active = items.filter((i) =>
-      TREND_ACTIVE_STATUSES.includes(i.status),
-    );
-    const activeCount = active.length;
-    const pastDue = active.filter((i) => isPast(i.neededBy, now)).length;
-    // Total AFC contribution (probability-weighted) across active trends.
-    // Matches the per-bucket roll-up on the reporting page.
-    const totalForecast = active.reduce(
-      (sum, t) =>
-        sum +
-        trendForecastContribution({
-          status: t.status,
-          probability: t.probability,
-          costLikely: t.costLikely,
-        }),
-      0,
-    );
-    // Unweighted likely exposure across active trends — what AFC becomes if
-    // every active trend lands at full value. Surfaces "worst-case" risk.
-    const totalExposure = active.reduce((sum, t) => sum + t.costLikely, 0);
-    const probableCount = items.filter((i) => i.status === "PROBABLE").length;
-    return {
-      activeCount,
-      pastDue,
-      totalForecast,
-      totalExposure,
-      probableCount,
-    };
-  }, [items]);
+  const stats = React.useMemo(() => computeTrendStats(items, new Date()), [items]);
 
   const projectScoped = projectId !== null;
 
@@ -252,13 +221,43 @@ function TrendLogPage() {
         </SelectProjectBanner>
       )}
 
-      <TrendStatsCards
-        total={items.length}
-        activeCount={stats.activeCount}
-        probableCount={stats.probableCount}
-        pastDue={stats.pastDue}
-        totalForecast={stats.totalForecast}
-        totalExposure={stats.totalExposure}
+      <StatCardRow
+        cards={[
+          {
+            label: "Total trends",
+            value: items.length.toString(),
+            icon: ListChecks,
+          },
+          {
+            label: "Active",
+            value: stats.activeCount.toString(),
+            tone: "amber",
+            icon: TrendingUp,
+          },
+          {
+            label: "Probable",
+            value: stats.probableCount.toString(),
+            tone: "violet",
+          },
+          {
+            label: "Past needed-by",
+            value: stats.pastDue.toString(),
+            tone: stats.pastDue > 0 ? "red" : "slate",
+            icon: CalendarClock,
+          },
+          {
+            label: "Weighted AFC",
+            value: formatMoney(stats.totalForecast),
+            tone: "amber",
+            icon: Wallet,
+          },
+          {
+            label: "Likely exposure",
+            value: formatMoney(stats.totalExposure),
+            tone: stats.totalExposure > 0 ? "red" : "slate",
+            icon: AlertTriangle,
+          },
+        ]}
       />
 
       <div className="flex items-center gap-2 flex-wrap rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
@@ -322,57 +321,6 @@ function TrendLogPage() {
         {...bulk.table}
       />
     </main>
-  );
-}
-
-function TrendStatsCards({
-  total,
-  activeCount,
-  probableCount,
-  pastDue,
-  totalForecast,
-  totalExposure,
-}: {
-  total: number;
-  activeCount: number;
-  probableCount: number;
-  pastDue: number;
-  totalForecast: number;
-  totalExposure: number;
-}) {
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
-      <StatCard
-        label="Total trends"
-        value={total.toString()}
-        icon={ListChecks}
-      />
-      <StatCard
-        label="Active"
-        value={activeCount.toString()}
-        tone="amber"
-        icon={TrendingUp}
-      />
-      <StatCard label="Probable" value={probableCount.toString()} tone="violet" />
-      <StatCard
-        label="Past needed-by"
-        value={pastDue.toString()}
-        tone={pastDue > 0 ? "red" : "slate"}
-        icon={CalendarClock}
-      />
-      <StatCard
-        label="Weighted AFC"
-        value={formatMoney(totalForecast)}
-        tone="amber"
-        icon={Wallet}
-      />
-      <StatCard
-        label="Likely exposure"
-        value={formatMoney(totalExposure)}
-        tone={totalExposure > 0 ? "red" : "slate"}
-        icon={AlertTriangle}
-      />
-    </div>
   );
 }
 

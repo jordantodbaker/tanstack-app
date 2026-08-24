@@ -23,24 +23,21 @@ import {
 import {
   assertProjectAccess,
   requireProjectAccess,
-  resolveCurrentUser,
 } from "./users.server";
 import { assertProjectUnchanged, hasAtLeastRole } from "./users";
 import {
+  deleteProjectScopedRecord,
+  transitionProjectScopedRecord,
+} from "./entity-writes.server";
+import {
   diffFields,
   recordCreate,
-  recordDelete,
   recordUpdate,
 } from "./audit.server";
-import { applyWorkflowTransition } from "./workflow.server";
 import { createLinkedCvr } from "./promote.server";
 import { TREND_TRANSITIONS } from "./workflow";
 import { TREND_STATUS_LABELS } from "./trendLabels";
 import { allocateIfBlank } from "./entityNumbers.server";
-import {
-  flushNotificationEmails,
-  type PendingNotificationEmail,
-} from "./notification-email.server";
 
 /**
  * SERVER-SIDE Trend module. Trends are anticipated cost impacts that haven't
@@ -371,50 +368,31 @@ const TREND_STATUSES_NEEDING_REVIEW: ReadonlySet<string> = new Set(["PROBABLE"])
 
 export const transitionTrend = createServerFn({ method: "POST" })
   .inputValidator(parseTransitionInput)
-  .handler(async ({ data }): Promise<TrendItem> => {
-    const pre = await prisma.trend.findUniqueOrThrow({
-      where: { id: data.id },
-      select: { projectId: true },
-    });
-    const actor = await requireProjectAccess(pre.projectId);
-    const pendingEmails: PendingNotificationEmail[] = [];
-    const row = await prisma.$transaction(async (tx) => {
-      const before = await tx.trend.findUniqueOrThrow({
-        where: { id: data.id },
-      });
-      const updated = await applyWorkflowTransition({
-        tx,
-        before,
-        actor,
-        action: data.action,
-        comment: data.comment,
-        pendingEmails,
-        config: {
-          entityType: "Trend",
-          transitionMap: TREND_TRANSITIONS,
-          statusLabels: TREND_STATUS_LABELS,
-          statusesNeedingReview: TREND_STATUSES_NEEDING_REVIEW,
-          auditFields: ["status", "closedAt"],
-          buildTitle: (r) =>
-            `${r.trendNumber || `Trend #${r.id}`} — ${r.title}`,
-          // Stamp closedAt when landing in a terminal state so list views
-          // can show "closed on" without a separate UPDATE round-trip.
-          extraUpdateData: (transition) =>
-            transition.to === "REJECTED" || transition.to === "VOID"
-              ? { closedAt: new Date() }
-              : transition.to === "IDENTIFIED"
-                ? { closedAt: null }
-                : {},
-        },
-        updateRow: (data) =>
-          tx.trend.update({ where: { id: before.id }, data }),
-      });
-      return updated;
-    });
-    // After commit: send email copies (no-op unless email is configured).
-    await flushNotificationEmails(pendingEmails);
-    return toItem(row);
-  });
+  .handler(({ data }): Promise<TrendItem> =>
+    transitionProjectScopedRecord({
+      id: data.id,
+      action: data.action,
+      comment: data.comment,
+      pickDelegate: (tx) => tx.trend,
+      config: {
+        entityType: "Trend",
+        transitionMap: TREND_TRANSITIONS,
+        statusLabels: TREND_STATUS_LABELS,
+        statusesNeedingReview: TREND_STATUSES_NEEDING_REVIEW,
+        auditFields: ["status", "closedAt"],
+        buildTitle: (r) => `${r.trendNumber || `Trend #${r.id}`} — ${r.title}`,
+        // Stamp closedAt when landing in a terminal state so list views can
+        // show "closed on" without a separate UPDATE round-trip.
+        extraUpdateData: (transition) =>
+          transition.to === "REJECTED" || transition.to === "VOID"
+            ? { closedAt: new Date() }
+            : transition.to === "IDENTIFIED"
+              ? { closedAt: null }
+              : {},
+      },
+      toItem,
+    }),
+  );
 
 /**
  * Promote a trend to a CVR. Creates a new ChangeLog row pre-populated from
@@ -502,25 +480,13 @@ export const promoteTrendToCvr = createServerFn({ method: "POST" })
 
 export const deleteTrend = createServerFn({ method: "POST" })
   .inputValidator(parseIdInput)
-  .handler(async ({ data }): Promise<{ ok: true }> => {
-    const row = await prisma.trend.findUniqueOrThrow({
-      where: { id: data.id },
-      select: { projectId: true },
-    });
-    const actor = await resolveCurrentUser();
-    if (!actor) throw new Error("Unauthorized: not signed in");
-    await assertProjectAccess(actor, row.projectId);
-    await prisma.$transaction(async (tx) => {
-      await tx.trend.delete({ where: { id: data.id } });
-      await recordDelete(tx, {
-        entityType: "Trend",
-        entityId: data.id,
-        projectId: row.projectId,
-        actor,
-      });
-    });
-    return { ok: true };
-  });
+  .handler(({ data }): Promise<{ ok: true }> =>
+    deleteProjectScopedRecord({
+      id: data.id,
+      entityType: "Trend",
+      pickDelegate: (tx) => tx.trend,
+    }),
+  );
 
 /**
  * The AFC contribution from a single trend. Pure so reporting + dashboard

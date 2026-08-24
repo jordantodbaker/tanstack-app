@@ -22,15 +22,17 @@ import {
 import { assertProjectAccess, resolveCurrentUser } from "./users.server";
 import { assertProjectUnchanged } from "./users";
 import {
+  deleteProjectScopedRecord,
+  transitionProjectScopedRecord,
+} from "./entity-writes.server";
+import {
   diffFields,
   recordCreate,
-  recordDelete,
   recordUpdate,
 } from "./audit.server";
 import { CVR_TRANSITIONS } from "./workflow";
 import { STATUS_LABELS } from "./changelogLabels";
 import {
-  applyWorkflowTransition,
   type WorkflowTransitionConfig,
 } from "./workflow.server";
 import {
@@ -40,10 +42,6 @@ import {
   type CvrLineItemDto,
 } from "./cvrLineItems";
 import { allocateIfBlank } from "./entityNumbers.server";
-import {
-  flushNotificationEmails,
-  type PendingNotificationEmail,
-} from "./notification-email.server";
 
 const CVR_STATUSES_NEEDING_REVIEW = new Set<string>([
   "IN_REVIEW",
@@ -481,60 +479,26 @@ export const upsertChangeLog = createServerFn({ method: "POST" })
  */
 export const transitionChangeLog = createServerFn({ method: "POST" })
   .inputValidator(parseTransitionInput)
-  .handler(async ({ data }): Promise<ChangeLogItem> => {
-    // Resolve the actor once up front; we read the row inside the
-    // transaction (avoiding a pre-read round-trip just to discover its
-    // `projectId` for the access check).
-    const actor = await resolveCurrentUser();
-    if (!actor) throw new Error("Unauthorized: not signed in");
-    const pendingEmails: PendingNotificationEmail[] = [];
-    const row = await prisma.$transaction(async (tx) => {
-      const before = await tx.changeLog.findUniqueOrThrow({
-        where: { id: data.id },
-      });
-      await assertProjectAccess(actor, before.projectId);
-      return applyWorkflowTransition({
-        tx,
-        before,
-        actor,
-        action: data.action,
-        comment: data.comment,
-        config: CVR_WORKFLOW_CONFIG,
-        updateRow: (payload) =>
-          tx.changeLog.update({ where: { id: data.id }, data: payload }),
-        pendingEmails,
-      });
-    });
-    // After commit: send email copies (no-op unless email is configured).
-    await flushNotificationEmails(pendingEmails);
-    return toItem(row);
-  });
+  .handler(({ data }): Promise<ChangeLogItem> =>
+    transitionProjectScopedRecord({
+      id: data.id,
+      action: data.action,
+      comment: data.comment,
+      pickDelegate: (tx) => tx.changeLog,
+      config: CVR_WORKFLOW_CONFIG,
+      toItem,
+    }),
+  );
 
 export const deleteChangeLog = createServerFn({ method: "POST" })
   .inputValidator(parseIdInput)
-  .handler(async ({ data }): Promise<{ ok: true }> => {
-    const actor = await resolveCurrentUser();
-    if (!actor) throw new Error("Unauthorized: not signed in");
-    await prisma.$transaction(async (tx) => {
-      // Single read for projectId + access check, then delete + audit.
-      // Doing the lookup inside the transaction also closes the race where
-      // a row's project could be reassigned between the access check and
-      // the delete.
-      const row = await tx.changeLog.findUniqueOrThrow({
-        where: { id: data.id },
-        select: { projectId: true },
-      });
-      await assertProjectAccess(actor, row.projectId);
-      await tx.changeLog.delete({ where: { id: data.id } });
-      await recordDelete(tx, {
-        entityType: "ChangeLog",
-        entityId: data.id,
-        projectId: row.projectId,
-        actor,
-      });
-    });
-    return { ok: true };
-  });
+  .handler(({ data }): Promise<{ ok: true }> =>
+    deleteProjectScopedRecord({
+      id: data.id,
+      entityType: "ChangeLog",
+      pickDelegate: (tx) => tx.changeLog,
+    }),
+  );
 
 /**
  * Cache-bust set fired after every CVR mutation (upsert / delete / transition)

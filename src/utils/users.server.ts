@@ -201,6 +201,22 @@ export function projectScopedHandler<
 }
 
 /**
+ * Same gate as `projectScopedHandler`, for the other input shape in this
+ * codebase: handlers validated with `parseProjectIdInput`, whose `data` IS the
+ * projectId rather than an object carrying one. Keeping both means every
+ * project-scoped endpoint can be wrapped, instead of the scalar half having to
+ * hand-roll the check.
+ */
+export function projectIdScopedHandler<O>(
+  fn: (args: { data: number }) => Promise<O>,
+): (args: { data: number }) => Promise<O> {
+  return async (args) => {
+    await requireProjectAccess(args.data);
+    return fn(args);
+  };
+}
+
+/**
  * Server-side guard for a request that operates on a single estimate version.
  * Loads the version's owning `projectId` (versions can't be reassigned across
  * projects), then delegates to `assertProjectAccess`. Returns the resolved

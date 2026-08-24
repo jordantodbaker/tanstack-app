@@ -15,6 +15,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useListFilters } from "~/lib/use-list-filters";
+import { computePcoStats } from "~/lib/list-stats";
 import { matchesListFilters } from "~/lib/list-filtering";
 import { makeFilteredExport } from "~/lib/filtered-export";
 import {
@@ -25,7 +26,6 @@ import {
   transitionPco,
   invalidatePcoQueries,
   PCO_STATUSES,
-  PCO_OPEN_STATUSES,
   type PcoItem,
   type PcoListItem,
   type PcoStatus,
@@ -41,7 +41,7 @@ import {
 import { PcoDialog } from "~/components/Pco/PcoDialog";
 import {
   FilterSelect,
-  StatCard,
+  StatCardRow,
   TableEmptyState,
   Th,
 } from "~/components/ui/list-page";
@@ -136,32 +136,7 @@ function PcoLogPage() {
     invalidate,
   });
 
-  const stats = React.useMemo(() => {
-    // "Open" — pre-approval bucket. Sums requested $ (what we're chasing
-    // approval on).
-    const open = items.filter((i) => PCO_OPEN_STATUSES.includes(i.status));
-    const openValue = open.reduce((s, p) => s + p.requestedAmount, 0);
-    // "Approved unbilled" — owner agreed but no invoice yet. Sums
-    // approvedAmount (the real number).
-    const approved = items.filter((i) => i.status === "APPROVED");
-    const approvedValue = approved.reduce((s, p) => s + p.approvedAmount, 0);
-    // "Invoiced unpaid" — outstanding receivable.
-    const invoiced = items.filter((i) => i.status === "INVOICED");
-    const invoicedValue = invoiced.reduce((s, p) => s + p.approvedAmount, 0);
-    // Closed total — paid this engagement.
-    const closed = items.filter((i) => i.status === "CLOSED");
-    const closedValue = closed.reduce((s, p) => s + p.approvedAmount, 0);
-    return {
-      openCount: open.length,
-      openValue,
-      approvedCount: approved.length,
-      approvedValue,
-      invoicedCount: invoiced.length,
-      invoicedValue,
-      closedCount: closed.length,
-      closedValue,
-    };
-  }, [items]);
+  const stats = React.useMemo(() => computePcoStats(items), [items]);
 
   const projectScoped = projectId !== null;
 
@@ -209,15 +184,38 @@ function PcoLogPage() {
         </SelectProjectBanner>
       )}
 
-      <PcoStatsCards
-        total={items.length}
-        openCount={stats.openCount}
-        openValue={stats.openValue}
-        approvedCount={stats.approvedCount}
-        approvedValue={stats.approvedValue}
-        invoicedCount={stats.invoicedCount}
-        invoicedValue={stats.invoicedValue}
-        closedValue={stats.closedValue}
+      <StatCardRow
+        cards={[
+          {
+            label: "Total PCOs",
+            value: items.length.toString(),
+            icon: ClipboardList,
+          },
+          {
+            label: `Open (${stats.openCount})`,
+            value: formatMoney(stats.openValue),
+            tone: "amber",
+            icon: Hourglass,
+          },
+          {
+            label: `Approved unbilled (${stats.approvedCount})`,
+            value: formatMoney(stats.approvedValue),
+            tone: "violet",
+            icon: CheckCircle2,
+          },
+          {
+            label: `Invoiced unpaid (${stats.invoicedCount})`,
+            value: formatMoney(stats.invoicedValue),
+            tone: stats.invoicedValue > 0 ? "red" : "slate",
+            icon: Receipt,
+          },
+          {
+            label: "Collected",
+            value: formatMoney(stats.closedValue),
+            tone: stats.closedValue > 0 ? "emerald" : "slate",
+            icon: CircleDollarSign,
+          },
+        ]}
       />
 
       <div className="flex items-center gap-2 flex-wrap rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
@@ -270,60 +268,6 @@ function PcoLogPage() {
         {...bulk.table}
       />
     </main>
-  );
-}
-
-function PcoStatsCards({
-  total,
-  openCount,
-  openValue,
-  approvedCount,
-  approvedValue,
-  invoicedCount,
-  invoicedValue,
-  closedValue,
-}: {
-  total: number;
-  openCount: number;
-  openValue: number;
-  approvedCount: number;
-  approvedValue: number;
-  invoicedCount: number;
-  invoicedValue: number;
-  closedValue: number;
-}) {
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-      <StatCard
-        label="Total PCOs"
-        value={total.toString()}
-        icon={ClipboardList}
-      />
-      <StatCard
-        label={`Open (${openCount})`}
-        value={formatMoney(openValue)}
-        tone="amber"
-        icon={Hourglass}
-      />
-      <StatCard
-        label={`Approved unbilled (${approvedCount})`}
-        value={formatMoney(approvedValue)}
-        tone="violet"
-        icon={CheckCircle2}
-      />
-      <StatCard
-        label={`Invoiced unpaid (${invoicedCount})`}
-        value={formatMoney(invoicedValue)}
-        tone={invoicedValue > 0 ? "red" : "slate"}
-        icon={Receipt}
-      />
-      <StatCard
-        label="Collected"
-        value={formatMoney(closedValue)}
-        tone={closedValue > 0 ? "emerald" : "slate"}
-        icon={CircleDollarSign}
-      />
-    </div>
   );
 }
 

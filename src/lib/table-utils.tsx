@@ -19,102 +19,86 @@ import {
   setMaterialsSectionRows,
 } from "./materialsStore";
 import { createDebug } from "./logger";
-import {
-  normalizeRange,
-  rangeSpansMultiple,
-  serializeRange,
-  parseClipboardMatrix,
-  applyPaste,
-  applyClear,
-  applyFillDown,
-  selectionStats,
-  insertRows,
-  deleteRows,
-  findMatches,
-  replaceInCell,
-  replaceAll,
-  sortRows,
-  type RangeSelection,
-  type WriteCtx,
-} from "./grid-range";
 // Cell editors, CellSelect, ColumnFilter/pagination, and their helpers live in
 // `fef-cells`; re-exported here so existing `~/lib/table-utils` imports still
 // resolve (this module is the public entry point for the FEF table).
 import {
   ColumnFilter,
   TablePagination,
-  makeBlankRow,
   TAKE_OFF_INITIAL_ROWS,
 } from "./fef-cells";
 export * from "./fef-cells";
+// The shared type surface and the range-editing hook live in their own
+// modules; both are re-exported here so `~/lib/table-utils` stays the public
+// entry point for the FEF table and existing imports keep resolving.
+import type {
+  FefTableMeta,
+  FefTableState,
+  FrozenColumn,
+  RangeRowHandlers,
+  ServerPagination,
+} from "./fef-table-types";
+export * from "./fef-table-types";
+import { useGridRangeEditing } from "./use-grid-range-editing";
+export { useGridRangeEditing } from "./use-grid-range-editing";
 
 const debug = createDebug("fef");
 
 
 // ── Shared FEF table state + content ────────────────────────────────────────
 
-type RoleRate = { roleName: string; schedule: string; rate: number };
+/** Resize bounds, in px. */
+const MIN_COL_WIDTH = 60;
+const MAX_COL_WIDTH = 800;
 
-export type TaskCodeOption = { code: string; taskDefinition: string };
-export type AreaSelectOption = { value: string; label: string };
-/** Shape shared with `SearchableSelectOption` (kept local to avoid a table-utils
- *  ↔ SearchableSelect import cycle). */
-export type SearchableSelectOptionMeta = {
-  value: string;
-  label: string;
-  searchText?: string;
-};
-export type CrewMixOption = {
-  id: number;
-  name: string;
-  schedule: string;
-  members: { roleName: string; count: number }[];
-};
+const WIDTH_STORAGE_PREFIX = "fef-col-widths:";
 
-export type FefTableMeta = {
-  cbsOptions?: CbsOption[];
-  weldGroupOptions?: string[];
-  weldGroupMaterialMap?: Record<
-    string,
-    { shopCode: string; installCode: string }
-  >;
-  roleOptions?: string[];
-  scheduleOptions?: string[];
-  roleRates?: RoleRate[];
-  crewMixOptions?: CrewMixOption[];
-  taskCodeOptions?: TaskCodeOption[];
-  /** Structural-steel members (SLTO_Data) for the steel-only Task Code
-   *  searchable dropdown, pre-mapped to `{ value, label, searchText }`. */
-  steelMemberOptions?: SearchableSelectOptionMeta[];
-  /** Member designation → QTO UoM (SLTO_Data); fills the Unit column when a
-   *  steel Task Code is selected. */
-  steelMemberUomLookup?: Record<string, string>;
-  /** Member designation → TNS/Unit (SLTO_Data); Total Tons = Quantity × this. */
-  steelMemberTonsLookup?: Record<string, number>;
-  pipingFactorLookup?: Map<
-    string,
-    { unit: string; values: Map<number, number> }
-  >;
-  areaOptions?: AreaSelectOption[];
-  selectedRowIndices?: Set<number>;
-  onToggleRowSelected?: (rowIndex: number) => void;
-  /** Optional override for the default delete behavior. Lets callers also
-   *  adjust ancillary state (e.g. selection sets) atomically with deletion. */
-  deleteRow?: (rowIndex: number) => void;
-};
+/** Saved column widths for a sheet, or {} when there are none / storage is
+ *  unavailable (SSR, privacy mode). Never throws — a bad blob just means
+ *  default widths. Values are re-clamped on read so a stored width can't
+ *  outlive a change to the bounds. */
+function readStoredWidths(key: string | undefined): Record<string, number> {
+  if (!key || typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(WIDTH_STORAGE_PREFIX + key);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof v === "number" && Number.isFinite(v)) {
+        out[k] = Math.min(MAX_COL_WIDTH, Math.max(MIN_COL_WIDTH, v));
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
 
-export type FefTableState = {
-  data: FefRow[];
-  setData: React.Dispatch<React.SetStateAction<FefRow[]>>;
-  columnFilters: ColumnFiltersState;
-  setColumnFilters: React.Dispatch<React.SetStateAction<ColumnFiltersState>>;
-};
+function writeStoredWidths(
+  key: string | undefined,
+  widths: Record<string, number>,
+): void {
+  if (!key || typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      WIDTH_STORAGE_PREFIX + key,
+      JSON.stringify(widths),
+    );
+  } catch {
+    // Storage full or blocked — the widths just won't survive a reload.
+  }
+}
 
-export type ServerPagination = {
-  totalCount: number;
-  pageIndex: number;
-  pageSize: number;
-  onPageChange: (page: number) => void;
+/** The width-persistence internals, exposed for tests. Not part of the
+ *  component API — the grid reads and writes these itself. */
+export const __columnWidthStorage = {
+  read: readStoredWidths,
+  write: writeStoredWidths,
+  MIN: MIN_COL_WIDTH,
+  MAX: MAX_COL_WIDTH,
+  PREFIX: WIDTH_STORAGE_PREFIX,
 };
 
 /**
@@ -134,29 +118,6 @@ export type ServerPagination = {
  * comparator forces every row to re-render with fresh meta after a refetch,
  * without giving up the per-keystroke memoization win for editing.
  */
-/** Callbacks the range-editing rows use to report pointer/focus and start a
- *  fill-handle drag. All are stable (useCallback) so they don't defeat the
- *  row memo. */
-type RangeRowHandlers = {
-  onCellPointerDown: (
-    rowIndex: number,
-    colIndex: number,
-    e: React.MouseEvent,
-  ) => void;
-  onCellFocus: (rowIndex: number, colIndex: number) => void;
-  onFillHandleDown: (e: React.MouseEvent) => void;
-  onCellContextMenu: (
-    rowIndex: number,
-    colIndex: number,
-    e: React.MouseEvent,
-  ) => void;
-  onRowHeaderClick: (rowIndex: number) => void;
-};
-
-/** Sticky-left placement for a frozen (pinned) column. */
-type FrozenColumn = { left: number; width: number };
-const GUTTER_WIDTH = 44;
-
 const FefTableRow = React.memo(
   function FefTableRow({
     row,
@@ -400,6 +361,7 @@ export function FefTableContent({
   minRows,
   getRowInvalid,
   enableRangeEditing,
+  columnWidthKey,
   frozenColumnCount = 0,
 }: {
   state: FefTableState;
@@ -431,12 +393,47 @@ export function FefTableContent({
    * to clear. Only the Take Off sheet opts in.
    */
   enableRangeEditing?: boolean;
+  /**
+   * Enables drag-to-resize column edges and remembers the widths under this
+   * key (localStorage, per sheet). Omit to keep fixed widths.
+   */
+  columnWidthKey?: string;
   /** Number of leading visible columns to freeze (pin) horizontally, in
    *  addition to the always-frozen row-number gutter. 0 = none. */
   frozenColumnCount?: number;
 }) {
   const { data, setData, columnFilters, setColumnFilters } = state;
   const [localPageIndex, setLocalPageIndex] = React.useState(0);
+
+  // Column widths. Seeded from storage in the lazy initializer rather than an
+  // effect, so the first paint is already at the user's widths — hydrating them
+  // afterwards would re-layout the whole grid one frame in.
+  const [columnSizing, setColumnSizing] = React.useState<Record<string, number>>(
+    () => readStoredWidths(columnWidthKey),
+  );
+  const resizable = columnWidthKey !== undefined;
+  const handleColumnSizingChange = React.useCallback(
+    (updater: React.SetStateAction<Record<string, number>>) => {
+      setColumnSizing((prev) => {
+        const next = typeof updater === "function" ? updater(prev) : updater;
+        writeStoredWidths(columnWidthKey, next);
+        return next;
+      });
+    },
+    [columnWidthKey],
+  );
+  /** Drop a column's stored width so it falls back to its column-def size. */
+  const resetColumnWidth = React.useCallback(
+    (columnId: string) => {
+      handleColumnSizingChange((prev) => {
+        if (!(columnId in prev)) return prev;
+        const next = { ...prev };
+        delete next[columnId];
+        return next;
+      });
+    },
+    [handleColumnSizingChange],
+  );
 
   // Identity that flips when any non-row-data input that affects cell
   // rendering changes reference: query-derived meta arrays (e.g. an admin
@@ -524,7 +521,16 @@ export function FefTableContent({
       }
     },
     onColumnVisibilityChange,
-    state: { columnFilters, pagination, ...(columnVisibility !== undefined && { columnVisibility }) },
+    // "onEnd" commits the new width once, on mouse-up. "onChange" would push a
+    // width through React state on every mousemove, re-rendering every cell of
+    // every row — thousands of them on the take-off — for each frame of a drag.
+    // The handle itself previews the drag by translating, so it still tracks
+    // the cursor.
+    enableColumnResizing: resizable,
+    columnResizeMode: "onEnd",
+    defaultColumn: { minSize: MIN_COL_WIDTH, maxSize: MAX_COL_WIDTH },
+    onColumnSizingChange: handleColumnSizingChange,
+    state: { columnFilters, pagination, columnSizing, ...(columnVisibility !== undefined && { columnVisibility }) },
     meta: {
       // Pass every caller-supplied field through untouched — the option lists,
       // the steel/piping lookups, areaOptions, and the selection state all live
@@ -563,6 +569,7 @@ export function FefTableContent({
   });
 
   const {
+    gridRef,
     rows, frozen, rangeSel, rangeHandlers, onGridKeyDown, onGridPaste, stats,
     fmtStat, menu, menuCopy, menuCut, menuPaste, menuClear, menuInsert,
     menuDeleteRows, selectedRowCount, find, setFind, findIndex, setFindIndex,
@@ -695,7 +702,13 @@ export function FefTableContent({
         </div>
       )}
     <div
-      className="overflow-x-auto"
+      ref={gridRef}
+      // Focusable but not a tab stop, so the header/gutter click and
+      // fill-handle handlers can park focus here and keep the range shortcuts
+      // (Ctrl+D fill down, Ctrl+C/V, Delete) inside the grid instead of
+      // letting the browser take them.
+      tabIndex={enableRangeEditing ? -1 : undefined}
+      className="overflow-x-auto focus:outline-none"
       onKeyDownCapture={enableRangeEditing ? onGridKeyDown : undefined}
       onPaste={enableRangeEditing ? onGridPaste : undefined}
     >
@@ -772,10 +785,45 @@ export function FefTableContent({
                           minWidth: fz.width,
                           zIndex: 30,
                         }
-                      : { top: headerTop, minWidth: header.column.getSize() }
+                      : {
+                          top: headerTop,
+                          minWidth: header.column.getSize(),
+                          // A resizable column also pins `width`. `minWidth`
+                          // alone only ever grows a column: with the table at
+                          // w-full the browser hands out slack space, so
+                          // dragging an edge left would change the number and
+                          // nothing on screen.
+                          ...(resizable && { width: header.column.getSize() }),
+                        }
                   }
                   className="sticky z-20 bg-gray-100 border border-gray-300 px-2 py-2 text-left font-semibold align-bottom"
                 >
+                  {resizable && header.column.getCanResize() && (
+                    <div
+                      role="separator"
+                      aria-orientation="vertical"
+                      aria-label={`Resize ${header.column.id}`}
+                      title="Drag to resize · double-click to reset"
+                      onMouseDown={header.getResizeHandler()}
+                      onTouchStart={header.getResizeHandler()}
+                      onDoubleClick={() => resetColumnWidth(header.column.id)}
+                      // Keep the drag off the header's own click handlers —
+                      // the column-select span sits right beside it.
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        transform: header.column.getIsResizing()
+                          ? `translateX(${
+                              table.getState().columnSizingInfo.deltaOffset ?? 0
+                            }px)`
+                          : undefined,
+                      }}
+                      className={`absolute right-0 top-0 z-40 h-full w-1.5 cursor-col-resize touch-none select-none ${
+                        header.column.getIsResizing()
+                          ? "bg-blue-500"
+                          : "hover:bg-blue-400/60"
+                      }`}
+                    />
+                  )}
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-1 leading-tight">
                       <span
@@ -968,593 +1016,3 @@ export function FefTableContent({
   );
 }
 
-/**
- * All Excel-style range-editing state and behavior for the FEF grid: cell
- * selection, keyboard shortcuts, the fill-handle drag, the selection status
- * bar, the right-click context menu, find & replace, click-header sort, and
- * frozen-column offsets. Extracted from FefTableContent so the component is
- * just table setup + this hook + render. Runs unconditionally; behavior is
- * gated on `enableRangeEditing`.
- */
-function useGridRangeEditing({
-  enableRangeEditing,
-  data,
-  setData,
-  table,
-  meta,
-  serverPagination,
-  setLocalPageIndex,
-  frozenColumnCount,
-}: {
-  enableRangeEditing: boolean;
-  data: FefRow[];
-  setData: React.Dispatch<React.SetStateAction<FefRow[]>>;
-  table: ReturnType<typeof useReactTable<FefRow>>;
-  meta?: FefTableMeta;
-  serverPagination?: ServerPagination;
-  setLocalPageIndex: React.Dispatch<React.SetStateAction<number>>;
-  frozenColumnCount: number;
-}) {
-  // ── Excel-style range editing (opt-in via enableRangeEditing) ─────────────
-  // All hooks below run unconditionally (rules of hooks); their behavior is
-  // gated on `enableRangeEditing` so non-Take-Off sheets are unaffected.
-  const rows = table.getRowModel().rows;
-  const columnIds = table.getVisibleLeafColumns().map((c) => c.id);
-  const colCount = columnIds.length;
-  const firstRowIndex = rows.length > 0 ? rows[0].index : 0;
-  const lastRowIndex = rows.length > 0 ? rows[rows.length - 1].index : 0;
-
-  // Sticky-left offsets for the frozen leading columns. Keyed on the visible
-  // column set + count so the array reference is stable across edit renders
-  // (keeping the row memo effective) but recomputes when columns show/hide.
-  const frozenKey = `${frozenColumnCount}|${columnIds.join(",")}`;
-  const frozen = React.useMemo(() => {
-    if (frozenColumnCount <= 0) return undefined;
-    const cols = table.getVisibleLeafColumns();
-    const out: (FrozenColumn | null)[] = [];
-    let left = GUTTER_WIDTH;
-    for (let i = 0; i < cols.length; i++) {
-      if (i < frozenColumnCount) {
-        const width = cols[i].getSize();
-        out.push({ left, width });
-        left += width;
-      } else {
-        out.push(null);
-      }
-    }
-    return out;
-    // `table`/`cols` are read fresh at recompute; `frozenKey` captures the
-    // inputs that actually change the offsets.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frozenKey]);
-
-  const [selection, setSelection] = React.useState<RangeSelection | null>(null);
-  const [filling, setFilling] = React.useState(false);
-  const pasteIdRef = React.useRef(1_000_000);
-  const [find, setFind] = React.useState<{
-    query: string;
-    replace: string;
-    mode: "find" | "replace";
-  } | null>(null);
-  const [findIndex, setFindIndex] = React.useState(0);
-  const [sortState, setSortState] = React.useState<{
-    colId: string;
-    dir: "asc" | "desc";
-  } | null>(null);
-
-  const writeCtx = React.useMemo<WriteCtx>(
-    () => ({
-      roleOptions: meta?.roleOptions ?? [],
-      scheduleOptions: meta?.scheduleOptions ?? [],
-      roleRates: meta?.roleRates ?? [],
-      areaOptions: meta?.areaOptions ?? [],
-      cbsOptions: meta?.cbsOptions ?? [],
-      crewMixOptions: meta?.crewMixOptions ?? [],
-      // Sheet-specific lookups; present only on the sheet that uses them, which
-      // is also how a range write tells a piping row from a steel one.
-      pipingFactorLookup: meta?.pipingFactorLookup,
-      weldGroupMaterialMap: meta?.weldGroupMaterialMap,
-      steelMemberUomLookup: meta?.steelMemberUomLookup,
-    }),
-    [
-      meta?.roleOptions,
-      meta?.scheduleOptions,
-      meta?.roleRates,
-      meta?.areaOptions,
-      meta?.cbsOptions,
-      meta?.crewMixOptions,
-      meta?.pipingFactorLookup,
-      meta?.weldGroupMaterialMap,
-      meta?.steelMemberUomLookup,
-    ],
-  );
-
-  // Snapshot of everything a deferred (drag mouseup) handler needs, refreshed
-  // after every render so those closures never read stale state.
-  const latest = React.useRef({
-    data,
-    columnIds,
-    writeCtx,
-    selection,
-    firstRowIndex,
-    lastRowIndex,
-  });
-  React.useEffect(() => {
-    latest.current = {
-      data,
-      columnIds,
-      writeCtx,
-      selection,
-      firstRowIndex,
-      lastRowIndex,
-    };
-  });
-
-  const onCellFocus = React.useCallback((rowIndex: number, colIndex: number) => {
-    // Plain focus/click collapses the selection to the focused cell.
-    setSelection({
-      anchor: { row: rowIndex, col: colIndex },
-      focus: { row: rowIndex, col: colIndex },
-    });
-  }, []);
-
-  const onCellPointerDown = React.useCallback(
-    (rowIndex: number, colIndex: number, e: React.MouseEvent) => {
-      // Shift+Click extends the range from the existing anchor without moving
-      // DOM focus (so the anchor cell keeps its caret).
-      if (!e.shiftKey) return;
-      e.preventDefault();
-      setSelection((prev) =>
-        prev
-          ? { ...prev, focus: { row: rowIndex, col: colIndex } }
-          : {
-              anchor: { row: rowIndex, col: colIndex },
-              focus: { row: rowIndex, col: colIndex },
-            },
-      );
-    },
-    [],
-  );
-
-  const onFillHandleDown = React.useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setFilling(true);
-  }, []);
-
-  // Right-click context menu (cut / copy / paste / insert / delete / clear).
-  const [menu, setMenu] = React.useState<{ x: number; y: number } | null>(null);
-  const onCellContextMenu = React.useCallback(
-    (rowIndex: number, colIndex: number, e: React.MouseEvent) => {
-      e.preventDefault();
-      // Keep a multi-cell selection if the click is inside it; otherwise
-      // collapse to the right-clicked cell (Excel's behavior).
-      setSelection((prev) => {
-        if (prev) {
-          const r = normalizeRange(prev);
-          if (
-            rowIndex >= r.minRow &&
-            rowIndex <= r.maxRow &&
-            colIndex >= r.minCol &&
-            colIndex <= r.maxCol
-          ) {
-            return prev;
-          }
-        }
-        return {
-          anchor: { row: rowIndex, col: colIndex },
-          focus: { row: rowIndex, col: colIndex },
-        };
-      });
-      setMenu({ x: e.clientX, y: e.clientY });
-    },
-    [],
-  );
-
-  // Excel-style header clicks: a row number selects its whole row, a column
-  // header selects the whole column, and the top-left corner selects all.
-  const onRowHeaderClick = React.useCallback((rowIndex: number) => {
-    const cc = latest.current.columnIds.length;
-    setSelection({
-      anchor: { row: rowIndex, col: 0 },
-      focus: { row: rowIndex, col: Math.max(0, cc - 1) },
-    });
-  }, []);
-  const onColHeaderClick = React.useCallback((colIndex: number) => {
-    const { firstRowIndex: fr, lastRowIndex: lr } = latest.current;
-    setSelection({
-      anchor: { row: fr, col: colIndex },
-      focus: { row: lr, col: colIndex },
-    });
-  }, []);
-  const onSelectAll = React.useCallback(() => {
-    const { firstRowIndex: fr, lastRowIndex: lr, columnIds: cids } =
-      latest.current;
-    setSelection({
-      anchor: { row: fr, col: 0 },
-      focus: { row: lr, col: Math.max(0, cids.length - 1) },
-    });
-  }, []);
-
-  const rangeHandlers = React.useMemo(
-    () => ({
-      onCellPointerDown,
-      onCellFocus,
-      onFillHandleDown,
-      onCellContextMenu,
-      onRowHeaderClick,
-    }),
-    [
-      onCellPointerDown,
-      onCellFocus,
-      onFillHandleDown,
-      onCellContextMenu,
-      onRowHeaderClick,
-    ],
-  );
-
-  // Dismiss the context menu on any outside interaction or Escape.
-  React.useEffect(() => {
-    if (!menu) return;
-    const close = () => setMenu(null);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMenu(null);
-    };
-    window.addEventListener("mousedown", close);
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("mousedown", close);
-      window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [menu]);
-
-  // Fill-handle drag: extend the selection downward to the row under the
-  // cursor, then fill-down on release. Down-only (the common estimator case).
-  React.useEffect(() => {
-    if (!filling) return;
-    const onMove = (ev: MouseEvent) => {
-      const el = document.elementFromPoint(ev.clientX, ev.clientY);
-      const td = (el as Element | null)?.closest("td[data-row]");
-      const attr = td?.getAttribute("data-row");
-      if (attr == null) return;
-      const r = parseInt(attr, 10);
-      if (Number.isNaN(r)) return;
-      setSelection((prev) => {
-        if (!prev) return prev;
-        const top = Math.min(prev.anchor.row, prev.focus.row);
-        return { ...prev, focus: { row: Math.max(top, r), col: prev.focus.col } };
-      });
-    };
-    const onUp = () => {
-      setFilling(false);
-      const { data: d, columnIds: cids, writeCtx: c, selection: sel } =
-        latest.current;
-      if (sel && rangeSpansMultiple(sel)) {
-        setData(applyFillDown(d, cids, sel, c));
-      }
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, [filling, setData]);
-
-  const onGridKeyDown = (e: React.KeyboardEvent) => {
-    if (!enableRangeEditing) return;
-    const mod = e.ctrlKey || e.metaKey;
-    const key = e.key;
-
-    // Ctrl/Cmd+F (find) and Ctrl/Cmd+H (replace) open the sheet's find bar.
-    if (mod && (key === "f" || key === "F")) {
-      e.preventDefault();
-      e.stopPropagation();
-      setFind((prev) =>
-        prev
-          ? { ...prev, mode: "find" }
-          : { query: "", replace: "", mode: "find" },
-      );
-      return;
-    }
-    if (mod && (key === "h" || key === "H")) {
-      e.preventDefault();
-      e.stopPropagation();
-      setFind((prev) =>
-        prev
-          ? { ...prev, mode: "replace" }
-          : { query: "", replace: "", mode: "replace" },
-      );
-      return;
-    }
-
-    if (!selection) return;
-
-    if (!mod && e.shiftKey && key.startsWith("Arrow")) {
-      e.preventDefault();
-      e.stopPropagation();
-      setSelection((prev) => {
-        if (!prev) return prev;
-        let { row, col } = prev.focus;
-        if (key === "ArrowUp") row = Math.max(firstRowIndex, row - 1);
-        else if (key === "ArrowDown") row = Math.min(lastRowIndex, row + 1);
-        else if (key === "ArrowLeft") col = Math.max(0, col - 1);
-        else if (key === "ArrowRight") col = Math.min(colCount - 1, col + 1);
-        return { ...prev, focus: { row, col } };
-      });
-      return;
-    }
-
-    // Ctrl/Cmd+Shift+Arrow — extend the selection to the far edge (Excel).
-    if (mod && e.shiftKey && key.startsWith("Arrow")) {
-      e.preventDefault();
-      e.stopPropagation();
-      setSelection((prev) => {
-        if (!prev) return prev;
-        let { row, col } = prev.focus;
-        if (key === "ArrowUp") row = firstRowIndex;
-        else if (key === "ArrowDown") row = lastRowIndex;
-        else if (key === "ArrowLeft") col = 0;
-        else if (key === "ArrowRight") col = colCount - 1;
-        return { ...prev, focus: { row, col } };
-      });
-      return;
-    }
-
-    // Ctrl/Cmd+A — select the whole grid.
-    if (mod && !e.shiftKey && (key === "a" || key === "A")) {
-      e.preventDefault();
-      e.stopPropagation();
-      setSelection({
-        anchor: { row: firstRowIndex, col: 0 },
-        focus: { row: lastRowIndex, col: colCount - 1 },
-      });
-      return;
-    }
-
-    // Ctrl/Cmd+X — cut a multi-cell range (copy to clipboard, then clear).
-    if (mod && (key === "x" || key === "X") && rangeSpansMultiple(selection)) {
-      e.preventDefault();
-      e.stopPropagation();
-      void navigator.clipboard?.writeText(
-        serializeRange(data, columnIds, selection, writeCtx),
-      );
-      setData(applyClear(data, columnIds, selection, writeCtx));
-      return;
-    }
-
-    if (mod && (key === "c" || key === "C") && rangeSpansMultiple(selection)) {
-      // Drive copy from keydown + the Clipboard API rather than a native `copy`
-      // event: after Shift-selecting a range the focused cell <input> has a
-      // collapsed caret, and browsers don't reliably fire `copy` with nothing
-      // selected; dropdown cells (<select>) never fire it at all. keydown always
-      // fires, for both. Single-cell copy still falls through to native.
-      e.preventDefault();
-      e.stopPropagation();
-      void navigator.clipboard?.writeText(
-        serializeRange(data, columnIds, selection, writeCtx),
-      );
-      return;
-    }
-
-    if (mod && (key === "v" || key === "V")) {
-      // A focused text input can paste natively (see onGridPaste, which spills a
-      // block even into a single input). For a multi-cell target or a non-input
-      // cell (<select>), native paste can't do it — read the clipboard ourselves.
-      const target = e.target as HTMLElement | null;
-      const nativePasteWorks =
-        target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
-      if (!rangeSpansMultiple(selection) && nativePasteWorks) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const clip = navigator.clipboard;
-      if (!clip?.readText) return;
-      void clip
-        .readText()
-        .then((text) => {
-          const { data: d, columnIds: cids, writeCtx: c, selection: sel } =
-            latest.current;
-          if (!sel) return;
-          const matrix = parseClipboardMatrix(text);
-          const isBlock = matrix.length > 1 || matrix.some((r) => r.length > 1);
-          if (!isBlock && !rangeSpansMultiple(sel)) return;
-          const { minRow, minCol } = normalizeRange(sel);
-          setData(
-            applyPaste(d, cids, { row: minRow, col: minCol }, matrix, c, () =>
-              makeBlankRow(pasteIdRef.current++),
-            ),
-          );
-        })
-        .catch(() => {
-          // Clipboard read denied/unsupported — nothing to paste.
-        });
-      return;
-    }
-
-    if (mod && (key === "d" || key === "D")) {
-      e.preventDefault();
-      e.stopPropagation();
-      if (rangeSpansMultiple(selection)) {
-        setData(applyFillDown(data, columnIds, selection, writeCtx));
-      }
-      return;
-    }
-
-    if ((key === "Delete" || key === "Backspace") && rangeSpansMultiple(selection)) {
-      e.preventDefault();
-      e.stopPropagation();
-      setData(applyClear(data, columnIds, selection, writeCtx));
-      return;
-    }
-
-    if (key === "Escape" && rangeSpansMultiple(selection)) {
-      e.preventDefault();
-      e.stopPropagation();
-      setSelection((prev) => (prev ? { anchor: prev.focus, focus: prev.focus } : prev));
-    }
-  };
-
-  const onGridPaste = (e: React.ClipboardEvent) => {
-    if (!enableRangeEditing || !selection) return;
-    const text = e.clipboardData.getData("text/plain");
-    const matrix = parseClipboardMatrix(text);
-    const isBlock = matrix.length > 1 || matrix.some((r) => r.length > 1);
-    // A single value pasted into one cell is left to the input's native paste;
-    // a block (or a multi-cell target) is spilled across the grid. Copy and
-    // <select>-cell paste are handled in onGridKeyDown via the Clipboard API;
-    // this native `paste` path still serves the common case of pasting a block
-    // into a focused text input.
-    if (!isBlock && !rangeSpansMultiple(selection)) return;
-    e.preventDefault();
-    const { minRow, minCol } = normalizeRange(selection);
-    setData(
-      applyPaste(
-        data,
-        columnIds,
-        { row: minRow, col: minCol },
-        matrix,
-        writeCtx,
-        () => makeBlankRow(pasteIdRef.current++),
-      ),
-    );
-  };
-
-  const rangeSel = enableRangeEditing && selection ? normalizeRange(selection) : null;
-
-  // Stable value-key for `columnIds` (a fresh array each render) so the memos
-  // below don't recompute on every render just because its reference changed.
-  const colKey = columnIds.join(",");
-
-  // Excel-style status bar for the current multi-cell selection. Memoized so
-  // it only recomputes when the selection or data actually changes.
-  const stats = React.useMemo(
-    () =>
-      enableRangeEditing && selection && rangeSpansMultiple(selection)
-        ? selectionStats(data, columnIds, selection, writeCtx)
-        : null,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [enableRangeEditing, selection, data, colKey, writeCtx],
-  );
-  const fmtStat = (n: number) =>
-    n.toLocaleString(undefined, { maximumFractionDigits: 2 });
-
-  // Context-menu actions. They read the live selection through `latest` so the
-  // async paste path isn't stale, and each closes the menu.
-  const menuCopy = () => {
-    if (selection) {
-      void navigator.clipboard?.writeText(
-        serializeRange(data, columnIds, selection, writeCtx),
-      );
-    }
-    setMenu(null);
-  };
-  const menuCut = () => {
-    if (selection) {
-      void navigator.clipboard?.writeText(
-        serializeRange(data, columnIds, selection, writeCtx),
-      );
-      setData(applyClear(data, columnIds, selection, writeCtx));
-    }
-    setMenu(null);
-  };
-  const menuPaste = () => {
-    const clip = navigator.clipboard;
-    if (selection && clip?.readText) {
-      void clip
-        .readText()
-        .then((text) => {
-          const { data: d, columnIds: cids, writeCtx: c, selection: sel } =
-            latest.current;
-          if (!sel) return;
-          const { minRow, minCol } = normalizeRange(sel);
-          setData(
-            applyPaste(
-              d,
-              cids,
-              { row: minRow, col: minCol },
-              parseClipboardMatrix(text),
-              c,
-              () => makeBlankRow(pasteIdRef.current++),
-            ),
-          );
-        })
-        .catch(() => {});
-    }
-    setMenu(null);
-  };
-  const menuClear = () => {
-    if (selection) setData(applyClear(data, columnIds, selection, writeCtx));
-    setMenu(null);
-  };
-  const menuInsert = (where: "above" | "below") => {
-    if (selection) {
-      const { minRow, maxRow } = normalizeRange(selection);
-      const count = maxRow - minRow + 1;
-      const at = where === "above" ? minRow : maxRow + 1;
-      setData(
-        insertRows(data, at, count, () => makeBlankRow(pasteIdRef.current++)),
-      );
-    }
-    setMenu(null);
-  };
-  const menuDeleteRows = () => {
-    if (selection) {
-      const { minRow, maxRow } = normalizeRange(selection);
-      setData(deleteRows(data, minRow, maxRow));
-      setSelection((prev) =>
-        prev ? { anchor: prev.anchor, focus: prev.anchor } : prev,
-      );
-    }
-    setMenu(null);
-  };
-  const selectedRowCount = selection
-    ? normalizeRange(selection).maxRow - normalizeRange(selection).minRow + 1
-    : 0;
-
-  // Find & replace over the sheet's cells. Memoized (find scans every cell) so
-  // an unrelated re-render while the find bar is open doesn't rescan the sheet.
-  const matches = React.useMemo(
-    () => (find ? findMatches(data, columnIds, find.query, writeCtx) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [find, data, colKey, writeCtx],
-  );
-  const goToMatch = (i: number) => {
-    if (matches.length === 0) return;
-    const idx = ((i % matches.length) + matches.length) % matches.length;
-    setFindIndex(idx);
-    const m = matches[idx];
-    setSelection({ anchor: m, focus: m });
-    // Jump the (client-paginated) page so the match is visible.
-    if (!serverPagination) setLocalPageIndex(Math.floor(m.row / 25));
-  };
-  const doReplaceOne = () => {
-    if (!find || matches.length === 0) return;
-    const m = matches[Math.min(findIndex, matches.length - 1)];
-    setData(replaceInCell(data, columnIds, m, find.query, find.replace, writeCtx));
-  };
-  const doReplaceAll = () => {
-    if (!find) return;
-    setData(replaceAll(data, columnIds, find.query, find.replace, writeCtx).data);
-  };
-
-  // Click-header sort. Physically reorders the rows (persisted, undoable) so the
-  // index-based selection/fill stay correct; toggles asc → desc on repeat.
-  const onColSort = (colId: string) => {
-    const dir: "asc" | "desc" =
-      sortState?.colId === colId && sortState.dir === "asc" ? "desc" : "asc";
-    setSortState({ colId, dir });
-    setData(sortRows(data, colId, dir, writeCtx));
-  };
-
-  return {
-    rows, frozen, rangeSel, rangeHandlers, onGridKeyDown, onGridPaste, stats,
-    fmtStat, menu, menuCopy, menuCut, menuPaste, menuClear, menuInsert,
-    menuDeleteRows, selectedRowCount, find, setFind, findIndex, setFindIndex,
-    matches, goToMatch, doReplaceOne, doReplaceAll, sortState, onColSort,
-    onColHeaderClick, onSelectAll,
-  };
-}

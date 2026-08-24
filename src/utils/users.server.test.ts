@@ -28,6 +28,8 @@ vi.mock("@clerk/tanstack-react-start/server", () => ({
 
 import {
   assertProjectAccess,
+  projectIdScopedHandler,
+  projectScopedHandler,
   requireProjectAccess,
   requireVersionAccess,
 } from "./users.server";
@@ -151,5 +153,106 @@ describe("requireVersionAccess", () => {
     await expect(requireVersionAccess(5)).rejects.toThrow(
       "Forbidden: no access to project 9",
     );
+  });
+});
+
+/**
+ * The two wrappers exist so a project-scoped endpoint can't be written without
+ * its access check — the gate is structural rather than a line each handler
+ * has to remember. These tests pin the two properties that matter: the check
+ * runs BEFORE the body, and a rejected check means the body never runs at all.
+ */
+describe("projectScopedHandler / projectIdScopedHandler", () => {
+  beforeEach(() => {
+    authFn.mockReset();
+    userFindUnique.mockReset();
+    userFindFirst.mockReset();
+  });
+
+  /** Signs in `who` and decides whether they're a member of the project. */
+  function signIn(who: CurrentUser, isMember: boolean) {
+    authFn.mockResolvedValue({ userId: who.clerkId });
+    userFindUnique.mockResolvedValue(who);
+    userFindFirst.mockResolvedValue(isMember ? { id: who.id } : null);
+  }
+
+  it("runs the body only after the access check passes", async () => {
+    signIn(user, true);
+    const order: string[] = [];
+    userFindFirst.mockImplementation(async () => {
+      order.push("check");
+      return { id: user.id };
+    });
+    const handler = projectScopedHandler(async ({ data }) => {
+      order.push("body");
+      return data.projectId * 2;
+    });
+
+    await expect(handler({ data: { projectId: 21 } })).resolves.toBe(42);
+    expect(order).toEqual(["check", "body"]);
+  });
+
+  it("never invokes the body when the caller lacks project access", async () => {
+    signIn(user, false);
+    const body = vi.fn();
+    const handler = projectScopedHandler(body);
+
+    await expect(handler({ data: { projectId: 7 } })).rejects.toThrow(
+      "Forbidden: no access to project 7",
+    );
+    expect(body).not.toHaveBeenCalled();
+  });
+
+  it("never invokes the body when nobody is signed in", async () => {
+    authFn.mockResolvedValue({ userId: null });
+    const body = vi.fn();
+
+    await expect(
+      projectScopedHandler(body)({ data: { projectId: 7 } }),
+    ).rejects.toThrow("Unauthorized: not signed in");
+    expect(body).not.toHaveBeenCalled();
+  });
+
+  it("gates on the projectId carried in `data` — not one the body picks", async () => {
+    signIn(user, true);
+    await projectScopedHandler(async () => null)({ data: { projectId: 33 } });
+
+    expect(userFindFirst).toHaveBeenCalledWith({
+      where: { id: user.id, projects: { some: { id: 33 } } },
+      select: { id: true },
+    });
+  });
+
+  it("projectIdScopedHandler gates on the scalar `data` itself", async () => {
+    signIn(user, true);
+    const body = vi.fn().mockResolvedValue("ok");
+
+    await expect(projectIdScopedHandler(body)({ data: 12 })).resolves.toBe("ok");
+    expect(userFindFirst).toHaveBeenCalledWith({
+      where: { id: user.id, projects: { some: { id: 12 } } },
+      select: { id: true },
+    });
+    // The body still receives the original args shape untouched.
+    expect(body).toHaveBeenCalledWith({ data: 12 });
+  });
+
+  it("projectIdScopedHandler blocks the body on a failed check", async () => {
+    signIn(user, false);
+    const body = vi.fn();
+
+    await expect(projectIdScopedHandler(body)({ data: 4 })).rejects.toThrow(
+      "Forbidden: no access to project 4",
+    );
+    expect(body).not.toHaveBeenCalled();
+  });
+
+  it("lets an administrator through without a membership query", async () => {
+    authFn.mockResolvedValue({ userId: admin.clerkId });
+    userFindUnique.mockResolvedValue(admin);
+
+    await expect(
+      projectIdScopedHandler(async () => "ok")({ data: 999 }),
+    ).resolves.toBe("ok");
+    expect(userFindFirst).not.toHaveBeenCalled();
   });
 });

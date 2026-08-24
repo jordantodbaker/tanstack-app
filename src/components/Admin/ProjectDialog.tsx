@@ -1,5 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { invalidateAdminEntity } from "~/lib/admin-invalidations";
 import { Trash2, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
@@ -96,12 +97,15 @@ export function ProjectDialog({
   const allUsers = usersQuery.data ?? [];
 
   // Area deletion is immediate (areas can't exist without a project, so
-  // "removing from a project" = deleting). Invalidate both areas and
-  // projects so the dialog and the Areas page both reflect it.
+  // "removing from a project" = deleting). Route through the shared admin
+  // fan-out rather than busting `["areas"]` alone: the per-project dropdown
+  // list is a separate cache key (`["areasByProject", projectId]`) with
+  // `staleTime: Infinity`, so a bare `["areas"]` invalidation left every Take
+  // Off / dialog dropdown showing the deleted area until a hard refresh.
   const deleteAreaMutation = useMutation({
     mutationFn: (id: number) => deleteArea({ data: { id } }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["areas"] });
+      invalidateAdminEntity(queryClient, "areas");
     },
   });
 

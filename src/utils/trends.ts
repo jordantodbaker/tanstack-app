@@ -21,23 +21,21 @@ import {
   parseUpsertTrend,
 } from "~/lib/validators";
 import {
-  assertProjectAccess,
   requireProjectAccess,
 } from "./users.server";
-import { assertProjectUnchanged, hasAtLeastRole } from "./users";
+import { hasAtLeastRole } from "./users";
 import {
   deleteProjectScopedRecord,
   transitionProjectScopedRecord,
+  upsertProjectScopedRecord,
 } from "./entity-writes.server";
 import {
   diffFields,
-  recordCreate,
   recordUpdate,
 } from "./audit.server";
 import { createLinkedCvr } from "./promote.server";
 import { TREND_TRANSITIONS } from "./workflow";
 import { TREND_STATUS_LABELS } from "./trendLabels";
-import { allocateIfBlank } from "./entityNumbers.server";
 
 /**
  * SERVER-SIDE Trend module. Trends are anticipated cost impacts that haven't
@@ -261,105 +259,66 @@ function clampProbability(p: number): number {
 
 export const upsertTrend = createServerFn({ method: "POST" })
   .inputValidator(parseUpsertTrend)
-  .handler(async ({ data }): Promise<TrendItem> => {
-    const actor = await requireProjectAccess(data.projectId);
-    // Cross-project trend links would let one project's trend point at
-    // another project's RFI/FCO. Validate that any link belongs to the
-    // claimed project before writing the row.
-    if (data.linkedRfiId !== null) {
-      const rfi = await prisma.rfi.findUnique({
-        where: { id: data.linkedRfiId },
-        select: { projectId: true },
-      });
-      if (!rfi || rfi.projectId !== data.projectId) {
-        throw new Error("Linked RFI does not belong to this project.");
-      }
-    }
-    if (data.linkedFcoId !== null) {
-      const fco = await prisma.fieldChangeOrder.findUnique({
-        where: { id: data.linkedFcoId },
-        select: { projectId: true },
-      });
-      if (!fco || fco.projectId !== data.projectId) {
-        throw new Error("Linked FCO does not belong to this project.");
-      }
-    }
-    // `status` and `linkedCvrId` are intentionally omitted from the payload:
-    // status moves through `transitionTrend`, and `linkedCvrId` is only set
-    // by `promoteTrendToCvr` so the link and the CONVERTED state arrive
-    // atomically.
-    const payload = {
+  .handler(({ data }): Promise<TrendItem> =>
+    upsertProjectScopedRecord({
+      id: data.id,
       projectId: data.projectId,
-      trendNumber: data.trendNumber,
-      title: data.title,
-      description: data.description,
-      priority: data.priority,
-      discipline: data.discipline,
-      cbsCodes: data.cbsCodes,
-      locationArea: data.locationArea,
-      probability: clampProbability(data.probability),
-      costLow: data.costLow,
-      costLikely: data.costLikely,
-      costHigh: data.costHigh,
-      scheduleDaysImpact: data.scheduleDaysImpact,
-      reasonNarrative: data.reasonNarrative,
-      notes: data.notes,
-      identifiedAt: new Date(data.identifiedAt),
-      neededBy: data.neededBy ? new Date(data.neededBy) : null,
-      linkedRfiId: data.linkedRfiId,
-      linkedFcoId: data.linkedFcoId,
-      initiatedBy: data.initiatedBy,
-    };
-    const row = await prisma.$transaction(async (tx) => {
-      if (data.id) {
-        const before = await tx.trend.findUniqueOrThrow({
-          where: { id: data.id },
-        });
-        // Access was checked against the incoming projectId; also verify the
-        // existing row's project and reject any move, so a user with access to
-        // project A can't edit/reassign a trend that lives in project B.
-        await assertProjectAccess(actor, before.projectId);
-        assertProjectUnchanged("trend", data.projectId, before.projectId);
-        const updated = await tx.trend.update({
-          where: { id: data.id },
-          data: payload,
-        });
-        await recordUpdate(
-          tx,
-          {
-            entityType: "Trend",
-            entityId: updated.id,
-            projectId: updated.projectId,
-            actor,
-          },
-          diffFields(before, updated, TREND_AUDIT_FIELDS),
-        );
-        return updated;
-      }
-      const created = await tx.trend.create({
-        data: {
-          ...payload,
-          // Auto-assign a trend number when blank; a typed value (manual
-          // override / legacy import) is kept as-is.
-          trendNumber: await allocateIfBlank(
-            tx,
-            data.projectId,
-            "Trend",
-            data.trendNumber,
-          ),
-          createdById: actor.id,
-        },
-      });
-      await recordCreate(tx, {
-        entityType: "Trend",
-        entityId: created.id,
-        projectId: created.projectId,
-        actor,
-      });
-      return created;
-    });
-    return toItem(row);
-  });
+      entityType: "Trend",
+      label: "trend",
+      pickDelegate: (tx) => tx.trend,
+      auditFields: TREND_AUDIT_FIELDS,
+      numbering: { field: "trendNumber", value: data.trendNumber },
+      // Cross-project trend links would let one project's trend point at
+      // another project's RFI/FCO. Validated inside the transaction, so the
+      // check and the write see the same snapshot.
+      validate: async (tx) => {
+        if (data.linkedRfiId !== null) {
+          const rfi = await tx.rfi.findUnique({
+            where: { id: data.linkedRfiId },
+            select: { projectId: true },
+          });
+          if (!rfi || rfi.projectId !== data.projectId) {
+            throw new Error("Linked RFI does not belong to this project.");
+          }
+        }
+        if (data.linkedFcoId !== null) {
+          const fco = await tx.fieldChangeOrder.findUnique({
+            where: { id: data.linkedFcoId },
+            select: { projectId: true },
+          });
+          if (!fco || fco.projectId !== data.projectId) {
+            throw new Error("Linked FCO does not belong to this project.");
+          }
+        }
+      },
+      // `status` and `linkedCvrId` are intentionally omitted: status moves
+      // through `transitionTrend`, and `linkedCvrId` is only set by
+      // `promoteTrendToCvr` so the link and the CONVERTED state arrive
+      // atomically.
+      payload: {
+        trendNumber: data.trendNumber,
+        title: data.title,
+        description: data.description,
+        priority: data.priority,
+        discipline: data.discipline,
+        cbsCodes: data.cbsCodes,
+        locationArea: data.locationArea,
+        probability: clampProbability(data.probability),
+        costLow: data.costLow,
+        costLikely: data.costLikely,
+        costHigh: data.costHigh,
+        scheduleDaysImpact: data.scheduleDaysImpact,
+        reasonNarrative: data.reasonNarrative,
+        notes: data.notes,
+        identifiedAt: new Date(data.identifiedAt),
+        neededBy: data.neededBy ? new Date(data.neededBy) : null,
+        linkedRfiId: data.linkedRfiId,
+        linkedFcoId: data.linkedFcoId,
+        initiatedBy: data.initiatedBy,
+      },
+      toItem,
+    }),
+  );
 
 // PROBABLE moves the trend's exposure from "loose hunch" into the published
 // AFC; it warrants the reviewer fan-out. REJECTED/CONVERTED are outcomes

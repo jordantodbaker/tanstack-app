@@ -23,23 +23,19 @@ import {
   parseUpsertPco,
 } from "~/lib/validators";
 import {
-  assertProjectAccess,
   projectScopedHandler,
-  requireProjectAccess,
 } from "./users.server";
 import { assertProjectUnchanged } from "./users";
 import {
   deleteProjectScopedRecord,
   transitionProjectScopedRecord,
+  upsertProjectScopedRecord,
 } from "./entity-writes.server";
 import {
-  diffFields,
-  recordCreate,
   recordUpdate,
 } from "./audit.server";
 import { PCO_TRANSITIONS } from "./workflow";
 import { PCO_STATUS_LABELS } from "./pcoLabels";
-import { allocateIfBlank } from "./entityNumbers.server";
 
 /**
  * SERVER-SIDE PCO module. PCOs (Prime / Owner Change Orders) bundle one or
@@ -380,134 +376,85 @@ const PCO_AUDIT_FIELDS = [
 
 export const upsertPco = createServerFn({ method: "POST" })
   .inputValidator(parseUpsertPco)
-  .handler(async ({ data }): Promise<PcoItem> => {
-    const actor = await requireProjectAccess(data.projectId);
-    // Validate every requested CVR link belongs to this project AND is in
-    // an attachable state. Doing both checks here keeps the upsert handler
-    // the single guard against linking foreign-project / non-approved CVRs.
-    if (data.linkedCvrIds.length > 0) {
-      const cvrs = await prisma.changeLog.findMany({
-        where: { id: { in: data.linkedCvrIds } },
-        select: {
-          id: true,
-          projectId: true,
-          status: true,
-          linkedPcoId: true,
-        },
-      });
-      if (cvrs.length !== data.linkedCvrIds.length) {
-        throw new Error("One or more selected CVRs no longer exist.");
-      }
-      for (const c of cvrs) {
-        if (c.projectId !== data.projectId) {
-          throw new Error("Cannot attach a CVR from another project.");
-        }
-        if (c.status !== "APPROVED" && c.status !== "EXECUTED") {
-          throw new Error(
-            "Only APPROVED or EXECUTED CVRs can be attached to a PCO.",
-          );
-        }
-        if (
-          c.linkedPcoId !== null &&
-          c.linkedPcoId !== (data.id ?? -1)
-        ) {
-          throw new Error(
-            "One or more selected CVRs are already attached to a different PCO.",
-          );
-        }
-      }
-    }
-
-    // `status` and the lifecycle timestamps (submittedAt/approvedAt/etc.)
-    // are intentionally omitted from the payload: status moves through
-    // `transitionPco` which also stamps the timestamps.
-    const payload = {
+  .handler(({ data }): Promise<PcoItem> =>
+    upsertProjectScopedRecord({
+      id: data.id,
       projectId: data.projectId,
-      pcoNumber: data.pcoNumber,
-      ownerReference: data.ownerReference,
-      title: data.title,
-      description: data.description,
-      priority: data.priority,
-      requestedAmount: data.requestedAmount,
-      approvedAmount: data.approvedAmount,
-      scheduleDaysImpact: data.scheduleDaysImpact,
-      ownerRepName: data.ownerRepName,
-      ownerRepEmail: data.ownerRepEmail,
-      reasonNarrative: data.reasonNarrative,
-      notes: data.notes,
-      invoiceNumber: data.invoiceNumber,
-      initiatedBy: data.initiatedBy,
-    };
-
-    const row = await prisma.$transaction(async (tx) => {
-      let pcoId: number;
-      if (data.id) {
-        const before = await tx.pco.findUniqueOrThrow({
-          where: { id: data.id },
-        });
-        // Access was checked against the incoming projectId; also verify the
-        // existing row's project and reject any move, so a user with access to
-        // project A can't edit/reassign a PCO that lives in project B.
-        await assertProjectAccess(actor, before.projectId);
-        assertProjectUnchanged("PCO", data.projectId, before.projectId);
-        const updated = await tx.pco.update({
-          where: { id: data.id },
-          data: payload,
-        });
-        await recordUpdate(
-          tx,
-          {
-            entityType: "Pco",
-            entityId: updated.id,
-            projectId: updated.projectId,
-            actor,
-          },
-          diffFields(before, updated, PCO_AUDIT_FIELDS),
-        );
-        pcoId = updated.id;
-      } else {
-        const created = await tx.pco.create({
-          data: {
-            ...payload,
-            // Auto-assign a PCO number when blank; a typed value (manual
-            // override / legacy import) is kept as-is.
-            pcoNumber: await allocateIfBlank(
-              tx,
-              data.projectId,
-              "Pco",
-              data.pcoNumber,
-            ),
-            createdById: actor.id,
+      entityType: "Pco",
+      label: "PCO",
+      pickDelegate: (tx) => tx.pco,
+      auditFields: PCO_AUDIT_FIELDS,
+      numbering: { field: "pcoNumber", value: data.pcoNumber },
+      // Validate every requested CVR link belongs to this project AND is in
+      // an attachable state. Doing both checks here keeps the upsert handler
+      // the single guard against linking foreign-project / non-approved CVRs.
+      validate: async (tx) => {
+        if (data.linkedCvrIds.length === 0) return;
+        const cvrs = await tx.changeLog.findMany({
+          where: { id: { in: data.linkedCvrIds } },
+          select: {
+            id: true,
+            projectId: true,
+            status: true,
+            linkedPcoId: true,
           },
         });
-        await recordCreate(tx, {
-          entityType: "Pco",
-          entityId: created.id,
-          projectId: created.projectId,
-          actor,
-        });
-        pcoId = created.id;
-      }
-
+        if (cvrs.length !== data.linkedCvrIds.length) {
+          throw new Error("One or more selected CVRs no longer exist.");
+        }
+        for (const c of cvrs) {
+          if (c.projectId !== data.projectId) {
+            throw new Error("Cannot attach a CVR from another project.");
+          }
+          if (c.status !== "APPROVED" && c.status !== "EXECUTED") {
+            throw new Error(
+              "Only APPROVED or EXECUTED CVRs can be attached to a PCO.",
+            );
+          }
+          if (c.linkedPcoId !== null && c.linkedPcoId !== (data.id ?? -1)) {
+            throw new Error(
+              "One or more selected CVRs are already attached to a different PCO.",
+            );
+          }
+        }
+      },
+      // `status` and the lifecycle timestamps (submittedAt/approvedAt/etc.)
+      // are intentionally omitted from the payload: status moves through
+      // `transitionPco` which also stamps the timestamps.
+      payload: {
+        pcoNumber: data.pcoNumber,
+        ownerReference: data.ownerReference,
+        title: data.title,
+        description: data.description,
+        priority: data.priority,
+        requestedAmount: data.requestedAmount,
+        approvedAmount: data.approvedAmount,
+        scheduleDaysImpact: data.scheduleDaysImpact,
+        ownerRepName: data.ownerRepName,
+        ownerRepEmail: data.ownerRepEmail,
+        reasonNarrative: data.reasonNarrative,
+        notes: data.notes,
+        invoiceNumber: data.invoiceNumber,
+        initiatedBy: data.initiatedBy,
+      },
       // CVR-link sync — diff current set against requested set, then issue
-      // two bulk updates: detach the ones being removed, attach the new
-      // ones. Audited per CVR so the CVR's history shows the (un)link.
-      const currentLinks = await tx.changeLog.findMany({
-        where: { linkedPcoId: pcoId },
-        select: { id: true, projectId: true },
-      });
-      const currentIds = new Set(currentLinks.map((c) => c.id));
-      const requestedIds = new Set(data.linkedCvrIds);
-      const toAttach = data.linkedCvrIds.filter((id) => !currentIds.has(id));
-      const toDetach = Array.from(currentIds).filter(
-        (id) => !requestedIds.has(id),
-      );
-      if (toDetach.length > 0) {
-        await tx.changeLog.updateMany({
-          where: { id: { in: toDetach } },
-          data: { linkedPcoId: null },
+      // two bulk updates: detach the ones being removed, attach the new ones.
+      // Audited per CVR so the CVR's history shows the (un)link. The sync sits
+      // between the upsert and the read, which is why the `linkedCvrs` include
+      // can't ride along on the write the way FCO/RFI do; the re-read stays
+      // inside the transaction so it sees these writes on the same connection.
+      afterWrite: async (tx, pcoId, actor) => {
+        const currentLinks = await tx.changeLog.findMany({
+          where: { linkedPcoId: pcoId },
+          select: { id: true },
         });
-        for (const cvrId of toDetach) {
+        const currentIds = new Set(currentLinks.map((c) => c.id));
+        const requestedIds = new Set(data.linkedCvrIds);
+        const toAttach = data.linkedCvrIds.filter((id) => !currentIds.has(id));
+        const toDetach = Array.from(currentIds).filter(
+          (id) => !requestedIds.has(id),
+        );
+        const auditLink = async (cvrId: number, linked: boolean) => {
           await recordUpdate(
             tx,
             {
@@ -519,52 +466,34 @@ export const upsertPco = createServerFn({ method: "POST" })
             [
               {
                 field: "linkedPcoId",
-                oldValue: String(pcoId),
-                newValue: null,
+                oldValue: linked ? null : String(pcoId),
+                newValue: linked ? String(pcoId) : null,
               },
             ],
           );
+        };
+        if (toDetach.length > 0) {
+          await tx.changeLog.updateMany({
+            where: { id: { in: toDetach } },
+            data: { linkedPcoId: null },
+          });
+          for (const cvrId of toDetach) await auditLink(cvrId, false);
         }
-      }
-      if (toAttach.length > 0) {
-        await tx.changeLog.updateMany({
-          where: { id: { in: toAttach } },
-          data: { linkedPcoId: pcoId },
+        if (toAttach.length > 0) {
+          await tx.changeLog.updateMany({
+            where: { id: { in: toAttach } },
+            data: { linkedPcoId: pcoId },
+          });
+          for (const cvrId of toAttach) await auditLink(cvrId, true);
+        }
+        return tx.pco.findUniqueOrThrow({
+          where: { id: pcoId },
+          include: linkedCvrsInclude,
         });
-        for (const cvrId of toAttach) {
-          await recordUpdate(
-            tx,
-            {
-              entityType: "ChangeLog",
-              entityId: cvrId,
-              projectId: data.projectId,
-              actor,
-            },
-            [
-              {
-                field: "linkedPcoId",
-                oldValue: null,
-                newValue: String(pcoId),
-              },
-            ],
-          );
-        }
-      }
-      // Re-fetch the freshly-upserted PCO with the `linkedCvrs` relation
-      // INSIDE the transaction (instead of after it). Same number of reads
-      // as before, but the second read uses the same transaction's
-      // connection and sees the link-sync writes above without a separate
-      // round-trip to a fresh connection. The link sync is between the
-      // upsert and this read, so we can't fold the include into the upsert
-      // itself the way FCO/RFI do.
-      return tx.pco.findUniqueOrThrow({
-        where: { id: pcoId },
-        include: linkedCvrsInclude,
-      });
-    });
-
-    return toItem(row);
-  });
+      },
+      toItem,
+    }),
+  );
 
 // Owner-facing review steps fan out to the reviewer pool. INVOICED/CLOSED
 // are bookkeeping; only the originator needs to know.

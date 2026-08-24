@@ -1,7 +1,14 @@
 import type { Prisma } from "../generated/prisma/client";
 import { prisma } from "../server/db";
 import { assertProjectAccess, resolveCurrentUser } from "./users.server";
-import { recordDelete } from "./audit.server";
+import { assertProjectUnchanged, type CurrentUser } from "./users";
+import { allocateIfBlank } from "./entityNumbers.server";
+import {
+  diffFields,
+  recordCreate,
+  recordDelete,
+  recordUpdate,
+} from "./audit.server";
 import {
   applyWorkflowTransition,
   type WorkflowTransitionConfig,
@@ -168,5 +175,150 @@ export async function transitionProjectScopedRecord<
 
   // After commit: send email copies (no-op unless email is configured).
   await flushNotificationEmails(pendingEmails);
+  return opts.toItem(row);
+}
+
+/** Delegate shape for the upsert path: read, update, create. */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type UpsertDelegate = {
+  findUniqueOrThrow: (...args: any[]) => any;
+  update: (...args: any[]) => any;
+  create: (...args: any[]) => any;
+};
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+/**
+ * Create-or-update one project-scoped record, with its audit event.
+ *
+ * The third of the shared write paths (see `deleteProjectScopedRecord` and
+ * `transitionProjectScopedRecord`). All five change-pipeline entities repeated
+ * this skeleton: resolve the actor, open a transaction, branch on `id`, and on
+ * the update side re-read the row, authorize against ITS project, refuse a
+ * cross-project move, write, and audit; on the create side authorize the
+ * claimed project, allocate a record number when blank, stamp `createdById`,
+ * write, and audit.
+ *
+ * **Authorization is per-branch and inside the transaction**, which is the
+ * shape CVR and FCO already used: an update authorizes against the row's
+ * existing `projectId`, never the caller-supplied one, because trusting
+ * `data.projectId` on an update would let someone with access to project A
+ * edit (and reassign) a row living in project B. RFI, Trend and PCO reached
+ * the same guarantee by *also* checking the claimed project up front, which
+ * cost a redundant query; `assertProjectUnchanged` already forces the two ids
+ * to agree, so the in-transaction check alone is sufficient.
+ *
+ * `projectId` is set on create only and is never part of `payload` — it can't
+ * change on an update (the assertion above forbids it), and it appears in no
+ * entity's audit-field list.
+ *
+ * Hooks, both inside the transaction:
+ *  - `validate` runs after authorization and before the write — for checks
+ *    that need the DB, like Trend verifying its linked RFI/FCO belong to the
+ *    same project. Running it here rather than before the transaction means
+ *    the check and the write see the same snapshot.
+ *  - `afterWrite` receives the resolved actor (so follow-on audit rows are
+ *    attributed without re-resolving) and may return a replacement row, for
+ *    entities that do follow-on work and then need to re-read with relations
+ *    (CVR's line-item buildup, PCO's CVR link sync).
+ */
+export async function upsertProjectScopedRecord<
+  Row extends { id: number; projectId: number },
+  Item,
+>(opts: {
+  /** Present for an update, absent for a create. */
+  id?: number;
+  projectId: number;
+  /** Audit-log discriminator, e.g. "ChangeLog" / "FieldChangeOrder". */
+  entityType: string;
+  /** Human label for the cross-project-move error ("FCO", "change item"). */
+  label: string;
+  pickDelegate: (tx: Prisma.TransactionClient) => UpsertDelegate;
+  /** Editable columns. Must NOT include `projectId`. */
+  payload: Record<string, unknown>;
+  auditFields: readonly string[];
+  /** Auto-assigned record number: the column and the client's value (blank
+   *  means "allocate one"). Omit for entities without a number sequence. */
+  numbering?: { field: string; value: string };
+  /** Relation include applied to the write, so the row already carries what
+   *  `toItem` needs. Skip it when `afterWrite` re-reads instead. */
+  include?: object;
+  validate?: (tx: Prisma.TransactionClient) => Promise<void>;
+  afterWrite?: (
+    tx: Prisma.TransactionClient,
+    id: number,
+    actor: CurrentUser,
+  ) => Promise<Row | void>;
+  toItem: (row: Row) => Item;
+}): Promise<Item> {
+  const actor = await resolveCurrentUser();
+  if (!actor) throw new Error("Unauthorized: not signed in");
+
+  const includeArg = opts.include ? { include: opts.include } : {};
+
+  const row = await prisma.$transaction(async (tx) => {
+    const delegate = opts.pickDelegate(tx);
+    let written: Row;
+
+    if (opts.id !== undefined) {
+      const before = (await delegate.findUniqueOrThrow({
+        where: { id: opts.id },
+      })) as Row;
+      await assertProjectAccess(actor, before.projectId);
+      assertProjectUnchanged(opts.label, opts.projectId, before.projectId);
+      await opts.validate?.(tx);
+      written = (await delegate.update({
+        where: { id: opts.id },
+        data: opts.payload,
+        ...includeArg,
+      })) as Row;
+      await recordUpdate(
+        tx,
+        {
+          entityType: opts.entityType,
+          entityId: written.id,
+          projectId: written.projectId,
+          actor,
+        },
+        diffFields(
+          before,
+          written,
+          opts.auditFields as readonly (keyof Row)[],
+        ),
+      );
+    } else {
+      await assertProjectAccess(actor, opts.projectId);
+      await opts.validate?.(tx);
+      written = (await delegate.create({
+        data: {
+          ...opts.payload,
+          ...(opts.numbering
+            ? {
+                // A typed-in number (manual override / legacy import) is kept
+                // as-is; a blank one draws from the project's sequence.
+                [opts.numbering.field]: await allocateIfBlank(
+                  tx,
+                  opts.projectId,
+                  opts.entityType as Parameters<typeof allocateIfBlank>[2],
+                  opts.numbering.value,
+                ),
+              }
+            : {}),
+          projectId: opts.projectId,
+          createdById: actor.id,
+        },
+        ...includeArg,
+      })) as Row;
+      await recordCreate(tx, {
+        entityType: opts.entityType,
+        entityId: written.id,
+        projectId: written.projectId,
+        actor,
+      });
+    }
+
+    const replacement = await opts.afterWrite?.(tx, written.id, actor);
+    return replacement ?? written;
+  });
+
   return opts.toItem(row);
 }

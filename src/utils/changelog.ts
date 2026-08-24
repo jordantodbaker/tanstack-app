@@ -19,17 +19,12 @@ import {
   parseTransitionInput,
   parseUpsertChangeLog,
 } from "~/lib/validators";
-import { assertProjectAccess, resolveCurrentUser } from "./users.server";
 import { assertProjectUnchanged } from "./users";
 import {
   deleteProjectScopedRecord,
   transitionProjectScopedRecord,
+  upsertProjectScopedRecord,
 } from "./entity-writes.server";
-import {
-  diffFields,
-  recordCreate,
-  recordUpdate,
-} from "./audit.server";
 import { CVR_TRANSITIONS } from "./workflow";
 import { STATUS_LABELS } from "./changelogLabels";
 import {
@@ -41,7 +36,6 @@ import {
   type CvrCostType,
   type CvrLineItemDto,
 } from "./cvrLineItems";
-import { allocateIfBlank } from "./entityNumbers.server";
 
 const CVR_STATUSES_NEEDING_REVIEW = new Set<string>([
   "IN_REVIEW",
@@ -346,14 +340,6 @@ const CHANGELOG_AUDIT_FIELDS = [
 export const upsertChangeLog = createServerFn({ method: "POST" })
   .inputValidator(parseUpsertChangeLog)
   .handler(async ({ data }): Promise<ChangeLogDetail> => {
-    // Resolve the actor once; authorize per-branch inside the transaction
-    // against the *actual* project: for creates that's the claimed
-    // `data.projectId`; for updates it's the row's existing `projectId`.
-    // Trusting `data.projectId` for updates would let a caller with access
-    // to project A modify (and reassign) a row that belongs to project B.
-    const actor = await resolveCurrentUser();
-    if (!actor) throw new Error("Unauthorized: not signed in");
-
     // When a cost buildup is present the server is authoritative for
     // `costImpact` — it's the sum of the line totals, never the (possibly
     // stale) manual number the client sent. With no lines, the manual field
@@ -376,97 +362,59 @@ export const upsertChangeLog = createServerFn({ method: "POST" })
       notes: li.notes,
     }));
 
-    // `status` is intentionally omitted: lifecycle changes go through
-    // `transitionChangeLog`, never the generic upsert. Create falls back to
-    // the schema default (REQUESTED); update leaves the existing status.
-    // `projectId` is also omitted here — it's set on create only.
-    const editableFields = {
-      cvrNumber: data.cvrNumber,
-      title: data.title,
-      description: data.description,
-      type: data.type,
-      discipline: data.discipline,
-      // Every CBS code used in the cost buildup is, by definition, affected —
-      // union them into the CVR's Affected CBS Codes (additive; never drops a
-      // manually-entered code). Belt-and-suspenders alongside the dialog's
-      // live merge, so API/other callers stay consistent too.
-      cbsCodes: mergeAffectedCbsCodes(data.cbsCodes, data.lineItems),
-      originator: data.originator,
-      costImpact,
-      scheduleDaysImpact: data.scheduleDaysImpact,
-      laborHoursImpact: data.laborHoursImpact,
-      riskLevel: data.riskLevel,
-      reasonCode: data.reasonCode,
-      requestedAt: new Date(data.requestedAt),
-      dueDate: data.dueDate ? new Date(data.dueDate) : null,
-      approvedAt: data.approvedAt ? new Date(data.approvedAt) : null,
-      approver: data.approver,
-      notes: data.notes,
-      area: data.area,
-    };
-    const row = await prisma.$transaction(async (tx) => {
-      let id: number;
-      if (data.id) {
-        const before = await tx.changeLog.findUniqueOrThrow({
-          where: { id: data.id },
-        });
-        await assertProjectAccess(actor, before.projectId);
-        assertProjectUnchanged("change item", data.projectId, before.projectId);
-        const updated = await tx.changeLog.update({
-          where: { id: data.id },
-          data: editableFields,
-        });
-        await recordUpdate(
-          tx,
-          {
-            entityType: "ChangeLog",
-            entityId: updated.id,
-            projectId: updated.projectId,
-            actor,
-          },
-          diffFields(before, updated, CHANGELOG_AUDIT_FIELDS),
-        );
-        id = updated.id;
-      } else {
-        await assertProjectAccess(actor, data.projectId);
-        const created = await tx.changeLog.create({
-          data: {
-            ...editableFields,
-            // Auto-assign a CVR number when blank; a typed value (manual
-            // override / legacy import) is kept as-is.
-            cvrNumber: await allocateIfBlank(
-              tx,
-              data.projectId,
-              "ChangeLog",
-              data.cvrNumber,
-            ),
-            projectId: data.projectId,
-            createdById: actor.id,
-          },
-        });
-        await recordCreate(tx, {
-          entityType: "ChangeLog",
-          entityId: created.id,
-          projectId: created.projectId,
-          actor,
-        });
-        id = created.id;
-      }
-
+    const row = await upsertProjectScopedRecord({
+      id: data.id,
+      projectId: data.projectId,
+      entityType: "ChangeLog",
+      label: "change item",
+      pickDelegate: (tx) => tx.changeLog,
+      auditFields: CHANGELOG_AUDIT_FIELDS,
+      numbering: { field: "cvrNumber", value: data.cvrNumber },
+      // `status` is intentionally omitted: lifecycle changes go through
+      // `transitionChangeLog`, never the generic upsert. Create falls back to
+      // the schema default (REQUESTED); update leaves the existing status.
+      payload: {
+        cvrNumber: data.cvrNumber,
+        title: data.title,
+        description: data.description,
+        type: data.type,
+        discipline: data.discipline,
+        // Every CBS code used in the cost buildup is, by definition, affected —
+        // union them into the CVR's Affected CBS Codes (additive; never drops a
+        // manually-entered code). Belt-and-suspenders alongside the dialog's
+        // live merge, so API/other callers stay consistent too.
+        cbsCodes: mergeAffectedCbsCodes(data.cbsCodes, data.lineItems),
+        originator: data.originator,
+        costImpact,
+        scheduleDaysImpact: data.scheduleDaysImpact,
+        laborHoursImpact: data.laborHoursImpact,
+        riskLevel: data.riskLevel,
+        reasonCode: data.reasonCode,
+        requestedAt: new Date(data.requestedAt),
+        dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        approvedAt: data.approvedAt ? new Date(data.approvedAt) : null,
+        approver: data.approver,
+        notes: data.notes,
+        area: data.area,
+      },
       // Replace the buildup wholesale — small line counts make delete+recreate
       // simpler and safer than a per-row diff, and it keeps positions clean.
-      await tx.cvrLineItem.deleteMany({ where: { changeLogId: id } });
-      if (lineCreateData.length > 0) {
-        await tx.cvrLineItem.createMany({
-          data: lineCreateData.map((l) => ({ ...l, changeLogId: id })),
+      // Then re-read with the lines attached, inside the same transaction.
+      afterWrite: async (tx, id) => {
+        await tx.cvrLineItem.deleteMany({ where: { changeLogId: id } });
+        if (lineCreateData.length > 0) {
+          await tx.cvrLineItem.createMany({
+            data: lineCreateData.map((l) => ({ ...l, changeLogId: id })),
+          });
+        }
+        return tx.changeLog.findUniqueOrThrow({
+          where: { id },
+          include: { lineItems: { orderBy: { position: "asc" } } },
         });
-      }
-
-      return tx.changeLog.findUniqueOrThrow({
-        where: { id },
-        include: { lineItems: { orderBy: { position: "asc" } } },
-      });
+      },
+      toItem: (r) => r,
     });
+
     const { lineItems, ...scalar } = row;
     return { ...toItem(scalar), lineItems: lineItems.map(toLineItemDto) };
   });

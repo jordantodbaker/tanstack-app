@@ -29,10 +29,10 @@ import { assertProjectUnchanged } from "./users";
 import {
   deleteProjectScopedRecord,
   transitionProjectScopedRecord,
+  upsertProjectScopedRecord,
 } from "./entity-writes.server";
 import {
   diffFields,
-  recordCreate,
   recordUpdate,
 } from "./audit.server";
 import { createLinkedCvr } from "./promote.server";
@@ -42,7 +42,6 @@ import { FCO_STATUS_LABELS } from "./fcoLogLabels";
 import {
   type WorkflowTransitionConfig,
 } from "./workflow.server";
-import { allocateEntityNumber, allocateIfBlank } from "./entityNumbers.server";
 
 const FCO_STATUSES_NEEDING_REVIEW = new Set<string>([
   "SUBMITTED",
@@ -372,101 +371,51 @@ const linkedRelationsInclude = {
 
 export const upsertFco = createServerFn({ method: "POST" })
   .inputValidator(parseUpsertFco)
-  .handler(async ({ data }): Promise<FcoItem> => {
-    // Resolve the actor once; authorize per-branch inside the transaction
-    // against the *actual* project: for creates that's the claimed
-    // `data.projectId`; for updates it's the row's existing `projectId`.
-    // Trusting `data.projectId` for updates would let a caller with access
-    // to project A modify (and reassign) a row that belongs to project B.
-    const actor = await resolveCurrentUser();
-    if (!actor) throw new Error("Unauthorized: not signed in");
-
-    // `status` is intentionally omitted: lifecycle changes go through
-    // `transitionFco`, never the generic upsert. Create falls back to the
-    // schema default (DRAFT); update leaves the existing status.
-    // `projectId` is also omitted — it's set on create only.
-    const editableFields = {
-      fcoNumber: data.fcoNumber,
-      title: data.title,
-      description: data.description,
-      originType: data.originType,
-      priority: data.priority,
-      discipline: data.discipline,
-      cbsCodes: data.cbsCodes,
-      locationArea: data.locationArea,
-      drawingRefs: data.drawingRefs,
-      rfiNumbers: data.rfiNumbers,
-      initiatedBy: data.initiatedBy,
-      fieldContact: data.fieldContact,
-      estimatedCost: data.estimatedCost,
-      estimatedHours: data.estimatedHours,
-      workStopped: data.workStopped,
-      photosUrl: data.photosUrl,
-      reasonNarrative: data.reasonNarrative,
-      resolution: data.resolution,
-      notes: data.notes,
-      initiatedAt: new Date(data.initiatedAt),
-      neededBy: data.neededBy ? new Date(data.neededBy) : null,
-      closedAt: data.closedAt ? new Date(data.closedAt) : null,
-      linkedCvrId: data.linkedCvrId,
-    };
-    // Run the upsert *with* the linked-relation include so the row that
-    // bubbles out of the transaction already carries `linkedCvr` /
-    // `linkedRfi`. Previously we returned just the id and re-fetched after
-    // the transaction — an extra round-trip per write that this avoids.
-    // `before` stays scalar (no include) since the audit diff only inspects
-    // FCO_AUDIT_FIELDS, which are all scalar columns.
-    const row = await prisma.$transaction(async (tx) => {
-      if (data.id) {
-        const before = await tx.fieldChangeOrder.findUniqueOrThrow({
-          where: { id: data.id },
-        });
-        await assertProjectAccess(actor, before.projectId);
-        assertProjectUnchanged("FCO", data.projectId, before.projectId);
-        const updated = await tx.fieldChangeOrder.update({
-          where: { id: data.id },
-          data: editableFields,
-          include: linkedRelationsInclude,
-        });
-        await recordUpdate(
-          tx,
-          {
-            entityType: "FieldChangeOrder",
-            entityId: updated.id,
-            projectId: updated.projectId,
-            actor,
-          },
-          diffFields(before, updated as FcoScalarRow, FCO_AUDIT_FIELDS),
-        );
-        return updated;
-      }
-      await assertProjectAccess(actor, data.projectId);
-      const created = await tx.fieldChangeOrder.create({
-        data: {
-          ...editableFields,
-          // Auto-assign an FCO number when blank; a typed value (manual
-          // override / legacy import) is kept as-is.
-          fcoNumber: await allocateIfBlank(
-            tx,
-            data.projectId,
-            "FieldChangeOrder",
-            data.fcoNumber,
-          ),
-          projectId: data.projectId,
-          createdById: actor.id,
-        },
-        include: linkedRelationsInclude,
-      });
-      await recordCreate(tx, {
-        entityType: "FieldChangeOrder",
-        entityId: created.id,
-        projectId: created.projectId,
-        actor,
-      });
-      return created;
-    });
-    return toItem(row);
-  });
+  // The linked-relation include rides along on the write, so the row leaving
+  // the transaction already carries `linkedCvr` / `linkedRfi` — no re-fetch.
+  // FCO_AUDIT_FIELDS names scalar columns only, so the audit diff still works
+  // against the wider row type.
+  .handler(({ data }): Promise<FcoItem> =>
+    upsertProjectScopedRecord({
+      id: data.id,
+      projectId: data.projectId,
+      entityType: "FieldChangeOrder",
+      label: "FCO",
+      pickDelegate: (tx) => tx.fieldChangeOrder,
+      auditFields: FCO_AUDIT_FIELDS,
+      numbering: { field: "fcoNumber", value: data.fcoNumber },
+      include: linkedRelationsInclude,
+      // `status` is intentionally omitted: lifecycle changes go through
+      // `transitionFco`, never the generic upsert. Create falls back to the
+      // schema default (DRAFT); update leaves the existing status.
+      payload: {
+        fcoNumber: data.fcoNumber,
+        title: data.title,
+        description: data.description,
+        originType: data.originType,
+        priority: data.priority,
+        discipline: data.discipline,
+        cbsCodes: data.cbsCodes,
+        locationArea: data.locationArea,
+        drawingRefs: data.drawingRefs,
+        rfiNumbers: data.rfiNumbers,
+        initiatedBy: data.initiatedBy,
+        fieldContact: data.fieldContact,
+        estimatedCost: data.estimatedCost,
+        estimatedHours: data.estimatedHours,
+        workStopped: data.workStopped,
+        photosUrl: data.photosUrl,
+        reasonNarrative: data.reasonNarrative,
+        resolution: data.resolution,
+        notes: data.notes,
+        initiatedAt: new Date(data.initiatedAt),
+        neededBy: data.neededBy ? new Date(data.neededBy) : null,
+        closedAt: data.closedAt ? new Date(data.closedAt) : null,
+        linkedCvrId: data.linkedCvrId,
+      },
+      toItem,
+    }),
+  );
 
 /**
  * Performs a workflow status transition on an FCO. The requested `action` is

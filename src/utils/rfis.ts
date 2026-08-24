@@ -20,16 +20,17 @@ import {
   parseTransitionInput,
   parseUpsertRfi,
 } from "~/lib/validators";
-import { assertProjectAccess, requireProjectAccess } from "./users.server";
+import { requireProjectAccess } from "./users.server";
 import { assertProjectUnchanged } from "./users";
 import {
   deleteProjectScopedRecord,
   transitionProjectScopedRecord,
+  upsertProjectScopedRecord,
 } from "./entity-writes.server";
-import { diffFields, recordCreate, recordUpdate } from "./audit.server";
+import { recordCreate, recordUpdate } from "./audit.server";
 import { RFI_TRANSITIONS } from "./workflow";
 import { RFI_STATUS_LABELS } from "./rfiLabels";
-import { allocateEntityNumber, allocateIfBlank } from "./entityNumbers.server";
+import { allocateEntityNumber } from "./entityNumbers.server";
 
 export const RFI_STATUSES = [
   "DRAFT",
@@ -268,87 +269,45 @@ const RFI_AUDIT_FIELDS = [
 
 export const upsertRfi = createServerFn({ method: "POST" })
   .inputValidator(parseUpsertRfi)
-  .handler(async ({ data }): Promise<RfiItem> => {
-    const actor = await requireProjectAccess(data.projectId);
-    // `status` is intentionally omitted from the payload: lifecycle changes
-    // go through `transitionRfi`, never the generic upsert. Create falls
-    // back to the schema default (DRAFT); update leaves the existing status.
-    const payload = {
+  // The `linkedFcos` include rides along on the write, so the row leaving the
+  // transaction already carries the relation `toItem` needs — no re-fetch.
+  // RFI_AUDIT_FIELDS names scalar columns only, so the audit diff still works
+  // against the wider row type.
+  .handler(({ data }): Promise<RfiItem> =>
+    upsertProjectScopedRecord({
+      id: data.id,
       projectId: data.projectId,
-      rfiNumber: data.rfiNumber,
-      subject: data.subject,
-      question: data.question,
-      priority: data.priority,
-      discipline: data.discipline,
-      cbsCodes: data.cbsCodes,
-      locationArea: data.locationArea,
-      drawingRefs: data.drawingRefs,
-      specRefs: data.specRefs,
-      suspectsCostImpact: data.suspectsCostImpact,
-      suspectsScheduleImpact: data.suspectsScheduleImpact,
-      initiatedBy: data.initiatedBy,
-      assignedTo: data.assignedTo,
-      dueDate: data.dueDate ? new Date(data.dueDate) : null,
-      initiatedAt: new Date(data.initiatedAt),
-      response: data.response,
-      answeredBy: data.answeredBy,
-    };
-    // Run the upsert with the `linkedFcos` include so the row exiting the
-    // transaction already carries the relation needed by toItem. Saves the
-    // post-tx re-fetch round-trip per write. RFI_AUDIT_FIELDS only names
-    // scalar columns, so the audit diff still works on the wider type.
-    const row = await prisma.$transaction(async (tx) => {
-      if (data.id) {
-        const before = await tx.rfi.findUniqueOrThrow({
-          where: { id: data.id },
-        });
-        // Access was checked against the incoming projectId; also verify the
-        // existing row's project and reject any move, so a user with access to
-        // project A can't edit/reassign an RFI that lives in project B.
-        await assertProjectAccess(actor, before.projectId);
-        assertProjectUnchanged("RFI", data.projectId, before.projectId);
-        const updated = await tx.rfi.update({
-          where: { id: data.id },
-          data: payload,
-          include: linkedFcosInclude,
-        });
-        await recordUpdate(
-          tx,
-          {
-            entityType: "Rfi",
-            entityId: updated.id,
-            projectId: updated.projectId,
-            actor,
-          },
-          diffFields(before, updated as RfiScalarRow, RFI_AUDIT_FIELDS),
-        );
-        return updated;
-      }
-      const created = await tx.rfi.create({
-        data: {
-          ...payload,
-          // Auto-assign an RFI number when blank; a typed value (manual
-          // override / legacy import) is kept as-is.
-          rfiNumber: await allocateIfBlank(
-            tx,
-            data.projectId,
-            "Rfi",
-            data.rfiNumber,
-          ),
-          createdById: actor.id,
-        },
-        include: linkedFcosInclude,
-      });
-      await recordCreate(tx, {
-        entityType: "Rfi",
-        entityId: created.id,
-        projectId: created.projectId,
-        actor,
-      });
-      return created;
-    });
-    return toItem(row);
-  });
+      entityType: "Rfi",
+      label: "RFI",
+      pickDelegate: (tx) => tx.rfi,
+      auditFields: RFI_AUDIT_FIELDS,
+      numbering: { field: "rfiNumber", value: data.rfiNumber },
+      include: linkedFcosInclude,
+      // `status` is intentionally omitted: lifecycle changes go through
+      // `transitionRfi`, never the generic upsert. Create falls back to the
+      // schema default (DRAFT); update leaves the existing status.
+      payload: {
+        rfiNumber: data.rfiNumber,
+        subject: data.subject,
+        question: data.question,
+        priority: data.priority,
+        discipline: data.discipline,
+        cbsCodes: data.cbsCodes,
+        locationArea: data.locationArea,
+        drawingRefs: data.drawingRefs,
+        specRefs: data.specRefs,
+        suspectsCostImpact: data.suspectsCostImpact,
+        suspectsScheduleImpact: data.suspectsScheduleImpact,
+        initiatedBy: data.initiatedBy,
+        assignedTo: data.assignedTo,
+        dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        initiatedAt: new Date(data.initiatedAt),
+        response: data.response,
+        answeredBy: data.answeredBy,
+      },
+      toItem,
+    }),
+  );
 
 // RFI workflow doesn't use the APPROVER role — it's question/answer, not
 // approval. No status fans out to reviewers; the originator still gets a

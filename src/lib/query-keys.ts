@@ -52,6 +52,10 @@ export const qk = {
       projectId: number | null,
       currentPcoId: number | null,
     ) => ["pcos", "eligibleCvrs", projectId, currentPcoId] as const,
+    /** Prefix match — every cached `currentPcoId` variant for the project.
+     *  A PCO upsert can attach/detach CVRs, changing what is eligible. */
+    eligibleCvrsAll: (projectId: number | null) =>
+      ["pcos", "eligibleCvrs", projectId] as const,
   },
   dashboardSummary: (projectId: number | null) =>
     ["dashboardSummary", projectId] as const,
@@ -84,5 +88,139 @@ export const qk = {
     /** Prefix match — busts every baseline variant for the project. */
     budgetReconciliationAll: (projectId: number | null) =>
       ["budgetReconciliation", projectId] as const,
+  },
+
+  // ── Records attached to a host entity (CVR/FCO/RFI/Trend/PCO) ────────────
+  // All three are keyed by the host's (entityType, entityId) pair, so a
+  // dialog's three panels each get their own cache entry per record.
+  attachments: (entityType: string, entityId: number | null) =>
+    ["attachments", entityType, entityId] as const,
+  comments: (entityType: string, entityId: number | null) =>
+    ["comments", entityType, entityId] as const,
+  auditEvents: (entityType: string, entityId: number | null) =>
+    ["auditEvents", entityType, entityId] as const,
+
+  // ── Version-scoped estimate data ─────────────────────────────────────────
+  fefRows: {
+    /** Prefix match — every sheet of every version. Used when switching or
+     *  deleting an estimate version, where per-sheet keys aren't enumerable. */
+    all: () => ["fefRows"] as const,
+    sheet: (
+      versionId: number | null,
+      discipline: string,
+      section: string,
+    ) => ["fefRows", versionId, discipline, section] as const,
+  },
+  /** Prefix match over every version's totals. */
+  projectFefRowTotalsAll: () => ["projectFefRowTotals"] as const,
+  /** Prefix match over every version's invalid-row counts. */
+  invalidByDisciplineAll: () => ["invalidByDiscipline"] as const,
+  basisInputs: {
+    all: () => ["basisInputs"] as const,
+    forVersion: (versionId: number | null) =>
+      ["basisInputs", versionId] as const,
+  },
+  devDocChecklist: (versionId: number | null) =>
+    ["devDocChecklist", versionId] as const,
+
+  // ── Estimate versions + snapshots ────────────────────────────────────────
+  versions: (projectId: number | null) => ["versions", projectId] as const,
+  snapshots: (projectId: number | null) => ["snapshots", projectId] as const,
+  snapshot: (id: number | null) => ["snapshot", id] as const,
+
+  // ── CBS catalog ──────────────────────────────────────────────────────────
+  cbs: {
+    /** Sorted so two callers requesting the same set share one cache entry. */
+    codeResolve: (codes: string[]) =>
+      ["cbsCodeResolve", [...codes].sort()] as const,
+    codeSearch: (query: string) => ["cbsCodeSearch", query] as const,
+    itemsByL1: (l1Values: string[]) => ["cbsItemsByL1", l1Values] as const,
+    itemsByL1PagedAll: () => ["cbsItemsByL1Paged"] as const,
+    itemsByL1Paged: (input: {
+      l1Values: string[];
+      page: number;
+      pageSize: number;
+      projectId: number | null;
+    }) =>
+      [
+        "cbsItemsByL1Paged",
+        input.l1Values,
+        input.page,
+        input.pageSize,
+        input.projectId,
+      ] as const,
+    itemsByL1FilteredAll: () => ["cbsItemsByL1Filtered"] as const,
+    itemsByL1Filtered: (input: {
+      l1Values: string[];
+      projectId: number | null;
+    }) =>
+      ["cbsItemsByL1Filtered", input.l1Values, input.projectId] as const,
+  },
+
+  // ── Project setup (which CBS items a project may use) ────────────────────
+  setup: {
+    cbsItems: () => ["setupCbsItems"] as const,
+    allowedFefCbsItemIds: (projectId: number) =>
+      ["allowedFefCbsItemIds", projectId] as const,
+    allowedCbsL1Codes: (projectId: number) =>
+      ["allowedCbsL1Codes", projectId] as const,
+  },
+
+  // ── Take-off reference data ──────────────────────────────────────────────
+  piping: {
+    groups: () => ["pipingGroups"] as const,
+    factorData: () => ["pipingFactorData"] as const,
+  },
+  steelMembers: () => ["steelMembers"] as const,
+
+  // ── Admin entities. The key ROOTS here are what `admin-invalidations`
+  //    fans out over, so a rename must be made in both places. ─────────────
+  projects: () => ["projects"] as const,
+  subcontractors: () => ["subcontractors"] as const,
+  areas: {
+    /** The admin list — every area across every project. */
+    all: () => ["areas"] as const,
+    /** The per-project dropdown list. A SEPARATE cache from `all()`: busting
+     *  one does not bust the other, which is why area mutations go through
+     *  `invalidateAdminEntity` rather than invalidating a single key. */
+    byProject: (projectId: number | null) =>
+      ["areasByProject", projectId] as const,
+  },
+  schedules: () => ["schedules"] as const,
+  roles: {
+    admin: () => ["rolesAdmin"] as const,
+    /** Per-discipline role + rate data the take-off grid reads. */
+    data: (disciplineId: string | null) =>
+      ["roleData", disciplineId] as const,
+  },
+  crewMixes: {
+    admin: () => ["crewMixesAdmin"] as const,
+    data: () => ["crewMixData"] as const,
+  },
+  cvrTemplates: {
+    admin: () => ["cvrTemplatesAdmin"] as const,
+    picker: () => ["cvrTemplatePicker"] as const,
+  },
+  fcoTemplates: {
+    admin: () => ["fcoTemplatesAdmin"] as const,
+    picker: () => ["fcoTemplatePicker"] as const,
+  },
+
+  // ── Users, preferences, notifications ────────────────────────────────────
+  users: {
+    current: () => ["currentUser"] as const,
+    admin: () => ["adminUsers"] as const,
+  },
+  userPrefs: {
+    dashboard: () => ["userDashboardPrefs"] as const,
+    emailNotification: () => ["emailNotificationPref"] as const,
+    recents: () => ["userRecents"] as const,
+  },
+  notifications: {
+    /** Prefix match — covers the list AND the unread count below. */
+    all: () => ["notifications"] as const,
+    list: () => ["notifications"] as const,
+    unreadCount: () => ["notifications", "unreadCount"] as const,
+    emailDeliveryConfigured: () => ["emailDeliveryConfigured"] as const,
   },
 } as const;

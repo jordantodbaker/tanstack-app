@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { Prisma } from "../generated/prisma/client";
 import { prisma } from "../server/db";
@@ -158,7 +159,7 @@ export const fefRowsQueryOptions = (input: {
   section: FefSectionKey;
 }) =>
   queryOptions({
-    queryKey: ["fefRows", input.versionId, input.discipline, input.section],
+    queryKey: qk.fefRows.sheet(input.versionId, input.discipline, input.section),
     queryFn: () =>
       input.versionId === null
         ? Promise.resolve([] as FefRow[])

@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { prisma } from "../server/db";
@@ -80,7 +81,7 @@ export const fetchUserDashboardPrefs = createServerFn({
 
 export const userDashboardPrefsQueryOptions = () =>
   queryOptions({
-    queryKey: ["userDashboardPrefs"],
+    queryKey: qk.userPrefs.dashboard(),
     queryFn: () => fetchUserDashboardPrefs(),
     // Tiny payload, often-read; cache forever and let the mutation
     // invalidate it on save.
@@ -139,7 +140,7 @@ export const fetchEmailNotificationPref = createServerFn({
 
 export const emailNotificationPrefQueryOptions = () =>
   queryOptions({
-    queryKey: ["emailNotificationPref"],
+    queryKey: qk.userPrefs.emailNotification(),
     queryFn: () => fetchEmailNotificationPref(),
     staleTime: Infinity,
   });
@@ -254,7 +255,7 @@ export const fetchUserRecents = createServerFn({ method: "GET" }).handler(
 
 export const userRecentsQueryOptions = () =>
   queryOptions({
-    queryKey: ["userRecents"],
+    queryKey: qk.userPrefs.recents(),
     queryFn: () => fetchUserRecents(),
     // Short staleTime so a freshly-recorded view appears in the sidebar
     // promptly after the mutation invalidates the key.

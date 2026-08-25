@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { z } from "zod";
@@ -146,7 +147,7 @@ export const attachmentsQueryOptions = (input: {
   projectId: number | null;
 }) =>
   queryOptions({
-    queryKey: ["attachments", input.entityType, input.entityId],
+    queryKey: qk.attachments(input.entityType, input.entityId),
     queryFn: (): Promise<AttachmentItem[]> =>
       input.entityId === null || input.projectId === null
         ? Promise.resolve([])

@@ -1,4 +1,5 @@
 import * as React from "react";
+import { qk } from "~/lib/query-keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Bell } from "lucide-react";
@@ -63,11 +64,11 @@ export function NotificationBell() {
     mutationFn: (enabled: boolean) =>
       updateEmailNotificationPref({ data: { enabled } }),
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["emailNotificationPref"] }),
+      queryClient.invalidateQueries({ queryKey: qk.userPrefs.emailNotification() }),
   });
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    queryClient.invalidateQueries({ queryKey: qk.notifications.all() });
   };
 
   const markRead = useMutation({

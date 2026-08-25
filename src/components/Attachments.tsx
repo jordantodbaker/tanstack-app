@@ -1,4 +1,5 @@
 import * as React from "react";
+import { qk } from "~/lib/query-keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Paperclip, Trash2, Upload } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -41,12 +42,12 @@ export function Attachments({
 
   const invalidate = React.useCallback(() => {
     queryClient.invalidateQueries({
-      queryKey: ["attachments", entityType, entityId],
+      queryKey: qk.attachments(entityType, entityId),
     });
     // Refresh the parent's audit timeline — the upload/delete posted a
     // synthetic "attachment" UPDATE event against the parent record.
     queryClient.invalidateQueries({
-      queryKey: ["auditEvents", entityType, entityId],
+      queryKey: qk.auditEvents(entityType, entityId),
     });
   }, [queryClient, entityType, entityId]);
 

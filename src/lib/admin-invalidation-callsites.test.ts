@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { ADMIN_ENTITIES, invalidateAdminEntity } from "./admin-invalidations";
+import { qk } from "./query-keys";
 
 /**
  * Guard against invalidating an admin cache key by hand instead of going
@@ -94,5 +95,56 @@ describe("admin cache invalidation callsites", () => {
   it("self-check: an unrelated key is not flagged", () => {
     expect(fannedOutKeys().has("notifications")).toBe(false);
     expect(fannedOutKeys().has("snapshots")).toBe(false);
+  });
+});
+
+/**
+ * `admin-invalidations` fans out over bare key ROOTS (`"areasByProject"`),
+ * while every query now declares its key through `qk`. Nothing ties the two
+ * together at compile time, so a `qk` rename would silently orphan the fan-out
+ * entry — the same silent-drift failure `qk` exists to prevent. This asserts
+ * every fanned-out root is a root some `qk` key actually emits.
+ */
+function qkRoots(): Set<string> {
+  const roots = new Set<string>();
+  const visit = (node: unknown) => {
+    if (typeof node === "function") {
+      // Key builders take varying arg shapes; the leading string literal is
+      // the same whatever they receive, so try a few until one doesn't throw.
+      for (const arg of [undefined, [], {}, 0, ""]) {
+        try {
+          const key = (node as (...a: unknown[]) => unknown)(arg, arg);
+          if (Array.isArray(key) && typeof key[0] === "string") {
+            roots.add(key[0]);
+            return;
+          }
+        } catch {
+          // Wrong arg shape — try the next one.
+        }
+      }
+      return;
+    }
+    if (node && typeof node === "object") {
+      for (const v of Object.values(node)) visit(v);
+    }
+  };
+  visit(qk);
+  return roots;
+}
+
+describe("admin fan-out vs the query-key registry", () => {
+  it("fans out only over roots that some qk key actually emits", () => {
+    const known = qkRoots();
+    const orphaned = [...fannedOutKeys()].filter((k) => !known.has(k));
+    expect(orphaned).toEqual([]);
+  });
+
+  it("self-check: the walker finds roots from every nesting level", () => {
+    const roots = qkRoots();
+    expect(roots.has("projects")).toBe(true); // top-level function
+    expect(roots.has("areasByProject")).toBe(true); // nested one level
+    expect(roots.has("cbsItemsByL1Paged")).toBe(true); // nested, object arg
+    expect(roots.has("changeLog")).toBe(true); // built by entityKeys()
+    expect(roots.has("definitelyNotAKey")).toBe(false);
   });
 });

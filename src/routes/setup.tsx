@@ -1,4 +1,5 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { qk } from "~/lib/query-keys";
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Settings } from "lucide-react";
@@ -126,13 +127,13 @@ function CbsTreeEditor({
         data: { projectId, addIds: vars.addIds, removeIds: vars.removeIds },
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["cbsItemsByL1Paged"] });
-      queryClient.invalidateQueries({ queryKey: ["cbsItemsByL1Filtered"] });
+      queryClient.invalidateQueries({ queryKey: qk.cbs.itemsByL1PagedAll() });
+      queryClient.invalidateQueries({ queryKey: qk.cbs.itemsByL1FilteredAll() });
       queryClient.invalidateQueries({
-        queryKey: ["allowedFefCbsItemIds", projectId],
+        queryKey: qk.setup.allowedFefCbsItemIds(projectId),
       });
       queryClient.invalidateQueries({
-        queryKey: ["allowedCbsL1Codes", projectId],
+        queryKey: qk.setup.allowedCbsL1Codes(projectId),
       });
     },
     onError: (err, vars) => {

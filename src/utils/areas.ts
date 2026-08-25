@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { adminHandler, projectIdScopedHandler } from "./users.server";
@@ -31,7 +32,7 @@ export const fetchAreas = createServerFn({ method: "GET" }).handler(() =>
 
 export const areasQueryOptions = () =>
   queryOptions({
-    queryKey: ["areas"],
+    queryKey: qk.areas.all(),
     queryFn: () => fetchAreas(),
     // Admin mutations on areas/projects invalidate this key via
     // `invalidateAdminEntity`, so a refetch timer is redundant work.
@@ -53,7 +54,7 @@ export const fetchAreasByProject = createServerFn({ method: "GET" })
 
 export const areasByProjectQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["areasByProject", projectId],
+    queryKey: qk.areas.byProject(projectId),
     queryFn: () =>
       projectId === null
         ? Promise.resolve(

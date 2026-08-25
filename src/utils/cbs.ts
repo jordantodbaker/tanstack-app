@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { Prisma } from "../generated/prisma/client";
 import { prisma } from "../server/db";
@@ -52,7 +53,7 @@ export const resolveCbsCodes = createServerFn({ method: "GET" })
 export const cbsCodeResolveQueryOptions = (codes: string[]) =>
   queryOptions({
     // Sort so the cache key is order-independent.
-    queryKey: ["cbsCodeResolve", [...codes].sort()],
+    queryKey: qk.cbs.codeResolve(codes),
     queryFn: () =>
       codes.length === 0
         ? Promise.resolve(
@@ -89,7 +90,7 @@ export const fetchCbsItemsByL1 = createServerFn({ method: "GET" })
 
 export const cbsItemsByL1QueryOptions = (l1Values: string[]) =>
   queryOptions({
-    queryKey: ["cbsItemsByL1", l1Values],
+    queryKey: qk.cbs.itemsByL1(l1Values),
     queryFn: () => fetchCbsItemsByL1({ data: l1Values }),
     staleTime: Infinity,
   });
@@ -131,13 +132,7 @@ export const cbsItemsByL1PagedQueryOptions = (input: {
   projectId: number | null;
 }) =>
   queryOptions({
-    queryKey: [
-      "cbsItemsByL1Paged",
-      input.l1Values,
-      input.page,
-      input.pageSize,
-      input.projectId,
-    ],
+    queryKey: qk.cbs.itemsByL1Paged(input),
     queryFn: () => fetchCbsItemsByL1Paged({ data: input }),
   });
 
@@ -172,7 +167,7 @@ export const cbsItemsByL1FilteredQueryOptions = (input: {
   projectId: number | null;
 }) =>
   queryOptions({
-    queryKey: ["cbsItemsByL1Filtered", input.l1Values, input.projectId],
+    queryKey: qk.cbs.itemsByL1Filtered(input),
     queryFn: () => fetchCbsItemsByL1Filtered({ data: input }),
     staleTime: Infinity,
   });
@@ -228,7 +223,7 @@ export const searchCbsCodeOptions = createServerFn({ method: "GET" })
 
 export const cbsCodeSearchQueryOptions = (query: string) =>
   queryOptions({
-    queryKey: ["cbsCodeSearch", query],
+    queryKey: qk.cbs.codeSearch(query),
     queryFn: () => searchCbsCodeOptions({ data: { query } }),
     // The same query rarely changes mid-session; cache a few minutes. Keep the
     // previous page visible while the next keystroke's query is in flight so

@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { listUsers, resolveCurrentUser, setUser } from "./users.server";
 import { parseSetUser } from "~/lib/validators";
@@ -86,7 +87,7 @@ export const fetchCurrentUser = createServerFn({ method: "GET" }).handler(
 
 export const currentUserQueryOptions = () =>
   queryOptions({
-    queryKey: ["currentUser"],
+    queryKey: qk.users.current(),
     queryFn: () => fetchCurrentUser(),
     staleTime: 5 * 60 * 1000,
   });
@@ -98,7 +99,7 @@ export const fetchUsers = createServerFn({ method: "GET" }).handler(
 
 export const usersQueryOptions = () =>
   queryOptions({
-    queryKey: ["adminUsers"],
+    queryKey: qk.users.admin(),
     queryFn: () => fetchUsers(),
     // User and project admin mutations invalidate this via
     // `invalidateAdminEntity` — refetch timers are wasted work.

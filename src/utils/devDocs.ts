@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { z } from "zod";
@@ -41,7 +42,7 @@ export const fetchDevDocChecklist = createServerFn({ method: "GET" })
 
 export const devDocChecklistQueryOptions = (versionId: number | null) =>
   queryOptions({
-    queryKey: ["devDocChecklist", versionId],
+    queryKey: qk.devDocChecklist(versionId),
     queryFn: () =>
       versionId === null
         ? Promise.resolve(EMPTY)

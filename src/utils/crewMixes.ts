@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { adminHandler, adminHandlerNoInput } from "./users.server";
@@ -43,7 +44,7 @@ export const fetchCrewMixData = createServerFn({ method: "GET" }).handler(
 
 export const crewMixDataQueryOptions = () =>
   queryOptions({
-    queryKey: ["crewMixData"],
+    queryKey: qk.crewMixes.data(),
     queryFn: () => fetchCrewMixData(),
     staleTime: Infinity,
   });
@@ -91,7 +92,7 @@ export const fetchCrewMixesAdmin = createServerFn({ method: "GET" }).handler(
 
 export const crewMixesAdminQueryOptions = () =>
   queryOptions({
-    queryKey: ["crewMixesAdmin"],
+    queryKey: qk.crewMixes.admin(),
     queryFn: () => fetchCrewMixesAdmin(),
     staleTime: Infinity,
   });

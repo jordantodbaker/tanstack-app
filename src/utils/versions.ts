@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { z } from "zod";
@@ -84,7 +85,7 @@ export const fetchVersions = createServerFn({ method: "GET" })
 
 export const versionsQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["versions", projectId],
+    queryKey: qk.versions(projectId),
     queryFn: () =>
       projectId === null
         ? Promise.resolve([] as EstimateVersionOption[])

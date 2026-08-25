@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { diffFields } from "./audit.server";
+import { describe, expect, it, vi } from "vitest";
+import { diffFields, recordUpdate, recordUpdates } from "./audit.server";
 
 describe("diffFields", () => {
   it("returns an empty array when no listed field changed", () => {
@@ -105,5 +105,120 @@ describe("diffFields", () => {
         ["c", "a", "b"],
       ).map((change) => change.field),
     ).toEqual(["c", "a", "b"]);
+  });
+});
+
+/**
+ * `recordUpdates` batches several records' UPDATE rows into one `createMany`.
+ * `recordUpdate` is now a single-entry call into it, so these also cover the
+ * single-record path every entity upsert uses.
+ */
+describe("recordUpdates", () => {
+  const actor = {
+    id: 7,
+    clerkId: "c7",
+    email: "e@x.com",
+    role: "USER" as const,
+  };
+  const target = (entityId: number) => ({
+    entityType: "ChangeLog",
+    entityId,
+    projectId: 42,
+    actor,
+  });
+  const change = (field: string) => ({
+    field,
+    oldValue: null,
+    newValue: "1",
+  });
+
+  function db() {
+    const createMany = vi.fn();
+    return { db: { auditEvent: { createMany } } as never, createMany };
+  }
+
+  it("flattens several records into a single insert", () => {
+    const { db: fake, createMany } = db();
+    void recordUpdates(fake, [
+      { target: target(1), changes: [change("linkedPcoId")] },
+      { target: target(2), changes: [change("linkedPcoId")] },
+      { target: target(3), changes: [change("linkedPcoId")] },
+    ]);
+
+    expect(createMany).toHaveBeenCalledTimes(1);
+    const rows = createMany.mock.calls[0][0].data;
+    expect(rows).toHaveLength(3);
+    expect(rows.map((r: { entityId: number }) => r.entityId)).toEqual([1, 2, 3]);
+  });
+
+  it("emits one row per changed field, per record", () => {
+    const { db: fake, createMany } = db();
+    void recordUpdates(fake, [
+      { target: target(1), changes: [change("a"), change("b")] },
+      { target: target(2), changes: [change("c")] },
+    ]);
+    expect(createMany.mock.calls[0][0].data).toHaveLength(3);
+  });
+
+  it("stamps the actor and action on every row", () => {
+    const { db: fake, createMany } = db();
+    void recordUpdates(fake, [
+      { target: target(1), changes: [change("linkedPcoId")] },
+    ]);
+    expect(createMany.mock.calls[0][0].data[0]).toEqual({
+      entityType: "ChangeLog",
+      entityId: 1,
+      projectId: 42,
+      action: "UPDATE",
+      field: "linkedPcoId",
+      oldValue: null,
+      newValue: "1",
+      actorId: 7,
+      actorEmail: "e@x.com",
+      note: null,
+    });
+  });
+
+  it("attaches an optional note to every row in the batch", () => {
+    const { db: fake, createMany } = db();
+    void recordUpdates(
+      fake,
+      [
+        { target: target(1), changes: [change("a")] },
+        { target: target(2), changes: [change("b")] },
+      ],
+      "  approved on site  ",
+    );
+    for (const r of createMany.mock.calls[0][0].data) {
+      // Trimmed, and blank notes normalize to null (see below).
+      expect(r.note).toBe("approved on site");
+    }
+  });
+
+  it("normalizes a blank note to null", () => {
+    const { db: fake, createMany } = db();
+    void recordUpdates(fake, [{ target: target(1), changes: [change("a")] }], "   ");
+    expect(createMany.mock.calls[0][0].data[0].note).toBeNull();
+  });
+
+  it("writes nothing when no record actually changed", () => {
+    const { db: fake, createMany } = db();
+    void recordUpdates(fake, [
+      { target: target(1), changes: [] },
+      { target: target(2), changes: [] },
+    ]);
+    expect(createMany).not.toHaveBeenCalled();
+  });
+
+  it("writes nothing for an empty batch", () => {
+    const { db: fake, createMany } = db();
+    void recordUpdates(fake, []);
+    expect(createMany).not.toHaveBeenCalled();
+  });
+
+  it("recordUpdate still no-ops on an unchanged record", () => {
+    const { db: fake, createMany } = db();
+    void recordUpdate(fake, target(1), []);
+    expect(createMany).not.toHaveBeenCalled();
   });
 });

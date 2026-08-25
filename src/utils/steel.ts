@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 
@@ -50,7 +51,7 @@ export const fetchSteelMembers = createServerFn({ method: "GET" }).handler(
 
 export const steelMembersQueryOptions = () =>
   queryOptions({
-    queryKey: ["steelMembers"],
+    queryKey: qk.steelMembers(),
     queryFn: () => fetchSteelMembers(),
     // Reference data — never changes during a session (re-seeded offline).
     staleTime: Infinity,

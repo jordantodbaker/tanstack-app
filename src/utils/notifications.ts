@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { resolveCurrentUser } from "./users.server";
 import { parseIdInput } from "~/lib/validators";
@@ -78,7 +79,7 @@ export const fetchEmailDeliveryConfigured = createServerFn({
 
 export const emailDeliveryConfiguredQueryOptions = () =>
   queryOptions({
-    queryKey: ["emailDeliveryConfigured"],
+    queryKey: qk.notifications.emailDeliveryConfigured(),
     queryFn: () => fetchEmailDeliveryConfigured(),
     // Server config doesn't change within a session; cache for the session.
     staleTime: Infinity,
@@ -86,14 +87,14 @@ export const emailDeliveryConfiguredQueryOptions = () =>
 
 export const notificationsQueryOptions = () =>
   queryOptions({
-    queryKey: ["notifications"],
+    queryKey: qk.notifications.list(),
     queryFn: () => fetchNotifications(),
     staleTime: 30 * 1000,
   });
 
 export const unreadNotificationCountQueryOptions = () =>
   queryOptions({
-    queryKey: ["notifications", "unreadCount"],
+    queryKey: qk.notifications.unreadCount(),
     queryFn: () => fetchUnreadNotificationCount(),
     // Poll every 30s so the bell badge stays roughly current without a
     // websocket; tab focus also retriggers via React Query defaults.

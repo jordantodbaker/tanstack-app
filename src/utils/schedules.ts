@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { adminHandler } from "./users.server";
@@ -23,7 +24,7 @@ export const fetchSchedules = createServerFn({ method: "GET" }).handler(
 
 export const schedulesQueryOptions = () =>
   queryOptions({
-    queryKey: ["schedules"],
+    queryKey: qk.schedules(),
     queryFn: () => fetchSchedules(),
     staleTime: Infinity,
   });

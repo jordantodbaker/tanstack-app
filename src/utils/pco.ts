@@ -32,7 +32,7 @@ import {
   upsertProjectScopedRecord,
 } from "./entity-writes.server";
 import {
-  recordUpdate,
+  recordUpdates,
 } from "./audit.server";
 import { PCO_TRANSITIONS } from "./workflow";
 import { PCO_STATUS_LABELS } from "./pcoLabels";
@@ -454,38 +454,39 @@ export const upsertPco = createServerFn({ method: "POST" })
         const toDetach = Array.from(currentIds).filter(
           (id) => !requestedIds.has(id),
         );
-        const auditLink = async (cvrId: number, linked: boolean) => {
-          await recordUpdate(
-            tx,
+        // One audit row per (un)linked CVR so each CVR's own history shows the
+        // change — batched into a single insert rather than one per CVR.
+        const linkAudit = (cvrId: number, linked: boolean) => ({
+          target: {
+            entityType: "ChangeLog",
+            entityId: cvrId,
+            projectId: data.projectId,
+            actor,
+          },
+          changes: [
             {
-              entityType: "ChangeLog",
-              entityId: cvrId,
-              projectId: data.projectId,
-              actor,
+              field: "linkedPcoId",
+              oldValue: linked ? null : String(pcoId),
+              newValue: linked ? String(pcoId) : null,
             },
-            [
-              {
-                field: "linkedPcoId",
-                oldValue: linked ? null : String(pcoId),
-                newValue: linked ? String(pcoId) : null,
-              },
-            ],
-          );
-        };
+          ],
+        });
         if (toDetach.length > 0) {
           await tx.changeLog.updateMany({
             where: { id: { in: toDetach } },
             data: { linkedPcoId: null },
           });
-          for (const cvrId of toDetach) await auditLink(cvrId, false);
         }
         if (toAttach.length > 0) {
           await tx.changeLog.updateMany({
             where: { id: { in: toAttach } },
             data: { linkedPcoId: pcoId },
           });
-          for (const cvrId of toAttach) await auditLink(cvrId, true);
         }
+        await recordUpdates(tx, [
+          ...toDetach.map((id) => linkAudit(id, false)),
+          ...toAttach.map((id) => linkAudit(id, true)),
+        ]);
         return tx.pco.findUniqueOrThrow({
           where: { id: pcoId },
           include: linkedCvrsInclude,
@@ -600,6 +601,6 @@ export function invalidatePcoQueries(
   // for this project. Prefix-match: `["pcos", "eligibleCvrs", projectId]`
   // matches every cached `currentPcoId` for the project.
   queryClient.invalidateQueries({
-    queryKey: ["pcos", "eligibleCvrs", projectId],
+    queryKey: qk.pcos.eligibleCvrsAll(projectId),
   });
 }

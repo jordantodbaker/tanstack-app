@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { z } from "zod";
@@ -119,7 +120,7 @@ export const commentsQueryOptions = (input: {
   projectId: number | null;
 }) =>
   queryOptions({
-    queryKey: ["comments", input.entityType, input.entityId],
+    queryKey: qk.comments(input.entityType, input.entityId),
     queryFn: (): Promise<CommentItem[]> =>
       input.entityId === null || input.projectId === null
         ? Promise.resolve([])

@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { adminHandler, adminHandlerNoInput } from "./users.server";
@@ -50,7 +51,7 @@ export const fetchSubcontractors = createServerFn({ method: "GET" }).handler(
 
 export const subcontractorsQueryOptions = () =>
   queryOptions({
-    queryKey: ["subcontractors"],
+    queryKey: qk.subcontractors(),
     queryFn: () => fetchSubcontractors(),
     // Admin mutations on subcontractors/projects invalidate this key
     // via `invalidateAdminEntity` — refetch timers are wasted work.

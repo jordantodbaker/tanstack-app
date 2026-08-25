@@ -129,7 +129,7 @@ function SnapshotRow({
   const remove = useMutation({
     mutationFn: (id: number) => deleteSnapshot({ data: { id } }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["snapshots", projectId] });
+      queryClient.invalidateQueries({ queryKey: qk.snapshots(projectId) });
       // The deleted snapshot may have been the budget view's latest baseline.
       queryClient.invalidateQueries({
         queryKey: qk.reporting.budgetReconciliationAll(projectId),
@@ -201,7 +201,7 @@ function CreateSnapshotDialog({ projectId }: { projectId: number }) {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["snapshots", projectId] });
+      queryClient.invalidateQueries({ queryKey: qk.snapshots(projectId) });
       // A new snapshot becomes the budget view's latest baseline.
       queryClient.invalidateQueries({
         queryKey: qk.reporting.budgetReconciliationAll(projectId),
@@ -302,10 +302,10 @@ function EditSnapshotDialog({ snapshot }: { snapshot: EstimateSnapshotItem }) {
         data: { id: snapshot.id, label: label.trim(), notes: notes.trim() },
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["snapshots", projectId] });
+      queryClient.invalidateQueries({ queryKey: qk.snapshots(projectId) });
       // Detail cache has `staleTime: Infinity`, so it must be busted explicitly
       // or a reopened detail dialog would show the old label/notes.
-      queryClient.invalidateQueries({ queryKey: ["snapshot", snapshot.id] });
+      queryClient.invalidateQueries({ queryKey: qk.snapshot(snapshot.id) });
       setOpen(false);
     },
   });

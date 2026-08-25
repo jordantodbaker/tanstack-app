@@ -1,4 +1,5 @@
 import * as React from "react";
+import { qk } from "~/lib/query-keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Send } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -40,7 +41,7 @@ export function Comments({
 
   const invalidate = React.useCallback(() => {
     queryClient.invalidateQueries({
-      queryKey: ["comments", entityType, entityId],
+      queryKey: qk.comments(entityType, entityId),
     });
   }, [queryClient, entityType, entityId]);
 

@@ -1,4 +1,5 @@
 import * as React from "react";
+import { qk } from "~/lib/query-keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import { cn } from "~/lib/utils";
@@ -119,15 +120,15 @@ function NewVersionDialog({
         },
       }),
     onSuccess: (created) => {
-      queryClient.invalidateQueries({ queryKey: ["versions", projectId] });
+      queryClient.invalidateQueries({ queryKey: qk.versions(projectId) });
       // Drop any cached estimate data so the new version's sheets, totals, and
       // badges refetch fresh instead of briefly showing a stale/empty view of
       // the version we just switched away from. Keyed broadly (prefix match) so
       // every discipline/section and both totals queries are covered.
-      queryClient.invalidateQueries({ queryKey: ["fefRows"] });
-      queryClient.invalidateQueries({ queryKey: ["projectFefRowTotals"] });
-      queryClient.invalidateQueries({ queryKey: ["invalidByDiscipline"] });
-      queryClient.invalidateQueries({ queryKey: ["basisInputs"] });
+      queryClient.invalidateQueries({ queryKey: qk.fefRows.all() });
+      queryClient.invalidateQueries({ queryKey: qk.projectFefRowTotalsAll() });
+      queryClient.invalidateQueries({ queryKey: qk.invalidByDisciplineAll() });
+      queryClient.invalidateQueries({ queryKey: qk.basisInputs.all() });
       // Jump to the freshly created version.
       setVersionId(created.id);
       setOpen(false);
@@ -275,7 +276,7 @@ function RenameVersionItem({
     mutationFn: () =>
       updateVersion({ data: { versionId: version.id, name, description } }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["versions", projectId] });
+      queryClient.invalidateQueries({ queryKey: qk.versions(projectId) });
       setOpen(false);
       onDone();
     },
@@ -363,7 +364,7 @@ function DeleteVersionItem({
       // Clear selection; SelectedVersionProvider re-resolves to another version
       // once the refreshed list loads.
       setVersionId(null);
-      queryClient.invalidateQueries({ queryKey: ["versions", projectId] });
+      queryClient.invalidateQueries({ queryKey: qk.versions(projectId) });
       setOpen(false);
       onDone();
     },

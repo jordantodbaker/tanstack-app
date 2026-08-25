@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import {
@@ -90,7 +91,7 @@ export const fetchCvrTemplatePickerItems = createServerFn({
 
 export const cvrTemplatePickerQueryOptions = () =>
   queryOptions({
-    queryKey: ["cvrTemplatePicker"],
+    queryKey: qk.cvrTemplates.picker(),
     queryFn: () => fetchCvrTemplatePickerItems(),
     staleTime: Infinity,
   });
@@ -120,7 +121,7 @@ export const fetchCvrTemplatesAdmin = createServerFn({ method: "GET" }).handler(
 
 export const cvrTemplatesAdminQueryOptions = () =>
   queryOptions({
-    queryKey: ["cvrTemplatesAdmin"],
+    queryKey: qk.cvrTemplates.admin(),
     queryFn: () => fetchCvrTemplatesAdmin(),
     staleTime: Infinity,
   });

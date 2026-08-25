@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { z } from "zod";
@@ -61,7 +62,7 @@ export const auditEventsQueryOptions = (input: {
   projectId: number | null;
 }) =>
   queryOptions({
-    queryKey: ["auditEvents", input.entityType, input.entityId],
+    queryKey: qk.auditEvents(input.entityType, input.entityId),
     queryFn: (): Promise<AuditEventItem[]> =>
       input.entityId === null || input.projectId === null
         ? Promise.resolve([])

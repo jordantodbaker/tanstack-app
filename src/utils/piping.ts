@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 
@@ -11,7 +12,7 @@ export const fetchPipingGroups = createServerFn({ method: "GET" }).handler(() =>
 
 export const pipingGroupsQueryOptions = () =>
   queryOptions({
-    queryKey: ["pipingGroups"],
+    queryKey: qk.piping.groups(),
     queryFn: () => fetchPipingGroups(),
     staleTime: Infinity,
   });
@@ -56,7 +57,7 @@ export const fetchPipingFactorData = createServerFn({ method: "GET" }).handler(
 
 export const pipingFactorDataQueryOptions = () =>
   queryOptions({
-    queryKey: ["pipingFactorData"],
+    queryKey: qk.piping.factorData(),
     queryFn: () => fetchPipingFactorData(),
     staleTime: Infinity,
   });

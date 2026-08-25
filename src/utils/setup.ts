@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { prisma } from "../server/db";
@@ -34,7 +35,7 @@ export const fetchSetupCbsItems = createServerFn({ method: "GET" }).handler(
 
 export const setupCbsItemsQueryOptions = () =>
   queryOptions({
-    queryKey: ["setupCbsItems"],
+    queryKey: qk.setup.cbsItems(),
     queryFn: () => fetchSetupCbsItems(),
     // The CBS catalog rarely changes within a session, so cache forever.
     // Avoids re-shipping the entire CbsItem table on every /setup visit.
@@ -55,7 +56,7 @@ export const fetchAllowedFefCbsItemIds = createServerFn({ method: "GET" })
 
 export const allowedFefCbsItemIdsQueryOptions = (projectId: number) =>
   queryOptions({
-    queryKey: ["allowedFefCbsItemIds", projectId],
+    queryKey: qk.setup.allowedFefCbsItemIds(projectId),
     queryFn: () => fetchAllowedFefCbsItemIds({ data: projectId }),
     staleTime: Infinity,
   });
@@ -77,7 +78,7 @@ export const fetchAllowedCbsL1Codes = createServerFn({ method: "GET" })
 
 export const allowedCbsL1CodesQueryOptions = (projectId: number) =>
   queryOptions({
-    queryKey: ["allowedCbsL1Codes", projectId],
+    queryKey: qk.setup.allowedCbsL1Codes(projectId),
     queryFn: () => fetchAllowedCbsL1Codes({ data: projectId }),
     // Sidebar reads this on every page mount. `updateAllowedFefCbsItems`
     // invalidates this key explicitly on save, so refetching on a timer

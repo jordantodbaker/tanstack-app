@@ -107,10 +107,26 @@ export async function recordUpdate(
   changes: FieldChange[],
   note?: string,
 ): Promise<void> {
-  if (changes.length === 0) return;
+  await recordUpdates(db, [{ target, changes }], note);
+}
+
+/**
+ * Batched `recordUpdate` for several records changing together — e.g. a PCO's
+ * CVR link sync, where every attached and detached CVR gets its own UPDATE
+ * row. Flattens into ONE `createMany` rather than one per record, which
+ * matters inside a transaction: a PCO bundling 15 CVRs went from 15 sequential
+ * inserts to a single statement.
+ *
+ * Entries with no changes are dropped; an empty result is a no-op.
+ */
+export async function recordUpdates(
+  db: AuditDb,
+  entries: { target: AuditTarget; changes: FieldChange[] }[],
+  note?: string,
+): Promise<void> {
   const cleanNote = note?.trim() ? note.trim() : null;
-  await db.auditEvent.createMany({
-    data: changes.map((c) => ({
+  const data = entries.flatMap(({ target, changes }) =>
+    changes.map((c) => ({
       entityType: target.entityType,
       entityId: target.entityId,
       projectId: target.projectId,
@@ -122,5 +138,7 @@ export async function recordUpdate(
       actorEmail: target.actor.email,
       note: cleanNote,
     })),
-  });
+  );
+  if (data.length === 0) return;
+  await db.auditEvent.createMany({ data });
 }

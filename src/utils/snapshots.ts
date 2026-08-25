@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import {
@@ -354,7 +355,7 @@ export const updateSnapshot = createServerFn({ method: "POST" })
 
 export const snapshotsQueryOptions = (projectId: number | null) =>
   queryOptions({
-    queryKey: ["snapshots", projectId],
+    queryKey: qk.snapshots(projectId),
     queryFn: (): Promise<EstimateSnapshotItem[]> =>
       projectId === null
         ? Promise.resolve([])
@@ -364,7 +365,7 @@ export const snapshotsQueryOptions = (projectId: number | null) =>
 
 export const snapshotDetailQueryOptions = (id: number | null) =>
   queryOptions({
-    queryKey: ["snapshot", id],
+    queryKey: qk.snapshot(id),
     queryFn: (): Promise<EstimateSnapshotDetail | null> =>
       id === null ? Promise.resolve(null) : fetchSnapshotDetail({ data: id }),
     enabled: id !== null,

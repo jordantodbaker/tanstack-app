@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import {
@@ -86,7 +87,7 @@ export const fetchFcoTemplatePickerItems = createServerFn({
 
 export const fcoTemplatePickerQueryOptions = () =>
   queryOptions({
-    queryKey: ["fcoTemplatePicker"],
+    queryKey: qk.fcoTemplates.picker(),
     queryFn: () => fetchFcoTemplatePickerItems(),
     staleTime: Infinity,
   });
@@ -115,7 +116,7 @@ export const fetchFcoTemplatesAdmin = createServerFn({ method: "GET" }).handler(
 
 export const fcoTemplatesAdminQueryOptions = () =>
   queryOptions({
-    queryKey: ["fcoTemplatesAdmin"],
+    queryKey: qk.fcoTemplates.admin(),
     queryFn: () => fetchFcoTemplatesAdmin(),
     staleTime: Infinity,
   });

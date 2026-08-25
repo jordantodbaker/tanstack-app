@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { z } from "zod";
@@ -57,7 +58,7 @@ export const fetchRoleData = createServerFn({ method: "GET" })
 
 export const roleDataQueryOptions = (disciplineId: string | null = null) =>
   queryOptions({
-    queryKey: ["roleData", disciplineId],
+    queryKey: qk.roles.data(disciplineId),
     queryFn: () => fetchRoleData({ data: disciplineId }),
     staleTime: Infinity,
   });
@@ -92,7 +93,7 @@ export const fetchRolesAdmin = createServerFn({ method: "GET" }).handler(
 
 export const rolesAdminQueryOptions = () =>
   queryOptions({
-    queryKey: ["rolesAdmin"],
+    queryKey: qk.roles.admin(),
     queryFn: () => fetchRolesAdmin(),
     // Admin role mutations invalidate this key via `invalidateAdminEntity`.
     staleTime: Infinity,

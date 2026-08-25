@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { z } from "zod";
@@ -71,7 +72,7 @@ export const fetchBasisInputs = createServerFn({ method: "GET" })
 
 export const basisInputsQueryOptions = (versionId: number | null) =>
   queryOptions({
-    queryKey: ["basisInputs", versionId],
+    queryKey: qk.basisInputs.forVersion(versionId),
     queryFn: () =>
       versionId === null
         ? Promise.resolve(EMPTY)

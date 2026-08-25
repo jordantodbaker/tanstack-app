@@ -290,7 +290,7 @@ export function DisciplineTabs({
         .then((routed) => {
           for (const g of routed) {
             queryClient.invalidateQueries({
-              queryKey: ["fefRows", versionId, g.discipline, "TAKE_OFF"],
+              queryKey: qk.fefRows.sheet(versionId, g.discipline, "TAKE_OFF"),
             });
           }
           queryClient.invalidateQueries({

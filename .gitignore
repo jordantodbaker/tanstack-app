@@ -32,3 +32,9 @@ coverage/
 # Browser-driver artifacts (screenshots, saved auth state)
 /.screenshots/
 /.auth/
+
+# Editor/tool backups. Windows Perl's `-i` writes a .bak by default (GNU
+# Perl's does not), so in-place edits during mutation testing silently
+# littered these into the repo once.
+*.bak
+*.orig

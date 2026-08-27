@@ -22,6 +22,7 @@ const {
   prismaMock: {
     customFieldDef: {
       findMany: vi.fn(),
+      findFirst: vi.fn(),
       findUniqueOrThrow: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
@@ -57,6 +58,7 @@ import {
   addCustomFieldDef,
   clearCustomFieldData,
   removeCustomFieldDef,
+  restoreCustomFieldDef,
   renameCustomFieldDef,
   reorderCustomFieldDefs,
 } from "./customFields";
@@ -95,7 +97,9 @@ beforeEach(() => {
     discipline: "piping",
     slot: 3,
     label: "Client Tag",
+    position: 2,
   });
+  prismaMock.customFieldDef.findFirst.mockResolvedValue(null);
   prismaMock.fefRow.updateMany.mockResolvedValue({ count: 0 });
   prismaMock.$transaction = transaction;
   transaction.mockImplementation(
@@ -218,8 +222,10 @@ describe("removeCustomFieldDef", () => {
 
   it("deletes the definition and LEAVES the row values alone", async () => {
     // Removing is cheap and reversible up until the slot is reallocated;
-    // `addCustomFieldDef` is what clears a recycled slot.
-    await expect(run()).resolves.toEqual({ ok: true });
+    // `addCustomFieldDef` is what clears a recycled slot. The return value
+    // carries the slot and position so the caller can offer an undo — see
+    // "removeCustomFieldDef return value" below.
+    await expect(run()).resolves.toMatchObject({ slot: 3, position: 2 });
     expect(prismaMock.customFieldDef.delete).toHaveBeenCalledWith({
       where: { id: 1 },
     });
@@ -301,5 +307,88 @@ describe("reorderCustomFieldDefs", () => {
   it("requires APPROVER", async () => {
     requireProjectAccessFn.mockResolvedValue(plainUser);
     await expect(run([5])).rejects.toThrow(/APPROVER/);
+  });
+});
+
+describe("restoreCustomFieldDef", () => {
+  const removed = {
+    projectId: 42,
+    discipline: "piping",
+    label: "Client Tag",
+    slot: 3,
+    position: 2,
+  };
+  const run = (over = {}) =>
+    restoreCustomFieldDef({ data: { ...removed, ...over } });
+
+  it("puts the column back at its ORIGINAL slot, not the lowest free one", async () => {
+    // `addCustomFieldDef` allocates lowest-free; an undo must not, or the
+    // column comes back pointing at a different customN field than the values
+    // it is supposed to be recovering.
+    await run();
+    expect(prismaMock.customFieldDef.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ slot: 3, position: 2, label: "Client Tag" }),
+      }),
+    );
+  });
+
+  it("does NOT clear the slot — that is the whole point", async () => {
+    // Adding clears the slot it takes. If restore did the same it would wipe
+    // exactly the data the undo exists to bring back.
+    await run();
+    expect(prismaMock.fefRow.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("refuses when the slot has been taken since, naming the new owner", async () => {
+    prismaMock.customFieldDef.findFirst.mockResolvedValue({ label: "Heat Number" });
+    await expect(run()).rejects.toThrow(/Heat Number/);
+    expect(prismaMock.customFieldDef.create).not.toHaveBeenCalled();
+  });
+
+  it("checks the slot inside the transaction", async () => {
+    // Two people undoing at once would otherwise both see a free slot.
+    await run();
+    expect(transaction).toHaveBeenCalled();
+    expect(prismaMock.customFieldDef.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { projectId: 42, discipline: "piping", slot: 3 },
+      }),
+    );
+  });
+
+  it("audits the restore", async () => {
+    await run();
+    expect(auditCreate).toHaveBeenCalled();
+  });
+
+  it("requires APPROVER", async () => {
+    requireProjectAccessFn.mockResolvedValue(plainUser);
+    await expect(run()).rejects.toThrow(/APPROVER/);
+    expect(prismaMock.customFieldDef.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a slot outside the fixed range", async () => {
+    await expect(run({ slot: 0 })).rejects.toThrow();
+    await expect(run({ slot: 99 })).rejects.toThrow();
+    expect(transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects a blank label", async () => {
+    await expect(run({ label: "   " })).rejects.toThrow(/name/i);
+  });
+});
+
+describe("removeCustomFieldDef return value", () => {
+  it("returns what an undo needs", async () => {
+    // Without slot and position the caller cannot restore the column to the
+    // field its values actually live in.
+    await expect(removeCustomFieldDef({ data: { id: 1 } })).resolves.toEqual({
+      projectId: 42,
+      discipline: "piping",
+      label: "Client Tag",
+      slot: 3,
+      position: 2,
+    });
   });
 });

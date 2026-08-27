@@ -17,7 +17,8 @@ import {
  * would vanish and any active selection would point at nothing.
  */
 
-const col = (c: ColumnDef<FefRow, string>) => c as { id?: string; header?: unknown; size?: number };
+const col = (c: ColumnDef<FefRow, string>) =>
+  c as { id?: string; header?: unknown; size?: number; meta?: unknown };
 
 const stub = (id: string): ColumnDef<FefRow, string> =>
   ({ id, header: id }) as ColumnDef<FefRow, string>;
@@ -28,7 +29,30 @@ describe("buildCustomFieldColumns", () => {
       { field: "custom3", label: "Client Tag" },
     ]);
     expect(col(c).id).toBe("custom3");
+    // No definition id, so nothing to act on — a plain label.
     expect(col(c).header).toBe("Client Tag");
+  });
+
+  it("renders an interactive header when given a definition id", () => {
+    // With an id the header becomes the ⋯ menu component, so a column can be
+    // renamed or removed from where it is rather than only from the popover.
+    const [c] = buildCustomFieldColumns([
+      { field: "custom3", label: "Client Tag", id: 7 },
+    ]);
+    expect(typeof col(c).header).toBe("function");
+  });
+
+  it("keeps the plain label reachable once the header is a component", () => {
+    // `header` can no longer be read as text, so exports and any future column
+    // picker take the label from meta instead.
+    const [withId] = buildCustomFieldColumns([
+      { field: "custom3", label: "Client Tag", id: 7 },
+    ]);
+    const [withoutId] = buildCustomFieldColumns([
+      { field: "custom3", label: "Client Tag" },
+    ]);
+    expect(col(withId).meta).toEqual({ label: "Client Tag" });
+    expect(col(withoutId).meta).toEqual({ label: "Client Tag" });
   });
 
   it("keeps the id stable across a rename", () => {

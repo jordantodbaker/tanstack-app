@@ -2,6 +2,7 @@ import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
 import type { FefRow } from "./types";
 import type { CustomFieldSlot } from "./fef-helpers";
 import { EditableCell } from "./fef-cells";
+import { CustomColumnHeader } from "~/components/CustomColumnHeader";
 import type { ColumnGroup } from "./fef-table-types";
 
 /**
@@ -25,6 +26,12 @@ export type CustomFieldColumnSpec = {
   /** The `customN` field this column reads and writes. */
   field: string;
   label: string;
+  /**
+   * CustomFieldDef id. Optional so callers that only render (tests, exports)
+   * need not supply one; without it the header is a plain label rather than a
+   * menu, since there is no definition to act on.
+   */
+  id?: number;
 };
 
 /** Default width, in px. Wide enough for a tag number, narrow enough that ten
@@ -39,15 +46,25 @@ export function buildCustomFieldColumns(
     // beats rendering a column bound to nothing — the row would show blank
     // cells that silently discard whatever was typed into them.
     .filter((s) => s.field !== "")
-    .map(
-      (s) =>
-        columnHelper.accessor(s.field as CustomFieldSlot, {
-          id: s.field,
-          header: s.label,
-          cell: EditableCell,
-          size: CUSTOM_FIELD_COLUMN_WIDTH,
-        }) as ColumnDef<FefRow, string>,
-    );
+    .map((s) => {
+      const id = s.id;
+      return columnHelper.accessor(s.field as CustomFieldSlot, {
+        id: s.field,
+        // A component, not a string, so the column carries its own actions —
+        // renaming and removing a column is a thought you have while looking
+        // at it. `flexRender` in table-utils handles either form. With no
+        // definition id there is nothing to act on, so it stays a label.
+        header:
+          id === undefined
+            ? s.label
+            : () => <CustomColumnHeader id={id} label={s.label} />,
+        // The plain label, kept reachable now that `header` may be a component
+        // — exports and any future column picker want the text, not the node.
+        meta: { label: s.label },
+        cell: EditableCell,
+        size: CUSTOM_FIELD_COLUMN_WIDTH,
+      }) as ColumnDef<FefRow, string>;
+    });
 }
 
 /**

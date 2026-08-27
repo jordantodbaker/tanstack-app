@@ -49,6 +49,12 @@ const RenameInput = z.object({
   label: z.string().min(1).max(200),
 });
 const IdOnly = z.object({ id: Id });
+/** Undo of a remove: the definition's original slot and position, restored. */
+const RestoreInput = DisciplineScope.extend({
+  label: z.string().min(1).max(200),
+  slot: z.int().min(1).max(CUSTOM_FIELD_SLOT_COUNT),
+  position: z.int().nonnegative(),
+});
 const ReorderInput = DisciplineScope.extend({
   orderedIds: z.array(Id),
 });
@@ -106,7 +112,14 @@ function assertMayDefine(actor: CurrentUser): void {
 async function requireDefAccess(id: number) {
   const def = await prisma.customFieldDef.findUniqueOrThrow({
     where: { id },
-    select: { id: true, projectId: true, discipline: true, slot: true, label: true },
+    select: {
+      id: true,
+      projectId: true,
+      discipline: true,
+      slot: true,
+      label: true,
+      position: true,
+    },
   });
   const actor = await requireProjectAccess(def.projectId);
   assertMayDefine(actor);
@@ -234,9 +247,18 @@ export const renameCustomFieldDef = createServerFn({ method: "POST" })
  * nothing until the slot is reallocated. `addCustomFieldDef` is what clears a
  * recycled slot.
  */
+/** What an undo needs to put the column back exactly where it was. */
+export type RemovedCustomField = {
+  projectId: number;
+  discipline: string;
+  label: string;
+  slot: number;
+  position: number;
+};
+
 export const removeCustomFieldDef = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => IdOnly.parse(input))
-  .handler(async ({ data }): Promise<{ ok: true }> => {
+  .handler(async ({ data }): Promise<RemovedCustomField> => {
     const { def, actor } = await requireDefAccess(data.id);
     await prisma.$transaction(async (tx) => {
       await tx.customFieldDef.delete({ where: { id: data.id } });
@@ -247,7 +269,74 @@ export const removeCustomFieldDef = createServerFn({ method: "POST" })
         actor,
       });
     });
-    return { ok: true };
+    // Returned rather than discarded so the caller can offer an undo. Row data
+    // is untouched by the delete, so restoring the definition at this slot
+    // brings the values back with it.
+    return {
+      projectId: def.projectId,
+      discipline: def.discipline,
+      label: def.label,
+      slot: def.slot,
+      position: def.position,
+    };
+  });
+
+/**
+ * Put a just-removed column back, values and all.
+ *
+ * NOT `addCustomFieldDef`: that allocates the lowest free slot and CLEARS it,
+ * which for an undo is exactly backwards — it would hand the column a
+ * different slot and wipe the data the undo exists to recover. This restores
+ * the original slot and position and writes no row.
+ *
+ * Refuses when the slot has been taken since. That is the one case where the
+ * values really are gone: whoever claimed the slot cleared it on the way in,
+ * so silently restoring here would produce a column that looks recovered and
+ * is empty.
+ */
+export const restoreCustomFieldDef = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => RestoreInput.parse(input))
+  .handler(async ({ data }): Promise<CustomFieldDefItem> => {
+    const actor = await requireProjectAccess(data.projectId);
+    assertMayDefine(actor);
+
+    const label = normalizeLabel(data.label);
+    if (label === null) throw new Error("Give the column a name.");
+
+    return prisma.$transaction(async (tx) => {
+      const taken = await tx.customFieldDef.findFirst({
+        where: {
+          projectId: data.projectId,
+          discipline: data.discipline,
+          slot: data.slot,
+        },
+        select: { label: true },
+      });
+      if (taken) {
+        throw new Error(
+          `That column's slot now belongs to “${taken.label}”, which cleared it. ` +
+            `Add “${label}” again to get the column back — it will start empty.`,
+        );
+      }
+
+      const restored = await tx.customFieldDef.create({
+        data: {
+          projectId: data.projectId,
+          discipline: data.discipline,
+          slot: data.slot,
+          label,
+          position: data.position,
+        },
+        select: DEF_SELECT,
+      });
+      await recordCreate(tx, {
+        entityType: "CustomFieldDef",
+        entityId: restored.id,
+        projectId: data.projectId,
+        actor,
+      });
+      return toItem(restored);
+    });
   });
 
 /** Left-to-right order of a discipline's custom columns. */

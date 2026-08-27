@@ -51,6 +51,8 @@ import { appendTakeOffRows } from "~/utils/fefRows";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { customFieldDefsQueryOptions } from "~/utils/customFields";
 import { CustomColumnsButton } from "~/components/CustomColumnsButton";
+import { CustomColumnsProvider } from "~/lib/custom-columns-context";
+import { CustomColumnsUndoBar } from "~/components/CustomColumnsUndoBar";
 import { qk } from "~/lib/query-keys";
 import { disciplineById } from "~/config/disciplines";
 
@@ -499,7 +501,16 @@ export function DisciplineTabs({
             Field Estimate
           </TabsTrigger>
         </TabsList>
+        {/* The provider spans the toolbar AND the grid: the `+ Column`
+            popover and the ⋯ menu on each column header act on the same set,
+            and the undo after a removal has to survive the header that issued
+            it disappearing. */}
         <TabsContent value="takeoff" className="mt-4">
+          {/* Spans the toolbar AND the grid: the `+ Column` popover and the ⋯
+              menu on each column header act on the same set, and the undo
+              after a removal has to outlive the header that issued it.
+              A provider renders no DOM of its own. */}
+          <CustomColumnsProvider discipline={discipline}>
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <div className="flex items-center gap-1">
               <button
@@ -563,6 +574,7 @@ export function DisciplineTabs({
               );
             })}
             <CustomColumnsButton discipline={discipline} />
+            <CustomColumnsUndoBar />
             {/* Right-aligned cluster: mode/import/export actions + live totals. */}
             <div className="ml-auto flex items-center gap-2">
               <button
@@ -626,6 +638,7 @@ export function DisciplineTabs({
             columnWidthKey={`takeoff:${discipline}`}
             frozenColumnCount={2}
           />
+          </CustomColumnsProvider>
         </TabsContent>
         <TabsContent value="estimate" className="mt-4">
           <Accordion type="multiple" defaultValue={["support", "craft"]}>

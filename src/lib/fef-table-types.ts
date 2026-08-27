@@ -100,3 +100,16 @@ export type FrozenColumn = { left: number; width: number };
 /** Width of the row-number gutter, in px. Frozen columns' sticky-left offsets
  *  start after it. */
 export const GUTTER_WIDTH = 44;
+
+/**
+ * A toggleable set of columns. `banner: true` (the default) also draws a
+ * grouped-header band above the set, which requires the columns to be
+ * contiguous; `banner: false` makes it chip-only, for logical groups whose
+ * columns are scattered across the sheet.
+ */
+export type ColumnGroup = {
+  label: string;
+  columnIds: string[];
+  defaultCollapsed?: boolean;
+  banner?: boolean;
+};

@@ -27,7 +27,9 @@ export async function prefetchDisciplineLoaderData(
   versionId: number | null,
 ): Promise<void> {
   const promises: Promise<unknown>[] = [
-    queryClient.ensureQueryData(roleDataQueryOptions(disciplineId)),
+    queryClient.ensureQueryData(
+      roleDataQueryOptions({ disciplineId, projectId, versionId }),
+    ),
     queryClient.ensureQueryData(crewMixDataQueryOptions()),
   ];
   if (versionId !== null) {

@@ -78,6 +78,18 @@ export type FefRow = {
   laborFactorAdj: string;
   elevAdder: string;
   weldAdder: string;
+  // User-defined take-off columns. Generic slots — the label for each lives
+  // in `CustomFieldDef`, keyed by (project, discipline, slot).
+  custom1: string;
+  custom2: string;
+  custom3: string;
+  custom4: string;
+  custom5: string;
+  custom6: string;
+  custom7: string;
+  custom8: string;
+  custom9: string;
+  custom10: string;
 };
 
 export type CbsOption = {

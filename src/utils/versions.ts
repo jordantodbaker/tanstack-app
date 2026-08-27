@@ -29,6 +29,9 @@ export type EstimateVersionOption = {
   description: string;
   parentVersionId: number | null;
   createdAt: string;
+  /** ISO timestamp when this revision's labor rates were frozen, or null
+   *  while it still prices at live (project → global) rates. */
+  ratesFrozenAt: string | null;
 };
 
 type EstimateVersionRow = {
@@ -38,6 +41,7 @@ type EstimateVersionRow = {
   description: string;
   parentVersionId: number | null;
   createdAt: Date;
+  ratesFrozenAt: Date | null;
 };
 
 const toOption = (v: EstimateVersionRow): EstimateVersionOption => ({
@@ -47,6 +51,7 @@ const toOption = (v: EstimateVersionRow): EstimateVersionOption => ({
   description: v.description,
   parentVersionId: v.parentVersionId,
   createdAt: v.createdAt.toISOString(),
+  ratesFrozenAt: v.ratesFrozenAt?.toISOString() ?? null,
 });
 
 // Every FefRow column copied when branching a version, except the identity
@@ -76,6 +81,7 @@ export const fetchVersions = createServerFn({ method: "GET" })
             description: true,
             parentVersionId: true,
             createdAt: true,
+            ratesFrozenAt: true,
           },
         });
         return rows.map(toOption);
@@ -138,6 +144,7 @@ export const createVersion = createServerFn({ method: "POST" })
           description: true,
           parentVersionId: true,
           createdAt: true,
+          ratesFrozenAt: true,
         },
       });
       if (data.sourceVersionId != null) {
@@ -192,6 +199,7 @@ export const updateVersion = createServerFn({ method: "POST" })
           description: true,
           parentVersionId: true,
           createdAt: true,
+          ratesFrozenAt: true,
         },
       });
       return toOption(updated);

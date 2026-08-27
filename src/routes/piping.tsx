@@ -16,6 +16,7 @@ import {
 import { roleDataQueryOptions } from "~/utils/roles";
 import { crewMixDataQueryOptions } from "~/utils/crewMixes";
 import { useSelectedProject } from "~/lib/selected-project";
+import { useSelectedVersion } from "~/lib/selected-version";
 import {
   allowedFefCbsItemIdsQueryOptions,
 } from "~/utils/setup";
@@ -68,7 +69,9 @@ export const Route = createFileRoute("/piping")({
     // Take-Off-critical data — block until ready so SSR HTML has Take Off rows.
     const critical: Promise<unknown>[] = [
       context.queryClient.ensureQueryData(pipingGroupsQueryOptions()),
-      context.queryClient.ensureQueryData(roleDataQueryOptions("piping")),
+      context.queryClient.ensureQueryData(
+        roleDataQueryOptions({ disciplineId: "piping", projectId, versionId }),
+      ),
       context.queryClient.ensureQueryData(crewMixDataQueryOptions()),
       context.queryClient.ensureQueryData(pipingFactorDataQueryOptions()),
     ];
@@ -121,12 +124,17 @@ function PipingPending() {
 
 function PipingPage() {
   const { projectId } = useSelectedProject();
+  // Rate resolution is version-scoped, so the grid has to know which revision
+  // it is pricing — same scope the loader prefetched with.
+  const { versionId } = useSelectedVersion();
 
   const { data: pipingGroups = EMPTY } = useQuery(pipingGroupsQueryOptions());
   const { data: supportLaborItems = EMPTY } = useQuery(
     cbsItemsByL1QueryOptions(SUPPORT_LABOR_L1),
   );
-  const { data: roleData } = useQuery(roleDataQueryOptions("piping"));
+  const { data: roleData } = useQuery(
+    roleDataQueryOptions({ disciplineId: "piping", projectId, versionId }),
+  );
   const { data: crewMixOptions = EMPTY } = useQuery(crewMixDataQueryOptions());
   const { data: pipingFactorData } = useQuery(pipingFactorDataQueryOptions());
 

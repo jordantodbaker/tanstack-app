@@ -14,6 +14,9 @@ export type ProjectOption = {
   /** ISO timestamps or null. Drive the time-linear PV fallback in EVM. */
   startDate: string | null;
   endDate: string | null;
+  /** ISO timestamp when this project's labor rates were frozen, or null
+   *  while it still prices at the live global book. */
+  ratesFrozenAt: string | null;
 };
 
 /**
@@ -34,6 +37,7 @@ export const fetchProjects = createServerFn({ method: "GET" }).handler(
         description: true,
         startDate: true,
         endDate: true,
+        ratesFrozenAt: true,
       },
     });
     return rows.map((r) => ({
@@ -43,6 +47,7 @@ export const fetchProjects = createServerFn({ method: "GET" }).handler(
       description: r.description,
       startDate: r.startDate ? r.startDate.toISOString() : null,
       endDate: r.endDate ? r.endDate.toISOString() : null,
+      ratesFrozenAt: r.ratesFrozenAt ? r.ratesFrozenAt.toISOString() : null,
     }));
   },
 );

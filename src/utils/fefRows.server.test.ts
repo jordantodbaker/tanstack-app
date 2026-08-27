@@ -278,3 +278,33 @@ describe("the write transaction", () => {
     });
   });
 });
+
+describe("custom-column slots reach the write path", () => {
+  it("persists a row whose ONLY content is a custom column", async () => {
+    // The design bet: because the slots are ordinary FEF_ROW_STRING_FIELDS
+    // entries, `fefRowHasUserData` sees them and the row is not discarded as a
+    // blank template row. If this breaks, an estimator fills a custom column,
+    // autosave runs, and the row silently disappears.
+    txFindMany.mockResolvedValue([]);
+
+    await save([
+      makeFefRow({ id: "__fe-blank-0", custom1: "CT-4471" }),
+      blank(1),
+    ]);
+
+    // One persistable row -> the trailing DELETE trims from position 1.
+    const del = executeRaw.mock.calls[1];
+    expect(del[del.length - 1]).toBe(1);
+  });
+
+  it("includes the slots in the generated INSERT column list", async () => {
+    txFindMany.mockResolvedValue([]);
+    await save([filled("611-A", "pump")]);
+    // The column list is a `Prisma.raw` VALUE interpolated into the template,
+    // not part of its static strings — so read it off the interpolation.
+    const [, columnList] = executeRaw.mock.calls[0];
+    const sql = JSON.stringify(columnList);
+    expect(sql).toContain("custom1");
+    expect(sql).toContain("custom10");
+  });
+});

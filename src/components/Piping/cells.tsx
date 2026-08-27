@@ -10,6 +10,7 @@ import {
 import { computeBoreSize } from "~/lib/utils";
 import {
   deriveLaborHours,
+  fabricationHint,
   laborFactorFor,
   resolveCbsStamp,
 } from "~/lib/piping-derive";
@@ -103,6 +104,7 @@ export function ShopFieldSelectCell({ getValue, row, table }: CellProps) {
           metallurgyCode,
           rowData.boreSize,
           finder(table.options.meta?.cbsOptions ?? []),
+          fabricationHint(rowData),
         );
         table.options.meta?.updateRow?.(row.index, {
           shopField: newShopField,
@@ -119,10 +121,15 @@ export function ShopFieldSelectCell({ getValue, row, table }: CellProps) {
 }
 
 /**
- * Fabricate / Erect — the two field work types the install (63x) cost codes
- * separate, each item carrying an "-ER-" and an "-FB-" variant. Stored on the
- * row so the Field-side CBS resolution can pick between them; it has no
- * bearing on a Shop row, whose codes make no such split.
+ * Fabricate / Erect — the two work types the piping cost codes separate. The
+ * catalog fuses the choice onto a NOMINAL SIZE inside segment 3
+ * (633-LB-12ER-00-C, 633-LB-12FB-00-C), so it only sharpens the CBS match on a
+ * row that also has a size; without one the row keeps resolving to its bore
+ * rollup.
+ *
+ * Re-resolves the item on change for the same reason Shop/Field does: leaving
+ * the old item in place would have the sheet asserting a code that contradicts
+ * the inputs shown beside it.
  */
 export function FabricateErectSelectCell({ getValue, row, table }: CellProps) {
   const value = getValue() as string;
@@ -132,11 +139,19 @@ export function FabricateErectSelectCell({ getValue, row, table }: CellProps) {
       className={editableCellClass}
       value={value}
       onChange={(e) => {
-        table.options.meta?.updateData?.(
-          row.index,
-          "fabricateErect",
-          e.target.value,
+        const fabricateErect = e.target.value;
+        const rowData = table.getRowModel().rows[row.index].original;
+        const next = { ...rowData, fabricateErect };
+        const stamp = resolveCbsStamp(
+          rowData.metallurgyCode,
+          rowData.boreSize,
+          finder(table.options.meta?.cbsOptions ?? []),
+          fabricationHint(next),
         );
+        table.options.meta?.updateRow?.(row.index, {
+          fabricateErect,
+          ...(stamp ?? {}),
+        });
       }}
     >
       <option value="">-- Select --</option>

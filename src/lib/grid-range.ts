@@ -36,11 +36,12 @@ import {
 } from "./fef-derive";
 import {
   deriveLaborHours,
+  fabricationHint,
   resolveCbsStamp,
   type PipingFactorLookup,
 } from "./piping-derive";
 import { computeBoreSize } from "./utils";
-import { fefRowHasUserData } from "./fef-helpers";
+import { CUSTOM_FIELD_SLOTS, fefRowHasUserData } from "./fef-helpers";
 
 export type CellCoord = { row: number; col: number };
 export type RangeSelection = { anchor: CellCoord; focus: CellCoord };
@@ -96,6 +97,9 @@ export type WriteCtx = {
  *  coupled field to recompute. Shared by the generic and piping take-offs
  *  (each sheet shows the subset its discipline needs). */
 const PLAIN_TEXT_COLUMNS: ReadonlySet<string> = new Set([
+  // User-defined take-off columns: free text with no derivation, so paste,
+  // fill-down and clear treat them exactly like Description or Notes.
+  ...CUSTOM_FIELD_SLOTS,
   "description",
   "notes",
   // Reference / line list
@@ -355,9 +359,13 @@ function cbsStamp(
   metallurgyCode: string,
   boreSize: string,
   idx: WriteIndex,
+  fabrication?: { sizeCode: string; feCode: "FB" | "ER" },
 ): Partial<FefRow> {
-  const stamp = resolveCbsStamp(metallurgyCode, boreSize, (code) =>
-    idx.cbsByExactCostCode.get(code),
+  const stamp = resolveCbsStamp(
+    metallurgyCode,
+    boreSize,
+    (code) => idx.cbsByExactCostCode.get(code),
+    fabrication,
   );
   return stamp ?? {};
 }
@@ -432,7 +440,12 @@ export function resolveCellWrite(
         size: v,
         boreSize,
         laborHours: laborHoursFor({ ...row, size: v }, ctx),
-        ...cbsStamp(row.metallurgyCode, boreSize, idx),
+        ...cbsStamp(
+          row.metallurgyCode,
+          boreSize,
+          idx,
+          fabricationHint({ ...row, size: v, boreSize }),
+        ),
       };
     }
     case "taskCode": {
@@ -445,7 +458,12 @@ export function resolveCellWrite(
       // the picker itself could never have produced.
       const pipingEntry = ctx.pipingFactorLookup?.get(code);
       if (pipingEntry) {
-        const stamp = cbsStamp(row.metallurgyCode, row.boreSize, idx);
+        const stamp = cbsStamp(
+          row.metallurgyCode,
+          row.boreSize,
+          idx,
+          fabricationHint(row),
+        );
         return {
           taskCode: code,
           laborHours: deriveLaborHours({ ...row, taskCode: code }, ctx.pipingFactorLookup),
@@ -465,7 +483,12 @@ export function resolveCellWrite(
       return {
         shopField: v,
         metallurgyCode,
-        ...cbsStamp(metallurgyCode, row.boreSize, idx),
+        ...cbsStamp(
+          metallurgyCode,
+          row.boreSize,
+          idx,
+          fabricationHint(row),
+        ),
       };
     }
     case "fabricateErect": {
@@ -475,7 +498,19 @@ export function resolveCellWrite(
       const t = raw.trim().toLowerCase();
       const v =
         t === "" ? "" : t === "fabricate" ? "Fabricate" : t === "erect" ? "Erect" : null;
-      return v === null ? null : { fabricateErect: v };
+      if (v === null) return null;
+      // Fabricate/Erect selects between the catalog's -FB-/-ER- variants, so it
+      // re-resolves the CBS item exactly as Shop/Field and Size do. Clearing it
+      // re-resolves too, dropping the row back to the rollup it came from.
+      return {
+        fabricateErect: v,
+        ...cbsStamp(
+          row.metallurgyCode,
+          row.boreSize,
+          idx,
+          fabricationHint({ ...row, fabricateErect: v }),
+        ),
+      };
     }
     case "weldGroupDescription": {
       const t = raw.trim();
@@ -489,7 +524,12 @@ export function resolveCellWrite(
       return {
         weldGroupDescription: match,
         metallurgyCode,
-        ...cbsStamp(metallurgyCode, row.boreSize, idx),
+        ...cbsStamp(
+          metallurgyCode,
+          row.boreSize,
+          idx,
+          fabricationHint(row),
+        ),
       };
     }
     case "laborFactor": {

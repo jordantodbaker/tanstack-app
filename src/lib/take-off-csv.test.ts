@@ -103,3 +103,74 @@ describe("takeOffRowsForExport", () => {
     expect(takeOffRowsForExport(rows)).toHaveLength(3);
   });
 });
+
+/**
+ * User-defined columns in the export.
+ *
+ * The leading columns are positional — "Paste from Excel" matches them by
+ * index, and anything already consuming this file reads fixed offsets. So the
+ * property under test is that custom columns only ever APPEND: no matter how
+ * many a project defines, every pre-existing column keeps its index.
+ */
+describe("custom columns in the take-off CSV", () => {
+  const custom = [
+    { field: "custom1", label: "Client Tag" },
+    { field: "custom4", label: "Heat Number" },
+  ];
+
+  it("appends one column per definition, labelled by the user", () => {
+    const cols = makeTakeOffCsvColumns(undefined, custom);
+    expect(cols.slice(-2).map((c) => c.header)).toEqual([
+      "Client Tag",
+      "Heat Number",
+    ]);
+  });
+
+  it("does not shift any existing column", () => {
+    const before = makeTakeOffCsvColumns().map((c) => c.header);
+    const after = makeTakeOffCsvColumns(undefined, custom).map((c) => c.header);
+    expect(after.slice(0, before.length)).toEqual(before);
+  });
+
+  it("keeps the paste round-trip columns at their original indexes", () => {
+    // Paste matches by position; a custom column landing among these would
+    // silently import a tag number as a Labor Rate.
+    const cols = makeTakeOffCsvColumns(undefined, custom).map((c) => c.header);
+    expect(cols.slice(0, 6)).toEqual([
+      "CBS Code",
+      "Description",
+      "Quantity",
+      "Labor Factor",
+      "Labor Rate",
+      "Area",
+    ]);
+  });
+
+  it("reads the value out of the row's slot field", () => {
+    const cols = makeTakeOffCsvColumns(undefined, custom);
+    const row = makeFefRow({ custom1: "CT-4471", custom4: "H-22" });
+    const byHeader = (h: string) => cols.find((c) => c.header === h)!.get(row);
+    expect(byHeader("Client Tag")).toBe("CT-4471");
+    expect(byHeader("Heat Number")).toBe("H-22");
+  });
+
+  it("emits an empty cell for a row that never filled the column", () => {
+    const cols = makeTakeOffCsvColumns(undefined, custom);
+    expect(cols.find((c) => c.header === "Client Tag")!.get(makeFefRow())).toBe(
+      "",
+    );
+  });
+
+  it("skips a definition with no storage field", () => {
+    const cols = makeTakeOffCsvColumns(undefined, [
+      { field: "", label: "Orphaned" },
+    ]);
+    expect(cols.map((c) => c.header)).not.toContain("Orphaned");
+  });
+
+  it("is unchanged when a discipline has no custom columns", () => {
+    expect(makeTakeOffCsvColumns(undefined, []).map((c) => c.header)).toEqual(
+      makeTakeOffCsvColumns().map((c) => c.header),
+    );
+  });
+});

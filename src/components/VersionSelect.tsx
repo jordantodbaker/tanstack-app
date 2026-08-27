@@ -1,7 +1,16 @@
 import * as React from "react";
 import { qk } from "~/lib/query-keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  Copy,
+  Lock,
+  LockOpen,
+  MoreVertical,
+  Pencil,
+  RefreshCw,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { cn } from "~/lib/utils";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useSelectedVersion } from "~/lib/selected-version";
@@ -13,6 +22,18 @@ import {
   type EstimateVersionOption,
 } from "~/utils/versions";
 import { useIsAdmin } from "~/lib/use-current-user";
+import {
+  freezeVersionRates,
+  invalidateRateFreezeQueries,
+  unfreezeVersionRates,
+} from "~/utils/rateFreeze";
+import { fmtDate } from "~/lib/csv-export";
+import { formatMoney } from "~/lib/formatting";
+import {
+  applyVersionRateRefresh,
+  invalidateRateRefreshQueries,
+  versionRateRefreshQueryOptions,
+} from "~/utils/rateRefresh";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -81,6 +102,17 @@ export function VersionSelect({ className }: { className?: string }) {
           </option>
         ))}
       </select>
+      {selected?.ratesFrozenAt && (
+        // Rates being frozen changes what new lines price at, so it needs to be
+        // visible while working the sheet — not only inside the actions menu.
+        <span
+          title={`Labor rates frozen on ${fmtDate(selected.ratesFrozenAt)} — new lines price at the rates as of that date.`}
+          className="inline-flex items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[11px] font-medium text-sky-700"
+        >
+          <Lock className="size-3" />
+          Rates frozen
+        </span>
+      )}
       <NewVersionDialog projectId={projectId} sourceVersion={selected} />
       {selected && (
         <VersionActionsMenu version={selected} totalVersions={versions.length} />
@@ -240,6 +272,8 @@ function VersionActionsMenu({
       </PopoverTrigger>
       <PopoverContent className="w-48 p-1">
         <RenameVersionItem version={version} onDone={() => setMenuOpen(false)} />
+        <RefreshRatesItem version={version} onDone={() => setMenuOpen(false)} />
+        <FreezeRatesItem version={version} onDone={() => setMenuOpen(false)} />
         {isAdmin && (
           <DeleteVersionItem
             version={version}
@@ -249,6 +283,290 @@ function VersionActionsMenu({
         )}
       </PopoverContent>
     </Popover>
+  );
+}
+
+/**
+ * Freeze / release this revision's labor rates.
+ *
+ * Freezing materializes the rate book the grid currently resolves, so later
+ * global or project rate changes can't reach an issued revision. Releasing is
+ * admin-only and destructive (it discards the frozen rows), so the two states
+ * render as different affordances rather than one toggle.
+ */
+function FreezeRatesItem({
+  version,
+  onDone,
+}: {
+  version: EstimateVersionOption;
+  onDone: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const { projectId } = useSelectedProject();
+  const [open, setOpen] = React.useState(false);
+  const isAdmin = useIsAdmin();
+  const isFrozen = version.ratesFrozenAt !== null;
+
+  const settle = () => {
+    invalidateRateFreezeQueries(queryClient, projectId);
+    setOpen(false);
+    onDone();
+  };
+  const freeze = useMutation({
+    mutationFn: () => freezeVersionRates({ data: { versionId: version.id } }),
+    onSuccess: settle,
+  });
+  const release = useMutation({
+    mutationFn: () => unfreezeVersionRates({ data: { versionId: version.id } }),
+    onSuccess: settle,
+  });
+  const active = isFrozen ? release : freeze;
+
+  // Releasing is admin-only (the server enforces it too); a non-admin looking
+  // at a frozen revision gets no action rather than one that will be refused.
+  if (isFrozen && !isAdmin) {
+    return (
+      <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-slate-400">
+        <Lock className="size-3.5" />
+        Rates frozen
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-slate-100"
+        >
+          {isFrozen ? (
+            <LockOpen className="size-3.5" />
+          ) : (
+            <Lock className="size-3.5" />
+          )}
+          {isFrozen ? "Release rates…" : "Freeze rates…"}
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <div className="space-y-4">
+          <div className="pr-8">
+            <h2 className="text-lg font-semibold text-slate-800">
+              {isFrozen
+                ? `Release v${version.versionNumber} back to live rates?`
+                : `Freeze rates on v${version.versionNumber}?`}
+            </h2>
+            <p className="text-xs text-slate-500">
+              {isFrozen ? (
+                <>
+                  This discards the rates frozen on{" "}
+                  {fmtDate(version.ratesFrozenAt)} and returns the revision
+                  to the project&apos;s current rates. Any per-revision rate
+                  overrides are discarded with them. This can&apos;t be undone.
+                </>
+              ) : (
+                <>
+                  Copies the rates this revision prices at right now onto the
+                  revision itself, so later changes to the global or project
+                  rate book can&apos;t reach it. Existing line items already
+                  store their own rate and are unaffected — this governs new
+                  lines and any re-picked role, schedule or crew mix.
+                </>
+              )}
+            </p>
+          </div>
+          {active.isError && (
+            <p className="text-xs text-red-600">
+              {active.error instanceof Error
+                ? active.error.message
+                : "Could not update rate freeze."}
+            </p>
+          )}
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+            <DialogClose asChild>
+              <Button variant="outline" type="button" disabled={active.isPending}>
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button
+              type="button"
+              variant={isFrozen ? "destructive" : "default"}
+              onClick={() => active.mutate()}
+              disabled={active.isPending}
+            >
+              {active.isPending
+                ? isFrozen
+                  ? "Releasing…"
+                  : "Freezing…"
+                : isFrozen
+                  ? "Release rates"
+                  : "Freeze rates"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Refresh this revision's stored labor rates.
+ *
+ * Line items carry the rate that was in force when they were estimated, so
+ * correcting the rate book leaves them behind. This shows exactly which rows
+ * drifted and what it costs before writing anything — nothing is repriced
+ * without someone approving the list.
+ *
+ * The preview is fetched fresh each time the dialog opens (never cached), and
+ * the server re-plans before writing, so an approved plan can't be applied
+ * against a sheet that moved underneath it.
+ */
+function RefreshRatesItem({
+  version,
+  onDone,
+}: {
+  version: EstimateVersionOption;
+  onDone: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = React.useState(false);
+  const { data: plan, isLoading } = useQuery({
+    ...versionRateRefreshQueryOptions(version.id),
+    enabled: open,
+  });
+
+  const apply = useMutation({
+    mutationFn: () => applyVersionRateRefresh({ data: { versionId: version.id } }),
+    onSuccess: () => {
+      invalidateRateRefreshQueries(queryClient, version.id);
+      setOpen(false);
+      onDone();
+    },
+  });
+
+  const nothingToDo = plan !== undefined && plan.rowCount === 0;
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-slate-100"
+        >
+          <RefreshCw className="size-3.5" />
+          Refresh rates…
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <div className="space-y-4">
+          <div className="pr-8">
+            <h2 className="text-lg font-semibold text-slate-800">
+              Refresh labor rates — v{version.versionNumber}
+            </h2>
+            <p className="text-xs text-slate-500">
+              Re-stamps every line item in this revision with the rate its role,
+              schedule or crew mix resolves to now. Rows whose rate no longer
+              resolves at all are left untouched.
+            </p>
+          </div>
+
+          {isLoading && (
+            <p className="text-sm text-slate-500">Checking line items…</p>
+          )}
+
+          {nothingToDo && (
+            <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              Every line item already matches the current rates
+              {version.ratesFrozenAt
+                ? " — this revision's rates are frozen, so they resolve to the frozen book."
+                : "."}
+            </p>
+          )}
+
+          {plan && plan.rowCount > 0 && (
+            <>
+              <div className="max-h-64 overflow-auto rounded-md border border-slate-200">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-2 py-1.5 text-left font-semibold">Rate source</th>
+                      <th className="px-2 py-1.5 text-right font-semibold">Stored</th>
+                      <th className="px-2 py-1.5 text-right font-semibold">New</th>
+                      <th className="px-2 py-1.5 text-right font-semibold">Rows</th>
+                      <th className="px-2 py-1.5 text-right font-semibold">Labor cost</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {plan.changes.map((c) => (
+                      <tr key={`${c.label}|${c.storedRate}`} className="border-t border-slate-200">
+                        <td className="px-2 py-1.5">{c.label}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">
+                          {c.storedRate === "" ? "—" : c.storedRate}
+                        </td>
+                        <td className="px-2 py-1.5 text-right tabular-nums font-medium">
+                          {c.newRate}
+                        </td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">
+                          {c.rowIds.length}
+                        </td>
+                        <td
+                          className={`px-2 py-1.5 text-right tabular-nums ${
+                            c.laborCostDelta > 0
+                              ? "text-red-600"
+                              : c.laborCostDelta < 0
+                                ? "text-emerald-700"
+                                : "text-slate-500"
+                          }`}
+                        >
+                          {c.laborCostDelta >= 0 ? "+" : "−"}$
+                          {formatMoney(Math.abs(c.laborCostDelta))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-slate-500">
+                {plan.rowCount} line item{plan.rowCount === 1 ? "" : "s"} across
+                every discipline in this revision. Net labor cost impact{" "}
+                <span className="font-semibold text-slate-700">
+                  {plan.totalDelta >= 0 ? "+" : "−"}$
+                  {formatMoney(Math.abs(plan.totalDelta))}
+                </span>
+                .
+              </p>
+            </>
+          )}
+
+          {apply.isError && (
+            <p className="text-xs text-red-600">
+              {apply.error instanceof Error
+                ? apply.error.message
+                : "Could not refresh rates."}
+            </p>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+            <DialogClose asChild>
+              <Button variant="outline" type="button" disabled={apply.isPending}>
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button
+              type="button"
+              onClick={() => apply.mutate()}
+              disabled={apply.isPending || isLoading || !plan || plan.rowCount === 0}
+            >
+              {apply.isPending
+                ? "Updating…"
+                : plan && plan.rowCount > 0
+                  ? `Update ${plan.rowCount} row${plan.rowCount === 1 ? "" : "s"}`
+                  : "Update"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

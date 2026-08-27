@@ -32,6 +32,7 @@ export * from "./fef-cells";
 // modules; both are re-exported here so `~/lib/table-utils` stays the public
 // entry point for the FEF table and existing imports keep resolving.
 import type {
+  ColumnGroup,
   FefTableMeta,
   FefTableState,
   FrozenColumn,
@@ -40,6 +41,7 @@ import type {
 } from "./fef-table-types";
 export * from "./fef-table-types";
 import { useGridRangeEditing } from "./use-grid-range-editing";
+import { useViewportFillHeight } from "./use-viewport-fill-height";
 export { useGridRangeEditing } from "./use-grid-range-editing";
 
 const debug = createDebug("fef");
@@ -318,12 +320,6 @@ export function useFefTableState(opts: {
  *  `defaultCollapsed` opens the sheet with the group hidden. `banner: false`
  *  makes it a show/hide *toggle only* (a chip, no header band) — for logical
  *  groups whose columns aren't contiguous, like the computed Labor & Cost set. */
-export type ColumnGroup = {
-  label: string;
-  columnIds: string[];
-  defaultCollapsed?: boolean;
-  banner?: boolean;
-};
 
 /** The computed labor/cost output columns — ID, Sub, Unit, Labor Factor/Hours/
  *  Rate, Total Cost. A non-contiguous logical group shown as a single toggle
@@ -586,6 +582,10 @@ export function FefTableContent({
     frozenColumnCount,
   });
 
+  // Reserve room below the pane for the pager and the selection status line,
+  // both of which sit outside it.
+  const gridMaxHeight = useViewportFillHeight(gridRef, { reserve: 116 });
+
   // Grouped-header banner segments, computed from the *visible* leaf columns so
   // hidden columns collapse and empty groups disappear. Consecutive non-frozen
   // columns sharing a group label coalesce into one banner cell; frozen columns
@@ -708,7 +708,14 @@ export function FefTableContent({
       // (Ctrl+D fill down, Ctrl+C/V, Delete) inside the grid instead of
       // letting the browser take them.
       tabIndex={enableRangeEditing ? -1 : undefined}
-      className="overflow-x-auto focus:outline-none"
+      // Capped to the space between here and the bottom of the viewport, so
+      // the horizontal scrollbar stays on screen instead of sitting below the
+      // last row. The cap is also what gives the `sticky` header row (and the
+      // frozen columns' `sticky left`) a container with room to scroll —
+      // without it they had nothing to stick to. A sheet shorter than the cap
+      // is unaffected: `max-height` only ever clips.
+      style={{ maxHeight: gridMaxHeight }}
+      className="overflow-auto focus:outline-none"
       onKeyDownCapture={enableRangeEditing ? onGridKeyDown : undefined}
       onPaste={enableRangeEditing ? onGridPaste : undefined}
     >
@@ -949,11 +956,13 @@ export function FefTableContent({
             )}
         </tbody>
       </table>
+    </div>
+      {/* Outside the scroll pane: the pager used to live inside it, so on a
+          wide sheet it slid off to the right along with the columns. */}
       <TablePagination
         table={table}
         totalCount={serverPagination?.totalCount}
       />
-    </div>
       {stats && stats.count > 0 && (
         <div className="mt-1 flex flex-wrap justify-end gap-4 px-2 text-xs text-slate-600">
           {stats.numericCount > 0 && (

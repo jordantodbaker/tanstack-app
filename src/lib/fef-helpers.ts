@@ -17,6 +17,34 @@ export const EMPTY_ARRAY: never[] = [];
  * detection, and DB serialization all iterate it, so adding a field to FefRow
  * only requires updating the type and this list.
  */
+/** How many user-defined take-off columns a (project, discipline) may have. */
+export const CUSTOM_FIELD_SLOT_COUNT = 10;
+
+/**
+ * The slot field names, `custom1` … `custom10`. Generated rather than typed out
+ * so the count above is the only place the number appears.
+ */
+export const CUSTOM_FIELD_SLOTS = [
+  "custom1",
+  "custom2",
+  "custom3",
+  "custom4",
+  "custom5",
+  "custom6",
+  "custom7",
+  "custom8",
+  "custom9",
+  "custom10",
+] as const;
+
+/** `custom1` | `custom2` | … — the field a slot number maps to. */
+export type CustomFieldSlot = (typeof CUSTOM_FIELD_SLOTS)[number];
+
+/** The field name for a 1-based slot number, or undefined when out of range. */
+export function customFieldForSlot(slot: number): CustomFieldSlot | undefined {
+  return CUSTOM_FIELD_SLOTS[slot - 1];
+}
+
 export const FEF_ROW_STRING_FIELDS = [
   "name",
   "description",
@@ -71,6 +99,21 @@ export const FEF_ROW_STRING_FIELDS = [
   "laborFactorAdj",
   "elevAdder",
   "weldAdder",
+  // ── User-defined take-off columns ────────────────────────────────────────
+  // Generic slots. The DATA lives in these fixed columns; the user-facing NAME
+  // lives in `CustomFieldDef`, keyed by (project, discipline, slot). Renaming a
+  // column therefore never touches a row, and a stable column id keeps saved
+  // widths and visibility working across a rename.
+  //
+  // They are ordinary string fields on purpose: everything generated from this
+  // array — the row type, the write SQL, `makeFefRow`, `fefRowHasUserData`,
+  // the version copy, the autosave schema — picks them up with no special
+  // casing. In particular a row carrying ONLY custom data is real data and
+  // survives a save, which a JSON side-channel would have got wrong.
+  //
+  // Raising the count is one migration (add columns, extend this list).
+  // Lowering it once estimators have filled them is not possible.
+  ...CUSTOM_FIELD_SLOTS,
 ] as const satisfies readonly (keyof FefRow)[];
 
 /**

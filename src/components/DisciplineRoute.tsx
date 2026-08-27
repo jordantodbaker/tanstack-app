@@ -6,6 +6,7 @@ import { disciplines } from "~/config/disciplines";
 import { roleDataQueryOptions } from "~/utils/roles";
 import { crewMixDataQueryOptions } from "~/utils/crewMixes";
 import { useSelectedProject } from "~/lib/selected-project";
+import { useSelectedVersion } from "~/lib/selected-version";
 import { allowedFefCbsItemIdsQueryOptions } from "~/utils/setup";
 import { steelMembersQueryOptions } from "~/utils/steel";
 import { toCbsOption, makeFefRow } from "~/lib/fef-helpers";
@@ -43,7 +44,13 @@ export function DisciplineRoute({
 }) {
   const discipline = disciplines.find((d) => d.label === title);
   const icon = discipline?.icon;
-  const { data: roleData } = useQuery(roleDataQueryOptions(disciplineId));
+  const { projectId } = useSelectedProject();
+  // Labor rates resolve version → project → global, so the grid has to ask
+  // for role data at the scope it is actually pricing.
+  const { versionId } = useSelectedVersion();
+  const { data: roleData } = useQuery(
+    roleDataQueryOptions({ disciplineId, projectId, versionId }),
+  );
   const roleOptions = roleData?.roleOptions;
   const scheduleOptions = roleData?.scheduleOptions;
   const roleRates = roleData?.roleRates;
@@ -83,7 +90,6 @@ export function DisciplineRoute({
     [steelMembers],
   );
 
-  const { projectId } = useSelectedProject();
   const { data: allowedIds } = useQuery({
     ...allowedFefCbsItemIdsQueryOptions(projectId ?? 0),
     enabled: projectId !== null,

@@ -29,6 +29,8 @@ const totalCost = (r: FefRow): number | "" => {
  */
 export function makeTakeOffCsvColumns(
   areaLabelFor: (areaId: string) => string = (id) => id,
+  /** This discipline's user-defined columns, appended in sheet order. */
+  customFields: readonly { field: string; label: string }[] = [],
 ): CsvColumn<FefRow>[] {
   return [
     // ── Paste round-trip columns (order must match TAKE_OFF_PASTE_COLUMNS) ──
@@ -49,6 +51,18 @@ export function makeTakeOffCsvColumns(
     { header: "Labor Hours", get: (r) => r.laborHours },
     { header: "Total Cost", get: totalCost },
     { header: "Area ID", get: (r) => r.area },
+    // ── User-defined columns (also ignored on paste) ──
+    // Last on purpose. The round-trip set is positional, and anything a
+    // consumer of this file already parses sits at a fixed index — appending
+    // keeps both stable no matter how many custom columns a project defines.
+    ...customFields
+      .filter((f) => f.field !== "")
+      .map(
+        (f): CsvColumn<FefRow> => ({
+          header: f.label,
+          get: (r) => (r as unknown as Record<string, string>)[f.field] ?? "",
+        }),
+      ),
   ];
 }
 

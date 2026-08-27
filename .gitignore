@@ -28,3 +28,7 @@ yarn.lock
 # Vitest coverage output
 coverage/
 .env*
+
+# Browser-driver artifacts (screenshots, saved auth state)
+/.screenshots/
+/.auth/

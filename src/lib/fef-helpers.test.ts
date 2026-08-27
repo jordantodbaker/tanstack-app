@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  CUSTOM_FIELD_SLOTS,
+  CUSTOM_FIELD_SLOT_COUNT,
+  FEF_DATA_COLUMNS,
   FEF_ROW_STRING_FIELDS,
+  customFieldForSlot,
   canComputeTotalCost,
   fefRowHasUserData,
   isTakeOffRowInvalid,
@@ -196,6 +200,19 @@ describe("makeFefRow", () => {
     "laborFactorAdj",
     "elevAdder",
     "weldAdder",
+    // User-defined take-off columns. Listed out rather than generated from
+    // CUSTOM_FIELD_SLOTS on purpose — this list is an INDEPENDENT witness, so
+    // deriving it from the source it guards would make the test vacuous.
+    "custom1",
+    "custom2",
+    "custom3",
+    "custom4",
+    "custom5",
+    "custom6",
+    "custom7",
+    "custom8",
+    "custom9",
+    "custom10",
   ];
 
   it("returns a row with id and every string field blank", () => {
@@ -343,5 +360,59 @@ describe("isTakeOffRowInvalid", () => {
         laborRate: "50",
       }),
     ).toBe(true);
+  });
+});
+
+/**
+ * The custom-column slots.
+ *
+ * The design bet is that making them ordinary entries in
+ * `FEF_ROW_STRING_FIELDS` gets every derived behaviour for free. These assert
+ * that bet directly — if a future change special-cases them out of the array,
+ * or a JSON-blob refactor moves the data elsewhere, these fail rather than the
+ * breakage showing up as silently dropped estimator data.
+ */
+describe("custom field slots", () => {
+  it("exposes one slot name per declared slot", () => {
+    expect(CUSTOM_FIELD_SLOTS).toHaveLength(CUSTOM_FIELD_SLOT_COUNT);
+    expect(new Set(CUSTOM_FIELD_SLOTS).size).toBe(CUSTOM_FIELD_SLOT_COUNT);
+  });
+
+  it("maps a 1-based slot number to its field", () => {
+    expect(customFieldForSlot(1)).toBe("custom1");
+    expect(customFieldForSlot(10)).toBe("custom10");
+  });
+
+  it("has no field for a slot outside the range", () => {
+    // Guards the off-by-one: slot 0 and slot 11 must not silently resolve.
+    expect(customFieldForSlot(0)).toBeUndefined();
+    expect(customFieldForSlot(11)).toBeUndefined();
+    expect(customFieldForSlot(-1)).toBeUndefined();
+  });
+
+  it("is part of the row field list, so everything derived includes it", () => {
+    for (const slot of CUSTOM_FIELD_SLOTS) {
+      expect(FEF_ROW_STRING_FIELDS).toContain(slot);
+    }
+  });
+
+  it("blanks like every other field on a new row", () => {
+    const r = makeFefRow();
+    for (const slot of CUSTOM_FIELD_SLOTS) expect(r[slot]).toBe("");
+  });
+
+  it("counts as user data — a row with ONLY custom data must survive a save", () => {
+    // This is the property a JSON side-channel would have got wrong.
+    // `saveFefRows` drops blank template rows; if custom values didn't register
+    // as user data, an estimator could fill a custom column, autosave, and lose
+    // the row.
+    expect(fefRowHasUserData(makeFefRow({ custom1: "CT-4471" }))).toBe(true);
+    expect(fefRowHasUserData(makeFefRow({ custom10: "x" }))).toBe(true);
+  });
+
+  it("is carried by the DB data columns, so the write SQL includes it", () => {
+    for (const slot of CUSTOM_FIELD_SLOTS) {
+      expect(FEF_DATA_COLUMNS).toContain(slot);
+    }
   });
 });

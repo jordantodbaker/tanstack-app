@@ -42,6 +42,11 @@ import {
 } from "~/components/Piping/cells";
 import { supportLaborColumns } from "~/components/Piping/columns";
 import { useSelectedProject } from "~/lib/selected-project";
+import { customFieldDefsQueryOptions } from "~/utils/customFields";
+import {
+  customFieldColumnGroup,
+  withCustomFieldColumns,
+} from "~/lib/custom-field-columns";
 import { useSelectedVersion } from "~/lib/selected-version";
 import { useFefRowPersistence } from "~/lib/use-fef-row-persistence";
 import { DisciplineTabs } from "~/components/DisciplineTabs";
@@ -318,6 +323,12 @@ export function DisciplinePage({
   const { data: areas = EMPTY_ARRAY } = useQuery(
     areasByProjectQueryOptions(projectId),
   );
+  // User-defined take-off columns for this project + discipline. Take-off only
+  // — the materials and support-labor sheets share the FefRow table and would
+  // inherit the slots, but they deliberately never render them.
+  const { data: customFieldDefs = EMPTY_ARRAY } = useQuery(
+    customFieldDefsQueryOptions(projectId, disciplineId ?? ""),
+  );
   const areaOptions = React.useMemo(
     () =>
       areas.map((a) => ({
@@ -345,6 +356,11 @@ export function DisciplinePage({
     cols = insertColumnsAfter(cols, "shapeCount", [steelTotalTonsColumn]);
     return cols;
   }, [isSteel]);
+  // Custom columns go last, after any discipline-specific insertions.
+  const takeOffColsWithCustom = React.useMemo(
+    () => withCustomFieldColumns(takeOffCols, customFieldDefs),
+    [takeOffCols, customFieldDefs],
+  );
   const takeOffGroups = React.useMemo(() => {
     if (!isSteel) return takeOffColumnGroups;
     // Dimensions chip sits after the banner groups, before chip-only Labor & Cost.
@@ -352,6 +368,12 @@ export function DisciplinePage({
     const chipOnly = takeOffColumnGroups.filter((g) => g.banner === false);
     return [...banner, steelDimensionsGroup, ...chipOnly];
   }, [isSteel]);
+  // "Custom" sits last in the chip row — it is the set the user assembled, not
+  // a structural section of the sheet.
+  const takeOffGroupsWithCustom = React.useMemo(() => {
+    const group = customFieldColumnGroup(customFieldDefs);
+    return group ? [...takeOffGroups, group] : takeOffGroups;
+  }, [takeOffGroups, customFieldDefs]);
 
   if (variant === "materials") {
     return (
@@ -394,8 +416,8 @@ export function DisciplinePage({
       title={title}
       icon={icon}
       discipline={disciplineId ?? ""}
-      takeOffColumns={takeOffCols}
-      takeOffColumnGroups={takeOffGroups}
+      takeOffColumns={takeOffColsWithCustom}
+      takeOffColumnGroups={takeOffGroupsWithCustom}
       craftColumns={fieldEstimateColumns}
       supportLaborColumns={supportLaborColumns}
       takeOffMeta={takeOffMeta}

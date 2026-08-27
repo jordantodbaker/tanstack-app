@@ -122,6 +122,14 @@ export const qk = {
   },
   devDocChecklist: (versionId: number | null) =>
     ["devDocChecklist", versionId] as const,
+  /** User-defined take-off column definitions for one project+discipline. */
+  customFieldDefs: (projectId: number | null, discipline: string) =>
+    ["customFieldDefs", projectId, discipline] as const,
+  /** Preview of which stored labor rates a refresh would change. Never
+   *  cached (see its queryOptions) — an approved plan must describe the
+   *  sheet as it is now. */
+  rateRefreshPreview: (versionId: number | null) =>
+    ["rateRefreshPreview", versionId] as const,
 
   // ── Estimate versions + snapshots ────────────────────────────────────────
   versions: (projectId: number | null) => ["versions", projectId] as const,
@@ -189,9 +197,21 @@ export const qk = {
   schedules: () => ["schedules"] as const,
   roles: {
     admin: () => ["rolesAdmin"] as const,
-    /** Per-discipline role + rate data the take-off grid reads. */
-    data: (disciplineId: string | null) =>
-      ["roleData", disciplineId] as const,
+    /** Prefix match — every (discipline, project, version) variant. Used
+     *  after a rate freeze, which changes what the grid resolves but not
+     *  the roles themselves, so the broader admin fan-out is overkill. */
+    dataAll: () => ["roleData"] as const,
+    /**
+     * Per-discipline role + rate data the take-off grid reads, scoped to the
+     * project and version so their rate overrides don't share a cache entry.
+     * The admin fan-out prefix-matches `["roleData"]`, so a global rate edit
+     * still busts every scoped variant.
+     */
+    data: (
+      disciplineId: string | null,
+      projectId: number | null = null,
+      versionId: number | null = null,
+    ) => ["roleData", disciplineId, projectId, versionId] as const,
   },
   crewMixes: {
     admin: () => ["crewMixesAdmin"] as const,

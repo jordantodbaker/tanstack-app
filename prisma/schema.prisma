@@ -288,6 +288,14 @@ model Project {
   estimateSnapshots  EstimateSnapshot[]
   reportingPeriods   ReportingPeriod[]
   numberSequences    NumberSequence[]
+  /// Project-scoped labor-rate overrides. Sparse: only the roles/schedules
+  /// this project prices differently from the global book get a row.
+  roleRates          ProjectRoleRate[]
+  customFieldDefs    CustomFieldDef[]
+  /// Set when someone materialized the effective rate book onto this project.
+  /// Null = the project prices at whatever the global book says today.
+  ratesFrozenAt      DateTime?
+  ratesFrozenById    Int?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @default(now())
 }
@@ -301,24 +309,32 @@ model Project {
 // a copy was branched from (null for the original / blank versions). Areas and
 // the CBS allow-list stay project-scoped and are shared across versions.
 model EstimateVersion {
-  id                Int                @id @default(autoincrement())
-  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id                Int                      @id @default(autoincrement())
+  project           Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   projectId         Int
   versionNumber     Int
-  name              String             @default("")
-  description       String             @default("")
+  name              String                   @default("")
+  description       String                   @default("")
   /// The version this one was copied from; null for original or blank versions.
-  parentVersion     EstimateVersion?   @relation("EstimateVersionLineage", fields: [parentVersionId], references: [id], onDelete: SetNull)
+  parentVersion     EstimateVersion?         @relation("EstimateVersionLineage", fields: [parentVersionId], references: [id], onDelete: SetNull)
   parentVersionId   Int?
-  childVersions     EstimateVersion[]  @relation("EstimateVersionLineage")
+  childVersions     EstimateVersion[]        @relation("EstimateVersionLineage")
   /// User.id of the creator (plain column, no FK — mirrors EstimateSnapshot).
   createdById       Int?
   fefRows           FefRow[]
   basisInputs       BasisInputs?
   devDocChecklist   DevelopmentDocChecklist?
   estimateSnapshots EstimateSnapshot[]
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  /// Version-scoped labor-rate overrides — the innermost layer of the
+  /// resolution chain (version → project → global).
+  roleRates         VersionRoleRate[]
+  /// Set by the "Freeze rates" action, which materializes the full effective
+  /// rate book into `roleRates` so later global changes cannot reach this
+  /// revision. Null = this version still tracks live rates.
+  ratesFrozenAt     DateTime?
+  ratesFrozenById   Int?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
 
   @@unique([projectId, versionNumber])
   @@index([projectId])
@@ -389,91 +405,138 @@ enum FefSection {
 }
 
 model FefRow {
-  id                   Int        @id @default(autoincrement())
-  project              Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id                   Int             @id @default(autoincrement())
+  project              Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   projectId            Int
   version              EstimateVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
   versionId            Int
   discipline           String
   section              FefSection
   position             Int
-  cbsCode              String     @default("")
-  name                 String     @default("")
-  description          String     @default("")
-  shopField            String     @default("")
+  cbsCode              String          @default("")
+  name                 String          @default("")
+  description          String          @default("")
+  shopField            String          @default("")
   /// "Fabricate" | "Erect" (or "" when unset). Distinguishes the two field
   /// work types the install cost codes separate — the 63x catalog carries an
   /// -ER- and an -FB- variant of each item — so it only carries meaning on a
   /// row whose `shopField` is "Field".
-  fabricateErect       String     @default("")
-  weldGroupDescription String     @default("")
-  quantity             String     @default("")
-  size                 String     @default("")
-  unit                 String     @default("")
-  metallurgyCode       String     @default("")
-  boreSize             String     @default("")
-  role                 String     @default("")
+  fabricateErect       String          @default("")
+  weldGroupDescription String          @default("")
+  quantity             String          @default("")
+  size                 String          @default("")
+  unit                 String          @default("")
+  metallurgyCode       String          @default("")
+  boreSize             String          @default("")
+  role                 String          @default("")
   /// CrewMix.id as a string ("" when the row uses Role instead). Stored so
   /// we can show which crew mix produced the snapshotted `laborRate`. Take
   /// Off rows pick either Role+Schedule OR Crew Mix; the per-page "Use Crew
   /// Mix" toggle only controls which input the table renders, not which is
   /// persisted on existing rows.
-  crewMixId            String     @default("")
-  schedule             String     @default("")
-  taskCode             String     @default("")
-  laborHours           String     @default("")
+  crewMixId            String          @default("")
+  schedule             String          @default("")
+  taskCode             String          @default("")
+  laborHours           String          @default("")
   /// Per-row labor factor (hours per quantity unit). Empty falls back to
   /// the project's Basis `estimateFactor` on the client; only the dynamic
   /// disciplines expose this as a user input today.
-  laborFactor          String     @default("")
-  laborRate            String     @default("")
-  materialCost         String     @default("")
-  equipment            String     @default("")
-  notes                String     @default("")
-  sub                  String     @default("")
-  area                 String     @default("")
+  laborFactor          String          @default("")
+  laborRate            String          @default("")
+  materialCost         String          @default("")
+  equipment            String          @default("")
+  notes                String          @default("")
+  sub                  String          @default("")
+  area                 String          @default("")
   // Reference / line-list attributes
-  projectPhase         String     @default("")
-  drawingNumber        String     @default("")
-  drawingRev           String     @default("")
-  processUnit          String     @default("")
+  projectPhase         String          @default("")
+  drawingNumber        String          @default("")
+  drawingRev           String          @default("")
+  processUnit          String          @default("")
   /// Free-text area name (distinct from `area`, which references a defined Area).
-  areaName             String     @default("")
-  systemName           String     @default("")
-  tagNumber            String     @default("")
+  areaName             String          @default("")
+  systemName           String          @default("")
+  tagNumber            String          @default("")
   // Spec & testing (piping/mechanical)
-  lineSpec             String     @default("")
-  paintSpec            String     @default("")
-  insulation           String     @default("")
-  nde                  String     @default("")
-  pwht                 String     @default("")
-  hydro                String     @default("")
-  heatTrace            String     @default("")
+  lineSpec             String          @default("")
+  paintSpec            String          @default("")
+  insulation           String          @default("")
+  nde                  String          @default("")
+  pwht                 String          @default("")
+  hydro                String          @default("")
+  heatTrace            String          @default("")
   // Location
-  agUg                 String     @default("")
-  elevation            String     @default("")
+  agUg                 String          @default("")
+  elevation            String          @default("")
   // Dimensions (Structural Steel take-off)
-  height               String     @default("")
-  width                String     @default("")
-  length               String     @default("")
-  shapeCount           String     @default("")
+  height               String          @default("")
+  width                String          @default("")
+  length               String          @default("")
+  shapeCount           String          @default("")
   // Labor adjustments
-  siteFactor           String     @default("")
-  feetAboveGrade       String     @default("")
-  efficAdjust          String     @default("")
+  siteFactor           String          @default("")
+  feetAboveGrade       String          @default("")
+  efficAdjust          String          @default("")
   /// Labor-factor adjustment (distinct from `laborFactor`, the hours-per-unit).
-  laborFactorAdj       String     @default("")
-  elevAdder            String     @default("")
-  weldAdder            String     @default("")
-  createdAt            DateTime   @default(now())
-  updatedAt            DateTime   @updatedAt
+  laborFactorAdj       String          @default("")
+  elevAdder            String          @default("")
+  weldAdder            String          @default("")
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
 
   // Stable identity for ON CONFLICT upsert in `saveFefRows`. Positions are
   // always sequential within a (version, discipline, section); the constraint
   // codifies that invariant so the upsert key is well-defined. Keyed by
   // versionId (not projectId) so each estimate version has its own line items.
+  /// User-defined take-off columns. Generic slots: the DATA lives here, the
+  /// user-facing NAME lives in CustomFieldDef keyed by (project, discipline,
+  /// slot). Renaming a column therefore never rewrites a row, and the stable
+  /// column id keeps saved widths and visibility working across a rename.
+  ///
+  /// Deliberately ordinary string columns rather than a JSON blob: everything
+  /// generated from FEF_ROW_STRING_FIELDS — the write SQL, the version copy,
+  /// blank-row detection, the autosave schema — picks them up untouched.
+  custom1  String @default("")
+  custom2  String @default("")
+  custom3  String @default("")
+  custom4  String @default("")
+  custom5  String @default("")
+  custom6  String @default("")
+  custom7  String @default("")
+  custom8  String @default("")
+  custom9  String @default("")
+  custom10 String @default("")
+
   @@unique([versionId, discipline, section, position])
   @@index([versionId, discipline, section])
+}
+
+/// A user-defined take-off column: the label an estimator gave one of
+/// FefRow's generic `customN` slots, scoped to a project + discipline.
+///
+/// Scoped per project because jobs genuinely differ — one client wants a tag
+/// number on Piping, the next wants a heat number. Take-off only for now;
+/// Support Labor and Materials share the FefRow table and inherit the columns,
+/// they simply never render them. A `section` field can be added later without
+/// touching stored data.
+model CustomFieldDef {
+  id         Int      @id @default(autoincrement())
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId  Int
+  discipline String
+  /// 1-based, mapping to FefRow.custom1 … custom10.
+  slot       Int
+  /// What the estimator typed. Shown as the column header.
+  label      String
+  /// Left-to-right order among this discipline's custom columns.
+  position   Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  /// One definition per slot per (project, discipline) — the slot IS the
+  /// storage, so two labels pointing at one slot would share data.
+  @@unique([projectId, discipline, slot])
+  @@index([projectId, discipline])
 }
 
 // Estimate basis (factor / composite labor rate / milestones) for a single
@@ -547,6 +610,14 @@ model PipingFactorValue {
   pipingFactorId Int
   size           Float
   value          Float?
+
+  // Only a primary key existed here, so the `values` relation join had no
+  // index on its foreign key, and nothing stopped one factor carrying two
+  // values for the same size. A unique on (factor, size) supplies both: the
+  // leading column serves the join, and the constraint makes "one value per
+  // size" enforced rather than assumed. Satisfied by the current data —
+  // 0 of 324 factor rows repeat a size.
+  @@unique([pipingFactorId, size])
 }
 
 // Steel take-off (SLTO) reference data: one row per steel member designation
@@ -555,11 +626,11 @@ model PipingFactorValue {
 // analogue of PipingFactor. Seeded from prisma/data/SLTO_Data.csv. Numeric
 // columns are nullable so a blank cell in the source stays null rather than 0.
 model SteelMember {
-  id              Int     @id @default(autoincrement())
+  id              Int    @id @default(autoincrement())
   /// Member designation — the lookup key (CSV "Member").
-  member          String  @unique
+  member          String @unique
   /// CSV "Steel Type": Extra Heavy / Heavy / Medium / Light / Misc.
-  steelType       String  @default("")
+  steelType       String @default("")
   lbPerLf         Float? // "LB/LF" — weight per linear foot
   factor          Float? // "Factor"
   lbPerLfFactored Float? // "LB/LF2" — LB/LF × Factor
@@ -568,9 +639,9 @@ model SteelMember {
   mhPerUnit       Float? // "MH/Unit"
   hours           Float? // "Hours"
   sfPerLf         Float? // "SF per LF"
-  qtoUom          String  @default("") // "QTO UoM"
-  uom             String  @default("") // "UoM"
-  notes           String  @default("") // "Notes"
+  qtoUom          String @default("") // "QTO UoM"
+  uom             String @default("") // "UoM"
+  notes           String @default("") // "Notes"
 }
 
 // Construction discipline role (Pipefitter, Electrician, etc.) — the
@@ -579,10 +650,14 @@ model SteelMember {
 // "Role" dropdown for a discipline whose id is in this list. Empty means
 // the role shows up nowhere.
 model Role {
-  id             Int             @id @default(autoincrement())
-  name           String          @unique
-  disciplines    String[]        @default([])
+  id             Int               @id @default(autoincrement())
+  name           String            @unique
+  disciplines    String[]          @default([])
+  /// The global rate book — the fallback when no project or version override
+  /// applies. See ProjectRoleRate / VersionRoleRate for the scoped layers.
   rates          RoleRate[]
+  projectRates   ProjectRoleRate[]
+  versionRates   VersionRoleRate[]
   crewMixMembers CrewMixMember[]
 }
 
@@ -592,6 +667,48 @@ model RoleRate {
   roleId   Int
   schedule String
   rate     Float
+}
+
+/// Project-scoped labor-rate override. The middle layer of the resolution
+/// chain: a row here beats the global `RoleRate` for every version of this
+/// project, and is itself beaten by a `VersionRoleRate`.
+///
+/// Sparse by design — a project that renegotiated two crafts stores two rows,
+/// not the whole book. The "Freeze rates" action is what materializes a full
+/// book; everything else here is a deliberate per-project override.
+model ProjectRoleRate {
+  id        Int     @id @default(autoincrement())
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId Int
+  role      Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  roleId    Int
+  /// Schedule NAME, matching `Schedule.name` / `RoleRate.schedule`. Stored
+  /// as a string rather than an FK for the same reason the global book does:
+  /// renaming a schedule must not silently re-point existing rates.
+  schedule  String
+  rate      Float
+
+  @@unique([projectId, roleId, schedule])
+  @@index([projectId])
+}
+
+/// Version-scoped labor-rate override — the innermost layer, beating both the
+/// project and global books.
+///
+/// Two tables (this and ProjectRoleRate) rather than one with nullable scope
+/// columns: Postgres treats NULLs as distinct, so a single table could not
+/// enforce "one rate per (scope, role, schedule)" with a real unique index.
+model VersionRoleRate {
+  id        Int             @id @default(autoincrement())
+  version   EstimateVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  versionId Int
+  role      Role            @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  roleId    Int
+  schedule  String
+  rate      Float
+
+  @@unique([versionId, roleId, schedule])
+  @@index([versionId])
 }
 
 // Managed list of labor schedules — the crew/shift codes ("1x6x10", "2x7x12")
@@ -656,30 +773,30 @@ model CrewMixMember {
 // add a templatable field to ChangeLog, mirror it here and update the
 // drift-guard test in cvrTemplates.test.ts.
 model CvrTemplate {
-  id                 Int          @id @default(autoincrement())
+  id                  Int        @id @default(autoincrement())
   /// Display name in the picker, e.g. "Weather Delay" or "Owner Directive". Unique.
-  name               String       @unique
+  name                String     @unique
   /// Help text shown beside the picker so users know when to choose it.
-  templateDescription String      @default("")
-  title              String       @default("")
-  description        String       @default("")
-  type               ChangeType   @default(SCOPE)
-  discipline         String       @default("")
-  cbsCodes           String[]     @default([])
-  originator         String       @default("")
-  costImpact         Float        @default(0)
-  scheduleDaysImpact Int          @default(0)
-  laborHoursImpact   Float        @default(0)
-  riskLevel          RiskLevel    @default(MEDIUM)
-  reasonCode         String       @default("")
-  notes              String       @default("")
-  area               String       @default("")
+  templateDescription String     @default("")
+  title               String     @default("")
+  description         String     @default("")
+  type                ChangeType @default(SCOPE)
+  discipline          String     @default("")
+  cbsCodes            String[]   @default([])
+  originator          String     @default("")
+  costImpact          Float      @default(0)
+  scheduleDaysImpact  Int        @default(0)
+  laborHoursImpact    Float      @default(0)
+  riskLevel           RiskLevel  @default(MEDIUM)
+  reasonCode          String     @default("")
+  notes               String     @default("")
+  area                String     @default("")
   /// Bump on every instantiation. Powers the per-discipline picker sort
   /// (most-used first within a discipline) without paying for a separate
   /// usage-events table.
-  usageCount         Int          @default(0)
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
+  usageCount          Int        @default(0)
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
 }
 
 enum ChangeStatus {
@@ -1223,7 +1340,6 @@ model CbsItem {
 
   // Hot path: discipline routes filter by `l1 IN (...)` on every load.
   @@index([l1])
-
   // `searchCbsCodeOptions` runs `WHERE displayCode ILIKE '%q%' OR name ILIKE
   // '%q%'` on every keystroke in the entity-dialog CBS pickers. A leading
   // wildcard can't use a B-tree, so without these the ~5k-row catalog is a

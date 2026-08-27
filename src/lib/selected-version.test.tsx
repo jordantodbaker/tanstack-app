@@ -36,6 +36,7 @@ const version = (id: number, versionNumber: number): EstimateVersionOption => ({
   description: "",
   parentVersionId: null,
   createdAt: "2026-01-01T00:00:00.000Z",
+  ratesFrozenAt: null,
 });
 
 function wrapper({ children }: { children: React.ReactNode }) {

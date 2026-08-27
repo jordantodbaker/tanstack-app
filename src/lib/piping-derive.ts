@@ -83,12 +83,78 @@ export function deriveLaborHours(
  * row with no size yet hasn't finished selecting anything, and stamping the
  * metallurgy rollup onto it would overwrite a Name the estimator picked by hand.
  */
+/**
+ * The two-character size code the CBS catalog uses inside segment 3, or
+ * `undefined` when the row's size can't produce one.
+ *
+ * The encoding is BORE-RELATIVE, which is why the bore class is a parameter
+ * rather than something to infer from the number:
+ *
+ *   Small bore (< 3")   tenths of an inch — .5" → "05", .75" → "07", 1" → "10"
+ *   Medium/large bore   whole inches      — 3"  → "03", 12"  → "12"
+ *
+ * So "10" means 1" under SB and 10" under MB; only the bore segment beside it
+ * disambiguates. Verified against the catalog's own names
+ * ("...Small Bore 1\"" is 633-SB-1000-ST-C, "...Medium Bore 10\"" is
+ * 633-MB-1000-ST-C).
+ *
+ * A size that doesn't land on a whole inch (or a whole tenth under SB) has no
+ * code — the caller falls back to the bore-level rollup rather than inventing
+ * one.
+ */
+export function pipingSizeCode(
+  size: string,
+  boreSize: string,
+): string | undefined {
+  const n = parseFloat(size);
+  if (!size || isNaN(n) || n <= 0) return undefined;
+
+  if (boreSize === "SB") {
+    // Tenths, TRUNCATED. Every small-bore step is a clean tenth except 3/4",
+    // which the catalog writes "07" rather than "08" (633-SB-0700-ST-C is
+    // named '...Small Bore .75"'). Rounding to the nearest tenth first keeps
+    // binary float noise out of it — 0.3 * 10 is 2.9999999999999996.
+    const tenths = Math.floor(Math.round(n * 10 * 1000) / 1000);
+    return tenths >= 1 && tenths <= 99
+      ? String(tenths).padStart(2, "0")
+      : undefined;
+  }
+
+  // Medium and large bore are exact whole inches. A size between steps (12.5")
+  // has no code at all — truncating it would resolve the row to an item that
+  // says 12", so it falls through to the bore rollup instead.
+  const inches = Math.round(n * 1000) / 1000;
+  if (!Number.isInteger(inches) || inches < 1 || inches > 99) return undefined;
+  return String(inches).padStart(2, "0");
+}
+
+/** Catalog abbreviation for the Fabricate / Erect picker, or `undefined` when
+ *  the row hasn't chosen one. */
+export function fabricateErectCode(
+  fabricateErect: string,
+): "FB" | "ER" | undefined {
+  if (fabricateErect === "Fabricate") return "FB";
+  if (fabricateErect === "Erect") return "ER";
+  return undefined;
+}
+
 export function pipingCostCodes(
   metallurgyCode: string,
   boreSize: string,
+  /** Size + Fabricate/Erect, when the row has both. Adds a more specific
+   *  candidate ahead of the rollups; omit and the ladder is unchanged. */
+  fabrication?: { sizeCode: string; feCode: "FB" | "ER" },
 ): string[] {
   if (!metallurgyCode || !boreSize) return [];
   return [
+    // {m}{bore}{size}{FB|ER}00C — 633-LB-12ER-00-C, "Install Carbon Steel
+    // Large Bore - Erect". The catalog only carries Fabricate/Erect fused to a
+    // NOMINAL SIZE; there is no bore-level "…-00ER-…" rollup, so this
+    // candidate exists only when the row has resolved a size code. It sits
+    // first because it is strictly more specific than everything below.
+    ...(fabrication
+      ? [`${metallurgyCode}${boreSize}${fabrication.sizeCode}${fabrication.feCode}00C`]
+      : []),
     `${metallurgyCode}${boreSize}ST0000C`,
     `${metallurgyCode}${boreSize}0000${boreSize}C`,
     `${metallurgyCode}${boreSize}000000C`,
@@ -125,8 +191,9 @@ export function resolveCbsStamp(
   metallurgyCode: string,
   boreSize: string,
   find: (costCode: string) => CbsStampSource | undefined,
+  fabrication?: { sizeCode: string; feCode: "FB" | "ER" },
 ): CbsStamp | undefined {
-  const codes = pipingCostCodes(metallurgyCode, boreSize);
+  const codes = pipingCostCodes(metallurgyCode, boreSize, fabrication);
   if (codes.length === 0) return undefined;
   for (const code of codes) {
     const match = find(code);
@@ -135,4 +202,20 @@ export function resolveCbsStamp(
     }
   }
   return CLEARED_CBS_STAMP;
+}
+
+/**
+ * The fabrication hint for a row, or `undefined` when it hasn't chosen a
+ * Fabricate/Erect value or its size doesn't map to a catalog size code.
+ *
+ * Convenience so every caller derives the hint the same way rather than each
+ * remembering to pair `pipingSizeCode` with `fabricateErectCode`.
+ */
+export function fabricationHint(
+  row: Pick<FefRow, "size" | "boreSize" | "fabricateErect">,
+): { sizeCode: string; feCode: "FB" | "ER" } | undefined {
+  const feCode = fabricateErectCode(row.fabricateErect);
+  if (!feCode) return undefined;
+  const sizeCode = pipingSizeCode(row.size, row.boreSize);
+  return sizeCode ? { sizeCode, feCode } : undefined;
 }

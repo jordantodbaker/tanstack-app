@@ -2,6 +2,10 @@ import { queryOptions } from "@tanstack/react-query";
 import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
+import {
+  packPipingFactors,
+  type PipingFactorData as PipingFactorDataType,
+} from "~/lib/piping-factors";
 
 export const fetchPipingGroups = createServerFn({ method: "GET" }).handler(() => {
   return prisma.pipingGroup.findMany({
@@ -17,41 +21,35 @@ export const pipingGroupsQueryOptions = () =>
     staleTime: Infinity,
   });
 
-export type PipingFactorData = {
-  taskCodeOptions: { code: string; taskDefinition: string }[];
-  pipingFactors: {
-    code: string;
-    unit: string;
-    values: { size: number; value: number | null }[];
-  }[];
-};
+export type {
+  PackedPipingFactor,
+  PipingFactorData,
+} from "~/lib/piping-factors";
 
+/**
+ * The piping factor catalog, reduced before it is sent.
+ *
+ * The reduction (drop nulls, one entry per code, flat size/value pairs) is
+ * `packPipingFactors`, which is the loop the client used to run on every load
+ * — see `~/lib/piping-factors` for why it moved and what it preserves.
+ */
 export const fetchPipingFactorData = createServerFn({ method: "GET" }).handler(
-  async (): Promise<PipingFactorData> => {
+  async (): Promise<PipingFactorDataType> => {
     const factors = await prisma.pipingFactor.findMany({
       select: {
         code: true,
         unit: true,
         taskDefinition: true,
-        values: { select: { size: true, value: true } },
+        values: { select: { size: true, value: true }, orderBy: { size: "asc" } },
       },
-      orderBy: { code: "asc" },
+      // `id` breaks the tie between two rows sharing a code, so which one wins
+      // is at least STABLE rather than left to the planner. Which one *should*
+      // win is a separate question — `FBWXXH` exists twice (Sch 5 and XXH)
+      // with factors differing up to 3.7x, and the lookup is keyed on `code`
+      // alone. Nothing uses that code today; fixing the key is its own change.
+      orderBy: [{ code: "asc" }, { id: "asc" }],
     });
-    const taskCodeMap = new Map<string, string>();
-    for (const f of factors) {
-      if (!taskCodeMap.has(f.code)) taskCodeMap.set(f.code, f.taskDefinition);
-    }
-    return {
-      taskCodeOptions: Array.from(taskCodeMap, ([code, taskDefinition]) => ({
-        code,
-        taskDefinition,
-      })),
-      pipingFactors: factors.map((f) => ({
-        code: f.code,
-        unit: f.unit,
-        values: f.values,
-      })),
-    };
+    return packPipingFactors(factors);
   },
 );
 

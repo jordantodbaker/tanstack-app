@@ -6,7 +6,7 @@ import {
 } from "@tanstack/react-table";
 
 import { LoadMask } from "~/components/LoadMask";
-import { tabTriggerClass } from "~/lib/fef-helpers";
+import { EMPTY_ARRAY, tabTriggerClass } from "~/lib/fef-helpers";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import {
   Accordion,
@@ -48,7 +48,9 @@ import { makeTakeOffCsvColumns, takeOffRowsForExport } from "~/lib/take-off-csv"
 import { rowsToCsv, downloadCsv, todayStamp } from "~/lib/csv-export";
 import { formatCurrency } from "~/lib/formatting";
 import { appendTakeOffRows } from "~/utils/fefRows";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { customFieldDefsQueryOptions } from "~/utils/customFields";
+import { CustomColumnsButton } from "~/components/CustomColumnsButton";
 import { qk } from "~/lib/query-keys";
 import { disciplineById } from "~/config/disciplines";
 
@@ -323,14 +325,23 @@ export function DisciplineTabs({
     [takeOffState.data],
   );
 
+  // This discipline's custom columns, for the CSV export below. React Query
+  // dedupes this with the identical query inside CustomColumnsButton.
+  const { data: customFieldDefs = EMPTY_ARRAY } = useQuery(
+    customFieldDefsQueryOptions(projectId, discipline),
+  );
+
   const handleExportCsv = React.useCallback(() => {
     const areaOptions = takeOffMeta?.areaOptions ?? [];
     const areaLabelFor = (id: string) =>
       areaOptions.find((o) => o.value === id)?.label ?? id;
     const rows = takeOffRowsForExport(takeOffState.data);
-    const csv = rowsToCsv(rows, makeTakeOffCsvColumns(areaLabelFor));
+    const csv = rowsToCsv(
+      rows,
+      makeTakeOffCsvColumns(areaLabelFor, customFieldDefs),
+    );
     downloadCsv(`${discipline || "take-off"}-takeoff-${todayStamp()}.csv`, csv);
-  }, [takeOffState.data, discipline, takeOffMeta]);
+  }, [takeOffState.data, discipline, takeOffMeta, customFieldDefs]);
 
   // Build a pre-filled CVR draft from the currently-selected take-off rows —
   // each becomes a LABOR cost-buildup line (hours × rate). Recomputed as the
@@ -551,6 +562,7 @@ export function DisciplineTabs({
                 </button>
               );
             })}
+            <CustomColumnsButton discipline={discipline} />
             {/* Right-aligned cluster: mode/import/export actions + live totals. */}
             <div className="ml-auto flex items-center gap-2">
               <button

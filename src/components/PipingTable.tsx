@@ -14,7 +14,16 @@ import {
 } from "~/components/Piping/columns";
 import { useSelectedProject } from "~/lib/selected-project";
 import { areasByProjectQueryOptions } from "~/utils/areas";
+import { customFieldDefsQueryOptions } from "~/utils/customFields";
+import {
+  customFieldColumnGroup,
+  withCustomFieldColumns,
+} from "~/lib/custom-field-columns";
 import { EMPTY_ARRAY } from "~/lib/fef-helpers";
+import {
+  unpackPipingFactors,
+  type PackedPipingFactor,
+} from "~/lib/piping-factors";
 
 type PipingGroupValue = {
   id: number;
@@ -63,11 +72,7 @@ export function PipingDisciplinePage({
   roleRates?: RoleRate[];
   crewMixOptions?: FefTableMeta["crewMixOptions"];
   taskCodeOptions?: { code: string; taskDefinition: string }[];
-  pipingFactors?: {
-    code: string;
-    unit: string;
-    values: { size: number; value: number | null }[];
-  }[];
+  pipingFactors?: PackedPipingFactor[];
 }) {
   const weldGroupOptions = React.useMemo(
     () =>
@@ -88,24 +93,30 @@ export function PipingDisciplinePage({
     [pipingGroups],
   );
 
-  const pipingFactorLookup = React.useMemo(() => {
-    const m = new Map<string, { unit: string; values: Map<number, number> }>();
-    for (const factor of pipingFactors ?? []) {
-      let entry = m.get(factor.code);
-      if (!entry) {
-        entry = { unit: factor.unit, values: new Map<number, number>() };
-        m.set(factor.code, entry);
-      }
-      for (const v of factor.values) {
-        if (v.value !== null && !entry.values.has(v.size)) {
-          entry.values.set(v.size, v.value);
-        }
-      }
-    }
-    return m;
-  }, [pipingFactors]);
+  // The server sends one packed entry per code, already deduplicated and
+  // null-free, so this only has to unflatten it — the first-wins reduction
+  // that used to run here now runs once on the server instead of in every
+  // browser. See `~/lib/piping-factors`.
+  const pipingFactorLookup = React.useMemo(
+    () => unpackPipingFactors(pipingFactors),
+    [pipingFactors],
+  );
 
   const { projectId } = useSelectedProject();
+  // User-defined take-off columns for piping on this project.
+  const { data: customFieldDefs = EMPTY_ARRAY } = useQuery(
+    customFieldDefsQueryOptions(projectId, "piping"),
+  );
+  const takeOffColsWithCustom = React.useMemo(
+    () => withCustomFieldColumns(takeOffColumns, customFieldDefs),
+    [customFieldDefs],
+  );
+  const takeOffGroupsWithCustom = React.useMemo(() => {
+    const group = customFieldColumnGroup(customFieldDefs);
+    return group
+      ? [...pipingTakeOffColumnGroups, group]
+      : pipingTakeOffColumnGroups;
+  }, [customFieldDefs]);
   const { data: areas = EMPTY_ARRAY } = useQuery(
     areasByProjectQueryOptions(projectId),
   );
@@ -176,8 +187,8 @@ export function PipingDisciplinePage({
       title={title}
       icon={icon}
       discipline="piping"
-      takeOffColumns={takeOffColumns}
-      takeOffColumnGroups={pipingTakeOffColumnGroups}
+      takeOffColumns={takeOffColsWithCustom}
+      takeOffColumnGroups={takeOffGroupsWithCustom}
       craftColumns={fieldEstimateColumns}
       supportLaborColumns={supportLaborColumns}
       takeOffMeta={takeOffMeta}

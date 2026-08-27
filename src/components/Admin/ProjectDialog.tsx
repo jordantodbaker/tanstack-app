@@ -1,7 +1,14 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invalidateAdminEntity } from "~/lib/admin-invalidations";
-import { Trash2, X } from "lucide-react";
+import {
+  freezeProjectRates,
+  invalidateRateFreezeQueries,
+  unfreezeProjectRates,
+} from "~/utils/rateFreeze";
+import { useIsAdmin } from "~/lib/use-current-user";
+import { fmtDate } from "~/lib/csv-export";
+import { Lock, Trash2, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -377,6 +384,16 @@ export function ProjectDialog({
             </Labeled>
           </fieldset>
 
+          {/* Labor rates — freezing acts immediately (like the area removals
+              above), not on save, because it materializes rows rather than
+              editing this form's state. Only meaningful for a saved project. */}
+          {initial?.id && (
+            <ProjectRateFreezeFieldset
+              projectId={initial.id}
+              ratesFrozenAt={initial.ratesFrozenAt}
+            />
+          )}
+
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
             <DialogClose asChild>
               <Button variant="outline" type="button" disabled={busy}>
@@ -394,5 +411,100 @@ export function ProjectDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Freeze / release a project's labor rates.
+ *
+ * Freezing copies the current global rate book onto the project, so later
+ * global changes don't reach it. Project overrides that already exist are left
+ * alone — the server treats them as the higher-precedence layer, so freezing
+ * never overwrites a negotiated rate.
+ *
+ * Acts immediately rather than on dialog save: it writes rate rows, not fields
+ * on this form. Same reasoning as the area removals above.
+ */
+function ProjectRateFreezeFieldset({
+  projectId,
+  ratesFrozenAt,
+}: {
+  projectId: number;
+  ratesFrozenAt: string | null;
+}) {
+  const queryClient = useQueryClient();
+  const isAdmin = useIsAdmin();
+  const isFrozen = ratesFrozenAt !== null;
+
+  const settle = () => invalidateRateFreezeQueries(queryClient, projectId);
+  const freeze = useMutation({
+    mutationFn: () => freezeProjectRates({ data: { projectId } }),
+    onSuccess: settle,
+  });
+  const release = useMutation({
+    mutationFn: () => unfreezeProjectRates({ data: { projectId } }),
+    onSuccess: settle,
+  });
+  const active = isFrozen ? release : freeze;
+
+  return (
+    <fieldset className="rounded-lg border border-slate-200 p-3 space-y-3">
+      <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        Labor rates
+      </legend>
+
+      <div className="flex items-start justify-between gap-3">
+        <div className="text-xs text-slate-500">
+          {isFrozen ? (
+            <>
+              <span className="inline-flex items-center gap-1 font-medium text-sky-700">
+                <Lock className="size-3" />
+                Frozen on {fmtDate(ratesFrozenAt)}
+              </span>
+              <p className="mt-1">
+                This project prices at the rates as of that date. Individual
+                revisions can still be frozen separately — a revision&apos;s own
+                rates win over the project&apos;s.
+              </p>
+            </>
+          ) : (
+            <p>
+              This project prices at the current global rates, so a later change
+              to the global book changes what new lines cost. Freezing copies
+              today&apos;s rates onto the project. Existing line items already
+              store their own rate and are unaffected.
+            </p>
+          )}
+        </div>
+        <Button
+          type="button"
+          variant={isFrozen ? "destructive" : "outline"}
+          disabled={active.isPending || (isFrozen && !isAdmin)}
+          title={
+            isFrozen && !isAdmin
+              ? "Releasing frozen rates requires administrator privilege"
+              : undefined
+          }
+          onClick={() => active.mutate()}
+          className="shrink-0"
+        >
+          {active.isPending
+            ? isFrozen
+              ? "Releasing…"
+              : "Freezing…"
+            : isFrozen
+              ? "Release rates"
+              : "Freeze rates"}
+        </Button>
+      </div>
+
+      {active.isError && (
+        <p className="text-xs text-red-600">
+          {active.error instanceof Error
+            ? active.error.message
+            : "Could not update rate freeze."}
+        </p>
+      )}
+    </fieldset>
   );
 }

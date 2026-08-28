@@ -2,13 +2,12 @@ import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import {
-  assertProjectAccess,
+  assertCreatorOrAdmin,
   projectIdScopedHandler,
   projectScopedHandler,
   requireProjectAccess,
-  resolveCurrentUser,
+  requireRecordAccess,
 } from "./users.server";
-import { hasAtLeastRole } from "./users";
 import { bacByBucket } from "~/lib/bac-buckets";
 import {
   accumulateProjectTotals,
@@ -570,13 +569,9 @@ export const createReportingPeriod = createServerFn({ method: "POST" })
 export const upsertMeasurement = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => UpsertMeasurementSchema.parse(input))
   .handler(async ({ data }): Promise<{ ok: true }> => {
-    const actor = await resolveCurrentUser();
-    if (!actor) throw new Error("Unauthorized: not signed in");
-    const period = await prisma.reportingPeriod.findUniqueOrThrow({
-      where: { id: data.periodId },
-      select: { projectId: true },
+    await requireRecordAccess(prisma.reportingPeriod, data.periodId, {
+      projectId: true,
     });
-    await assertProjectAccess(actor, period.projectId);
     await prisma.periodMeasurement.upsert({
       where: {
         periodId_bucket: { periodId: data.periodId, bucket: data.bucket },
@@ -604,21 +599,18 @@ export const upsertMeasurement = createServerFn({ method: "POST" })
 export const deleteReportingPeriod = createServerFn({ method: "POST" })
   .inputValidator(parseIdInput)
   .handler(async ({ data }): Promise<{ ok: true }> => {
-    const actor = await resolveCurrentUser();
-    if (!actor) throw new Error("Unauthorized: not signed in");
-    const period = await prisma.reportingPeriod.findUniqueOrThrow({
-      where: { id: data.id },
-      select: { projectId: true, createdById: true },
+    const { actor, row: period } = await requireRecordAccess<{
+      projectId: number;
+      createdById: number | null;
+    }>(prisma.reportingPeriod, data.id, {
+      projectId: true,
+      createdById: true,
     });
-    await assertProjectAccess(actor, period.projectId);
-    const isAdmin = hasAtLeastRole(actor.role, "ADMINISTRATOR");
-    const isCreator =
-      period.createdById !== null && period.createdById === actor.id;
-    if (!isAdmin && !isCreator) {
-      throw new Error(
-        "Only the period creator or an administrator can delete this period.",
-      );
-    }
+    assertCreatorOrAdmin(
+      actor,
+      period,
+      "Only the period creator or an administrator can delete this period.",
+    );
     // Cascade-deletes measurements via the FK.
     await prisma.reportingPeriod.delete({ where: { id: data.id } });
     return { ok: true };

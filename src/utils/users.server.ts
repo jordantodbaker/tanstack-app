@@ -171,6 +171,53 @@ export async function assertProjectAccess(
 }
 
 /**
+ * Ownership gate layered on top of project access: viewing a record only needs
+ * project access, but editing or deleting someone else's requires that the
+ * actor is the creator or an administrator. `message` is the user-facing error
+ * thrown when neither holds. A `createdById` of null (legacy rows) is never a
+ * match, so only admins can act on those.
+ */
+export function assertCreatorOrAdmin(
+  actor: CurrentUser,
+  row: { createdById: number | null },
+  message: string,
+): void {
+  const isAdmin = hasAtLeastRole(actor.role, "ADMINISTRATOR");
+  const isCreator = row.createdById !== null && row.createdById === actor.id;
+  if (!isAdmin && !isCreator) throw new Error(message);
+}
+
+// `findUniqueOrThrow`'s (generic, overloaded) signature is assignable to this
+// loose shape; a precise type fights Prisma's per-`select` return narrowing.
+// The looseness is sealed here — callers stay typed via the `Row` generic.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type RecordDelegate = { findUniqueOrThrow: (args: any) => Promise<unknown> };
+
+/**
+ * Server-side guard for a handler whose input is a *record id* whose owning
+ * project must be read from the row before authorizing — the shape shared by
+ * edit/delete endpoints (reporting periods, snapshots, …) that live outside the
+ * change-pipeline generics. Loads the row with the caller's `select` (which
+ * must include `projectId`), asserts project access, and returns the actor plus
+ * the loaded row so the handler needn't re-query it. Throws if the caller is
+ * signed out, or `findUniqueOrThrow` throws when the row doesn't exist.
+ *
+ * `requireVersionAccess` is the same shape hard-coded to `EstimateVersion`; it
+ * stays separate only because it wants a custom "not found" message.
+ */
+export async function requireRecordAccess<Row extends { projectId: number }>(
+  delegate: RecordDelegate,
+  id: number,
+  select: object,
+): Promise<{ actor: CurrentUser; projectId: number; row: Row }> {
+  const actor = await resolveCurrentUser();
+  if (!actor) throw new Error("Unauthorized: not signed in");
+  const row = (await delegate.findUniqueOrThrow({ where: { id }, select })) as Row;
+  await assertProjectAccess(actor, row.projectId);
+  return { actor, projectId: row.projectId, row };
+}
+
+/**
  * Server-side guard for any request that operates on a single project.
  * Throws if the signed-in user is not an admin AND is not assigned to that
  * project. Use inside every project-scoped server-fn handler.

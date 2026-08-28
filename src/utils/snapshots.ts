@@ -3,12 +3,11 @@ import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import {
-  assertProjectAccess,
+  assertCreatorOrAdmin,
   projectIdScopedHandler,
   requireProjectAccess,
-  resolveCurrentUser,
+  requireRecordAccess,
 } from "./users.server";
-import { hasAtLeastRole } from "./users";
 import {
   accumulateProjectTotals,
   type ProjectFefRowTotals,
@@ -283,23 +282,20 @@ export const fetchSnapshotDetail = createServerFn({ method: "GET" })
 export const deleteSnapshot = createServerFn({ method: "POST" })
   .inputValidator(parseIdInput)
   .handler(async ({ data }): Promise<{ ok: true }> => {
-    const actor = await resolveCurrentUser();
-    if (!actor) throw new Error("Unauthorized: not signed in");
-    const snap = await prisma.estimateSnapshot.findUniqueOrThrow({
-      where: { id: data.id },
-      select: { projectId: true, createdById: true },
+    // Project access is enough to view a snapshot but not to remove someone
+    // else's — only the creator or an administrator can delete.
+    const { actor, row: snap } = await requireRecordAccess<{
+      projectId: number;
+      createdById: number | null;
+    }>(prisma.estimateSnapshot, data.id, {
+      projectId: true,
+      createdById: true,
     });
-    await assertProjectAccess(actor, snap.projectId);
-    // Only the creator or an administrator can delete. Project access is
-    // enough to view a snapshot but not to remove someone else's.
-    const isAdmin = hasAtLeastRole(actor.role, "ADMINISTRATOR");
-    const isCreator =
-      snap.createdById !== null && snap.createdById === actor.id;
-    if (!isAdmin && !isCreator) {
-      throw new Error(
-        "Only the snapshot creator or an administrator can delete this snapshot.",
-      );
-    }
+    assertCreatorOrAdmin(
+      actor,
+      snap,
+      "Only the snapshot creator or an administrator can delete this snapshot.",
+    );
     await prisma.estimateSnapshot.delete({ where: { id: data.id } });
     return { ok: true };
   });
@@ -307,23 +303,20 @@ export const deleteSnapshot = createServerFn({ method: "POST" })
 export const updateSnapshot = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => UpdateSnapshotSchema.parse(input))
   .handler(async ({ data }): Promise<EstimateSnapshotItem> => {
-    const actor = await resolveCurrentUser();
-    if (!actor) throw new Error("Unauthorized: not signed in");
-    const snap = await prisma.estimateSnapshot.findUniqueOrThrow({
-      where: { id: data.id },
-      select: { projectId: true, createdById: true },
-    });
-    await assertProjectAccess(actor, snap.projectId);
     // Same rule as delete: project access lets you view a snapshot, but only
     // the creator or an administrator can change its label / notes.
-    const isAdmin = hasAtLeastRole(actor.role, "ADMINISTRATOR");
-    const isCreator =
-      snap.createdById !== null && snap.createdById === actor.id;
-    if (!isAdmin && !isCreator) {
-      throw new Error(
-        "Only the snapshot creator or an administrator can edit this snapshot.",
-      );
-    }
+    const { actor, row: snap } = await requireRecordAccess<{
+      projectId: number;
+      createdById: number | null;
+    }>(prisma.estimateSnapshot, data.id, {
+      projectId: true,
+      createdById: true,
+    });
+    assertCreatorOrAdmin(
+      actor,
+      snap,
+      "Only the snapshot creator or an administrator can edit this snapshot.",
+    );
     const updated = await prisma.estimateSnapshot.update({
       where: { id: data.id },
       data: { label: data.label.trim(), notes: data.notes?.trim() ?? "" },

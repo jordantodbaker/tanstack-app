@@ -104,6 +104,64 @@ export const __columnWidthStorage = {
 };
 
 /**
+ * Column-width state for one sheet, persisted to localStorage under
+ * `columnWidthKey`. Seeded from storage in the lazy initializer so the first
+ * paint is already at the user's widths (hydrating in an effect would re-layout
+ * a frame in). Returns the sizing map, the TanStack `onColumnSizingChange`
+ * handler (writes through to storage), a per-column reset back to the column-def
+ * size, and whether resizing is enabled at all (off when no key is given).
+ */
+function useColumnWidths(columnWidthKey: string | undefined) {
+  const [columnSizing, setColumnSizing] = React.useState<Record<string, number>>(
+    () => readStoredWidths(columnWidthKey),
+  );
+  const resizable = columnWidthKey !== undefined;
+  const handleColumnSizingChange = React.useCallback(
+    (updater: React.SetStateAction<Record<string, number>>) => {
+      setColumnSizing((prev) => {
+        const next = typeof updater === "function" ? updater(prev) : updater;
+        writeStoredWidths(columnWidthKey, next);
+        return next;
+      });
+    },
+    [columnWidthKey],
+  );
+  /** Drop a column's stored width so it falls back to its column-def size. */
+  const resetColumnWidth = React.useCallback(
+    (columnId: string) => {
+      handleColumnSizingChange((prev) => {
+        if (!(columnId in prev)) return prev;
+        const next = { ...prev };
+        delete next[columnId];
+        return next;
+      });
+    },
+    [handleColumnSizingChange],
+  );
+  return { columnSizing, handleColumnSizingChange, resetColumnWidth, resizable };
+}
+
+/**
+ * Sticky-left CSS for a frozen (pinned leading) data cell, or the default
+ * min-width style for a non-frozen one. Shared by the memoized data rows and
+ * the filler rows so their frozen offsets can never drift apart.
+ */
+function cellFreezeStyle(
+  fz: FrozenColumn | null,
+  fallbackWidth: number,
+): React.CSSProperties {
+  return fz
+    ? {
+        position: "sticky",
+        left: fz.left,
+        width: fz.width,
+        minWidth: fz.width,
+        zIndex: 10,
+      }
+    : { minWidth: fallbackWidth };
+}
+
+/**
  * Memoized table row. The big perf win for the FEF / Piping take-off: with
  * 50+ rows × ~20 cells each, an unmemoized typing burst re-renders every
  * cell on every keystroke because the parent's `data` array reference flips
@@ -198,17 +256,7 @@ const FefTableRow = React.memo(
               key={cell.id}
               data-row={row.index}
               data-col={colIndex}
-              style={
-                fz
-                  ? {
-                      position: "sticky",
-                      left: fz.left,
-                      width: fz.width,
-                      minWidth: fz.width,
-                      zIndex: 10,
-                    }
-                  : { minWidth: cell.column.getSize() }
-              }
+              style={cellFreezeStyle(fz, cell.column.getSize())}
               className={`relative border border-gray-300${
                 fz ? ` ${baseBg}` : ""
               }${
@@ -345,6 +393,114 @@ export const LABOR_COST_GROUP: ColumnGroup = {
  *  directly below it. */
 const BANNER_HEIGHT = 28;
 
+type FindState = { query: string; replace: string; mode: "find" | "replace" };
+
+/**
+ * The Excel-style Find / Find-&-Replace bar shown above the grid when a find
+ * session is open. Pure presentational — the session state lives in the
+ * range-editing hook and is threaded in; `matchCount` is `matches.length`.
+ */
+function GridFindBar({
+  find,
+  setFind,
+  findIndex,
+  setFindIndex,
+  matchCount,
+  goToMatch,
+  doReplaceOne,
+  doReplaceAll,
+}: {
+  find: FindState;
+  setFind: React.Dispatch<React.SetStateAction<FindState | null>>;
+  findIndex: number;
+  setFindIndex: React.Dispatch<React.SetStateAction<number>>;
+  matchCount: number;
+  goToMatch: (i: number) => void;
+  doReplaceOne: () => void;
+  doReplaceAll: () => void;
+}) {
+  return (
+    <div className="mb-1 flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs">
+      <input
+        autoFocus
+        value={find.query}
+        onChange={(e) => {
+          setFind({ ...find, query: e.target.value });
+          setFindIndex(0);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            goToMatch(e.shiftKey ? findIndex - 1 : findIndex + 1);
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            setFind(null);
+          }
+        }}
+        placeholder="Find in sheet…"
+        className="w-40 rounded border border-slate-300 px-2 py-1 focus:border-blue-400 focus:outline-none"
+      />
+      <span className="text-slate-500">
+        {find.query === ""
+          ? ""
+          : matchCount === 0
+            ? "No matches"
+            : `${Math.min(findIndex + 1, matchCount)} of ${matchCount}`}
+      </span>
+      <button
+        type="button"
+        onClick={() => goToMatch(findIndex - 1)}
+        aria-label="Previous match"
+        className="rounded border border-slate-300 px-2 py-0.5 hover:bg-slate-100"
+      >
+        ↑
+      </button>
+      <button
+        type="button"
+        onClick={() => goToMatch(findIndex + 1)}
+        aria-label="Next match"
+        className="rounded border border-slate-300 px-2 py-0.5 hover:bg-slate-100"
+      >
+        ↓
+      </button>
+      {find.mode === "replace" && (
+        <>
+          <input
+            value={find.replace}
+            onChange={(e) => setFind({ ...find, replace: e.target.value })}
+            placeholder="Replace with…"
+            className="w-40 rounded border border-slate-300 px-2 py-1 focus:border-blue-400 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={doReplaceOne}
+            disabled={matchCount === 0}
+            className="rounded border border-slate-300 px-2 py-0.5 hover:bg-slate-100 disabled:opacity-50"
+          >
+            Replace
+          </button>
+          <button
+            type="button"
+            onClick={doReplaceAll}
+            disabled={matchCount === 0}
+            className="rounded border border-slate-300 px-2 py-0.5 hover:bg-slate-100 disabled:opacity-50"
+          >
+            Replace all
+          </button>
+        </>
+      )}
+      <button
+        type="button"
+        onClick={() => setFind(null)}
+        aria-label="Close find"
+        className="ml-auto rounded border border-slate-300 px-2 py-0.5 hover:bg-slate-100"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
 export function FefTableContent({
   state,
   meta,
@@ -401,35 +557,8 @@ export function FefTableContent({
   const { data, setData, columnFilters, setColumnFilters } = state;
   const [localPageIndex, setLocalPageIndex] = React.useState(0);
 
-  // Column widths. Seeded from storage in the lazy initializer rather than an
-  // effect, so the first paint is already at the user's widths — hydrating them
-  // afterwards would re-layout the whole grid one frame in.
-  const [columnSizing, setColumnSizing] = React.useState<Record<string, number>>(
-    () => readStoredWidths(columnWidthKey),
-  );
-  const resizable = columnWidthKey !== undefined;
-  const handleColumnSizingChange = React.useCallback(
-    (updater: React.SetStateAction<Record<string, number>>) => {
-      setColumnSizing((prev) => {
-        const next = typeof updater === "function" ? updater(prev) : updater;
-        writeStoredWidths(columnWidthKey, next);
-        return next;
-      });
-    },
-    [columnWidthKey],
-  );
-  /** Drop a column's stored width so it falls back to its column-def size. */
-  const resetColumnWidth = React.useCallback(
-    (columnId: string) => {
-      handleColumnSizingChange((prev) => {
-        if (!(columnId in prev)) return prev;
-        const next = { ...prev };
-        delete next[columnId];
-        return next;
-      });
-    },
-    [handleColumnSizingChange],
-  );
+  const { columnSizing, handleColumnSizingChange, resetColumnWidth, resizable } =
+    useColumnWidths(columnWidthKey);
 
   // Identity that flips when any non-row-data input that affects cell
   // rendering changes reference: query-derived meta arrays (e.g. an admin
@@ -622,84 +751,16 @@ export function FefTableContent({
   return (
     <div>
       {find && (
-        <div className="mb-1 flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs">
-          <input
-            autoFocus
-            value={find.query}
-            onChange={(e) => {
-              setFind({ ...find, query: e.target.value });
-              setFindIndex(0);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                goToMatch(e.shiftKey ? findIndex - 1 : findIndex + 1);
-              } else if (e.key === "Escape") {
-                e.preventDefault();
-                setFind(null);
-              }
-            }}
-            placeholder="Find in sheet…"
-            className="w-40 rounded border border-slate-300 px-2 py-1 focus:border-blue-400 focus:outline-none"
-          />
-          <span className="text-slate-500">
-            {find.query === ""
-              ? ""
-              : matches.length === 0
-                ? "No matches"
-                : `${Math.min(findIndex + 1, matches.length)} of ${matches.length}`}
-          </span>
-          <button
-            type="button"
-            onClick={() => goToMatch(findIndex - 1)}
-            aria-label="Previous match"
-            className="rounded border border-slate-300 px-2 py-0.5 hover:bg-slate-100"
-          >
-            ↑
-          </button>
-          <button
-            type="button"
-            onClick={() => goToMatch(findIndex + 1)}
-            aria-label="Next match"
-            className="rounded border border-slate-300 px-2 py-0.5 hover:bg-slate-100"
-          >
-            ↓
-          </button>
-          {find.mode === "replace" && (
-            <>
-              <input
-                value={find.replace}
-                onChange={(e) => setFind({ ...find, replace: e.target.value })}
-                placeholder="Replace with…"
-                className="w-40 rounded border border-slate-300 px-2 py-1 focus:border-blue-400 focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={doReplaceOne}
-                disabled={matches.length === 0}
-                className="rounded border border-slate-300 px-2 py-0.5 hover:bg-slate-100 disabled:opacity-50"
-              >
-                Replace
-              </button>
-              <button
-                type="button"
-                onClick={doReplaceAll}
-                disabled={matches.length === 0}
-                className="rounded border border-slate-300 px-2 py-0.5 hover:bg-slate-100 disabled:opacity-50"
-              >
-                Replace all
-              </button>
-            </>
-          )}
-          <button
-            type="button"
-            onClick={() => setFind(null)}
-            aria-label="Close find"
-            className="ml-auto rounded border border-slate-300 px-2 py-0.5 hover:bg-slate-100"
-          >
-            ✕
-          </button>
-        </div>
+        <GridFindBar
+          find={find}
+          setFind={setFind}
+          findIndex={findIndex}
+          setFindIndex={setFindIndex}
+          matchCount={matches.length}
+          goToMatch={goToMatch}
+          doReplaceOne={doReplaceOne}
+          doReplaceAll={doReplaceAll}
+        />
       )}
     <div
       ref={gridRef}
@@ -927,17 +988,7 @@ export function FefTableContent({
                       return (
                         <td
                           key={col.id}
-                          style={
-                            fz
-                              ? {
-                                  position: "sticky",
-                                  left: fz.left,
-                                  width: fz.width,
-                                  minWidth: fz.width,
-                                  zIndex: 10,
-                                }
-                              : { minWidth: col.getSize() }
-                          }
+                          style={cellFreezeStyle(fz, col.getSize())}
                           className={`border border-gray-300 px-3 py-2${
                             fz
                               ? overallIdx % 2 === 0

@@ -7,7 +7,10 @@
       "Bash(npx tsx *)",
       "Bash(npx tsc *)",
       "Bash(node -e \"console.log\\(require\\('@vercel/blob/package.json'\\).version\\)\")",
-      "Bash(grep -vE \"SECURITY WARNING|sslmode|libpq|next major|explicitly use|libpq compatibility|postgresql.org|trace-warnings|^$\")"
+      "Bash(grep -vE \"SECURITY WARNING|sslmode|libpq|next major|explicitly use|libpq compatibility|postgresql.org|trace-warnings|^$\")",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ]
   }
 }

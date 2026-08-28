@@ -11,7 +11,12 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { aggregateTakeOff } from "./take-off-sync";
-import { canComputeTotalCost, makeFefRow } from "./fef-helpers";
+import {
+  BLANK_ID_PREFIX,
+  canComputeTotalCost,
+  isBlankId,
+  makeFefRow,
+} from "./fef-helpers";
 import {
   computeLaborHours,
   computeSteelQuantity,
@@ -30,6 +35,16 @@ export const displayEditCellClass =
 // Radix Select forbids an item value of "", so the placeholder/clear row uses
 // this sentinel and CellSelect maps it back to "" on change.
 const SELECT_CLEAR = "__clear__";
+
+/**
+ * Shared `onMouseDown` for a display-until-edit cell: a modifier-click belongs
+ * to range selection, so block the focus that would open the editor while
+ * letting the event bubble to the row's range handler. A plain click still
+ * focuses (and its `onFocus` opens the editor).
+ */
+function guardRangeModifierMouseDown(e: React.MouseEvent): void {
+  if (e.shiftKey || e.ctrlKey || e.metaKey) e.preventDefault();
+}
 
 /**
  * Cell dropdown built on the custom (non-native) Radix Select. It replaces the
@@ -98,11 +113,7 @@ export function CellSelect({
         tabIndex={0}
         aria-label={ariaLabel}
         onFocus={() => setEditing(true)}
-        onMouseDown={(e) => {
-          // Modifier-clicks belong to range selection — block the focus (so the
-          // editor doesn't open) but let the event reach the row's range handler.
-          if (e.shiftKey || e.ctrlKey || e.metaKey) e.preventDefault();
-        }}
+        onMouseDown={guardRangeModifierMouseDown}
         className={cn(
           editableCellClass,
           "flex h-auto cursor-default items-center justify-between gap-1 font-normal",
@@ -242,14 +253,12 @@ export function TextCell({
   onEditEnd?: () => void;
 }) {
   const normalize = (v: string) =>
-    stripBlankPrefix && v.startsWith("__fe-blank-") ? "" : v;
+    stripBlankPrefix && isBlankId(v) ? "" : v;
   const [value, setValue] = React.useState(() => normalize(rawValue));
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
-    setValue(
-      stripBlankPrefix && rawValue.startsWith("__fe-blank-") ? "" : rawValue,
-    );
+    setValue(stripBlankPrefix && isBlankId(rawValue) ? "" : rawValue);
   }, [rawValue, stripBlankPrefix]);
 
   React.useEffect(() => {
@@ -349,11 +358,7 @@ export function DisplayEditControl({
       data-cell-control
       role="textbox"
       onFocus={() => setEditing(true)}
-      onMouseDown={(e) => {
-        // Let range selection own modifier-clicks; a plain click focuses the
-        // wrapper, whose onFocus switches to the editor.
-        if (e.shiftKey || e.ctrlKey || e.metaKey) e.preventDefault();
-      }}
+      onMouseDown={guardRangeModifierMouseDown}
       className={displayEditCellClass}
     >
       {value}
@@ -373,7 +378,7 @@ export function DisplayEditCell({ getValue, row, column, table }: CellProps) {
 }
 
 export function makeBlankRow(i: number): FefRow {
-  return makeFefRow({ id: `__fe-blank-${i}` });
+  return makeFefRow({ id: `${BLANK_ID_PREFIX}${i}` });
 }
 
 export const TAKE_OFF_INITIAL_ROWS: FefRow[] = Array.from(
@@ -464,7 +469,7 @@ export function TakeOffIdCell({ getValue, row, column, table }: CellProps) {
 
 export function TakeOffIdReadOnlyCell({ getValue }: { getValue: () => unknown }) {
   const raw = getValue() as string;
-  const value = raw.startsWith("__fe-blank-") ? "" : raw;
+  const value = isBlankId(raw) ? "" : raw;
   return (
     <span className={readOnlyCellClass}>{value}</span>
   );
@@ -562,39 +567,40 @@ export function ComputedLaborHoursCell({ row }: CellProps) {
 // the row's laborHours) via updateRow. Both editors use the display-until-edit
 // shell to match the H/W/L dimension cells.
 
-/** Editable "# of Shapes" (steel). Recomputes Quantity = count × L. */
-export function ShapeCountCell({ getValue, row, table }: CellProps) {
-  return (
-    <DisplayEditControl
-      value={getValue() as string}
-      onCommit={(v) => {
-        const quantity = computeSteelQuantity(v, row.original.length);
-        table.options.meta?.updateRow?.(row.index, {
-          shapeCount: v,
-          quantity,
-          laborHours: computeLaborHours(quantity, row.original.laborFactor),
-        });
-      }}
-    />
-  );
+/**
+ * Both steel dimension editors ("# of Shapes" and "L") do the same thing: on
+ * commit, recompute Quantity = count × L (with the *other* dimension read from
+ * the row), then push the edited field + derived Quantity + laborHours back
+ * through updateRow. Only the field they own differs, so they share this
+ * factory rather than duplicating the commit block.
+ */
+function makeSteelDimensionCell(field: "shapeCount" | "length") {
+  return function SteelDimensionCell({ getValue, row, table }: CellProps) {
+    return (
+      <DisplayEditControl
+        value={getValue() as string}
+        onCommit={(v) => {
+          const shapeCount =
+            field === "shapeCount" ? v : row.original.shapeCount;
+          const length = field === "length" ? v : row.original.length;
+          const quantity = computeSteelQuantity(shapeCount, length);
+          const patch: Partial<FefRow> = {
+            quantity,
+            laborHours: computeLaborHours(quantity, row.original.laborFactor),
+          };
+          patch[field] = v;
+          table.options.meta?.updateRow?.(row.index, patch);
+        }}
+      />
+    );
+  };
 }
 
+/** Editable "# of Shapes" (steel). Recomputes Quantity = count × L. */
+export const ShapeCountCell = makeSteelDimensionCell("shapeCount");
+
 /** Editable "L" (length, steel). Recomputes Quantity = # of shapes × L. */
-export function SteelLengthCell({ getValue, row, table }: CellProps) {
-  return (
-    <DisplayEditControl
-      value={getValue() as string}
-      onCommit={(v) => {
-        const quantity = computeSteelQuantity(row.original.shapeCount, v);
-        table.options.meta?.updateRow?.(row.index, {
-          length: v,
-          quantity,
-          laborHours: computeLaborHours(quantity, row.original.laborFactor),
-        });
-      }}
-    />
-  );
-}
+export const SteelLengthCell = makeSteelDimensionCell("length");
 
 /** Read-only Quantity for steel — always shows # of shapes × L, recomputed on
  *  render so rows saved before this derivation still display correctly. */
@@ -652,8 +658,7 @@ export function DeleteRowCell({ row, table }: CellProps) {
   // always wants one undeletable blank slot at the bottom for new entries.
   const data = table.options.data as FefRow[];
   const isTrailingBlank =
-    row.index === data.length - 1 &&
-    row.original.id.startsWith("__fe-blank-");
+    row.index === data.length - 1 && isBlankId(row.original.id);
   if (isTrailingBlank) {
     return <div className="flex h-7 items-center justify-center" />;
   }

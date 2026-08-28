@@ -125,6 +125,21 @@ export const FEF_ROW_STRING_FIELDS = [
  */
 export const FEF_DATA_COLUMNS = ["cbsCode", ...FEF_ROW_STRING_FIELDS] as const;
 
+/**
+ * Prefix marking a synthetic *blank template* row id (`__fe-blank-3`). Such a
+ * row is a placeholder, not yet real data: its id never persists (it's blanked
+ * to "" on save), is never read as a CBS code, and is excluded from the
+ * "has the user started this row?" checks. Centralised here so the sentinel is
+ * one constant + one predicate rather than scattered `startsWith("__fe-blank-")`
+ * string literals across the grid, the range engine, and the cell editors.
+ */
+export const BLANK_ID_PREFIX = "__fe-blank-";
+
+/** True when `id` is a synthetic blank-template row id (see `BLANK_ID_PREFIX`). */
+export function isBlankId(id: string): boolean {
+  return id.startsWith(BLANK_ID_PREFIX);
+}
+
 /** Builds a FefRow with every field blank, then applies `partial` overrides. */
 export function makeFefRow(partial: Partial<FefRow> = {}): FefRow {
   const base = Object.fromEntries(
@@ -205,9 +220,7 @@ export type TakeOffValidationInput = Partial<
  */
 export function isTakeOffRowInvalid(row: TakeOffValidationInput): boolean {
   const idIsRealCode =
-    typeof row.id === "string" &&
-    row.id !== "" &&
-    !row.id.startsWith("__fe-blank-");
+    typeof row.id === "string" && row.id !== "" && !isBlankId(row.id);
   const cbsTouched = !!row.cbsCode && row.cbsCode !== "";
   const anyFieldTouched = FEF_ROW_STRING_FIELDS.some((f) => {
     const v = row[f];

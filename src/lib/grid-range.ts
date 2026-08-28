@@ -41,7 +41,7 @@ import {
   type PipingFactorLookup,
 } from "./piping-derive";
 import { computeBoreSize } from "./utils";
-import { CUSTOM_FIELD_SLOTS, fefRowHasUserData } from "./fef-helpers";
+import { CUSTOM_FIELD_SLOTS, fefRowHasUserData, isBlankId } from "./fef-helpers";
 
 export type CellCoord = { row: number; col: number };
 export type RangeSelection = { anchor: CellCoord; focus: CellCoord };
@@ -604,7 +604,7 @@ export function readCellText(colId: string, row: FefRow, ctx: WriteCtx): string 
     case "delete":
       return "";
     case "id":
-      return row.id.startsWith("__fe-blank-") ? "" : row.id;
+      return isBlankId(row.id) ? "" : row.id;
     case "sub":
       return row.sub === "true" ? "Yes" : "";
     case "totalCost": {
@@ -718,7 +718,7 @@ export function applyClear(
  *  less-reliable display name. */
 function fillSourceValue(colId: string, src: FefRow): string {
   if (colId === "name") {
-    return src.id.startsWith("__fe-blank-") ? "" : src.id;
+    return isBlankId(src.id) ? "" : src.id;
   }
   const v = (src as Record<string, unknown>)[colId];
   return typeof v === "string" ? v : "";
@@ -767,8 +767,7 @@ export function sortRows(
   dir: "asc" | "desc",
   ctx: WriteCtx,
 ): FefRow[] {
-  const isBlank = (r: FefRow) =>
-    r.id.startsWith("__fe-blank-") && !fefRowHasUserData(r);
+  const isBlank = (r: FefRow) => isBlankId(r.id) && !fefRowHasUserData(r);
   const real = data.filter((r) => !isBlank(r));
   const blanks = data.filter(isBlank);
   const sign = dir === "asc" ? 1 : -1;

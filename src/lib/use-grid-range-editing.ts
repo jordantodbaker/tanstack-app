@@ -335,6 +335,62 @@ export function useGridRangeEditing({
     };
   }, [filling, setData]);
 
+  // ── Shared clipboard/range write primitives ──────────────────────────────
+  // Copy, cut-clear, and paste are each triggered from three entry points
+  // (keyboard shortcut, native clipboard event, context menu). The entry points
+  // differ only in where the text/selection come from; the write half is these
+  // helpers so it lives in one place. `newBlankRow` is the filler factory every
+  // structural edit (paste-spill, insert) shares.
+  const newBlankRow = () => makeBlankRow(pasteIdRef.current++);
+
+  const copyRange = (sel: RangeSelection) =>
+    void navigator.clipboard?.writeText(
+      serializeRange(data, columnIds, sel, writeCtx),
+    );
+
+  const clearRange = (sel: RangeSelection) =>
+    setData(applyClear(data, columnIds, sel, writeCtx));
+
+  /** Spill `matrix` from the top-left of `sel`, growing the grid as needed. */
+  const pasteMatrixInto = (
+    d: FefRow[],
+    cids: string[],
+    ctx: WriteCtx,
+    sel: RangeSelection,
+    matrix: string[][],
+  ) => {
+    const { minRow, minCol } = normalizeRange(sel);
+    setData(
+      applyPaste(d, cids, { row: minRow, col: minCol }, matrix, ctx, newBlankRow),
+    );
+  };
+
+  /**
+   * Read the clipboard and paste into the live selection (via `latest`, so the
+   * async read never sees stale state). `gate` lets a caller decline the paste
+   * after seeing the parsed matrix — the keyboard path skips a single value
+   * dropped on a single cell (that stays native); the menu always pastes.
+   */
+  const readClipboardAndPaste = (
+    gate?: (matrix: string[][], sel: RangeSelection) => boolean,
+  ) => {
+    const clip = navigator.clipboard;
+    if (!clip?.readText) return;
+    void clip
+      .readText()
+      .then((text) => {
+        const { data: d, columnIds: cids, writeCtx: c, selection: sel } =
+          latest.current;
+        if (!sel) return;
+        const matrix = parseClipboardMatrix(text);
+        if (gate && !gate(matrix, sel)) return;
+        pasteMatrixInto(d, cids, c, sel, matrix);
+      })
+      .catch(() => {
+        // Clipboard read denied/unsupported — nothing to paste.
+      });
+  };
+
   const onGridKeyDown = (e: React.KeyboardEvent) => {
     if (!enableRangeEditing) return;
     const mod = e.ctrlKey || e.metaKey;
@@ -410,10 +466,8 @@ export function useGridRangeEditing({
     if (mod && (key === "x" || key === "X") && rangeSpansMultiple(selection)) {
       e.preventDefault();
       e.stopPropagation();
-      void navigator.clipboard?.writeText(
-        serializeRange(data, columnIds, selection, writeCtx),
-      );
-      setData(applyClear(data, columnIds, selection, writeCtx));
+      copyRange(selection);
+      clearRange(selection);
       return;
     }
 
@@ -425,9 +479,7 @@ export function useGridRangeEditing({
       // fires, for both. Single-cell copy still falls through to native.
       e.preventDefault();
       e.stopPropagation();
-      void navigator.clipboard?.writeText(
-        serializeRange(data, columnIds, selection, writeCtx),
-      );
+      copyRange(selection);
       return;
     }
 
@@ -441,27 +493,11 @@ export function useGridRangeEditing({
       if (!rangeSpansMultiple(selection) && nativePasteWorks) return;
       e.preventDefault();
       e.stopPropagation();
-      const clip = navigator.clipboard;
-      if (!clip?.readText) return;
-      void clip
-        .readText()
-        .then((text) => {
-          const { data: d, columnIds: cids, writeCtx: c, selection: sel } =
-            latest.current;
-          if (!sel) return;
-          const matrix = parseClipboardMatrix(text);
-          const isBlock = matrix.length > 1 || matrix.some((r) => r.length > 1);
-          if (!isBlock && !rangeSpansMultiple(sel)) return;
-          const { minRow, minCol } = normalizeRange(sel);
-          setData(
-            applyPaste(d, cids, { row: minRow, col: minCol }, matrix, c, () =>
-              makeBlankRow(pasteIdRef.current++),
-            ),
-          );
-        })
-        .catch(() => {
-          // Clipboard read denied/unsupported — nothing to paste.
-        });
+      // Decline a single value dropped on a single cell — that stays native.
+      readClipboardAndPaste((matrix, sel) => {
+        const isBlock = matrix.length > 1 || matrix.some((r) => r.length > 1);
+        return isBlock || rangeSpansMultiple(sel);
+      });
       return;
     }
 
@@ -477,7 +513,7 @@ export function useGridRangeEditing({
     if ((key === "Delete" || key === "Backspace") && rangeSpansMultiple(selection)) {
       e.preventDefault();
       e.stopPropagation();
-      setData(applyClear(data, columnIds, selection, writeCtx));
+      clearRange(selection);
       return;
     }
 
@@ -500,17 +536,7 @@ export function useGridRangeEditing({
     // into a focused text input.
     if (!isBlock && !rangeSpansMultiple(selection)) return;
     e.preventDefault();
-    const { minRow, minCol } = normalizeRange(selection);
-    setData(
-      applyPaste(
-        data,
-        columnIds,
-        { row: minRow, col: minCol },
-        matrix,
-        writeCtx,
-        () => makeBlankRow(pasteIdRef.current++),
-      ),
-    );
+    pasteMatrixInto(data, columnIds, writeCtx, selection, matrix);
   };
 
   const rangeSel = enableRangeEditing && selection ? normalizeRange(selection) : null;
@@ -535,49 +561,23 @@ export function useGridRangeEditing({
   // Context-menu actions. They read the live selection through `latest` so the
   // async paste path isn't stale, and each closes the menu.
   const menuCopy = () => {
-    if (selection) {
-      void navigator.clipboard?.writeText(
-        serializeRange(data, columnIds, selection, writeCtx),
-      );
-    }
+    if (selection) copyRange(selection);
     setMenu(null);
   };
   const menuCut = () => {
     if (selection) {
-      void navigator.clipboard?.writeText(
-        serializeRange(data, columnIds, selection, writeCtx),
-      );
-      setData(applyClear(data, columnIds, selection, writeCtx));
+      copyRange(selection);
+      clearRange(selection);
     }
     setMenu(null);
   };
   const menuPaste = () => {
-    const clip = navigator.clipboard;
-    if (selection && clip?.readText) {
-      void clip
-        .readText()
-        .then((text) => {
-          const { data: d, columnIds: cids, writeCtx: c, selection: sel } =
-            latest.current;
-          if (!sel) return;
-          const { minRow, minCol } = normalizeRange(sel);
-          setData(
-            applyPaste(
-              d,
-              cids,
-              { row: minRow, col: minCol },
-              parseClipboardMatrix(text),
-              c,
-              () => makeBlankRow(pasteIdRef.current++),
-            ),
-          );
-        })
-        .catch(() => {});
-    }
+    // No gate: the menu Paste always spills whatever's on the clipboard.
+    if (selection) readClipboardAndPaste();
     setMenu(null);
   };
   const menuClear = () => {
-    if (selection) setData(applyClear(data, columnIds, selection, writeCtx));
+    if (selection) clearRange(selection);
     setMenu(null);
   };
   const menuInsert = (where: "above" | "below") => {
@@ -585,9 +585,7 @@ export function useGridRangeEditing({
       const { minRow, maxRow } = normalizeRange(selection);
       const count = maxRow - minRow + 1;
       const at = where === "above" ? minRow : maxRow + 1;
-      setData(
-        insertRows(data, at, count, () => makeBlankRow(pasteIdRef.current++)),
-      );
+      setData(insertRows(data, at, count, newBlankRow));
     }
     setMenu(null);
   };

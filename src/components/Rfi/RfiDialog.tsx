@@ -1,8 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, Link as LinkIcon, Printer, Trash2 } from "lucide-react";
-import { Button } from "~/components/ui/button";
-import { DialogClose } from "~/components/ui/dialog";
+import { Link as LinkIcon } from "lucide-react";
 import { EntityDialogShell } from "~/components/EntityDialog/EntityDialogShell";
 import { CbsMultiSelect } from "~/components/CbsMultiSelect";
 import { Input } from "~/components/ui/input";
@@ -28,7 +26,13 @@ import { RFI_TRANSITIONS } from "~/utils/workflow";
 import { useEntityWorkflow } from "~/lib/use-entity-workflow";
 import { useRecordRecentView } from "~/lib/use-record-recent-view";
 import { WorkflowActions } from "~/components/WorkflowActions";
-import { DISCIPLINE_FILTER_OPTIONS } from "~/config/disciplines";
+import {
+  DeleteEntityButton,
+  DialogFooterActions,
+  DisciplineField,
+  PrintPdfLink,
+  PromoteButton,
+} from "~/components/EntityDialog/EntityDialogActions";
 import {
   RFI_PRIORITY_LABELS,
 } from "~/utils/rfiLabels";
@@ -258,40 +262,17 @@ function RfiDialogBody({
             </div>
             <div className="flex items-center gap-2">
               {initial?.id && (
-                <a
-                  href={`/rfi-print/${initial.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                  title="Open the printable / PDF version in a new tab"
-                >
-                  <Printer className="size-3.5" />
-                  Print / PDF
-                </a>
+                <PrintPdfLink href={`/rfi-print/${initial.id}`} />
               )}
               {canPromote && (
-                <Button
-                  variant="outline"
-                  size="sm"
+                <PromoteButton
+                  label="Promote to FCO"
                   onClick={handlePromote}
                   disabled={busy}
-                  className="text-violet-700 hover:bg-violet-50"
-                >
-                  <ArrowUpRight className="size-3.5 mr-1" />
-                  Promote to FCO
-                </Button>
+                />
               )}
               {initial && onDelete && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDelete}
-                  disabled={busy}
-                  className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                >
-                  <Trash2 className="size-3.5 mr-1" />
-                  Delete
-                </Button>
+                <DeleteEntityButton onClick={handleDelete} disabled={busy} />
               )}
             </div>
           </div>
@@ -366,16 +347,10 @@ function RfiDialogBody({
                     }))}
                   />
                 </Labeled>
-                <Labeled label="Discipline">
-                  <NativeSelect
-                    value={form.discipline}
-                    onChange={(v) => update("discipline", v)}
-                    options={[
-                      { value: "", label: "—" },
-                      ...DISCIPLINE_FILTER_OPTIONS,
-                    ]}
-                  />
-                </Labeled>
+                <DisciplineField
+                  value={form.discipline}
+                  onChange={(v) => update("discipline", v)}
+                />
                 <Labeled label="Due date">
                   <Input
                     type="date"
@@ -550,20 +525,12 @@ function RfiDialogBody({
             />
           </Tabs>
 
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
-            <DialogClose asChild>
-              <Button variant="outline" type="button" disabled={busy}>
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button
-              type="button"
-              disabled={busy || projectId === null}
-              onClick={() => handleSubmit()}
-            >
-              {busy ? "Saving…" : initial ? "Save" : "Create"}
-            </Button>
-          </div>
+          <DialogFooterActions
+            busy={busy}
+            disabled={busy || projectId === null}
+            submitLabel={initial ? "Save" : "Create"}
+            onSubmit={() => handleSubmit()}
+          />
       </div>
     </>
   );

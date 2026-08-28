@@ -1,8 +1,7 @@
 import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, Printer, Trash2, ArrowUpRight } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { DialogClose } from "~/components/ui/dialog";
 import { EntityDialogShell } from "~/components/EntityDialog/EntityDialogShell";
 import { CbsMultiSelect } from "~/components/CbsMultiSelect";
 import { TemplatePicker } from "~/components/EntityDialog/TemplatePicker";
@@ -40,7 +39,13 @@ import {
 import { FCO_TRANSITIONS } from "~/utils/workflow";
 import { useEntityWorkflow } from "~/lib/use-entity-workflow";
 import { WorkflowActions } from "~/components/WorkflowActions";
-import { DISCIPLINE_FILTER_OPTIONS } from "~/config/disciplines";
+import {
+  DeleteEntityButton,
+  DialogFooterActions,
+  DisciplineField,
+  PrintPdfLink,
+  PromoteButton,
+} from "~/components/EntityDialog/EntityDialogActions";
 import {
   FCO_ORIGIN_LABELS,
   FCO_PRIORITY_LABELS,
@@ -360,28 +365,14 @@ function FcoDialogBody({
             </div>
             <div className="flex items-center gap-2">
               {initial?.id && (
-                <a
-                  href={`/fco-print/${initial.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                  title="Open the printable / PDF version in a new tab"
-                >
-                  <Printer className="size-3.5" />
-                  Print / PDF
-                </a>
+                <PrintPdfLink href={`/fco-print/${initial.id}`} />
               )}
               {canPromote && (
-                <Button
-                  variant="outline"
-                  size="sm"
+                <PromoteButton
+                  label="Promote to CVR"
                   onClick={handlePromote}
                   disabled={busy}
-                  className="text-violet-700 hover:bg-violet-50"
-                >
-                  <ArrowUpRight className="size-3.5 mr-1" />
-                  Promote to CVR
-                </Button>
+                />
               )}
               {isAdmin && (
                 <Button
@@ -396,16 +387,7 @@ function FcoDialogBody({
                 </Button>
               )}
               {initial && onDelete && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDelete}
-                  disabled={busy}
-                  className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                >
-                  <Trash2 className="size-3.5 mr-1" />
-                  Delete
-                </Button>
+                <DeleteEntityButton onClick={handleDelete} disabled={busy} />
               )}
             </div>
           </div>
@@ -512,16 +494,10 @@ function FcoDialogBody({
                 }))}
               />
             </Labeled>
-            <Labeled label="Discipline">
-              <NativeSelect
-                value={form.discipline}
-                onChange={(v) => update("discipline", v)}
-                options={[
-                  { value: "", label: "—" },
-                  ...DISCIPLINE_FILTER_OPTIONS,
-                ]}
-              />
-            </Labeled>
+            <DisciplineField
+              value={form.discipline}
+              onChange={(v) => update("discipline", v)}
+            />
           </div>
 
           {initial && onTransition && (
@@ -765,20 +741,12 @@ function FcoDialogBody({
             />
           </Tabs>
 
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
-            <DialogClose asChild>
-              <Button variant="outline" type="button" disabled={busy}>
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button
-              type="button"
-              onClick={handleSubmit}
-              disabled={busy || !form.title.trim()}
-            >
-              {busy ? "Saving…" : initial ? "Save Changes" : "Create FCO"}
-            </Button>
-          </div>
+          <DialogFooterActions
+            busy={busy}
+            disabled={busy || !form.title.trim()}
+            submitLabel={initial ? "Save Changes" : "Create FCO"}
+            onSubmit={handleSubmit}
+          />
       </div>
     </>
   );

@@ -1,8 +1,7 @@
 import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Printer, Trash2, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { DialogClose } from "~/components/ui/dialog";
 import { EntityDialogShell } from "~/components/EntityDialog/EntityDialogShell";
 import { CbsMultiSelect } from "~/components/CbsMultiSelect";
 import { Input } from "~/components/ui/input";
@@ -36,13 +35,18 @@ import {
 import { formatMoney } from "~/lib/formatting";
 import { CVR_TRANSITIONS } from "~/utils/workflow";
 import { useEntityWorkflow } from "~/lib/use-entity-workflow";
-import { DISCIPLINE_FILTER_OPTIONS } from "~/config/disciplines";
 import {
   RISK_LABELS,
   StatusBadge,
   TYPE_LABELS,
 } from "~/components/Changelog/StatusBadge";
 import { WorkflowActions } from "~/components/WorkflowActions";
+import {
+  DeleteEntityButton,
+  DialogFooterActions,
+  DisciplineField,
+  PrintPdfLink,
+} from "~/components/EntityDialog/EntityDialogActions";
 import { CbsSelect } from "~/components/CbsSelect";
 import {
   Tabs,
@@ -376,16 +380,7 @@ function ChangelogDialogBody({
             </div>
             <div className="flex items-center gap-2">
               {initial?.id && (
-                <a
-                  href={`/cvr-print/${initial.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                  title="Open the printable / PDF version in a new tab"
-                >
-                  <Printer className="size-3.5" />
-                  Print / PDF
-                </a>
+                <PrintPdfLink href={`/cvr-print/${initial.id}`} />
               )}
               {isAdmin && (
                 <Button
@@ -400,16 +395,7 @@ function ChangelogDialogBody({
                 </Button>
               )}
               {initial && onDelete && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDelete}
-                  disabled={busy}
-                  className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                >
-                  <Trash2 className="size-3.5 mr-1" />
-                  Delete
-                </Button>
+                <DeleteEntityButton onClick={handleDelete} disabled={busy} />
               )}
             </div>
           </div>
@@ -500,16 +486,10 @@ function ChangelogDialogBody({
                 }))}
               />
             </Labeled>
-            <Labeled label="Discipline">
-              <NativeSelect
-                value={form.discipline}
-                onChange={(v) => update("discipline", v)}
-                options={[
-                  { value: "", label: "—" },
-                  ...DISCIPLINE_FILTER_OPTIONS,
-                ]}
-              />
-            </Labeled>
+            <DisciplineField
+              value={form.discipline}
+              onChange={(v) => update("discipline", v)}
+            />
           </div>
 
           {initial && onTransition && (
@@ -696,20 +676,13 @@ function ChangelogDialogBody({
             </div>
           </Tabs>
 
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 shrink-0">
-            <DialogClose asChild>
-              <Button variant="outline" type="button" disabled={busy}>
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button
-              type="button"
-              onClick={handleSubmit}
-              disabled={busy || !form.title.trim()}
-            >
-              {busy ? "Saving…" : initial ? "Save Changes" : "Create"}
-            </Button>
-          </div>
+          <DialogFooterActions
+            busy={busy}
+            disabled={busy || !form.title.trim()}
+            submitLabel={initial ? "Save Changes" : "Create"}
+            onSubmit={handleSubmit}
+            className="shrink-0"
+          />
       </div>
     </>
   );

@@ -1,8 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { DialogClose } from "~/components/ui/dialog";
 import { EntityDialogShell } from "~/components/EntityDialog/EntityDialogShell";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
@@ -22,6 +20,10 @@ import { PCO_TRANSITIONS } from "~/utils/workflow";
 import { useEntityWorkflow } from "~/lib/use-entity-workflow";
 import { useRecordRecentView } from "~/lib/use-record-recent-view";
 import { WorkflowActions } from "~/components/WorkflowActions";
+import {
+  DeleteEntityButton,
+  DialogFooterActions,
+} from "~/components/EntityDialog/EntityDialogActions";
 import { PCO_PRIORITY_LABELS } from "~/utils/pcoLabels";
 import { PcoStatusBadge } from "~/components/Pco/PcoBadges";
 import { formatMoney } from "~/lib/formatting";
@@ -221,16 +223,7 @@ function PcoDialogBody({
             </div>
             <div className="flex items-center gap-2">
               {initial && onDelete && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDelete}
-                  disabled={busy}
-                  className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                >
-                  <Trash2 className="size-3.5 mr-1" />
-                  Delete
-                </Button>
+                <DeleteEntityButton onClick={handleDelete} disabled={busy} />
               )}
             </div>
           </div>
@@ -595,20 +588,12 @@ function PcoDialogBody({
             />
           </Tabs>
 
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
-            <DialogClose asChild>
-              <Button variant="outline" type="button" disabled={busy}>
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button
-              type="button"
-              disabled={busy || projectId === null}
-              onClick={() => handleSubmit()}
-            >
-              {busy ? "Saving…" : initial ? "Save" : "Create"}
-            </Button>
-          </div>
+          <DialogFooterActions
+            busy={busy}
+            disabled={busy || projectId === null}
+            submitLabel={initial ? "Save" : "Create"}
+            onSubmit={() => handleSubmit()}
+          />
       </div>
     </>
   );

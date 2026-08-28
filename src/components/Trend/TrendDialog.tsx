@@ -1,8 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, Link as LinkIcon, Trash2 } from "lucide-react";
-import { Button } from "~/components/ui/button";
-import { DialogClose } from "~/components/ui/dialog";
+import { Link as LinkIcon } from "lucide-react";
 import { EntityDialogShell } from "~/components/EntityDialog/EntityDialogShell";
 import { CbsMultiSelect } from "~/components/CbsMultiSelect";
 import { Input } from "~/components/ui/input";
@@ -29,7 +27,12 @@ import { useEntityWorkflow } from "~/lib/use-entity-workflow";
 import { useRecordRecentView } from "~/lib/use-record-recent-view";
 import { hasAtLeastRole } from "~/utils/users";
 import { WorkflowActions } from "~/components/WorkflowActions";
-import { DISCIPLINE_FILTER_OPTIONS } from "~/config/disciplines";
+import {
+  DeleteEntityButton,
+  DialogFooterActions,
+  DisciplineField,
+  PromoteButton,
+} from "~/components/EntityDialog/EntityDialogActions";
 import { TREND_PRIORITY_LABELS } from "~/utils/trendLabels";
 import { TrendStatusBadge } from "~/components/Trend/TrendBadges";
 import { rfiListQueryOptions } from "~/utils/rfis";
@@ -262,28 +265,14 @@ function TrendDialogBody({
             </div>
             <div className="flex items-center gap-2">
               {canPromote && (
-                <Button
-                  variant="outline"
-                  size="sm"
+                <PromoteButton
+                  label="Promote to CVR"
                   onClick={handlePromote}
                   disabled={busy}
-                  className="text-violet-700 hover:bg-violet-50"
-                >
-                  <ArrowUpRight className="size-3.5 mr-1" />
-                  Promote to CVR
-                </Button>
+                />
               )}
               {initial && onDelete && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDelete}
-                  disabled={busy}
-                  className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                >
-                  <Trash2 className="size-3.5 mr-1" />
-                  Delete
-                </Button>
+                <DeleteEntityButton onClick={handleDelete} disabled={busy} />
               )}
             </div>
           </div>
@@ -353,16 +342,10 @@ function TrendDialogBody({
                     }))}
                   />
                 </Labeled>
-                <Labeled label="Discipline">
-                  <NativeSelect
-                    value={form.discipline}
-                    onChange={(v) => update("discipline", v)}
-                    options={[
-                      { value: "", label: "—" },
-                      ...DISCIPLINE_FILTER_OPTIONS,
-                    ]}
-                  />
-                </Labeled>
+                <DisciplineField
+                  value={form.discipline}
+                  onChange={(v) => update("discipline", v)}
+                />
                 <Labeled label="Needed by">
                   <Input
                     type="date"
@@ -615,20 +598,12 @@ function TrendDialogBody({
             />
           </Tabs>
 
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
-            <DialogClose asChild>
-              <Button variant="outline" type="button" disabled={busy}>
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button
-              type="button"
-              disabled={busy || projectId === null}
-              onClick={() => handleSubmit()}
-            >
-              {busy ? "Saving…" : initial ? "Save" : "Create"}
-            </Button>
-          </div>
+          <DialogFooterActions
+            busy={busy}
+            disabled={busy || projectId === null}
+            submitLabel={initial ? "Save" : "Create"}
+            onSubmit={() => handleSubmit()}
+          />
       </div>
     </>
   );

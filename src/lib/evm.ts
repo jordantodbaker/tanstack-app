@@ -88,8 +88,16 @@ export function computeEvm(input: EvmInputs): EvmMetrics {
 
   const cv = ev - ac;
   const sv = ev - pv;
-  const cpi = ac === 0 ? null : ev / ac;
-  const spi = pv === 0 ? null : ev / pv;
+  // Null, not zero, when nothing has been earned yet. CPI/SPI are ratios OF
+  // earned value: with EV at 0 they evaluate to a real 0, and the dashboard
+  // renders 0.00 in alarm red with a falling arrow — reporting "no progress
+  // recorded" as the worst possible cost and schedule performance. That is the
+  // normal state early in a project. `eac` below already treated a 0 index as
+  // no-signal; this makes the indices themselves say so, and the cards already
+  // render null as an em dash.
+  const noEarnedValue = ev === 0;
+  const cpi = ac === 0 || noEarnedValue ? null : ev / ac;
+  const spi = pv === 0 || noEarnedValue ? null : ev / pv;
   // Forecast: BAC / CPI when CPI is meaningful; otherwise no signal yet,
   // so the best estimate is the baseline budget itself.
   const eac = cpi === null || cpi === 0 ? bac : bac / cpi;
@@ -152,8 +160,16 @@ export function aggregateEvm(perBucket: EvmMetrics[]): EvmMetrics {
   const pendingTrend = perBucket.reduce((a, m) => a + m.pendingTrend, 0);
   const cv = ev - ac;
   const sv = ev - pv;
-  const cpi = ac === 0 ? null : ev / ac;
-  const spi = pv === 0 ? null : ev / pv;
+  // Null, not zero, when nothing has been earned yet. CPI/SPI are ratios OF
+  // earned value: with EV at 0 they evaluate to a real 0, and the dashboard
+  // renders 0.00 in alarm red with a falling arrow — reporting "no progress
+  // recorded" as the worst possible cost and schedule performance. That is the
+  // normal state early in a project. `eac` below already treated a 0 index as
+  // no-signal; this makes the indices themselves say so, and the cards already
+  // render null as an em dash.
+  const noEarnedValue = ev === 0;
+  const cpi = ac === 0 || noEarnedValue ? null : ev / ac;
+  const spi = pv === 0 || noEarnedValue ? null : ev / pv;
   const eac = cpi === null || cpi === 0 ? bac : bac / cpi;
   const etc = eac - ac;
   const vac = currentBudget - eac;

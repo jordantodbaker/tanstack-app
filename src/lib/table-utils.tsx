@@ -384,8 +384,10 @@ export const LABOR_COST_GROUP: ColumnGroup = {
     "unit",
     "laborFactor",
     "laborHours",
+    "unitHours",
     "laborRate",
     "totalCost",
+    "unitRate",
   ],
 };
 

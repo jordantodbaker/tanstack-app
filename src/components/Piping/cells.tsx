@@ -9,6 +9,11 @@ import {
 } from "~/lib/table-utils";
 import { computeBoreSize } from "~/lib/utils";
 import {
+  computeTotalCost,
+  computeUnitCost,
+  computeUnitHours,
+} from "~/lib/fef-derive";
+import {
   deriveLaborHours,
   fabricationHint,
   laborFactorFor,
@@ -252,13 +257,32 @@ export function PipeCategoryCell({ row }: CellProps) {
 }
 
 export function TotalCostCell({ row }: CellProps) {
-  const hours = parseFloat(row.original.laborHours);
-  const rate = parseFloat(row.original.laborRate);
-  const total =
-    !isNaN(hours) && !isNaN(rate) && row.original.laborRate !== ""
-      ? (hours * rate).toFixed(2)
-      : "";
-  return <span className={readOnlyCellClass}>{total}</span>;
+  const { laborHours, laborRate } = row.original;
+  return (
+    <span className={readOnlyCellClass}>
+      {computeTotalCost(laborHours, laborRate)}
+    </span>
+  );
+}
+
+/** Installed cost of a single unit — Total Cost spread over Quantity. */
+export function UnitRateCell({ row }: CellProps) {
+  const { laborHours, laborRate, quantity } = row.original;
+  return (
+    <span className={readOnlyCellClass}>
+      {computeUnitCost(laborHours, laborRate, quantity)}
+    </span>
+  );
+}
+
+/** Hours to install a single unit — Labor Hours spread over Quantity. */
+export function UnitHoursCell({ row }: CellProps) {
+  const { laborHours, quantity } = row.original;
+  return (
+    <span className={readOnlyCellClass}>
+      {computeUnitHours(laborHours, quantity)}
+    </span>
+  );
 }
 
 type RoleRate = { roleName: string; schedule: string; rate: number };

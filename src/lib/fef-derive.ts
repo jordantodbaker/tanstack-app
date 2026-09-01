@@ -77,3 +77,53 @@ export function cleanNumber(raw: string): string {
 export function normalizeCode(code: string): string {
   return code.replace(/[-\s]/g, "").toLowerCase();
 }
+
+/**
+ * Total installed cost of a line item: labor only.
+ *
+ * Material is priced separately and per-unit (`materialCost` is a unit price
+ * the rollup multiplies by quantity), so this is deliberately hours x rate and
+ * not a whole-line total. Blank whenever either side is missing rather than
+ * showing 0.00, which would read as "free" instead of "not priced yet".
+ */
+export function computeTotalCost(laborHours: string, laborRate: string): string {
+  const hours = parseFloat(laborHours);
+  const rate = parseFloat(laborRate);
+  if (isNaN(hours) || isNaN(rate) || laborRate === "") return "";
+  return (hours * rate).toFixed(2);
+}
+
+/**
+ * The two "unit rate" figures a line item has, both spread over quantity:
+ * what one unit COSTS to install, and how many HOURS one unit takes.
+ *
+ * Two, because the estimate is compared both ways — the Summary page's own
+ * "Unit Rate" column has always been the hours one, while a bid comparison
+ * wants the money one. They are named for what they measure rather than both
+ * being "unit rate", since only the column headers can afford that ambiguity.
+ *
+ * Quantity must be a positive number for either: at zero there is nothing to
+ * divide by, and a blank quantity means the line is not taken off yet. Both
+ * give "" — the same "not priced yet" blank `computeTotalCost` uses.
+ */
+export function computeUnitCost(
+  laborHours: string,
+  laborRate: string,
+  quantity: string,
+): string {
+  const total = computeTotalCost(laborHours, laborRate);
+  const qty = parseFloat(quantity);
+  if (total === "" || isNaN(qty) || qty <= 0) return "";
+  return (parseFloat(total) / qty).toFixed(2);
+}
+
+/** Hours to install ONE of something. The Summary page's "Unit Rate". */
+export function computeUnitHours(
+  laborHours: string,
+  quantity: string,
+): string {
+  const hours = parseFloat(laborHours);
+  const qty = parseFloat(quantity);
+  if (isNaN(hours) || isNaN(qty) || qty <= 0) return "";
+  return (hours / qty).toFixed(2);
+}

@@ -44,7 +44,7 @@ import { useCurrentUser, useIsAdmin } from "~/lib/use-current-user";
 import { Button } from "~/components/ui/button";
 import { NotificationBell } from "~/components/NotificationBell";
 import { GlobalSearch } from "~/components/GlobalSearch";
-import { TOP_NAV_LINKS } from "~/config/top-nav-links";
+import { TopNav } from "~/components/TopNav";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -222,24 +222,9 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
               <GlobalSearch />
             </div>
             {/* Top nav — desktop only. Mobile + tablet (< lg) see these same
-                links inside the sidebar drawer (lg:hidden block in Sidebar). */}
-            <nav className="hidden lg:flex items-center gap-1 flex-1 min-w-0">
-              {TOP_NAV_LINKS.filter((l) => !l.adminOnly || isAdmin).map((l) => (
-                <Link
-                  key={l.to}
-                  to={l.to}
-                  className="px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                  activeProps={{ className: "text-red-800 bg-red-50" }}
-                  inactiveProps={{
-                    className:
-                      "text-slate-600 hover:text-slate-900 hover:bg-slate-100",
-                  }}
-                  activeOptions={{ exact: true }}
-                >
-                  {l.label}
-                </Link>
-              ))}
-            </nav>
+                links inside the sidebar drawer (lg:hidden block in Sidebar).
+                Collapses whatever does not fit into a "More" menu — see TopNav. */}
+            <TopNav isAdmin={isAdmin} />
             <div className="shrink-0 flex items-center gap-1 md:gap-2 ml-auto lg:ml-0">
               <NotificationBell />
               <UserButton />

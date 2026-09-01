@@ -295,3 +295,52 @@ describe("timeLinearPv", () => {
     expect(timeLinearPv(1000, start, end, "2027-03-01")).toBe(1000);
   });
 });
+
+describe("computeEvm — no earned value yet", () => {
+  it("reports CPI/SPI as unmeasurable, not as zero", () => {
+    // The real dashboard case: money spent, nothing claimed complete. EV/AC is
+    // arithmetically 0, and rendering that put "0.00" in alarm red with a
+    // falling arrow on every project that had not yet recorded progress.
+    const m = computeEvm(
+      inp({ bac: 755205, percentComplete: 0, actualCost: 473217, pv: 311210 }),
+    );
+    expect(m.ev).toBe(0);
+    expect(m.cpi).toBeNull();
+    expect(m.spi).toBeNull();
+  });
+
+  it("still reports the variances, which ARE meaningful with no progress", () => {
+    // "Spent 473k and earned nothing" is a real statement; only the ratios are
+    // undefined. Leaving CV/SV intact keeps the spend visible.
+    const m = computeEvm(
+      inp({ bac: 755205, percentComplete: 0, actualCost: 473217, pv: 311210 }),
+    );
+    expect(m.cv).toBe(-473217);
+    expect(m.sv).toBe(-311210);
+  });
+
+  it("falls back to the baseline budget for EAC", () => {
+    const m = computeEvm(
+      inp({ bac: 755205, percentComplete: 0, actualCost: 473217 }),
+    );
+    expect(m.eac).toBe(755205);
+  });
+
+  it("still yields real indices as soon as anything is earned", () => {
+    // The guard must key on "nothing earned", not suppress low performance:
+    // 1% complete against heavy spend is terrible, and has to show as terrible.
+    const m = computeEvm(
+      inp({ bac: 1000, percentComplete: 0.01, actualCost: 500, pv: 500 }),
+    );
+    expect(m.cpi).toBeCloseTo(0.02);
+    expect(m.spi).toBeCloseTo(0.02);
+  });
+
+  it("aggregates to unmeasurable when no bucket has earned anything", () => {
+    const a = computeEvm(inp({ bac: 500, percentComplete: 0, actualCost: 200 }));
+    const b = computeEvm(inp({ bac: 500, percentComplete: 0, actualCost: 300 }));
+    const total = aggregateEvm([a, b]);
+    expect(total.cpi).toBeNull();
+    expect(total.spi).toBeNull();
+  });
+});

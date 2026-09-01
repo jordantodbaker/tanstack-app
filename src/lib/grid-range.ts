@@ -32,6 +32,9 @@ import {
   cleanNumber,
   computeLaborHours,
   computeSteelQuantity,
+  computeTotalCost,
+  computeUnitCost,
+  computeUnitHours,
   DEFAULT_LABOR_FACTOR,
   normalizeCode,
 } from "./fef-derive";
@@ -631,13 +634,14 @@ export function readCellText(colId: string, row: FefRow, ctx: WriteCtx): string 
       return isBlankId(row.id) ? "" : row.id;
     case "sub":
       return row.sub === "true" ? "Yes" : "";
-    case "totalCost": {
-      const h = parseFloat(row.laborHours);
-      const r = parseFloat(row.laborRate);
-      return !isNaN(h) && !isNaN(r) && row.laborRate !== ""
-        ? (h * r).toFixed(2)
-        : "";
-    }
+    case "totalCost":
+      return computeTotalCost(row.laborHours, row.laborRate);
+    // Derived like Total Cost, so it is copy-only: it serializes here so a
+    // whole row still exports to Excel, but paste/fill/clear skip it.
+    case "unitRate":
+      return computeUnitCost(row.laborHours, row.laborRate, row.quantity);
+    case "unitHours":
+      return computeUnitHours(row.laborHours, row.quantity);
     case "area": {
       return idx.areaLabelById.get(row.area) ?? row.area;
     }

@@ -553,11 +553,24 @@ export function LaborFactorQuantityCell({ getValue, row, table }: CellProps) {
  * from before this column existed (stored `laborHours` may be stale)
  * still display the right number.
  */
+/**
+ * Labor Hours as STORED on the row, not recomputed from quantity.
+ *
+ * It used to render `quantity x laborFactor` on every paint, which disagreed
+ * with every other reader of the same row: the toolbar totals, Total Cost and
+ * both unit-rate columns all use `laborHours`. On a row with 101 units and no
+ * factor the cell showed 101.0 while the unit rate beside it showed 0.35 —
+ * derived from the 35.02 actually saved.
+ *
+ * The write path is unchanged: editing Quantity still recomputes and STORES
+ * hours (`LaborFactorQuantityCell`), so typing keeps behaving as before. What
+ * changes is that the cell now reports the number the rest of the app costs
+ * from, including hours that arrived by import or by paste rather than by
+ * multiplication.
+ */
 export function ComputedLaborHoursCell({ row }: CellProps) {
   return (
-    <span className={readOnlyCellClass}>
-      {computeLaborHours(row.original.quantity, row.original.laborFactor)}
-    </span>
+    <span className={readOnlyCellClass}>{row.original.laborHours}</span>
   );
 }
 

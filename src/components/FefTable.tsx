@@ -38,6 +38,8 @@ import {
   ScheduleSelectCell,
   SubCheckboxCell,
   TotalCostCell,
+  UnitRateCell,
+  UnitHoursCell,
   CrewMixSelectCell,
 } from "~/components/Piping/cells";
 import { supportLaborColumns } from "~/components/Piping/columns";
@@ -116,11 +118,23 @@ const takeOffColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("sub", { header: "Sub", cell: SubCheckboxCell, size: 60 }),
   columnHelper.accessor("unit", { header: "Unit", cell: ReadOnlyCell }),
   columnHelper.accessor("laborHours", { header: "Labor Hours", cell: ComputedLaborHoursCell }),
+  columnHelper.display({
+    id: "unitHours",
+    header: "Unit Rate (HRS)",
+    cell: UnitHoursCell,
+    size: 130,
+  }),
   columnHelper.accessor("laborRate", { header: "Labor Rate ($)", cell: ReadOnlyCell }),
   columnHelper.display({
     id: "totalCost",
     header: "Total Cost ($)",
     cell: TotalCostCell,
+    size: 130,
+  }),
+  columnHelper.display({
+    id: "unitRate",
+    header: "Unit Rate ($)",
+    cell: UnitRateCell,
     size: 130,
   }),
   columnHelper.accessor("notes", { header: "Notes", cell: EditableCell }),

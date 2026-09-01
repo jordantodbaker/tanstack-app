@@ -15,7 +15,6 @@ import {
   TakeOffIdReadOnlyCell,
   DeleteRowCell,
   AreaSelectCell,
-  LaborFactorInputCell,
   LaborFactorQuantityCell,
   ComputedLaborHoursCell,
   ShapeCountCell,
@@ -99,6 +98,7 @@ const takeOffColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("id", { header: "ID", cell: TakeOffIdReadOnlyCell, size: 150 }),
   columnHelper.accessor("name", { header: "Name", cell: CbsSelectCell, size: 300 }),
   columnHelper.accessor("description", { header: "Description", cell: EditableCell, size: 250 }),
+  columnHelper.accessor("area", { header: "Area", cell: AreaSelectCell, size: 200 }),
   // ── Reference (universal) ──
   columnHelper.accessor("projectPhase", { header: "Project Phase", cell: DisplayEditCell, size: 130 }),
   columnHelper.accessor("drawingNumber", { header: "Drawing Number", cell: DisplayEditCell, size: 140 }),
@@ -106,20 +106,13 @@ const takeOffColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("areaName", { header: "Area Name", cell: DisplayEditCell, size: 140 }),
   columnHelper.accessor("systemName", { header: "System", cell: DisplayEditCell, size: 120 }),
   columnHelper.accessor("tagNumber", { header: "Tag Number", cell: DisplayEditCell, size: 120 }),
-  // ── Location (universal) ──
-  columnHelper.accessor("elevation", { header: "Elevation", cell: DisplayEditCell, size: 100 }),
   // ── Labor Adjustments (universal) ──
-  columnHelper.accessor("siteFactor", { header: "Site Factor", cell: DisplayEditCell, size: 100 }),
   columnHelper.accessor("feetAboveGrade", { header: "Feet above grade", cell: DisplayEditCell, size: 120 }),
   columnHelper.accessor("efficAdjust", { header: "Effic Adjust", cell: DisplayEditCell, size: 110 }),
-  columnHelper.accessor("laborFactorAdj", { header: "Labor Factor", cell: DisplayEditCell, size: 110 }),
-  columnHelper.accessor("elevAdder", { header: "Elev' Adder", cell: DisplayEditCell, size: 100 }),
-  columnHelper.accessor("area", { header: "Area", cell: AreaSelectCell, size: 200 }),
   columnHelper.accessor("role", { header: "Role", cell: RoleSelectCell, size: 180 }),
   columnHelper.accessor("crewMixId", { header: "Crew Mix", cell: CrewMixSelectCell, size: 180 }),
   columnHelper.accessor("schedule", { header: "Schedule", cell: ScheduleSelectCell, size: 150 }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: LaborFactorQuantityCell }),
-  columnHelper.accessor("laborFactor", { header: "Labor Factor", cell: LaborFactorInputCell, size: 110 }),
   columnHelper.accessor("sub", { header: "Sub", cell: SubCheckboxCell, size: 60 }),
   columnHelper.accessor("unit", { header: "Unit", cell: ReadOnlyCell }),
   columnHelper.accessor("laborHours", { header: "Labor Hours", cell: ComputedLaborHoursCell }),
@@ -154,16 +147,9 @@ const takeOffColumnGroups: ColumnGroup[] = [
       "tagNumber",
     ],
   },
-  { label: "Location", columnIds: ["elevation"] },
   {
     label: "Labor Adjustments",
-    columnIds: [
-      "siteFactor",
-      "feetAboveGrade",
-      "efficAdjust",
-      "laborFactorAdj",
-      "elevAdder",
-    ],
+    columnIds: ["feetAboveGrade", "efficAdjust"],
   },
   // Computed output columns — chip-only toggle (was the "Show Details" button).
   LABOR_COST_GROUP,
@@ -361,12 +347,12 @@ export function DisciplinePage({
     }
     if (!isSteel) return takeOffColumns;
     // Quantity is derived on steel, so swap it for the read-only cell. Then add
-    // Task Code (SLTO member picker) after Description and the H/W/L + # of
-    // Shapes dimension columns after Quantity.
+    // Task Code (SLTO member picker) between Schedule and Quantity, and the
+    // H/W/L + # of Shapes dimension columns after Quantity.
     const withSteelQty = takeOffColumns.map((c) =>
       columnId(c) === "quantity" ? steelQuantityColumn : c,
     );
-    let cols = insertColumnsAfter(withSteelQty, "description", [
+    let cols = insertColumnsAfter(withSteelQty, "schedule", [
       steelTaskCodeColumn,
     ]);
     cols = insertColumnsAfter(cols, "quantity", steelDimensionColumns);

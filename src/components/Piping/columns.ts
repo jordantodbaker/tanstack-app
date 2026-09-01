@@ -32,6 +32,7 @@ export const takeOffColumns: ColumnDef<FefRow, string>[] = [
   // combinations resolves to an item, so nothing is unreachable without it.
   columnHelper.accessor("name", { header: "Name", cell: CbsNameCell, size: 220 }),
   columnHelper.accessor("description", { header: "Description", cell: EditableCell, size: 180 }),
+  columnHelper.accessor("area", { header: "Area", cell: AreaSelectCell, size: 140 }),
   // ── Reference ──
   columnHelper.accessor("projectPhase", { header: "Project Phase", cell: DisplayEditCell, size: 120 }),
   columnHelper.accessor("drawingNumber", { header: "Drawing Number", cell: DisplayEditCell, size: 130 }),
@@ -50,15 +51,10 @@ export const takeOffColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("heatTrace", { header: "TRACE", cell: DisplayEditCell, size: 80 }),
   // ── Location ──
   columnHelper.accessor("agUg", { header: "AG / UG", cell: DisplayEditCell, size: 80 }),
-  columnHelper.accessor("elevation", { header: "Elevation", cell: DisplayEditCell, size: 90 }),
   // ── Labor Adjustments ──
-  columnHelper.accessor("siteFactor", { header: "Site Factor", cell: DisplayEditCell, size: 90 }),
   columnHelper.accessor("feetAboveGrade", { header: "Feet above grade", cell: DisplayEditCell, size: 110 }),
   columnHelper.accessor("efficAdjust", { header: "Effic Adjust", cell: DisplayEditCell, size: 100 }),
-  columnHelper.accessor("laborFactorAdj", { header: "Labor Factor", cell: DisplayEditCell, size: 100 }),
-  columnHelper.accessor("elevAdder", { header: "Elev' Adder", cell: DisplayEditCell, size: 90 }),
   columnHelper.accessor("weldAdder", { header: "Weld Adder", cell: DisplayEditCell, size: 90 }),
-  columnHelper.accessor("area", { header: "Area", cell: AreaSelectCell, size: 140 }),
   columnHelper.accessor("role", { header: "Role", cell: RoleSelectCell, size: 130 }),
   columnHelper.accessor("crewMixId", { header: "Crew Mix", cell: CrewMixSelectCell, size: 140 }),
   columnHelper.accessor("schedule", { header: "Schedule", cell: ScheduleSelectCell, size: 100 }),
@@ -107,18 +103,11 @@ export const pipingTakeOffColumnGroups: ColumnGroup[] = [
       "heatTrace",
     ],
   },
-  { label: "Location", columnIds: ["agUg", "elevation"] },
+  { label: "Location", columnIds: ["agUg"] },
   {
     label: "Labor Adjustments",
     defaultCollapsed: true,
-    columnIds: [
-      "siteFactor",
-      "feetAboveGrade",
-      "efficAdjust",
-      "laborFactorAdj",
-      "elevAdder",
-      "weldAdder",
-    ],
+    columnIds: ["feetAboveGrade", "efficAdjust", "weldAdder"],
   },
   // Computed output columns — chip-only toggle (was the "Show Details" button).
   LABOR_COST_GROUP,

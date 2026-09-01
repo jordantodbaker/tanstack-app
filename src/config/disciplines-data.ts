@@ -83,6 +83,8 @@ export const disciplinesData: DisciplineData[] = [
   {
     id: "concrete",
     label: "Concrete",
+    // Summary reports concrete and grout as one digit-2 row.
+    summaryLabel: "Concrete & Grout",
     to: "/concrete",
     // "290" moved to the new Grout discipline below.
     l1Codes: ["200", "201", "202", "203", "231", "232", "233"],

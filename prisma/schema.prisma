@@ -417,6 +417,8 @@ model FefRow {
   name                 String          @default("")
   description          String          @default("")
   shopField            String          @default("")
+  /// Equipment take-off only: "Bulk" | "Tagged" | "" (not yet classified).
+  materialType         String          @default("")
   /// "Fabricate" | "Erect" (or "" when unset). Distinguishes the two field
   /// work types the install cost codes separate — the 63x catalog carries an
   /// -ER- and an -FB- variant of each item — so it only carries meaning on a

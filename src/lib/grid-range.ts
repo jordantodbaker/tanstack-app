@@ -27,6 +27,7 @@
  */
 import type { CbsOption, FefRow } from "./types";
 import { crewMixAverageRate } from "./crew-mix-rate";
+import { MATERIAL_TYPES } from "./fef-cells";
 import {
   cleanNumber,
   computeLaborHours,
@@ -157,6 +158,8 @@ export const RANGE_WRITABLE_COLUMNS: ReadonlySet<string> = new Set([
   "shopField",
   "fabricateErect",
   "weldGroupDescription",
+  // Equipment: fixed Bulk/Tagged vocabulary, validated on write.
+  "materialType",
 ]);
 
 /**
@@ -561,10 +564,31 @@ export function resolveCellWrite(
         ? applyRoleRate({ schedule: match }, row, idx)
         : null;
     }
+    case "materialType": {
+      // A fixed vocabulary, so a paste has to resolve to one of the options
+      // rather than being taken verbatim — otherwise a stray spreadsheet value
+      // ("BULK ", "tag") lands in a field that reporting groups on. Blank
+      // clears, matching the dropdown's placeholder row; anything else is
+      // refused (the cell keeps its value) rather than silently blanked.
+      const t = raw.trim();
+      if (t === "") return { materialType: "" };
+      const match = MATERIAL_TYPES.find(
+        (m) => m.toLowerCase() === t.toLowerCase(),
+      );
+      return match ? { materialType: match } : null;
+    }
     case "name": {
-      // The Name column is the CBS-item picker; its stored identity is the CBS
-      // code in `id`. Clearing removes the whole item; a resolvable code/name
-      // stamps id + name + unit (matching CbsSelectCell / CbsSearchSelectCell).
+      // On piping the CBS item is DERIVED from Weld Group + Shop/Field + Size
+      // + Fabricate/Erect, so Name is read-only there (see Piping/columns.ts).
+      // Copy-only, like the other derived columns: a pasted value would stand
+      // until the next edit to any of those four silently re-stamped it.
+      // Bulk loading a piping sheet from a spreadsheet still works — the
+      // "Paste from Excel" dialog reads a CBS Code column, not this one.
+      if (isPipingSheet(ctx)) return null;
+      // Elsewhere the Name column IS the CBS-item picker; its stored identity
+      // is the CBS code in `id`. Clearing removes the whole item; a resolvable
+      // code/name stamps id + name + unit (matching CbsSelectCell /
+      // CbsSearchSelectCell).
       if (raw.trim() === "") return { id: "", name: "", unit: "" };
       const match = resolveCbs(raw, idx);
       return match

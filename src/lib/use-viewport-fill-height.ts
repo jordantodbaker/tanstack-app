@@ -17,6 +17,15 @@ import * as React from "react";
  */
 
 /** Pure height math, split out so the clamping rules are testable. */
+/**
+ * Share of the viewport a pane gets when it cannot fill the space below it.
+ *
+ * Generous on purpose: this is the STACKED case, where the page scrolls to
+ * reach the pane anyway, so a taller pane costs nothing and a short one is
+ * pure friction.
+ */
+const STACKED_VIEWPORT_RATIO = 0.7;
+
 export function computeFillHeight(input: {
   /** The pane's top edge in viewport coordinates. */
   top: number;
@@ -27,7 +36,24 @@ export function computeFillHeight(input: {
   min: number;
 }): number {
   const available = input.viewportHeight - input.top - input.reserve;
-  return Math.max(input.min, Math.round(available));
+  if (available >= input.min) return Math.round(available);
+
+  // Not enough room below the pane to be worth filling — which happens when
+  // the pane is not the page's only grid. Field Estimate stacks two: the
+  // second starts at or past the bottom of the viewport, so "fill what is
+  // left" evaluates to nothing and the pane collapsed to `min` — a 240px
+  // window onto a sheet twelve hundred pixels tall.
+  //
+  // A stacked pane is reached by scrolling the page, so size it against the
+  // viewport rather than against the (absent) space beneath it. Capped at the
+  // viewport itself so the pane never exceeds one screen.
+  return Math.max(
+    input.min,
+    Math.min(
+      input.viewportHeight - input.reserve,
+      Math.round(input.viewportHeight * STACKED_VIEWPORT_RATIO),
+    ),
+  );
 }
 
 /**

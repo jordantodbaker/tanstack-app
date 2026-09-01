@@ -719,6 +719,42 @@ export function AreaSelectCell({ getValue, row, column, table }: CellProps) {
   );
 }
 
+/**
+ * How an equipment line item is procured: in bulk, or as a tagged item with
+ * its own equipment number. Blank means "not classified yet" — an estimator
+ * types quantities long before that decision is made, so an unset value is a
+ * normal state rather than a missing one.
+ *
+ * A fixed vocabulary rather than free text: it drives how the line is reported,
+ * and "tagged"/"Tagged "/"TAG" would fragment that.
+ */
+export const MATERIAL_TYPE_OPTIONS = [
+  { value: "Bulk", label: "Bulk" },
+  { value: "Tagged", label: "Tagged" },
+] as const;
+
+/** Valid stored values, blank included. Shared with the range-paste validator
+ *  so typing and pasting accept exactly the same set. */
+export const MATERIAL_TYPES: readonly string[] = MATERIAL_TYPE_OPTIONS.map(
+  (o) => o.value,
+);
+
+export function MaterialTypeSelectCell({ getValue, row, column, table }: CellProps) {
+  const value = getValue() as string;
+  return (
+    <CellSelect
+      value={value}
+      // `CellSelect`, not a native <select>: the native popup swallows Ctrl+V
+      // at the OS level, which would break paste while the cell is focused.
+      options={MATERIAL_TYPE_OPTIONS as unknown as { value: string; label: string }[]}
+      ariaLabel="Material type"
+      onValueChange={(v) =>
+        table.options.meta?.updateData?.(row.index, column.id, v)
+      }
+    />
+  );
+}
+
 type PaginatableTable = {
   firstPage: () => void;
   previousPage: () => void;

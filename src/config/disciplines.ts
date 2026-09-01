@@ -139,7 +139,8 @@ export type SummaryDiscipline = {
 export const SUMMARY_DISCIPLINES: SummaryDiscipline[] = [
   { label: "Demolition", uom: "AL", digit: "0" },
   { label: "Civil", uom: "CY", digit: "1" },
-  { label: "Concrete", uom: "CY", digit: "2" },
+  // One row over two take-off sheets: grout's 29X codes live in digit 2.
+  { label: "Concrete & Grout", uom: "CY", digit: "2" },
   { label: "Structural Steel", uom: "TN", digit: "3" },
   { label: "Structural Steel Shop", uom: "TN", digit: null },
   { label: "Buildings", uom: "", digit: "4" },

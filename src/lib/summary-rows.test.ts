@@ -25,25 +25,53 @@ const emptyTotals = (): ProjectFefRowTotals => ({
 
 const concreteLabel = SUMMARY_DISCIPLINES.find((d) => d.digit === "2")!.label;
 
-describe("buildSummaryRows — Grout carve-out", () => {
-  it("subtracts Grout (29X) from Concrete's digit-2 totals and adds a Grout row after it", () => {
+describe("buildSummaryRows — Concrete and Grout reported together", () => {
+  it("reports the whole digit-2 bucket on one row, grout included", () => {
+    // Grout's 29X codes are already inside digit 2. They used to be summed out
+    // of the L1 buckets and subtracted back off Concrete so the two could show
+    // separately; reporting them together means that arithmetic is gone, not
+    // rearranged — the row is simply what the bucket holds.
     const t = emptyTotals();
-    t.laborByDigit["2"] = 1000; // all of digit 2 (incl. grout)
-    t.laborByL1["290"] = 300; // grout's share, keyed by L1
+    // Every measure, not just labor: the old carve-out subtracted all four, so
+    // testing one would let a leftover subtraction on any of the others pass.
+    t.laborByDigit["2"] = 1000;
+    t.materialsByDigit["2"] = 4000;
+    t.laborHoursByDigit["2"] = 50;
+    t.quantityByDigit["2"] = 200;
+    // Grout's L1 share — present in the buckets, and must NOT be subtracted.
+    t.laborByL1["290"] = 300;
+    t.materialsByL1["290"] = 1200;
+    t.laborHoursByL1["290"] = 15;
+    t.quantityByL1["290"] = 60;
     const { disciplines } = buildSummaryRows(t);
 
-    const grout = disciplines.find((r) => r.description === "Grout");
-    const concrete = disciplines.find((r) => r.description === concreteLabel);
-    expect(grout?.totalLabor).toBe(formatMoney(300));
-    // Concrete keeps only the non-grout remainder — no double count.
-    expect(concrete?.totalLabor).toBe(formatMoney(700));
+    const combined = disciplines.find((r) => r.description === concreteLabel);
+    expect(combined?.totalLabor).toBe(formatMoney(1000));
+    expect(combined?.material).toBe(formatMoney(4000));
+    expect(combined?.hrs).toBe(formatMoney(50));
+    expect(combined?.qty).toBe(formatMoney(200));
   });
 
-  it("inserts the Grout row immediately after Concrete", () => {
+  it("no longer emits a separate Grout row", () => {
     const { disciplines } = buildSummaryRows(emptyTotals());
-    const ci = disciplines.findIndex((r) => r.description === concreteLabel);
-    expect(ci).toBeGreaterThanOrEqual(0);
-    expect(disciplines[ci + 1]?.description).toBe("Grout");
+    expect(disciplines.map((r) => r.description)).not.toContain("Grout");
+  });
+
+  it("counts grout's invalid rows against the combined row", () => {
+    // The badge is keyed by discipline id, so without `alsoCovers` a bad grout
+    // row would warn on the Grout sheet and nowhere on this page.
+    const { disciplines } = buildSummaryRows(emptyTotals());
+    const combined = disciplines.find((r) => r.description === concreteLabel);
+    expect(combined?.disciplineId).toBe("concrete");
+    expect(combined?.alsoCovers).toContain("grout");
+  });
+
+  it("still links to a real take-off sheet", () => {
+    // The label changed, so the label→discipline lookup has to still resolve
+    // or the row silently loses its route and its error badge.
+    const { disciplines } = buildSummaryRows(emptyTotals());
+    const combined = disciplines.find((r) => r.description === concreteLabel);
+    expect(combined?.disciplineTo).toBe("/concrete");
   });
 });
 

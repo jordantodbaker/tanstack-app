@@ -174,8 +174,24 @@ async function main() {
     else byL1.set(item.l1, [item]);
   }
   const byL1entries = () => byL1.entries();
+
+  // The CBS L1 suffix says which sheet a code belongs on — see
+  // `DisciplineRoute.tsx`, which builds the Take Off dropdown and the Support
+  // Labor rows from exactly these predicates. Ignoring them produces rows the
+  // app itself could never have created: a take-off row stamped with a code its
+  // Name dropdown excludes, or a support-labor row with no code at all (which
+  // then renders as the `__fe-blank-loaded-…` sentinel in the ID column).
+  const isMaterialCode = (l1: string) => l1.endsWith("01") || l1.endsWith("31");
+  const isSupportCode = (l1: string) => l1.endsWith("02") || l1.endsWith("32");
+
+  const codesFor = (d: string, keep: (l1: string) => boolean) =>
+    (L1[d] ?? []).filter(keep).flatMap((code) => byL1.get(code) ?? []);
+
+  /** Selectable in the Take Off Name dropdown: neither material nor support. */
   const forDiscipline = (d: string) =>
-    (L1[d] ?? []).flatMap((code) => byL1.get(code) ?? []);
+    codesFor(d, (l1) => !isMaterialCode(l1) && !isSupportCode(l1));
+  /** What the Support Labor sheet is seeded from. */
+  const supportItemsFor = (d: string) => codesFor(d, isSupportCode);
 
   // Roles carry the disciplines they serve, so labor can be assigned by craft
   // rather than at random — otherwise piping ends up priced as "Painter".
@@ -444,18 +460,30 @@ async function main() {
     }
   }
 
-  // SUPPORT_LABOR — role/schedule/crew driven, no CBS stamp.
+  // SUPPORT_LABOR — seeded from the discipline's 02/32 CBS codes, the way
+  // `toSupportLaborRow` does it: the code, its name and its UoM come straight
+  // off the CBS item. A support row without a code has no id to show, and the
+  // grid falls back to the `__fe-blank-loaded-…` sentinel.
   for (const [discipline, share] of SUPPORT_MIX) {
+    const items = supportItemsFor(discipline);
     const count = Math.round(TARGET_ROWS * share);
+    if (items.length === 0) {
+      console.log(
+        `Support labor: ${discipline} has no allowed 02/32 CBS items — skipping its sheet.`,
+      );
+      continue;
+    }
     for (let i = 0; i < count; i++) {
+      const item = pick(items);
       const labor = laborPick(discipline);
       rows.push({
         ...base(discipline, "SUPPORT_LABOR", i),
         ...areaCols(),
-        name: `${labor.role} support — ${pick(["supervision", "QA/QC", "rigging", "scaffold", "cleanup", "layout"])}`,
+        cbsCode: item.displayCode,
+        name: item.name ?? "",
+        unit: item.uom,
         description: `${discipline} indirect support`,
         quantity: String(int(1, 12)),
-        unit: "CRW",
         role: labor.role,
         schedule: labor.schedule,
         laborRate: String(labor.rate),
@@ -480,7 +508,15 @@ async function main() {
   const fallbackShare =
     dropped.reduce((n, [, share]) => n + share, 0) / Math.max(1, dropped.length);
   const substitutes = [...byL1entries()]
-    .filter(([l1, items]) => items.length >= MIN_ITEMS && !MATERIALS_MIX.some((m) => m[0] === l1))
+    // Only genuine material L1s. Substituting a take-off or support bucket
+    // would put codes on the Materials sheet that do not belong there — the
+    // app decides that sheet by the same 01/31 suffix.
+    .filter(
+      ([l1, items]) =>
+        isMaterialCode(l1) &&
+        items.length >= MIN_ITEMS &&
+        !MATERIALS_MIX.some((m) => m[0] === l1),
+    )
     .sort((a, b) => b[1].length - a[1].length)
     .slice(0, dropped.length)
     .map(([l1]) => [l1, fallbackShare] as [string, number]);

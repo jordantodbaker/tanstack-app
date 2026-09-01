@@ -17,6 +17,7 @@ import {
   replaceInCell,
   replaceAll,
   sortRows,
+  RANGE_WRITABLE_COLUMNS,
   type RangeSelection,
   type WriteCtx,
 } from "./grid-range";
@@ -415,6 +416,26 @@ describe("piping-sheet range writes", () => {
     },
   };
 
+  it("refuses to write Name on a piping sheet — it is derived there", () => {
+    // Weld Group + Shop/Field + Size + Fabricate/Erect stamp the CBS item, so
+    // Name is read-only in the piping cell editors. A range paste that could
+    // still set it would stand only until the next edit to any of those four
+    // re-stamped the row.
+    const row = makeFefRow({ name: "Install CS Medium Bore" });
+    expect(resolveCellWrite("name", "FLDCS-MB-0000-MB-C", row, pipingCtx)).toBeNull();
+    // Clearing is refused too — the same derivation owns the field.
+    expect(resolveCellWrite("name", "", row, pipingCtx)).toBeNull();
+  });
+
+  it("still writes Name on a non-piping sheet, where it IS the picker", () => {
+    const row = makeFefRow({});
+    expect(resolveCellWrite("name", "601-10-0000-00-L", row, ctx)).toEqual({
+      id: "601-10-0000-00-L",
+      name: expect.any(String),
+      unit: expect.any(String),
+    });
+  });
+
   it("derives Labor Hours from the factor table, not quantity × labor factor", () => {
     const row = makeFefRow({ taskCode: "WLD-CS", size: "4", quantity: "10" });
     expect(resolveCellWrite("quantity", "20", row, pipingCtx)).toEqual({
@@ -793,5 +814,52 @@ describe("selectionStats", () => {
     expect(s.numericCount).toBe(0);
     expect(s.sum).toBe(0);
     expect(s.average).toBe(0);
+  });
+});
+
+describe("resolveCellWrite — Material Type (equipment)", () => {
+  const row = makeFefRow({});
+
+  it("accepts the two options verbatim", () => {
+    expect(resolveCellWrite("materialType", "Bulk", row, ctx)).toEqual({
+      materialType: "Bulk",
+    });
+    expect(resolveCellWrite("materialType", "Tagged", row, ctx)).toEqual({
+      materialType: "Tagged",
+    });
+  });
+
+  it("normalizes case and surrounding space to the stored spelling", () => {
+    // A spreadsheet column will not be typed consistently, and reporting
+    // groups on this value — "bulk" and "Bulk" must not become two categories.
+    for (const raw of ["bulk", "BULK", "  Bulk  ", "tagged"]) {
+      const out = resolveCellWrite("materialType", raw, row, ctx);
+      expect(out?.materialType).toMatch(/^(Bulk|Tagged)$/);
+    }
+  });
+
+  it("clears on blank — the same as picking the placeholder", () => {
+    // Blank is a real state: quantities get typed long before anyone decides
+    // whether a line is bulk or tagged.
+    expect(resolveCellWrite("materialType", "", row, ctx)).toEqual({
+      materialType: "",
+    });
+    expect(resolveCellWrite("materialType", "   ", row, ctx)).toEqual({
+      materialType: "",
+    });
+  });
+
+  it("refuses a value outside the vocabulary rather than storing it", () => {
+    // null leaves the cell untouched. Writing the raw text would put a third
+    // category into a field that only has two.
+    expect(resolveCellWrite("materialType", "Bulky", row, ctx)).toBeNull();
+    expect(resolveCellWrite("materialType", "TAG", row, ctx)).toBeNull();
+    expect(resolveCellWrite("materialType", "1", row, ctx)).toBeNull();
+  });
+
+  it("is reachable by paste, fill and clear at all", () => {
+    // A column with an editor but no entry here silently ignores Ctrl+D,
+    // paste and Delete — the failure mode is invisible, so assert it directly.
+    expect(RANGE_WRITABLE_COLUMNS.has("materialType")).toBe(true);
   });
 });

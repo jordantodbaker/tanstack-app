@@ -5,6 +5,7 @@ import type { FefRow, CbsOption } from "~/lib/types";
 import { areasByProjectQueryOptions } from "~/utils/areas";
 import { EMPTY_ARRAY } from "~/lib/fef-helpers";
 import {
+  MaterialTypeSelectCell,
   EditableCell,
   DisplayEditCell,
   CbsSelectCell,
@@ -199,6 +200,16 @@ const steelTaskCodeColumn = columnHelper.accessor("taskCode", {
   size: 160,
 });
 
+// ── Equipment only: Bulk / Tagged classification ─────────────────────────────
+// Sits next to Description because it qualifies WHAT the line is, not how it
+// is priced — an estimator sets it while reading the equipment list, not while
+// working out labor.
+const equipmentMaterialTypeColumn = columnHelper.accessor("materialType", {
+  header: "Material Type",
+  cell: MaterialTypeSelectCell,
+  size: 130,
+});
+
 // ── Structural Steel only: member dimensions + shape count ────────────────────
 // H / W are plain text; L and "# of Shapes" recompute the derived Quantity
 // (Quantity = # of shapes × L) on edit.
@@ -341,7 +352,13 @@ export function DisciplinePage({
   // Structural Steel gets extra member-dimension columns (H/W/L) after Quantity,
   // plus a "Dimensions" group. Other disciplines use the base columns unchanged.
   const isSteel = disciplineId === "steel";
+  const isEquipment = disciplineId === "equipment";
   const takeOffCols = React.useMemo(() => {
+    if (isEquipment) {
+      return insertColumnsAfter(takeOffColumns, "description", [
+        equipmentMaterialTypeColumn,
+      ]);
+    }
     if (!isSteel) return takeOffColumns;
     // Quantity is derived on steel, so swap it for the read-only cell. Then add
     // Task Code (SLTO member picker) after Description and the H/W/L + # of
@@ -355,7 +372,7 @@ export function DisciplinePage({
     cols = insertColumnsAfter(cols, "quantity", steelDimensionColumns);
     cols = insertColumnsAfter(cols, "shapeCount", [steelTotalTonsColumn]);
     return cols;
-  }, [isSteel]);
+  }, [isSteel, isEquipment]);
   // Custom columns go last, after any discipline-specific insertions.
   const takeOffColsWithCustom = React.useMemo(
     () => withCustomFieldColumns(takeOffCols, customFieldDefs),

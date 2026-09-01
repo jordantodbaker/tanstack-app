@@ -88,9 +88,12 @@ function SummaryTable({
         </thead>
         <tbody>
           {rows.map((row) => {
-            const invalidCount = row.disciplineId
-              ? (invalidByDiscipline?.[row.disciplineId] ?? 0)
-              : 0;
+            // A row may stand for more than one sheet ("Concrete & Grout"), so
+            // count every discipline it reports for.
+            const invalidCount = [
+              ...(row.disciplineId ? [row.disciplineId] : []),
+              ...(row.alsoCovers ?? []),
+            ].reduce((n, id) => n + (invalidByDiscipline?.[id] ?? 0), 0);
             return (
             <tr key={row.description} className="border-b border-gray-200">
               {columns.map((col) => {

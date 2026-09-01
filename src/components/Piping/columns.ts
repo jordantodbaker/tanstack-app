@@ -1,6 +1,6 @@
 import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
 import type { FefRow } from "~/lib/types";
-import { EditableCell, DisplayEditCell, SizeCell, CbsSelectCell, ReadOnlyCell, TakeOffIdReadOnlyCell, CbsNameCell, CbsUomCell, DeleteRowCell, AreaSelectCell, LABOR_COST_GROUP, type ColumnGroup } from "~/lib/table-utils";
+import { EditableCell, DisplayEditCell, SizeCell, ReadOnlyCell, TakeOffIdReadOnlyCell, CbsNameCell, CbsUomCell, DeleteRowCell, AreaSelectCell, LABOR_COST_GROUP, type ColumnGroup } from "~/lib/table-utils";
 import {
   ShopFieldSelectCell,
   FabricateErectSelectCell,
@@ -23,7 +23,14 @@ const columnHelper = createColumnHelper<FefRow>();
 
 export const takeOffColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("id", { header: "ID", cell: TakeOffIdReadOnlyCell, size: 100 }),
-  columnHelper.accessor("name", { header: "Name", cell: CbsSelectCell, size: 220 }),
+  // Read-only: on piping the CBS item is DERIVED, not chosen. Weld group +
+  // Shop/Field give the metallurgy code, Size gives the bore, Fabricate/Erect
+  // gives the FB/ER segment, and `resolveCbsStamp` stamps id/name/unit from
+  // those. A dropdown here let someone pick an item the other four columns
+  // contradict, and the next edit to any of them silently overwrote it.
+  // Every one of the 748 weld-group x Shop/Field x Fab/Erect x size
+  // combinations resolves to an item, so nothing is unreachable without it.
+  columnHelper.accessor("name", { header: "Name", cell: CbsNameCell, size: 220 }),
   columnHelper.accessor("description", { header: "Description", cell: EditableCell, size: 180 }),
   // ── Reference ──
   columnHelper.accessor("projectPhase", { header: "Project Phase", cell: DisplayEditCell, size: 120 }),

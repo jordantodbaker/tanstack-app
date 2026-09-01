@@ -26,6 +26,12 @@ export type SummaryRow = {
   disciplineId?: string;
   /** Target route for the "errors" link — the discipline's take-off page. */
   disciplineTo?: string;
+  /**
+   * Further discipline ids this row reports for. Set where one Summary row
+   * spans several take-off sheets ("Concrete & Grout"), so the error badge
+   * counts every sheet the row stands for.
+   */
+  alsoCovers?: string[];
 };
 
 /**
@@ -95,8 +101,17 @@ const SUMMARY_ENGINEERING: { label: string; uom: string; l1: string }[] = [
 
 const TIC_BEFORE_CONTINGENCY = ["Bond", "Insurance", "B&O Tax", "Contingency"];
 
-/** Grout's L1 (parent CBS) codes — digit "2", broken out from Concrete. */
-const GROUT_L1_CODES = ["290", "291", "292", "293"];
+/**
+ * Disciplines a Summary row covers BEYOND the one its label resolves to.
+ *
+ * "Concrete & Grout" is one digit-2 row over two take-off sheets. Only the
+ * error badge needs this: the money is already combined in the digit bucket,
+ * but invalid-row counts are keyed per discipline id, so without it a bad
+ * grout row would show a warning on the Grout sheet and nothing here.
+ */
+const SUMMARY_ROW_EXTRA_DISCIPLINES: Record<string, string[]> = {
+  "Concrete & Grout": ["grout"],
+};
 
 const emptyRow = (): Omit<SummaryRow, "description"> => ({
   qty: "",
@@ -122,6 +137,7 @@ function buildSummaryRow(
   uom: string,
   totals: { material: number; labor: number; hours: number; quantity: number },
   matched?: { id?: string; to?: string },
+  alsoCovers?: string[],
 ): SummaryRow {
   const { material, labor, hours, quantity } = totals;
   const unitRate = quantity > 0 && hours > 0 ? hours / quantity : 0;
@@ -138,6 +154,7 @@ function buildSummaryRow(
     totalLabor: labor > 0 ? formatMoney(labor) : "",
     disciplineId: matched?.id,
     disciplineTo: matched?.to,
+    alsoCovers,
   };
 }
 
@@ -186,36 +203,25 @@ export type SummarySections = {
 /**
  * Roll the project's aggregate estimate totals into the Summary page's five
  * sections. Pure — a function of `dbTotals` alone (undefined before the totals
- * load, in which case every bucket reads 0). This is where the load-bearing
- * carve-outs live: Grout (29X) is summed from L1 buckets and subtracted from
- * Concrete's digit-2 totals so it isn't double-counted, and Craft Support Labor
- * overrides the Indirects row from its own dedicated totals.
+ * load, in which case every bucket reads 0). The one carve-out left is Craft
+ * Support Labor, which overrides its Indirects row from dedicated totals.
+ *
+ * Grout used to be carved out here: it is a separate discipline with its own
+ * take-off sheet, but its CBS codes (29X) share leading digit "2" with
+ * Concrete, so the digit bucket already contains it. Reporting them apart meant
+ * summing grout from the L1 buckets and SUBTRACTING it back out of Concrete.
+ * They are now reported together, which is what the digit bucket natively
+ * holds — so the arithmetic is simply gone rather than rearranged.
  */
 export function buildSummaryRows(
   dbTotals: ProjectFefRowTotals | undefined,
 ): SummarySections {
-  // Grout (29X) shares leading digit "2" with Concrete, so it can't be a digit
-  // bucket — roll it up from the L1 buckets instead and carve it out of the
-  // Concrete digit-2 totals so it isn't double-counted.
-  const groutTotals = {
-    material: sumL1(dbTotals?.materialsByL1, GROUT_L1_CODES),
-    labor: sumL1(dbTotals?.laborByL1, GROUT_L1_CODES),
-    hours: sumL1(dbTotals?.laborHoursByL1, GROUT_L1_CODES),
-    quantity: sumL1(dbTotals?.quantityByL1, GROUT_L1_CODES),
-  };
-
   const disciplineRows: SummaryRow[] = [];
   for (const { label, uom, digit } of SUMMARY_DISCIPLINES) {
-    let material = digit !== null ? (dbTotals?.materialsByDigit[digit] ?? 0) : 0;
-    let labor = digit !== null ? (dbTotals?.laborByDigit[digit] ?? 0) : 0;
-    let hours = digit !== null ? (dbTotals?.laborHoursByDigit[digit] ?? 0) : 0;
-    let quantity = digit !== null ? (dbTotals?.quantityByDigit[digit] ?? 0) : 0;
-    if (digit === "2") {
-      material -= groutTotals.material;
-      labor -= groutTotals.labor;
-      hours -= groutTotals.hours;
-      quantity -= groutTotals.quantity;
-    }
+    const material = digit !== null ? (dbTotals?.materialsByDigit[digit] ?? 0) : 0;
+    const labor = digit !== null ? (dbTotals?.laborByDigit[digit] ?? 0) : 0;
+    const hours = digit !== null ? (dbTotals?.laborHoursByDigit[digit] ?? 0) : 0;
+    const quantity = digit !== null ? (dbTotals?.quantityByDigit[digit] ?? 0) : 0;
     // Rows like "Structural Steel Shop" / "Piping Shop" have no underlying
     // discipline, so neither id nor route are set and no link renders.
     disciplineRows.push(
@@ -224,14 +230,12 @@ export function buildSummaryRows(
         uom,
         { material, labor, hours, quantity },
         disciplineBySummaryLabel[label],
+        // The combined row stands for both sheets, so its error badge has to
+        // count both — otherwise an invalid grout row would be reported
+        // nowhere on this page. The link still goes to the primary sheet.
+        SUMMARY_ROW_EXTRA_DISCIPLINES[label],
       ),
     );
-    // Insert the Grout row immediately after Concrete.
-    if (digit === "2") {
-      disciplineRows.push(
-        buildSummaryRow("Grout", "HR", groutTotals, disciplineById["grout"]),
-      );
-    }
   }
 
   const craftSupportTotal = dbTotals?.craftSupportLabor ?? 0;

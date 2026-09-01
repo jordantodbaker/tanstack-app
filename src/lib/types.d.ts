@@ -12,6 +12,7 @@ export type FefRow = {
   name: string;
   description: string;
   shopField: string;
+  materialType: string;
   fabricateErect: string;
   weldGroupDescription: string;
   quantity: string;

@@ -49,6 +49,8 @@ const SaveFefRowsSchema = z.object({
    * hasn't established what the server holds for a sheet must not send this, and
    * without it an empty save is refused rather than obeyed.
    */
+  /** The user removed rows AND the client had loaded this sheet. Only such a
+   *  save may empty a populated sheet. */
   allowClear: z.boolean().optional(),
 });
 
@@ -215,9 +217,15 @@ export const saveFefRows = createServerFn({ method: "POST" })
             where: { versionId, discipline, section },
             orderBy: { position: "asc" },
           });
-          // Deleting a populated sheet is only ever right when the client knew
-          // what was there. Refuse otherwise and hand back what's on disk, so
-          // the caller's cache re-syncs to reality instead of to its own blank.
+          // Deleting a populated sheet is only ever right when the client
+          // knew what was there AND the user actually removed the rows. The
+          // first condition alone is not enough: once a sheet has loaded, any
+          // client-side fault that empties the grid is indistinguishable from
+          // a deliberate deletion, which is how the steel (144 rows) and
+          // piping (444) sheets were lost — each save reporting success.
+          // `allowClear` now carries both; see `use-fef-row-persistence`.
+          // Refuse otherwise and hand back what's on disk, so the caller's
+          // cache re-syncs to reality instead of to its own blank.
           if (existing.length > 0 && !data.allowClear) {
             logger.error("saveFefRows refused an unconfirmed sheet wipe", {
               versionId,

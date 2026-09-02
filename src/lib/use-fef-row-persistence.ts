@@ -64,7 +64,13 @@ export function useFefRowPersistence({
    *  changes, before the new key's data hydrates. Defaults to empty; the Take
    *  Off passes a single blank row so the grid is never momentarily rowless. */
   emptyRows?: FefRow[];
-}): { isLoading: boolean; saveStatus: SaveStatus; lastSavedAt: number | null } {
+}): {
+  isLoading: boolean;
+  saveStatus: SaveStatus;
+  lastSavedAt: number | null;
+  /** Call when the USER removes rows — the only thing that authorizes a wipe. */
+  notifyRowsRemoved: () => void;
+} {
   const queryClient = useQueryClient();
   const { isHydrated: isVersionHydrated } = useSelectedVersion();
   const queryOpts = fefRowsQueryOptions({ versionId, discipline, section });
@@ -78,6 +84,19 @@ export function useFefRowPersistence({
   // settles, an empty grid is this hook's own blank slate, not a sheet the
   // user emptied — and `saveFefRows` refuses to delete on that basis.
   const serverSyncedKeyRef = React.useRef<string | null>(null);
+  // Whether the user has actually REMOVED rows since the last settled save.
+  //
+  // Seeing the server's contents is necessary to authorize a wipe but not
+  // sufficient: after a successful load, any client-side fault that empties the
+  // grid looks exactly like the user deleting every row, and the save writes it
+  // through. That is not hypothetical — an HMR-induced render loop emptied the
+  // steel sheet (144 rows) and the piping sheet (444) this way, each reported
+  // as a successful save.
+  //
+  // Rows only ever leave a sheet through the row-delete button or the range
+  // "delete rows" command, so both call `notifyRowsRemoved` and a wipe is
+  // refused unless one of them ran. A render loop calls neither.
+  const rowsRemovedRef = React.useRef(false);
   // Signature of the last content we know is persisted (or was just loaded from
   // the DB) for the current key. The autosave compares against this so it only
   // fires on a real content change — see `persistableSignature`. `null` means
@@ -111,6 +130,8 @@ export function useFefRowPersistence({
     // makes that blank slate look like the user deleting every row.
     hydratedKeyRef.current = null;
     lastSavedSigRef.current = null;
+    // Intent belongs to the sheet it was expressed on.
+    rowsRemovedRef.current = false;
     setData(emptyRowsRef.current);
   }, [currentKey, setData]);
 
@@ -213,11 +234,16 @@ export function useFefRowPersistence({
           discipline,
           section,
           rows: snapshot,
-          allowClear: serverSyncedKeyRef.current === currentKey,
+          // Both halves required: the client must have seen what the server
+          // holds AND the user must have removed rows to get here.
+          allowClear:
+            serverSyncedKeyRef.current === currentKey && rowsRemovedRef.current,
         },
       })
         .then((saved) => {
           lastSavedSigRef.current = sig;
+          // Consumed: a later empty save must be justified by its own delete.
+          rowsRemovedRef.current = false;
           queryClient.setQueryData(
             ["fefRows", versionId, discipline, section],
             saved,
@@ -247,9 +273,14 @@ export function useFefRowPersistence({
     // Browser refresh will still drop pending saves — that's a separate concern.
   }, [versionId, discipline, section, currentKey, data, queryClient, appliedKey]);
 
+  const notifyRowsRemoved = React.useCallback(() => {
+    rowsRemovedRef.current = true;
+  }, []);
+
   return {
     isLoading: isPending || appliedKey !== currentKey,
     saveStatus,
     lastSavedAt,
+    notifyRowsRemoved,
   };
 }

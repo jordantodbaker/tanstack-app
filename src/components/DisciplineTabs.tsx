@@ -223,6 +223,10 @@ export function DisciplineTabs({
   // post-delete indices (rows below the deleted one shift up by one).
   const handleDeleteTakeOffRow = React.useCallback(
     (rowIndex: number) => {
+      // Tells the save path a HUMAN removed this row. Emptying a sheet is
+      // refused without it, so a render loop or bad hydration can no longer
+      // masquerade as "the user deleted everything".
+      takeOffPersist.notifyRowsRemoved();
       takeOffState.setData((old) => old.filter((_, i) => i !== rowIndex));
       setSelectedRowIndices((prev) => {
         const next = new Set<number>();
@@ -233,7 +237,7 @@ export function DisciplineTabs({
         return next;
       });
     },
-    [takeOffState],
+    [takeOffState, takeOffPersist],
   );
 
   // Undo/redo over the Take Off sheet. Enabled only once persistence has
@@ -378,6 +382,7 @@ export function DisciplineTabs({
     selectedRowIndices,
     onToggleRowSelected,
     deleteRow: handleDeleteTakeOffRow,
+    onRowsRemoved: takeOffPersist.notifyRowsRemoved,
   };
 
   // "Use Crew Mix" mode swaps the Role column for the Crew Mix column and
@@ -636,6 +641,11 @@ export function DisciplineTabs({
             getRowInvalid={isTakeOffRowInvalidLive}
             enableRangeEditing
             columnWidthKey={`takeoff:${discipline}`}
+            // Keep the row identifiable while scrolling right: the selection
+            // gutter through Name. Named rather than counted because ID sits
+            // between them and lives in a collapsible group — a count froze
+            // Name only while ID happened to be hidden.
+            frozenThroughColumnId="name"
             frozenColumnCount={2}
           />
           </CustomColumnsProvider>

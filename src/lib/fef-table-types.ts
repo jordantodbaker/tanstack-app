@@ -59,6 +59,12 @@ export type FefTableMeta = {
   /** Optional override for the default delete behavior. Lets callers also
    *  adjust ancillary state (e.g. selection sets) atomically with deletion. */
   deleteRow?: (rowIndex: number) => void;
+  /**
+   * Report that the USER removed rows. The save path refuses to empty a sheet
+   * without it, so anything that clears the grid programmatically (a render
+   * loop, a bad hydration) cannot be mistaken for a deliberate deletion.
+   */
+  onRowsRemoved?: () => void;
 };
 
 export type FefTableState = {

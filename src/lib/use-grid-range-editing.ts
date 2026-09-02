@@ -592,6 +592,9 @@ export function useGridRangeEditing({
   const menuDeleteRows = () => {
     if (selection) {
       const { minRow, maxRow } = normalizeRange(selection);
+      // The other way rows leave a sheet; same authorization as the row-delete
+      // button, since this one can empty a sheet in a single command.
+      meta?.onRowsRemoved?.();
       setData(deleteRows(data, minRow, maxRow));
       setSelection((prev) =>
         prev ? { anchor: prev.anchor, focus: prev.anchor } : prev,

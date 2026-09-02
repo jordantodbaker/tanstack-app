@@ -517,6 +517,7 @@ export function FefTableContent({
   enableRangeEditing,
   columnWidthKey,
   frozenColumnCount = 0,
+  frozenThroughColumnId,
 }: {
   state: FefTableState;
   meta?: FefTableMeta;
@@ -555,6 +556,19 @@ export function FefTableContent({
   /** Number of leading visible columns to freeze (pin) horizontally, in
    *  addition to the always-frozen row-number gutter. 0 = none. */
   frozenColumnCount?: number;
+  /**
+   * Freeze through this column instead of a fixed count — every visible
+   * column up to and including it stays pinned.
+   *
+   * A count is positional, so it silently freezes something else whenever
+   * column visibility changes: the take-off froze through Name only while ID
+   * was hidden inside a collapsed group, and expanding that group pushed Name
+   * out of the frozen set and off-screen. Naming the column makes the intent
+   * ("keep the row identifiable") survive a visibility change.
+   *
+   * Falls back to `frozenColumnCount` when the column is not currently visible.
+   */
+  frozenThroughColumnId?: string;
 }) {
   const { data, setData, columnFilters, setColumnFilters } = state;
   const [localPageIndex, setLocalPageIndex] = React.useState(0);
@@ -695,6 +709,16 @@ export function FefTableContent({
     } satisfies TableMeta<RowData>,
   });
 
+  // Resolved against the CURRENT visible columns, so hiding or showing a
+  // column ahead of the anchor moves the freeze boundary with it.
+  const visibleLeafIds = table.getVisibleLeafColumns().map((c) => c.id);
+  const frozenCount = React.useMemo(() => {
+    if (!frozenThroughColumnId) return frozenColumnCount;
+    const at = visibleLeafIds.indexOf(frozenThroughColumnId);
+    return at === -1 ? frozenColumnCount : at + 1;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frozenThroughColumnId, frozenColumnCount, visibleLeafIds.join(",")]);
+
   const {
     gridRef,
     rows, frozen, rangeSel, rangeHandlers, onGridKeyDown, onGridPaste, stats,
@@ -710,7 +734,7 @@ export function FefTableContent({
     meta,
     serverPagination,
     setLocalPageIndex,
-    frozenColumnCount,
+    frozenColumnCount: frozenCount,
   });
 
   // Reserve room below the pane for the pager and the selection status line,
@@ -738,7 +762,7 @@ export function FefTableContent({
     }[] = [];
     for (let i = 0; i < leaf.length; i++) {
       const label = groupOf.get(leaf[i].id) ?? "";
-      const isFrozen = i < frozenColumnCount;
+      const isFrozen = i < frozenCount;
       const last = segs[segs.length - 1];
       if (!isFrozen && last && !last.frozen && last.label === label) {
         last.span += 1;

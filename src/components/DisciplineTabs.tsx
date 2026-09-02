@@ -469,17 +469,6 @@ export function DisciplineTabs({
   const inner = (
     <>
       {showMask && <LoadMask />}
-      <div className="mb-3 md:mb-4 flex items-center justify-between gap-2">
-        {title ? (
-          <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2">
-            {Icon && <Icon className="size-6 md:size-7" />}
-            {title}
-          </h1>
-        ) : (
-          <span />
-        )}
-        <SaveIndicator status={saveStatus} lastSavedAt={lastSavedAt} />
-      </div>
       {routedNotice && (
         <div className="mb-2 flex items-center justify-between gap-2 rounded border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs text-blue-800">
           <span>{routedNotice}</span>
@@ -498,14 +487,32 @@ export function DisciplineTabs({
         onValueChange={handleTabChange}
         className="w-full"
       >
-        <TabsList className="w-full justify-start rounded-none border-b border-slate-200 bg-transparent p-0 pb-2 h-auto group-data-horizontal/tabs:h-auto overflow-x-visible gap-2">
-          <TabsTrigger value="takeoff" className={tabTriggerClass}>
-            Take Off
-          </TabsTrigger>
-          <TabsTrigger value="estimate" className={tabTriggerClass}>
-            Field Estimate
-          </TabsTrigger>
-        </TabsList>
+        {/* Title, sheet tabs and save state share one row. They used to stack
+            as three blocks, which cost ~110px before any data — a third of a
+            laptop viewport gone above the grid. The tabs sit next to the title
+            because they name what the page is showing, so reading them
+            together is no loss. */}
+        <div className="mb-2 flex items-center justify-between gap-3 border-b border-slate-200 pb-1.5">
+          <div className="flex min-w-0 items-center gap-3">
+            {title ? (
+              <h1 className="flex shrink-0 items-center gap-2 text-lg md:text-xl font-bold">
+                {Icon && <Icon className="size-5 md:size-6" />}
+                {title}
+              </h1>
+            ) : (
+              <span />
+            )}
+            <TabsList className="h-auto gap-1.5 rounded-none bg-transparent p-0 group-data-horizontal/tabs:h-auto">
+              <TabsTrigger value="takeoff" className={tabTriggerClass}>
+                Take Off
+              </TabsTrigger>
+              <TabsTrigger value="estimate" className={tabTriggerClass}>
+                Field Estimate
+              </TabsTrigger>
+            </TabsList>
+          </div>
+          <SaveIndicator status={saveStatus} lastSavedAt={lastSavedAt} />
+        </div>
         {/* The provider spans the toolbar AND the grid: the `+ Column`
             popover and the ⋯ menu on each column header act on the same set,
             and the undo after a removal has to survive the header that issued

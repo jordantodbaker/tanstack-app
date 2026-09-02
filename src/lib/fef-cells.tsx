@@ -97,7 +97,14 @@ export function CellSelect({
   ariaLabel,
 }: {
   value: string;
-  options: { value: string; label: string }[];
+  /**
+   * `label` is what the OPEN list shows — keep it identifying (the CBS code
+   * plus the name) so the right item can be found among near-duplicates.
+   * `shortLabel` is what the closed cell shows once one is chosen; the column
+   * has a heading and an ID column beside it, so repeating the code in every
+   * cell only crowds out the name.
+   */
+  options: { value: string; label: string; shortLabel?: string }[];
   onValueChange: (value: string) => void;
   placeholder?: string;
   ariaLabel?: string;
@@ -120,7 +127,7 @@ export function CellSelect({
         )}
       >
         <span className={cn("line-clamp-1", !selected && "text-slate-400")}>
-          {selected ? selected.label : placeholder}
+          {selected ? (selected.shortLabel ?? selected.label) : placeholder}
         </span>
         <ChevronDown className="size-3.5 shrink-0 text-slate-400" aria-hidden />
       </div>

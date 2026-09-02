@@ -14,7 +14,13 @@ declare module "@tanstack/react-table" {
     updateRow?: (rowIndex: number, updates: Record<string, string>) => void;
     // Pre-mapped `{ value, label }` lists for the dropdown cells, computed once
     // per grid (see FefTableContent) so each cell doesn't re-map its source.
-    cbsSelectOptions?: { value: string; label: string }[];
+    // `shortLabel` is the resting-cell text (the item name); `label` stays the
+    // identifying "code: name" the open dropdown lists. See CellSelect.
+    cbsSelectOptions?: {
+      value: string;
+      label: string;
+      shortLabel?: string;
+    }[];
     roleSelectOptions?: { value: string; label: string }[];
     scheduleSelectOptions?: { value: string; label: string }[];
     crewMixSelectOptions?: { value: string; label: string }[];

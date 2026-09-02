@@ -378,8 +378,12 @@ export const LABOR_COST_GROUP: ColumnGroup = {
   label: "Labor & Cost",
   banner: false,
   defaultCollapsed: true,
+  // "id" is deliberately NOT here. It used to be, which meant the CBS code was
+  // hidden by default along with the computed columns — tolerable only while
+  // the Name cell rendered "code: name" and carried the code itself. Now that
+  // Name shows just the name, the code has to be a column of its own, always
+  // visible and frozen beside it.
   columnIds: [
-    "id",
     "sub",
     "unit",
     "laborFactor",
@@ -620,7 +624,10 @@ export function FefTableContent({
     () =>
       (meta?.cbsOptions ?? []).map((o) => ({
         value: o.displayCode,
+        // Picking needs the code; reading the sheet does not — the ID column
+        // carries it, frozen alongside Name.
         label: o.displayDescription ?? `${o.displayCode}: ${o.name}`,
+        shortLabel: o.name || o.displayCode,
       })),
     [meta?.cbsOptions],
   );

@@ -232,5 +232,14 @@ export function isTakeOffRowInvalid(row: TakeOffValidationInput): boolean {
   return !isTotalCostComputable(row.laborHours, row.laborRate);
 }
 
+/**
+ * Take Off / Field Estimate switch.
+ *
+ * Sized for a laptop: these were `py-4` + `text-lg` full-width banners, which
+ * with the page title above them ate roughly a third of an 800px viewport
+ * before a single row of data. They are a two-way switch, not a landing page —
+ * the selected state carries the emphasis, so the resting size does not have
+ * to. The lift-on-hover is dropped too; it nudged the whole grid.
+ */
 export const tabTriggerClass =
-  "cursor-pointer select-none rounded-md border border-slate-300 bg-white px-3 md:px-6 py-2.5 md:py-4 text-sm md:text-lg font-medium text-slate-700 shadow-sm transition-all duration-150 ease-out hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-50 hover:text-slate-900 hover:shadow-md active:translate-y-0 active:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a63434]/40 data-active:border-[#a63434] data-active:bg-[#a63434] data-active:text-white data-active:shadow data-active:hover:bg-[#8d2a2a] data-active:hover:border-[#8d2a2a] data-active:hover:text-white";
+  "cursor-pointer select-none rounded-md border border-slate-300 bg-white px-3 md:px-4 py-1 text-sm font-medium text-slate-700 shadow-sm transition-colors duration-150 ease-out hover:border-slate-400 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a63434]/40 data-active:border-[#a63434] data-active:bg-[#a63434] data-active:text-white data-active:shadow data-active:hover:bg-[#8d2a2a] data-active:hover:border-[#8d2a2a] data-active:hover:text-white";

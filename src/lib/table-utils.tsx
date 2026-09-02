@@ -577,6 +577,14 @@ export function FefTableContent({
   const { data, setData, columnFilters, setColumnFilters } = state;
   const [localPageIndex, setLocalPageIndex] = React.useState(0);
 
+  // Any filter change re-cuts the pages under the reader, so page 4 of the
+  // unfiltered sheet is usually past the end of the filtered one — an empty
+  // grid that reads as "the filter matched nothing". Go back to the first
+  // page of the new result set instead.
+  React.useEffect(() => {
+    setLocalPageIndex(0);
+  }, [columnFilters]);
+
   const { columnSizing, handleColumnSizingChange, resetColumnWidth, resizable } =
     useColumnWidths(columnWidthKey);
 
@@ -980,7 +988,13 @@ export function FefTableContent({
                 key={row.id}
                 row={row}
                 rowIndex={i}
-                selected={meta?.selectedRowIndices?.has(i) ?? false}
+                // `row.index`, not the loop counter: the memo comparator uses
+                // this to decide whether the row's checkbox needs repainting,
+                // and the cell itself reads selection by `row.index`. They
+                // diverge whenever the visible rows aren't the whole sheet —
+                // page 2, or any active filter — and a stale hint means a
+                // click that doesn't visibly tick the box.
+                selected={meta?.selectedRowIndices?.has(row.index) ?? false}
                 metaRev={metaRev}
                 getRowInvalid={getRowInvalid}
                 selMin={inRange ? rangeSel!.minCol : -1}

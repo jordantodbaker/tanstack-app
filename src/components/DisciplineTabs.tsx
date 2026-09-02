@@ -28,6 +28,12 @@ import {
   type ColumnGroup,
 } from "~/lib/table-utils";
 import { isTakeOffRowInvalid, fefRowHasUserData } from "~/lib/fef-helpers";
+import {
+  ERROR_FILTER_COLUMN_ID,
+  countInvalidRows,
+  invalidRowIndices,
+  isRowInErrorFilter,
+} from "~/lib/take-off-errors";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useSelectedVersion } from "~/lib/selected-version";
 import { useFefRowPersistence } from "~/lib/use-fef-row-persistence";
@@ -41,7 +47,7 @@ import {
   invalidateChangeLogQueries,
   type UpsertChangeLogInput,
 } from "~/utils/changelog";
-import { Undo2, Redo2 } from "lucide-react";
+import { Undo2, Redo2, AlertTriangle } from "lucide-react";
 import { splitRowsByDiscipline } from "~/lib/take-off-paste";
 import { computeTakeOffTotals } from "~/lib/take-off-totals";
 import { makeTakeOffCsvColumns, takeOffRowsForExport } from "~/lib/take-off-csv";
@@ -73,6 +79,26 @@ const takeOffSelectionColumn: ColumnDef<FefRow, string> =
  */
 const isTakeOffRowInvalidLive = (row: FefRow): boolean =>
   isTakeOffRowInvalid(row);
+
+/**
+ * Carrier for the toolbar's "errors only" view filter.
+ *
+ * A zero-width hidden column rather than a global filter: TanStack evaluates a
+ * column filter exactly once per row, while a global filter is fanned out over
+ * every column (and is skipped altogether unless a column opts in), so this
+ * both costs less on a 400-row sheet and can't be silently disabled by the
+ * columns a given discipline happens to define. It renders nothing — the
+ * filter value does all the work; see `~/lib/take-off-errors.ts`.
+ */
+const takeOffErrorFilterColumn: ColumnDef<FefRow, string> =
+  selectionColumnHelper.accessor((row) => (isTakeOffRowInvalid(row) ? "1" : ""), {
+    id: ERROR_FILTER_COLUMN_ID,
+    header: () => null,
+    cell: () => null,
+    size: 0,
+    filterFn: (row, _columnId, pinned: ReadonlySet<number>) =>
+      isRowInErrorFilter(row.original, row.index, pinned),
+  }) as ColumnDef<FefRow, string>;
 
 /**
  * Keep a buffer of empty, editable rows at the bottom of the sheet. The user
@@ -374,9 +400,52 @@ export function DisciplineTabs({
   );
 
   const takeOffColumnsWithSelection = React.useMemo(
-    () => [takeOffSelectionColumn, ...takeOffColumns],
+    () => [takeOffSelectionColumn, ...takeOffColumns, takeOffErrorFilterColumn],
     [takeOffColumns],
   );
+
+  // ── "Errors only" view filter ────────────────────────────────────────────
+  // The count is live (it drops as rows are fixed); the *filter* pins the rows
+  // that were in error when it was switched on, so a row doesn't vanish
+  // mid-edit the instant it becomes valid. See `~/lib/take-off-errors.ts`.
+  const takeOffRows = takeOffState.data;
+  const takeOffErrorCount = React.useMemo(
+    () => countInvalidRows(takeOffRows),
+    [takeOffRows],
+  );
+  const { columnFilters: takeOffFilters, setColumnFilters: setTakeOffFilters } =
+    takeOffState;
+  const errorsOnly = takeOffFilters.some((f) => f.id === ERROR_FILTER_COLUMN_ID);
+
+  const clearErrorFilter = React.useCallback(() => {
+    setTakeOffFilters((prev) =>
+      prev.filter((f) => f.id !== ERROR_FILTER_COLUMN_ID),
+    );
+  }, [setTakeOffFilters]);
+
+  const toggleErrorsOnly = React.useCallback(() => {
+    setTakeOffFilters((prev) => {
+      const without = prev.filter((f) => f.id !== ERROR_FILTER_COLUMN_ID);
+      if (prev.length !== without.length) return without;
+      return [
+        ...without,
+        { id: ERROR_FILTER_COLUMN_ID, value: invalidRowIndices(takeOffRows) },
+      ];
+    });
+  }, [setTakeOffFilters, takeOffRows]);
+
+  // The pinned set is a set of row indices, and an insert or delete renumbers
+  // every row below it — which would leave the filter showing rows that were
+  // never in error. Rows are otherwise only edited or appended to, so a change
+  // in row count is the signal that the pins are stale. Drop the filter rather
+  // than show the wrong rows.
+  const takeOffRowCount = takeOffRows.length;
+  const lastRowCount = React.useRef(takeOffRowCount);
+  React.useEffect(() => {
+    if (lastRowCount.current === takeOffRowCount) return;
+    lastRowCount.current = takeOffRowCount;
+    if (errorsOnly) clearErrorFilter();
+  }, [takeOffRowCount, errorsOnly, clearErrorFilter]);
   const takeOffWithSelection: FefTableMeta = {
     ...takeOffMeta,
     selectedRowIndices,
@@ -411,6 +480,8 @@ export function DisciplineTabs({
   }, []);
   const takeOffColumnVisibility = React.useMemo<VisibilityState>(
     () => ({
+      // Carries the errors-only filter; never rendered.
+      [ERROR_FILTER_COLUMN_ID]: false,
       role: !useCrewMix,
       crewMixId: useCrewMix,
       schedule: !useCrewMix,
@@ -502,7 +573,15 @@ export function DisciplineTabs({
             ) : (
               <span />
             )}
-            <TabsList className="h-auto gap-1.5 rounded-none bg-transparent p-0 group-data-horizontal/tabs:h-auto">
+            {/* `overflow-visible` and `shrink-0` both undo defaults that do not
+                apply here. The TabsList base sets `max-w-full overflow-x-auto`
+                so a tab strip can scroll inside a narrow entity dialog; on a
+                full-width page that only risks painting a scrollbar across a
+                30px-tall two-button switch, since setting one overflow axis to
+                auto makes the other compute to auto as well. `shrink-0` keeps
+                a long discipline title from squeezing the strip into that
+                state in the first place. */}
+            <TabsList className="h-auto shrink-0 gap-1.5 overflow-visible rounded-none bg-transparent p-0 group-data-horizontal/tabs:h-auto">
               <TabsTrigger value="takeoff" className={tabTriggerClass}>
                 Take Off
               </TabsTrigger>
@@ -546,6 +625,33 @@ export function DisciplineTabs({
                 <Redo2 className="size-4" />
               </button>
             </div>
+            {/* Errors-only view filter. Doubles as the sheet's error count,
+                which is the same number the sidebar's ⚠ badge and the
+                Validation page report. Stays enabled while active even at
+                zero errors, so the filter can always be switched back off. */}
+            <button
+              type="button"
+              onClick={toggleErrorsOnly}
+              disabled={takeOffErrorCount === 0 && !errorsOnly}
+              aria-pressed={errorsOnly}
+              title={
+                errorsOnly
+                  ? "Show all rows"
+                  : takeOffErrorCount === 0
+                    ? "No rows on this sheet have errors"
+                    : "Show only rows with errors — rows stay listed while you fix them"
+              }
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-sm border rounded cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                errorsOnly
+                  ? "border-[#a63434] bg-[#a63434] text-white hover:bg-[#8d2a2a]"
+                  : takeOffErrorCount > 0
+                    ? "border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
+                    : "border-slate-300 text-slate-600 disabled:hover:bg-transparent"
+              }`}
+            >
+              <AlertTriangle className="size-4" />
+              {takeOffErrorCount} {takeOffErrorCount === 1 ? "error" : "errors"}
+            </button>
             <ChangelogDialog
               trigger={
                 <button

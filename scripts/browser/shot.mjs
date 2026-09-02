@@ -8,6 +8,7 @@ import { join } from "node:path";
  * Screenshots an authenticated page of the running dev server.
  *
  *   node scripts/browser/shot.mjs /piping piping-grid [--width 1600] [--height 1000]
+ *     [--click <selector>] [--hide <selector>] [--scroll <selector> <px>]
  *
  * Drives the Chrome already installed on this machine (`channel: "chrome"`), so
  * `playwright-core` is the only dependency — no bundled browser download.
@@ -47,6 +48,16 @@ const clicks = rest.reduce(
   (acc, v, i) => (rest[i - 1] === "--click" ? [...acc, v] : acc),
   [],
 );
+/**
+ * Repeatable `--hide <selector>` blanks matching elements before the shot.
+ * Mainly for the dev-only router/query devtools badges, which otherwise ride
+ * along into screenshots meant for users (see `public/help/`).
+ */
+const hides = rest.reduce(
+  (acc, v, i) => (rest[i - 1] === "--hide" ? [...acc, v] : acc),
+  [],
+);
+
 /** `--scroll <selector> <px>` scrolls an element before the shot. */
 const scrollIdx = rest.indexOf("--scroll");
 const scroll =
@@ -130,6 +141,13 @@ try {
       el.scrollLeft = by;
     }, scroll.by);
     await page.waitForTimeout(400);
+  }
+
+  for (const selector of hides) {
+    await page
+      .locator(selector)
+      .evaluateAll((els) => els.forEach((el) => (el.style.display = "none")))
+      .catch(() => {});
   }
 
   const file = join(outDir, `${rawName}.png`);

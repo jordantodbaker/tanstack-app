@@ -1,5 +1,15 @@
 # EPC Manager — User Guide
 
+> **The shipped guide lives in the app**, not here. `src/config/help-guide.ts`
+> is the authoritative copy: it is what the header's **?** button and the
+> `/help` route render, and it is filtered to each reader's role. Edit that
+> file when app behaviour changes.
+>
+> This document is kept as the plain-text reference for anyone reading the
+> repo rather than using the app. It has no role filtering, so it describes
+> every feature including the administrator-only ones — expect it to lag the
+> in-app guide.
+
 A field-estimating and change-management app for EPC projects. It has two halves
 that stay reconciled with each other:
 

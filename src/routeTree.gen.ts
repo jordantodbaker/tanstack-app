@@ -18,6 +18,7 @@ import { Route as ReportingRouteImport } from './routes/reporting'
 import { Route as PipingRouteImport } from './routes/piping'
 import { Route as PcoRouteImport } from './routes/pco'
 import { Route as MaterialsRouteImport } from './routes/materials'
+import { Route as HelpRouteImport } from './routes/help'
 import { Route as FcoLogRouteImport } from './routes/fco-log'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ChangelogRouteImport } from './routes/changelog'
@@ -83,6 +84,11 @@ const PcoRoute = PcoRouteImport.update({
 const MaterialsRoute = MaterialsRouteImport.update({
   id: '/materials',
   path: '/materials',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HelpRoute = HelpRouteImport.update({
+  id: '/help',
+  path: '/help',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FcoLogRoute = FcoLogRouteImport.update({
@@ -199,6 +205,7 @@ export interface FileRoutesByFullPath {
   '/changelog': typeof ChangelogRoute
   '/dashboard': typeof DashboardRoute
   '/fco-log': typeof FcoLogRoute
+  '/help': typeof HelpRoute
   '/materials': typeof MaterialsRoute
   '/pco': typeof PcoRoute
   '/piping': typeof PipingRoute
@@ -231,6 +238,7 @@ export interface FileRoutesByTo {
   '/changelog': typeof ChangelogRoute
   '/dashboard': typeof DashboardRoute
   '/fco-log': typeof FcoLogRoute
+  '/help': typeof HelpRoute
   '/materials': typeof MaterialsRoute
   '/pco': typeof PcoRoute
   '/piping': typeof PipingRoute
@@ -264,6 +272,7 @@ export interface FileRoutesById {
   '/changelog': typeof ChangelogRoute
   '/dashboard': typeof DashboardRoute
   '/fco-log': typeof FcoLogRoute
+  '/help': typeof HelpRoute
   '/materials': typeof MaterialsRoute
   '/pco': typeof PcoRoute
   '/piping': typeof PipingRoute
@@ -298,6 +307,7 @@ export interface FileRouteTypes {
     | '/changelog'
     | '/dashboard'
     | '/fco-log'
+    | '/help'
     | '/materials'
     | '/pco'
     | '/piping'
@@ -330,6 +340,7 @@ export interface FileRouteTypes {
     | '/changelog'
     | '/dashboard'
     | '/fco-log'
+    | '/help'
     | '/materials'
     | '/pco'
     | '/piping'
@@ -362,6 +373,7 @@ export interface FileRouteTypes {
     | '/changelog'
     | '/dashboard'
     | '/fco-log'
+    | '/help'
     | '/materials'
     | '/pco'
     | '/piping'
@@ -395,6 +407,7 @@ export interface RootRouteChildren {
   ChangelogRoute: typeof ChangelogRoute
   DashboardRoute: typeof DashboardRoute
   FcoLogRoute: typeof FcoLogRoute
+  HelpRoute: typeof HelpRoute
   MaterialsRoute: typeof MaterialsRoute
   PcoRoute: typeof PcoRoute
   PipingRoute: typeof PipingRoute
@@ -473,6 +486,13 @@ declare module '@tanstack/react-router' {
       path: '/materials'
       fullPath: '/materials'
       preLoaderRoute: typeof MaterialsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/help': {
+      id: '/help'
+      path: '/help'
+      fullPath: '/help'
+      preLoaderRoute: typeof HelpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/fco-log': {
@@ -661,6 +681,7 @@ const rootRouteChildren: RootRouteChildren = {
   ChangelogRoute: ChangelogRoute,
   DashboardRoute: DashboardRoute,
   FcoLogRoute: FcoLogRoute,
+  HelpRoute: HelpRoute,
   MaterialsRoute: MaterialsRoute,
   PcoRoute: PcoRoute,
   PipingRoute: PipingRoute,

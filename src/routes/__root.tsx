@@ -45,6 +45,7 @@ import { Button } from "~/components/ui/button";
 import { NotificationBell } from "~/components/NotificationBell";
 import { GlobalSearch } from "~/components/GlobalSearch";
 import { TopNav } from "~/components/TopNav";
+import { HelpButton } from "~/components/Help/HelpButton";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -226,6 +227,7 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
                 Collapses whatever does not fit into a "More" menu — see TopNav. */}
             <TopNav isAdmin={isAdmin} />
             <div className="shrink-0 flex items-center gap-1 md:gap-2 ml-auto lg:ml-0">
+              <HelpButton />
               <NotificationBell />
               <UserButton />
               <div className="hidden sm:block">
@@ -241,9 +243,12 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
                 CVR routes also skip the guard since they fetch the CVR by
                 id and can derive the project context from the record
                 itself — the user may be opening the URL from an email or
-                bookmark without a selected project. Everything else flows
-                through the guard for the not-assigned / not-selected screens. */}
+                bookmark without a selected project. /help skips it too: a
+                user who can't get past the guard is exactly the one who
+                needs the guide. Everything else flows through the guard for
+                the not-assigned / not-selected screens. */}
             {pathname.startsWith("/admin") ||
+            pathname.startsWith("/help") ||
             pathname.startsWith("/cvr-print/") ||
             pathname.startsWith("/fco-print/") ||
             pathname.startsWith("/rfi-print/") ? (

@@ -43,34 +43,34 @@ const finder = (cbsOptions: CbsOption[]) => (costCode: string) =>
  * shows as the placeholder rather than raw text.
  */
 export function CbsSearchSelectCell({ row, table }: CellProps) {
-  const cbsOptions = table.options.meta?.cbsOptions ?? [];
+  // Shared, pre-mapped once per grid (see FefTableContent).
+  const base = table.options.meta?.cbsSearchOptions ?? [];
   const rawId = row.original.id;
   const value = rawId.startsWith("__fe-blank-") ? "" : rawId;
   const name = row.original.name;
   const options: SearchableSelectOption[] = React.useMemo(() => {
-    const base = cbsOptions.map((o) => ({
-      value: o.displayCode,
-      label: o.displayDescription ?? `${o.displayCode}: ${o.name}`,
-      searchText: `${o.displayCode} ${o.name}`.toLowerCase(),
-    }));
-    // Existing rows may reference a code that isn't in this discipline's
-    // option set. Surface it with its stored name so the control shows
-    // "code: name" instead of falling back to the bare code.
+    // Existing rows may reference a code that isn't in this discipline's option
+    // set. Surface it with its stored name so the control shows "code: name"
+    // instead of the bare code — prepended to (not mutated into) the shared
+    // list, whose reference must stay stable across cells.
     if (value && !base.some((o) => o.value === value)) {
-      base.unshift({
-        value,
-        label: name ? `${value}: ${name}` : value,
-        searchText: `${value} ${name}`.toLowerCase(),
-      });
+      return [
+        {
+          value,
+          label: name ? `${value}: ${name}` : value,
+          searchText: `${value} ${name}`.toLowerCase(),
+        },
+        ...base,
+      ];
     }
     return base;
-  }, [cbsOptions, value, name]);
+  }, [base, value, name]);
   return (
     <SearchableSelect
       value={value}
       options={options}
       onSelect={(code) => {
-        const selected = cbsOptions.find((o) => o.displayCode === code);
+        const selected = table.options.meta?.cbsByCode?.get(code);
         table.options.meta?.updateRow?.(
           row.index,
           selected
@@ -168,13 +168,9 @@ export function FabricateErectSelectCell({ getValue, row, table }: CellProps) {
 
 export function WeldGroupSelectCell({ getValue, row, table }: CellProps) {
   const value = getValue() as string;
-  const { weldGroupOptions = [], weldGroupMaterialMap = {} } =
-    table.options.meta ?? {};
-
-  const options: SearchableSelectOption[] = React.useMemo(
-    () => weldGroupOptions.map((opt) => ({ value: opt, label: opt })),
-    [weldGroupOptions],
-  );
+  const { weldGroupMaterialMap = {} } = table.options.meta ?? {};
+  // Pre-mapped once per grid (see FefTableContent).
+  const options = table.options.meta?.weldGroupSelectOptions ?? [];
 
   return (
     <SearchableSelect
@@ -207,8 +203,7 @@ export function WeldGroupSelectCell({ getValue, row, table }: CellProps) {
 }
 
 export function SubCheckboxCell({ row, table }: CellProps) {
-  const cbsOptions = table.options.meta?.cbsOptions ?? [];
-  const match = cbsOptions.find((o) => o.displayCode === row.original.id);
+  const match = table.options.meta?.cbsByCode?.get(row.original.id);
   const enabled = !!match && match.subReporting === true;
   const checked = row.original.sub === "true";
 
@@ -398,17 +393,9 @@ export function LaborHoursCell({ row }: CellProps) {
 
 export function TaskCodeSelectCell({ getValue, row, table }: CellProps) {
   const value = getValue() as string;
-  const { taskCodeOptions = [], pipingFactorLookup } = table.options.meta ?? {};
-
-  const options: SearchableSelectOption[] = React.useMemo(
-    () =>
-      taskCodeOptions.map((opt) => ({
-        value: opt.code,
-        label: `${opt.taskDefinition} - ${opt.code}`,
-        searchText: `${opt.taskDefinition} ${opt.code}`.toLowerCase(),
-      })),
-    [taskCodeOptions],
-  );
+  const { pipingFactorLookup } = table.options.meta ?? {};
+  // Pre-mapped once per grid (see FefTableContent).
+  const options = table.options.meta?.taskCodeSelectOptions ?? [];
 
   return (
     <SearchableSelect

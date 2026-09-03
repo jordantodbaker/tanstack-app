@@ -655,6 +655,42 @@ export function FefTableContent({
       })),
     [meta?.crewMixOptions],
   );
+  // Read-path CBS index: the read-only Name/UoM/Sub cells look their option up
+  // by the row's code on every render. Build the map once per grid so those are
+  // O(1) gets instead of a full-catalog Array.find each (×25 rows on a metaRev
+  // flip or page change). The write path already indexes this way.
+  const cbsByCode = React.useMemo(() => {
+    const map = new Map<string, CbsOption>();
+    for (const o of meta?.cbsOptions ?? []) map.set(o.displayCode, o);
+    return map;
+  }, [meta?.cbsOptions]);
+  // SearchableSelect option lists, pre-mapped once per grid (same reasoning as
+  // the {value,label} lists above) so each visible search cell doesn't rebuild
+  // its list from the source on mount. Per-row tweaks (e.g. surfacing a stored
+  // code not in the set) stay in the cells.
+  const cbsSearchOptions = React.useMemo(
+    () =>
+      (meta?.cbsOptions ?? []).map((o) => ({
+        value: o.displayCode,
+        label: o.displayDescription ?? `${o.displayCode}: ${o.name}`,
+        searchText: `${o.displayCode} ${o.name}`.toLowerCase(),
+      })),
+    [meta?.cbsOptions],
+  );
+  const taskCodeSelectOptions = React.useMemo(
+    () =>
+      (meta?.taskCodeOptions ?? []).map((opt) => ({
+        value: opt.code,
+        label: `${opt.taskDefinition} - ${opt.code}`,
+        searchText: `${opt.taskDefinition} ${opt.code}`.toLowerCase(),
+      })),
+    [meta?.taskCodeOptions],
+  );
+  const weldGroupSelectOptions = React.useMemo(
+    () =>
+      (meta?.weldGroupOptions ?? []).map((opt) => ({ value: opt, label: opt })),
+    [meta?.weldGroupOptions],
+  );
 
   const table = useReactTable({
     data,
@@ -700,6 +736,10 @@ export function FefTableContent({
       roleSelectOptions,
       scheduleSelectOptions,
       crewMixSelectOptions,
+      cbsByCode,
+      cbsSearchOptions,
+      taskCodeSelectOptions,
+      weldGroupSelectOptions,
       updateData: (rowIndex: number, columnId: string, value: string) => {
         debug("updateData", { rowIndex, columnId, value });
         setData((old) =>

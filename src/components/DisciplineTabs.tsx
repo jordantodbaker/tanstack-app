@@ -29,11 +29,10 @@ import {
 } from "~/lib/table-utils";
 import { isTakeOffRowInvalid, fefRowHasUserData } from "~/lib/fef-helpers";
 import {
-  ERROR_FILTER_COLUMN_ID,
-  countInvalidRows,
-  invalidRowIndices,
-  isRowInErrorFilter,
-} from "~/lib/take-off-errors";
+  takeOffErrorFilterColumn,
+  takeOffErrorFilterColumnVisibility,
+  useTakeOffErrorFilter,
+} from "~/lib/use-take-off-error-filter";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useSelectedVersion } from "~/lib/selected-version";
 import { useFefRowPersistence } from "~/lib/use-fef-row-persistence";
@@ -79,26 +78,6 @@ const takeOffSelectionColumn: ColumnDef<FefRow, string> =
  */
 const isTakeOffRowInvalidLive = (row: FefRow): boolean =>
   isTakeOffRowInvalid(row);
-
-/**
- * Carrier for the toolbar's "errors only" view filter.
- *
- * A zero-width hidden column rather than a global filter: TanStack evaluates a
- * column filter exactly once per row, while a global filter is fanned out over
- * every column (and is skipped altogether unless a column opts in), so this
- * both costs less on a 400-row sheet and can't be silently disabled by the
- * columns a given discipline happens to define. It renders nothing — the
- * filter value does all the work; see `~/lib/take-off-errors.ts`.
- */
-const takeOffErrorFilterColumn: ColumnDef<FefRow, string> =
-  selectionColumnHelper.accessor((row) => (isTakeOffRowInvalid(row) ? "1" : ""), {
-    id: ERROR_FILTER_COLUMN_ID,
-    header: () => null,
-    cell: () => null,
-    size: 0,
-    filterFn: (row, _columnId, pinned: ReadonlySet<number>) =>
-      isRowInErrorFilter(row.original, row.index, pinned),
-  }) as ColumnDef<FefRow, string>;
 
 /**
  * Keep a buffer of empty, editable rows at the bottom of the sheet. The user
@@ -404,48 +383,13 @@ export function DisciplineTabs({
     [takeOffColumns],
   );
 
-  // ── "Errors only" view filter ────────────────────────────────────────────
-  // The count is live (it drops as rows are fixed); the *filter* pins the rows
-  // that were in error when it was switched on, so a row doesn't vanish
-  // mid-edit the instant it becomes valid. See `~/lib/take-off-errors.ts`.
-  const takeOffRows = takeOffState.data;
-  const takeOffErrorCount = React.useMemo(
-    () => countInvalidRows(takeOffRows),
-    [takeOffRows],
-  );
-  const { columnFilters: takeOffFilters, setColumnFilters: setTakeOffFilters } =
-    takeOffState;
-  const errorsOnly = takeOffFilters.some((f) => f.id === ERROR_FILTER_COLUMN_ID);
-
-  const clearErrorFilter = React.useCallback(() => {
-    setTakeOffFilters((prev) =>
-      prev.filter((f) => f.id !== ERROR_FILTER_COLUMN_ID),
-    );
-  }, [setTakeOffFilters]);
-
-  const toggleErrorsOnly = React.useCallback(() => {
-    setTakeOffFilters((prev) => {
-      const without = prev.filter((f) => f.id !== ERROR_FILTER_COLUMN_ID);
-      if (prev.length !== without.length) return without;
-      return [
-        ...without,
-        { id: ERROR_FILTER_COLUMN_ID, value: invalidRowIndices(takeOffRows) },
-      ];
-    });
-  }, [setTakeOffFilters, takeOffRows]);
-
-  // The pinned set is a set of row indices, and an insert or delete renumbers
-  // every row below it — which would leave the filter showing rows that were
-  // never in error. Rows are otherwise only edited or appended to, so a change
-  // in row count is the signal that the pins are stale. Drop the filter rather
-  // than show the wrong rows.
-  const takeOffRowCount = takeOffRows.length;
-  const lastRowCount = React.useRef(takeOffRowCount);
-  React.useEffect(() => {
-    if (lastRowCount.current === takeOffRowCount) return;
-    lastRowCount.current = takeOffRowCount;
-    if (errorsOnly) clearErrorFilter();
-  }, [takeOffRowCount, errorsOnly, clearErrorFilter]);
+  // "Errors only" toolbar toggle — count, toggle, and the stale-pin guard live
+  // in the hook alongside the predicates it uses.
+  const {
+    errorCount: takeOffErrorCount,
+    errorsOnly,
+    toggleErrorsOnly,
+  } = useTakeOffErrorFilter(takeOffState);
   const takeOffWithSelection: FefTableMeta = {
     ...takeOffMeta,
     selectedRowIndices,
@@ -481,7 +425,7 @@ export function DisciplineTabs({
   const takeOffColumnVisibility = React.useMemo<VisibilityState>(
     () => ({
       // Carries the errors-only filter; never rendered.
-      [ERROR_FILTER_COLUMN_ID]: false,
+      ...takeOffErrorFilterColumnVisibility,
       role: !useCrewMix,
       crewMixId: useCrewMix,
       schedule: !useCrewMix,

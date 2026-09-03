@@ -878,6 +878,8 @@ model ChangeLog {
   updatedAt          DateTime           @updatedAt
 
   @@index([projectId, status])
+  // Backs the change-log list: filter by project, sort by requestedAt desc.
+  @@index([projectId, requestedAt])
   @@index([linkedPcoId])
   // Trigram GIN indexes back the global command palette's leading-wildcard
   // ILIKE search. One index per column (multicolumn GIN works for ORs, but
@@ -1034,6 +1036,8 @@ model FieldChangeOrder {
   updatedAt       DateTime      @updatedAt
 
   @@index([projectId, status])
+  // Backs the FCO-log list: filter by project, sort by initiatedAt desc.
+  @@index([projectId, initiatedAt])
   @@index([linkedCvrId])
   // Trigram GIN indexes for the global search — see ChangeLog for rationale.
   @@index([fcoNumber(ops: raw("gin_trgm_ops"))], type: Gin)
@@ -1115,6 +1119,8 @@ model Pco {
 
   @@index([projectId, status])
   @@index([projectId, submittedAt])
+  // Backs the PCO list: filter by project, sort by createdAt desc.
+  @@index([projectId, createdAt])
   // Trigram GIN indexes for the global search.
   @@index([pcoNumber(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([ownerReference(ops: raw("gin_trgm_ops"))], type: Gin)
@@ -1198,6 +1204,8 @@ model Trend {
   updatedAt          DateTime          @updatedAt
 
   @@index([projectId, status])
+  // Backs the trend-log list: filter by project, sort by identifiedAt desc.
+  @@index([projectId, identifiedAt])
   @@index([linkedCvrId])
   @@index([linkedFcoId])
   @@index([linkedRfiId])

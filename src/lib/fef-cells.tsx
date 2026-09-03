@@ -703,8 +703,7 @@ function CbsLookupCell({
   table,
   field,
 }: Pick<CellProps, "row" | "table"> & { field: "name" | "uom" }) {
-  const cbsOptions = table.options.meta?.cbsOptions ?? [];
-  const match = cbsOptions.find((o) => o.displayCode === row.original.id);
+  const match = table.options.meta?.cbsByCode?.get(row.original.id);
   const fallback = field === "name" ? row.original.name : row.original.unit;
   return (
     <span className={readOnlyCellClass}>{match?.[field] ?? fallback}</span>
@@ -846,28 +845,50 @@ export function ColumnFilter({
   data: FefRow[];
 }) {
   const value = (column.getFilterValue() ?? "") as string;
-  const options = React.useMemo(
-    () =>
-      Array.from(
-        new Set(
-          data
-            .map((row) => row[column.id as keyof FefRow])
-            .filter((v): v is string => v !== undefined),
-        ),
-      ).sort(),
+  const [activated, setActivated] = React.useState(false);
+
+  // Cheap gate that preserves the old "no values → render nothing" behavior:
+  // `.some` short-circuits at the first defined value, so it's O(1) for real
+  // data columns and only scans fully for the few display columns that have
+  // none. This is the only work done per edit for an un-opened filter.
+  const hasValues = React.useMemo(
+    () => data.some((row) => row[column.id as keyof FefRow] !== undefined),
     [data, column.id],
   );
 
-  if (options.length === 0) return null;
+  // The expensive part — distinct values + Set + sort over the whole array — is
+  // deferred until the user shows intent to use this filter (hover or focus).
+  // Otherwise ~40 header filters would each rebuild this on every commit/paste,
+  // for dropdowns that are rarely opened. `null` = not built yet.
+  const options = React.useMemo(() => {
+    if (!activated) return null;
+    return Array.from(
+      new Set(
+        data
+          .map((row) => row[column.id as keyof FefRow])
+          .filter((v): v is string => v !== undefined),
+      ),
+    ).sort();
+  }, [activated, data, column.id]);
+
+  if (!hasValues) return null;
+
+  const activate = () => setActivated(true);
 
   return (
     <select
       className="mt-1 w-full border border-gray-300 px-1 py-0.5 text-xs font-normal rounded focus:border-blue-400 focus:outline-none bg-white"
       value={value}
+      onMouseEnter={activate}
+      onFocus={activate}
       onChange={(e) => column.setFilterValue(e.target.value || undefined)}
     >
       <option value="">All</option>
-      {options.map((opt) => (
+      {/* Keep the active selection selectable before the options materialize. */}
+      {value !== "" && !(options ?? []).includes(value) && (
+        <option value={value}>{value}</option>
+      )}
+      {(options ?? []).map((opt) => (
         <option key={opt} value={opt}>
           {opt}
         </option>

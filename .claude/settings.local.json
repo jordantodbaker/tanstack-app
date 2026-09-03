@@ -10,7 +10,8 @@
       "Bash(grep -vE \"SECURITY WARNING|sslmode|libpq|next major|explicitly use|libpq compatibility|postgresql.org|trace-warnings|^$\")",
       "Bash(git checkout *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(git pull *)"
     ]
   }
 }

@@ -68,6 +68,7 @@
     "@types/react-query": "^1.2.8",
     "@vitejs/plugin-react": "^6.0.1",
     "@vitest/coverage-v8": "^4.1.9",
+    "exceljs": "^4.4.0",
     "jsdom": "^29.1.1",
     "playwright-core": "^1.62.1",
     "prisma": "^7.6.0",

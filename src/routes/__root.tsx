@@ -249,6 +249,7 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
                 the not-assigned / not-selected screens. */}
             {pathname.startsWith("/admin") ||
             pathname.startsWith("/help") ||
+            pathname.startsWith("/cbs-sample") ||
             pathname.startsWith("/cvr-print/") ||
             pathname.startsWith("/fco-print/") ||
             pathname.startsWith("/rfi-print/") ? (

@@ -22,6 +22,7 @@ import { Route as HelpRouteImport } from './routes/help'
 import { Route as FcoLogRouteImport } from './routes/fco-log'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ChangelogRouteImport } from './routes/changelog'
+import { Route as CbsSampleRouteImport } from './routes/cbs-sample'
 import { Route as BasisRouteImport } from './routes/basis'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as DisciplineRouteImport } from './routes/$discipline'
@@ -104,6 +105,11 @@ const DashboardRoute = DashboardRouteImport.update({
 const ChangelogRoute = ChangelogRouteImport.update({
   id: '/changelog',
   path: '/changelog',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CbsSampleRoute = CbsSampleRouteImport.update({
+  id: '/cbs-sample',
+  path: '/cbs-sample',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BasisRoute = BasisRouteImport.update({
@@ -202,6 +208,7 @@ export interface FileRoutesByFullPath {
   '/$discipline': typeof DisciplineRoute
   '/admin': typeof AdminRouteWithChildren
   '/basis': typeof BasisRoute
+  '/cbs-sample': typeof CbsSampleRoute
   '/changelog': typeof ChangelogRoute
   '/dashboard': typeof DashboardRoute
   '/fco-log': typeof FcoLogRoute
@@ -235,6 +242,7 @@ export interface FileRoutesByTo {
   '/$discipline': typeof DisciplineRoute
   '/admin': typeof AdminRouteWithChildren
   '/basis': typeof BasisRoute
+  '/cbs-sample': typeof CbsSampleRoute
   '/changelog': typeof ChangelogRoute
   '/dashboard': typeof DashboardRoute
   '/fco-log': typeof FcoLogRoute
@@ -269,6 +277,7 @@ export interface FileRoutesById {
   '/$discipline': typeof DisciplineRoute
   '/admin': typeof AdminRouteWithChildren
   '/basis': typeof BasisRoute
+  '/cbs-sample': typeof CbsSampleRoute
   '/changelog': typeof ChangelogRoute
   '/dashboard': typeof DashboardRoute
   '/fco-log': typeof FcoLogRoute
@@ -304,6 +313,7 @@ export interface FileRouteTypes {
     | '/$discipline'
     | '/admin'
     | '/basis'
+    | '/cbs-sample'
     | '/changelog'
     | '/dashboard'
     | '/fco-log'
@@ -337,6 +347,7 @@ export interface FileRouteTypes {
     | '/$discipline'
     | '/admin'
     | '/basis'
+    | '/cbs-sample'
     | '/changelog'
     | '/dashboard'
     | '/fco-log'
@@ -370,6 +381,7 @@ export interface FileRouteTypes {
     | '/$discipline'
     | '/admin'
     | '/basis'
+    | '/cbs-sample'
     | '/changelog'
     | '/dashboard'
     | '/fco-log'
@@ -404,6 +416,7 @@ export interface RootRouteChildren {
   DisciplineRoute: typeof DisciplineRoute
   AdminRoute: typeof AdminRouteWithChildren
   BasisRoute: typeof BasisRoute
+  CbsSampleRoute: typeof CbsSampleRoute
   ChangelogRoute: typeof ChangelogRoute
   DashboardRoute: typeof DashboardRoute
   FcoLogRoute: typeof FcoLogRoute
@@ -514,6 +527,13 @@ declare module '@tanstack/react-router' {
       path: '/changelog'
       fullPath: '/changelog'
       preLoaderRoute: typeof ChangelogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cbs-sample': {
+      id: '/cbs-sample'
+      path: '/cbs-sample'
+      fullPath: '/cbs-sample'
+      preLoaderRoute: typeof CbsSampleRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/basis': {
@@ -678,6 +698,7 @@ const rootRouteChildren: RootRouteChildren = {
   DisciplineRoute: DisciplineRoute,
   AdminRoute: AdminRouteWithChildren,
   BasisRoute: BasisRoute,
+  CbsSampleRoute: CbsSampleRoute,
   ChangelogRoute: ChangelogRoute,
   DashboardRoute: DashboardRoute,
   FcoLogRoute: FcoLogRoute,

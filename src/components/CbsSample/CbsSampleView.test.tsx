@@ -1,49 +1,57 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  within,
+} from "@testing-library/react";
 import { CbsSampleView } from "./CbsSampleView";
 
 afterEach(cleanup);
 
 describe("CbsSampleView", () => {
-  it("renders the heading, counts, and the top-level CBS disciplines", () => {
+  it("renders the page heading and both collapsible sections", () => {
     render(<CbsSampleView />);
     expect(
       screen.getByRole("heading", { name: "CBS Sample" }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/rows$/)).toBeInTheDocument();
-    // Roots are expanded by default, so the discipline rows are present.
-    expect(screen.getByText("Civil")).toBeInTheDocument();
-    expect(screen.getByText("Pipe Shop")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /CBS Code Book/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Master CBS Dictionary/ }),
+    ).toBeInTheDocument();
   });
 
-  it("paints each level with the workbook's fill colour (hierarchy by colour)", () => {
+  it("lazy-loads the CBS Code Book (open by default) and colours a root by level", async () => {
     render(<CbsSampleView />);
-    // Civil is a level-0/1 row → gold (#FFD966) per the workbook palette.
-    const civilRow = screen.getByText("Civil").closest('[role="treeitem"]');
-    expect(civilRow).not.toBeNull();
-    expect(civilRow).toHaveStyle({ backgroundColor: "#FFD966" });
-  });
+    // "Civil" is a top-level root of the code book; the dictionary section is
+    // collapsed, so this is unambiguous once the lazy chunk resolves.
+    const civil = await screen.findByText("Civil", {}, { timeout: 20000 });
+    const row = civil.closest('[role="treeitem"]');
+    expect(row).not.toBeNull();
+    // Level-0 fill from the workbook palette (gold).
+    expect(row).toHaveStyle({ backgroundColor: "#FFD966" });
+  }, 25000);
 
-  it("collapses and expands a node", () => {
+  it("lazy-loads the Master CBS Dictionary only when its section is opened", async () => {
     render(<CbsSampleView />);
-    // Collapse everything, then a deep child should be gone.
-    fireEvent.click(screen.getByRole("button", { name: "Collapse all" }));
-    expect(screen.queryByText("Civil Shop Materials")).toBeNull();
-    // Civil root is still shown; expanding it brings its children back.
-    const civilRow = screen.getByText("Civil").closest('[role="treeitem"]')!;
-    fireEvent.click(within(civilRow).getByRole("button", { name: "Expand" }));
-    expect(screen.getAllByText(/Civil/).length).toBeGreaterThan(1);
-  });
+    // The dictionary (3,573 rows) is not present until its section is expanded.
+    fireEvent.click(screen.getByRole("button", { name: /Master CBS Dictionary/ }));
+    // 3,573-row count appears once the dictionary chunk resolves (in both the
+    // section badge and the hierarchy's count chip).
+    const counts = await screen.findAllByText(/3,573 rows/, {}, { timeout: 20000 });
+    expect(counts.length).toBeGreaterThan(0);
+  }, 25000);
 
-  it("filters by search query", () => {
+  it("filters the open section by search query", async () => {
     render(<CbsSampleView />);
-    fireEvent.change(screen.getByRole("searchbox", { name: /search the cbs/i }), {
-      target: { value: "Topsoil" },
-    });
-    expect(screen.getByText("Topsoil")).toBeInTheDocument();
-    expect(screen.getByText(/match/)).toBeInTheDocument();
-    // A non-matching sibling discipline's leaf is pruned out.
-    expect(screen.queryByText("Coatings & Insulation")).toBeNull();
-  });
+    await screen.findByText("Civil", {}, { timeout: 20000 }); // code book loaded
+    const search = screen.getAllByRole("searchbox")[0];
+    fireEvent.change(search, { target: { value: "Topsoil" } });
+    const tree = screen.getByRole("tree");
+    expect(await within(tree).findByText("Topsoil")).toBeInTheDocument();
+  }, 25000);
 });

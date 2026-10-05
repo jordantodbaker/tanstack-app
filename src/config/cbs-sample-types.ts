@@ -8,6 +8,8 @@ export type CbsNode = {
   code: string;
   level: number;
   rowType: string;
+  /** Lowercased `name + code`, precomputed so search doesn't re-lowercase. */
+  haystack: string;
   /** Non-empty cell values keyed by the workbook's column header. */
   fields: Record<string, string>;
   children: CbsNode[];
@@ -15,7 +17,6 @@ export type CbsNode = {
 
 export type CbsData = {
   meta: {
-    title: string;
     subtitle: string;
     sheetName: string;
     generatedAt: string;

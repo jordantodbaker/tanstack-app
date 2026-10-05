@@ -61,6 +61,9 @@ type CbsNode = {
   code: string;
   level: number;
   rowType: string;
+  /** Lowercased `name + code`, precomputed so the UI's search never
+   *  re-lowercases every node on each keystroke. */
+  haystack: string;
   fields: Record<string, string>;
   children: CbsNode[];
 };
@@ -174,7 +177,16 @@ function extractSheet(ws: ExcelJS.Worksheet) {
     const prefix = dash >= 0 ? code.slice(0, dash) : code;
     const costType = (dash >= 0 ? code.slice(dash + 1) : "") || "0";
 
-    const node: CbsNode = { id: idSeq++, name, code, level, rowType, fields, children: [] };
+    const node: CbsNode = {
+      id: idSeq++,
+      name,
+      code,
+      level,
+      rowType,
+      haystack: `${name} ${code}`.toLowerCase(),
+      fields,
+      children: [],
+    };
 
     // Close ancestors this row ends: anything deeper than it, plus same-level
     // nodes that AREN'T a parallel cost-type variant of it (i.e. a different
@@ -214,7 +226,6 @@ function extractSheet(ws: ExcelJS.Worksheet) {
 
   return {
     meta: {
-      title: (ws.getRow(1).getCell(1).text ?? "").trim(),
       subtitle: (ws.getRow(2).getCell(1).text ?? "").trim(),
       sheetName: ws.name,
       generatedAt: new Date().toISOString(),

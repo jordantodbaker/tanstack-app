@@ -1,6 +1,5 @@
 import * as React from "react";
-import { Search } from "lucide-react";
-import { cn } from "~/lib/utils";
+import { SearchBox } from "~/components/SearchBox";
 import { HELP_SECTIONS, type HelpSection } from "~/config/help-guide";
 import {
   flattenSections,
@@ -39,44 +38,22 @@ export function useHelpGuide(): {
 }
 
 /**
- * The guide's search box. `showIcon` off drops the leading magnifier (the
- * dialog's compact mobile variant); `className` carries the per-placement
- * height (e.g. `h-8` in the dialog, `h-9` on the route).
+ * The guide's search box — the shared `SearchBox` with the guide's wording.
+ * `showIcon` off drops the leading magnifier (the dialog's compact mobile
+ * variant); `className` carries the per-placement height (`h-8`/`h-9`).
  */
-export function GuideSearchBox({
-  value,
-  onChange,
-  className,
-  showIcon = true,
-}: {
+export function GuideSearchBox(props: {
   value: string;
   onChange: (value: string) => void;
   className?: string;
   showIcon?: boolean;
 }) {
-  const input = (
-    <input
-      type="search"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder="Search the guide…"
-      aria-label="Search the guide"
-      className={cn(
-        "w-full rounded-md border border-slate-200 bg-white text-sm text-slate-700 outline-none placeholder:text-slate-400 focus-visible:border-slate-400",
-        showIcon ? "pr-2 pl-7" : "px-2",
-        className,
-      )}
-    />
-  );
-  if (!showIcon) return input;
   return (
-    <div className="relative">
-      <Search
-        size={14}
-        className="absolute top-1/2 left-2 -translate-y-1/2 text-slate-400"
-      />
-      {input}
-    </div>
+    <SearchBox
+      {...props}
+      placeholder="Search the guide…"
+      ariaLabel="Search the guide"
+    />
   );
 }
 

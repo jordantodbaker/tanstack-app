@@ -1,5 +1,7 @@
 import * as React from "react";
-import { ChevronRight, Loader2, Search, X } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { ChevronRight, Loader2, X } from "lucide-react";
+import { SearchBox } from "~/components/SearchBox";
 import type {
   CbsData,
   CbsLevelColor,
@@ -19,6 +21,8 @@ type ColorFn = (level: number) => CbsLevelColor;
 // The workbooks colour L0 and L1 the same gold. Override L0 (the discipline
 // roots) to a distinct red so the top of each hierarchy stands apart.
 const L0_COLOR: CbsLevelColor = { fill: "#C0504D", text: "#FFFFFF" };
+// Styling for an unknown/unmapped level.
+const DEFAULT_LEVEL_COLOR: CbsLevelColor = { fill: "#ffffff", text: "#000000" };
 
 function rowTypeBadge(rowType: string): { label: string; title: string } | null {
   if (rowType.includes("Sub")) return { label: "S", title: "Sub-code row" };
@@ -26,7 +30,7 @@ function rowTypeBadge(rowType: string): { label: string; title: string } | null 
   return null;
 }
 
-/** Keep only nodes matching `q` (by name or code) plus their ancestors. */
+/** Keep only nodes matching `needle` (lowercased name+code) plus their ancestors. */
 function filterTree(
   nodes: CbsNode[],
   needle: string,
@@ -35,9 +39,7 @@ function filterTree(
   const rec = (list: CbsNode[]): CbsNode[] => {
     const out: CbsNode[] = [];
     for (const n of list) {
-      const selfMatch =
-        n.name.toLowerCase().includes(needle) ||
-        n.code.toLowerCase().includes(needle);
+      const selfMatch = n.haystack.includes(needle);
       const kids = rec(n.children);
       if (selfMatch || kids.length > 0) {
         if (selfMatch) matches++;
@@ -49,116 +51,123 @@ function filterTree(
   return { nodes: rec(nodes), matches };
 }
 
-function CbsRow({
+/**
+ * One flattened tree row. Memoized and fed only primitives + stable refs
+ * (`isOpen`/`isSelected` booleans, a stable `color`, stable callbacks) so that
+ * scrolling the virtual list — and selecting/toggling — re-renders only the
+ * rows whose own state changed, not the whole tree.
+ */
+const CbsRow = React.memo(function CbsRow({
   node,
   depth,
-  expanded,
+  hasChildren,
+  isOpen,
+  isSelected,
   onToggle,
-  selectedId,
   onSelect,
-  forceExpand,
-  colorFor,
+  color,
 }: {
   node: CbsNode;
   depth: number;
-  expanded: Set<number>;
+  hasChildren: boolean;
+  isOpen: boolean;
+  isSelected: boolean;
   onToggle: (id: number) => void;
-  selectedId: number | null;
   onSelect: (node: CbsNode) => void;
-  forceExpand: boolean;
-  colorFor: ColorFn;
+  color: CbsLevelColor;
 }) {
-  const hasChildren = node.children.length > 0;
-  const isOpen = forceExpand || expanded.has(node.id);
-  const color = colorFor(node.level);
   const badge = rowTypeBadge(node.rowType);
   const uom = node.fields["UOM"];
-  const selected = selectedId === node.id;
 
   return (
-    <>
-      <div
-        role="treeitem"
-        aria-level={node.level + 1}
-        aria-expanded={hasChildren ? isOpen : undefined}
-        aria-selected={selected}
-        onClick={() => onSelect(node)}
-        style={{
-          backgroundColor: color.fill,
-          color: color.text,
-          paddingLeft: 8 + depth * 18,
-        }}
-        className={`flex cursor-pointer items-center gap-2 border-b border-black/5 py-1 pr-3 text-sm transition-[filter] hover:brightness-95 ${
-          selected ? "ring-2 ring-inset ring-sky-900/60" : ""
-        }`}
-      >
-        {hasChildren ? (
-          <button
-            type="button"
-            aria-label={isOpen ? "Collapse" : "Expand"}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggle(node.id);
-            }}
-            className="grid size-4 shrink-0 place-items-center rounded hover:bg-black/10"
-          >
-            <ChevronRight
-              size={13}
-              className={`transition-transform ${isOpen ? "rotate-90" : ""}`}
-            />
-          </button>
-        ) : (
-          <span className="size-4 shrink-0 text-center opacity-40">·</span>
-        )}
-        <span className="shrink-0 font-mono text-xs tabular-nums opacity-80">
-          {node.code}
-        </span>
-        <span className="truncate font-medium">{node.name}</span>
-        {badge && (
-          <span
-            title={badge.title}
-            className="shrink-0 rounded border border-current/30 px-1 text-[10px] leading-4 font-semibold opacity-70"
-          >
-            {badge.label}
-          </span>
-        )}
-        {uom && (
-          <span className="ml-auto shrink-0 font-mono text-[11px] opacity-70">
-            {uom}
-          </span>
-        )}
-      </div>
-      {hasChildren &&
-        isOpen &&
-        node.children.map((child) => (
-          <CbsRow
-            key={child.id}
-            node={child}
-            depth={depth + 1}
-            expanded={expanded}
-            onToggle={onToggle}
-            selectedId={selectedId}
-            onSelect={onSelect}
-            forceExpand={forceExpand}
-            colorFor={colorFor}
+    <div
+      role="treeitem"
+      aria-level={node.level + 1}
+      aria-expanded={hasChildren ? isOpen : undefined}
+      aria-selected={isSelected}
+      onClick={() => onSelect(node)}
+      style={{
+        backgroundColor: color.fill,
+        color: color.text,
+        paddingLeft: 8 + depth * 18,
+      }}
+      className={`flex cursor-pointer items-center gap-2 border-b border-black/5 py-1 pr-3 text-sm transition-[filter] hover:brightness-95 ${
+        isSelected ? "ring-2 ring-inset ring-sky-900/60" : ""
+      }`}
+    >
+      {hasChildren ? (
+        <button
+          type="button"
+          aria-label={isOpen ? "Collapse" : "Expand"}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle(node.id);
+          }}
+          className="grid size-4 shrink-0 place-items-center rounded hover:bg-black/10"
+        >
+          <ChevronRight
+            size={13}
+            className={`transition-transform ${isOpen ? "rotate-90" : ""}`}
           />
-        ))}
-    </>
+        </button>
+      ) : (
+        <span className="size-4 shrink-0 text-center opacity-40">·</span>
+      )}
+      <span className="shrink-0 font-mono text-xs tabular-nums opacity-80">
+        {node.code}
+      </span>
+      <span className="truncate font-medium">{node.name}</span>
+      {badge && (
+        <span
+          title={badge.title}
+          className="shrink-0 rounded border border-current/30 px-1 text-[10px] leading-4 font-semibold opacity-70"
+        >
+          {badge.label}
+        </span>
+      )}
+      {uom && (
+        <span className="ml-auto shrink-0 font-mono text-[11px] opacity-70">
+          {uom}
+        </span>
+      )}
+    </div>
   );
+});
+
+/** A node paired with its depth — the flattened, currently-visible rows. */
+type FlatRow = { node: CbsNode; depth: number };
+
+/** Depth-first flatten of the nodes that are currently visible: a node's
+ *  children are included only when it's expanded (or a search forces it open). */
+function flattenVisible(
+  nodes: CbsNode[],
+  expanded: Set<number>,
+  forceExpand: boolean,
+): FlatRow[] {
+  const out: FlatRow[] = [];
+  const walk = (list: CbsNode[], depth: number) => {
+    for (const n of list) {
+      out.push({ node: n, depth });
+      if (n.children.length > 0 && (forceExpand || expanded.has(n.id))) {
+        walk(n.children, depth + 1);
+      }
+    }
+  };
+  walk(nodes, 0);
+  return out;
 }
 
 function DetailPanel({
   node,
   detailColumns,
-  colorFor,
+  color,
   onClose,
 }: {
   node: CbsNode;
   detailColumns: string[];
-  colorFor: ColorFn;
+  color: CbsLevelColor;
   onClose: () => void;
 }) {
-  const color = colorFor(node.level);
   return (
     <div className="flex h-full flex-col">
       <div
@@ -197,14 +206,209 @@ function DetailPanel({
   );
 }
 
-/** The collapsible tree + toolbar + detail for one CBS dataset. */
+/** Row-count pills + the per-level colour legend. */
+function CountsLegend({
+  counts,
+  levels,
+  colorFor,
+}: {
+  counts: CbsData["meta"]["counts"];
+  levels: number[];
+  colorFor: ColorFn;
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+        {counts.total.toLocaleString()} rows
+      </span>
+      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
+        {counts.original.toLocaleString()} original · {counts.subRows} sub ·{" "}
+        {counts.materialRows} material
+      </span>
+      <span className="ml-1 flex flex-wrap items-center gap-1">
+        {levels.map((lvl) => {
+          const c = colorFor(lvl);
+          return (
+            <span
+              key={lvl}
+              title={`Level ${lvl}`}
+              className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
+              style={{
+                backgroundColor: c.fill,
+                color: c.text,
+                outline: "1px solid rgba(0,0,0,0.1)",
+              }}
+            >
+              L{lvl}
+            </span>
+          );
+        })}
+      </span>
+    </div>
+  );
+}
+
+/** Search box + expand/collapse-all + (while searching) a match count. */
+function HierarchyToolbar({
+  query,
+  setQuery,
+  onExpandAll,
+  onCollapseAll,
+  matchCount,
+}: {
+  query: string;
+  setQuery: (v: string) => void;
+  onExpandAll: () => void;
+  onCollapseAll: () => void;
+  matchCount: number | null;
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      <SearchBox
+        value={query}
+        onChange={setQuery}
+        placeholder="Search code or name…"
+        ariaLabel="Search this CBS hierarchy"
+        className="h-8 w-64"
+      />
+      <button
+        type="button"
+        onClick={onExpandAll}
+        className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+      >
+        Expand all
+      </button>
+      <button
+        type="button"
+        onClick={onCollapseAll}
+        className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+      >
+        Collapse all
+      </button>
+      {matchCount !== null && (
+        <span className="text-xs text-slate-500">
+          {matchCount.toLocaleString()} match{matchCount === 1 ? "" : "es"}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** The virtualized, scrollable tree panel (header bar + windowed rows). */
+function TreePanel({
+  flat,
+  headerColor,
+  expanded,
+  needle,
+  selectedId,
+  onToggle,
+  onSelect,
+  colorFor,
+  query,
+}: {
+  flat: FlatRow[];
+  headerColor: CbsLevelColor;
+  expanded: Set<number>;
+  needle: string;
+  selectedId: number | null;
+  onToggle: (id: number) => void;
+  onSelect: (node: CbsNode) => void;
+  colorFor: ColorFn;
+  query: string;
+}) {
+  // Virtualize so only the rows in view are in the DOM — "Expand all" over
+  // thousands of nodes stays cheap, and scroll/select/toggle never re-render
+  // the whole tree.
+  const scrollRef = React.useRef<HTMLDivElement | null>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: flat.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 29,
+    overscan: 12,
+  });
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div
+        className="flex items-center gap-2 px-3 py-2 text-xs font-semibold"
+        style={{ backgroundColor: headerColor.fill, color: headerColor.text }}
+      >
+        CBS code &amp; name
+        <span className="ml-auto opacity-80">UOM</span>
+      </div>
+      {flat.length === 0 ? (
+        <p className="p-6 text-center text-sm text-slate-500">
+          No rows match “{query}”.
+        </p>
+      ) : (
+        <div
+          ref={scrollRef}
+          role="tree"
+          aria-label="CBS hierarchy"
+          className="max-h-[70vh] overflow-auto"
+        >
+          <div
+            style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}
+          >
+            {rowVirtualizer.getVirtualItems().map((vi) => {
+              const { node, depth } = flat[vi.index];
+              return (
+                <div
+                  key={node.id}
+                  data-index={vi.index}
+                  ref={rowVirtualizer.measureElement}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${vi.start}px)`,
+                  }}
+                >
+                  <CbsRow
+                    node={node}
+                    depth={depth}
+                    hasChildren={node.children.length > 0}
+                    isOpen={needle.length > 0 || expanded.has(node.id)}
+                    isSelected={selectedId === node.id}
+                    onToggle={onToggle}
+                    onSelect={onSelect}
+                    color={colorFor(node.level)}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The provenance/rebuild footer line. */
+function SourceFooter({ meta }: { meta: CbsData["meta"] }) {
+  return (
+    <p className="mt-2 text-[11px] text-slate-400">
+      Source: {meta.source} ({meta.sheetName}) · generated{" "}
+      {new Date(meta.generatedAt).toLocaleDateString()}. Colours and outline
+      mirror the workbook; rebuild with{" "}
+      <code className="rounded bg-slate-100 px-1">
+        tsx scripts/build-cbs-sample.ts
+      </code>{" "}
+      after CBS changes.
+    </p>
+  );
+}
+
+/** The collapsible tree + toolbar + detail for one CBS dataset. Owns the state
+ *  and derivation; the presentational pieces above take plain props. */
 function CbsHierarchy({ data }: { data: CbsData }) {
   const { meta } = data;
   const colorFor = React.useCallback<ColorFn>(
     (level) =>
       level === 0
         ? L0_COLOR
-        : (meta.levelColors[String(level)] ?? { fill: "#ffffff", text: "#000000" }),
+        : (meta.levelColors[String(level)] ?? DEFAULT_LEVEL_COLOR),
     [meta.levelColors],
   );
 
@@ -239,8 +443,12 @@ function CbsHierarchy({ data }: { data: CbsData }) {
     return ids;
   }, [data.nodes]);
 
-  const { counts, levelColors } = meta;
-  const levels = Object.keys(levelColors)
+  const flat = React.useMemo(
+    () => flattenVisible(nodes, expanded, needle.length > 0),
+    [nodes, expanded, needle],
+  );
+
+  const levels = Object.keys(meta.levelColors)
     .map(Number)
     .sort((a, b) => a - b);
 
@@ -252,106 +460,34 @@ function CbsHierarchy({ data }: { data: CbsData }) {
         </p>
       )}
 
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-          {counts.total.toLocaleString()} rows
-        </span>
-        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
-          {counts.original.toLocaleString()} original · {counts.subRows} sub ·{" "}
-          {counts.materialRows} material
-        </span>
-        <span className="ml-1 flex flex-wrap items-center gap-1">
-          {levels.map((lvl) => (
-            <span
-              key={lvl}
-              title={`Level ${lvl}`}
-              className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
-              style={{
-                backgroundColor: colorFor(lvl).fill,
-                color: colorFor(lvl).text,
-                outline: "1px solid rgba(0,0,0,0.1)",
-              }}
-            >
-              L{lvl}
-            </span>
-          ))}
-        </span>
-      </div>
-
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="relative">
-          <Search
-            size={14}
-            className="absolute top-1/2 left-2 -translate-y-1/2 text-slate-400"
-          />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search code or name…"
-            aria-label="Search this CBS hierarchy"
-            className="h-8 w-64 rounded-md border border-slate-200 bg-white pr-2 pl-7 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus-visible:border-slate-400"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={() => setExpanded(new Set(allIdsWithChildren))}
-          className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-        >
-          Expand all
-        </button>
-        <button
-          type="button"
-          onClick={() => setExpanded(new Set())}
-          className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-        >
-          Collapse all
-        </button>
-        {needle && (
-          <span className="text-xs text-slate-500">
-            {matches.toLocaleString()} match{matches === 1 ? "" : "es"}
-          </span>
-        )}
-      </div>
+      <CountsLegend counts={meta.counts} levels={levels} colorFor={colorFor} />
+      <HierarchyToolbar
+        query={query}
+        setQuery={setQuery}
+        onExpandAll={() => setExpanded(new Set(allIdsWithChildren))}
+        onCollapseAll={() => setExpanded(new Set())}
+        matchCount={needle ? matches : null}
+      />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_22rem]">
-        <div className="max-h-[70vh] overflow-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div
-            className="sticky top-0 z-10 flex items-center gap-2 px-3 py-2 text-xs font-semibold"
-            style={{ backgroundColor: meta.headerColor.fill, color: meta.headerColor.text }}
-          >
-            CBS code &amp; name
-            <span className="ml-auto opacity-80">UOM</span>
-          </div>
-          <div role="tree" aria-label="CBS hierarchy">
-            {nodes.length === 0 ? (
-              <p className="p-6 text-center text-sm text-slate-500">
-                No rows match “{query}”.
-              </p>
-            ) : (
-              nodes.map((node) => (
-                <CbsRow
-                  key={node.id}
-                  node={node}
-                  depth={0}
-                  expanded={expanded}
-                  onToggle={toggle}
-                  selectedId={selected?.id ?? null}
-                  onSelect={setSelected}
-                  forceExpand={needle.length > 0}
-                  colorFor={colorFor}
-                />
-              ))
-            )}
-          </div>
-        </div>
+        <TreePanel
+          flat={flat}
+          headerColor={meta.headerColor}
+          expanded={expanded}
+          needle={needle}
+          selectedId={selected?.id ?? null}
+          onToggle={toggle}
+          onSelect={setSelected}
+          colorFor={colorFor}
+          query={query}
+        />
 
         <aside className="hidden rounded-lg border border-slate-200 bg-white shadow-sm lg:block lg:self-start">
           {selected ? (
             <DetailPanel
               node={selected}
               detailColumns={meta.detailColumns}
-              colorFor={colorFor}
+              color={colorFor(selected.level)}
               onClose={() => setSelected(null)}
             />
           ) : (
@@ -363,15 +499,7 @@ function CbsHierarchy({ data }: { data: CbsData }) {
         </aside>
       </div>
 
-      <p className="mt-2 text-[11px] text-slate-400">
-        Source: {meta.source} ({meta.sheetName}) · generated{" "}
-        {new Date(meta.generatedAt).toLocaleDateString()}. Colours and outline
-        mirror the workbook; rebuild with{" "}
-        <code className="rounded bg-slate-100 px-1">
-          tsx scripts/build-cbs-sample.ts
-        </code>{" "}
-        after CBS changes.
-      </p>
+      <SourceFooter meta={meta} />
     </div>
   );
 }
@@ -468,6 +596,7 @@ export function CbsSampleView() {
           title="Master CBS Dictionary"
           description="Civil, Shop Equipment, Equipment, Pipe Shop & Piping — with generated S/M rows."
           load={loadDictionary}
+          defaultOpen
         />
       </div>
     </div>

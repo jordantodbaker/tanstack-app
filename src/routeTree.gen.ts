@@ -9,117 +9,42 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as ValidationRouteImport } from './routes/validation'
-import { Route as TrendsRouteImport } from './routes/trends'
-import { Route as SummaryRouteImport } from './routes/summary'
-import { Route as SetupRouteImport } from './routes/setup'
-import { Route as RfisRouteImport } from './routes/rfis'
-import { Route as ReportingRouteImport } from './routes/reporting'
-import { Route as PipingRouteImport } from './routes/piping'
-import { Route as PcoRouteImport } from './routes/pco'
-import { Route as MaterialsRouteImport } from './routes/materials'
-import { Route as HelpRouteImport } from './routes/help'
-import { Route as FcoLogRouteImport } from './routes/fco-log'
-import { Route as DashboardRouteImport } from './routes/dashboard'
-import { Route as ChangelogRouteImport } from './routes/changelog'
-import { Route as CbsSampleRouteImport } from './routes/cbs-sample'
-import { Route as BasisRouteImport } from './routes/basis'
-import { Route as AdminRouteImport } from './routes/admin'
-import { Route as DisciplineRouteImport } from './routes/$discipline'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as RfiPrintIdRouteImport } from './routes/rfi-print.$id'
-import { Route as FcoPrintIdRouteImport } from './routes/fco-print.$id'
-import { Route as CvrPrintIdRouteImport } from './routes/cvr-print.$id'
-import { Route as AdminUsersRouteImport } from './routes/admin.users'
-import { Route as AdminSystemRouteImport } from './routes/admin.system'
-import { Route as AdminSubcontractorsRouteImport } from './routes/admin.subcontractors'
-import { Route as AdminSchedulesRouteImport } from './routes/admin.schedules'
-import { Route as AdminRolesRouteImport } from './routes/admin.roles'
-import { Route as AdminProjectsRouteImport } from './routes/admin.projects'
-import { Route as AdminFcoTemplatesRouteImport } from './routes/admin.fco-templates'
-import { Route as AdminCvrTemplatesRouteImport } from './routes/admin.cvr-templates'
-import { Route as AdminCrewMixesRouteImport } from './routes/admin.crew-mixes'
+import { Route as DisciplineRouteImport } from './routes/$discipline'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as BasisRouteImport } from './routes/basis'
+import { Route as CbsSampleRouteImport } from './routes/cbs-sample'
+import { Route as ChangelogRouteImport } from './routes/changelog'
+import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as FcoLogRouteImport } from './routes/fco-log'
+import { Route as HelpRouteImport } from './routes/help'
+import { Route as MaterialsRouteImport } from './routes/materials'
+import { Route as PcoRouteImport } from './routes/pco'
+import { Route as PipingRouteImport } from './routes/piping'
+import { Route as ReportingRouteImport } from './routes/reporting'
+import { Route as RfisRouteImport } from './routes/rfis'
+import { Route as SetupRouteImport } from './routes/setup'
+import { Route as SummaryRouteImport } from './routes/summary'
+import { Route as TrendsRouteImport } from './routes/trends'
+import { Route as ValidationRouteImport } from './routes/validation'
 import { Route as AdminAreasRouteImport } from './routes/admin.areas'
+import { Route as AdminCrewMixesRouteImport } from './routes/admin.crew-mixes'
+import { Route as AdminCvrTemplatesRouteImport } from './routes/admin.cvr-templates'
+import { Route as AdminFcoTemplatesRouteImport } from './routes/admin.fco-templates'
+import { Route as AdminProjectsRouteImport } from './routes/admin.projects'
+import { Route as AdminRolesRouteImport } from './routes/admin.roles'
+import { Route as AdminSchedulesRouteImport } from './routes/admin.schedules'
+import { Route as AdminSubcontractorsRouteImport } from './routes/admin.subcontractors'
+import { Route as AdminSystemRouteImport } from './routes/admin.system'
+import { Route as AdminUsersRouteImport } from './routes/admin.users'
+import { Route as CvrPrintIdRouteImport } from './routes/cvr-print.$id'
+import { Route as FcoPrintIdRouteImport } from './routes/fco-print.$id'
+import { Route as RfiPrintIdRouteImport } from './routes/rfi-print.$id'
 import { Route as ApiCronRemindersRouteImport } from './routes/api.cron.reminders'
 
-const ValidationRoute = ValidationRouteImport.update({
-  id: '/validation',
-  path: '/validation',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TrendsRoute = TrendsRouteImport.update({
-  id: '/trends',
-  path: '/trends',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SummaryRoute = SummaryRouteImport.update({
-  id: '/summary',
-  path: '/summary',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SetupRoute = SetupRouteImport.update({
-  id: '/setup',
-  path: '/setup',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RfisRoute = RfisRouteImport.update({
-  id: '/rfis',
-  path: '/rfis',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ReportingRoute = ReportingRouteImport.update({
-  id: '/reporting',
-  path: '/reporting',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PipingRoute = PipingRouteImport.update({
-  id: '/piping',
-  path: '/piping',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PcoRoute = PcoRouteImport.update({
-  id: '/pco',
-  path: '/pco',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MaterialsRoute = MaterialsRouteImport.update({
-  id: '/materials',
-  path: '/materials',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HelpRoute = HelpRouteImport.update({
-  id: '/help',
-  path: '/help',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FcoLogRoute = FcoLogRouteImport.update({
-  id: '/fco-log',
-  path: '/fco-log',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ChangelogRoute = ChangelogRouteImport.update({
-  id: '/changelog',
-  path: '/changelog',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CbsSampleRoute = CbsSampleRouteImport.update({
-  id: '/cbs-sample',
-  path: '/cbs-sample',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BasisRoute = BasisRouteImport.update({
-  id: '/basis',
-  path: '/basis',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminRoute = AdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DisciplineRoute = DisciplineRouteImport.update({
@@ -127,64 +52,89 @@ const DisciplineRoute = DisciplineRouteImport.update({
   path: '/$discipline',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
-const RfiPrintIdRoute = RfiPrintIdRouteImport.update({
-  id: '/rfi-print/$id',
-  path: '/rfi-print/$id',
+const BasisRoute = BasisRouteImport.update({
+  id: '/basis',
+  path: '/basis',
   getParentRoute: () => rootRouteImport,
-} as any).lazy(() => import('./routes/rfi-print.$id.lazy').then((d) => d.Route))
-const FcoPrintIdRoute = FcoPrintIdRouteImport.update({
-  id: '/fco-print/$id',
-  path: '/fco-print/$id',
+} as any)
+const CbsSampleRoute = CbsSampleRouteImport.update({
+  id: '/cbs-sample',
+  path: '/cbs-sample',
   getParentRoute: () => rootRouteImport,
-} as any).lazy(() => import('./routes/fco-print.$id.lazy').then((d) => d.Route))
-const CvrPrintIdRoute = CvrPrintIdRouteImport.update({
-  id: '/cvr-print/$id',
-  path: '/cvr-print/$id',
+} as any)
+const ChangelogRoute = ChangelogRouteImport.update({
+  id: '/changelog',
+  path: '/changelog',
   getParentRoute: () => rootRouteImport,
-} as any).lazy(() => import('./routes/cvr-print.$id.lazy').then((d) => d.Route))
-const AdminUsersRoute = AdminUsersRouteImport.update({
-  id: '/users',
-  path: '/users',
-  getParentRoute: () => AdminRoute,
 } as any)
-const AdminSystemRoute = AdminSystemRouteImport.update({
-  id: '/system',
-  path: '/system',
-  getParentRoute: () => AdminRoute,
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AdminSubcontractorsRoute = AdminSubcontractorsRouteImport.update({
-  id: '/subcontractors',
-  path: '/subcontractors',
-  getParentRoute: () => AdminRoute,
+const FcoLogRoute = FcoLogRouteImport.update({
+  id: '/fco-log',
+  path: '/fco-log',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AdminSchedulesRoute = AdminSchedulesRouteImport.update({
-  id: '/schedules',
-  path: '/schedules',
-  getParentRoute: () => AdminRoute,
+const HelpRoute = HelpRouteImport.update({
+  id: '/help',
+  path: '/help',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AdminRolesRoute = AdminRolesRouteImport.update({
-  id: '/roles',
-  path: '/roles',
-  getParentRoute: () => AdminRoute,
+const MaterialsRoute = MaterialsRouteImport.update({
+  id: '/materials',
+  path: '/materials',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AdminProjectsRoute = AdminProjectsRouteImport.update({
-  id: '/projects',
-  path: '/projects',
-  getParentRoute: () => AdminRoute,
+const PcoRoute = PcoRouteImport.update({
+  id: '/pco',
+  path: '/pco',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AdminFcoTemplatesRoute = AdminFcoTemplatesRouteImport.update({
-  id: '/fco-templates',
-  path: '/fco-templates',
-  getParentRoute: () => AdminRoute,
+const PipingRoute = PipingRouteImport.update({
+  id: '/piping',
+  path: '/piping',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AdminCvrTemplatesRoute = AdminCvrTemplatesRouteImport.update({
-  id: '/cvr-templates',
-  path: '/cvr-templates',
+const ReportingRoute = ReportingRouteImport.update({
+  id: '/reporting',
+  path: '/reporting',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RfisRoute = RfisRouteImport.update({
+  id: '/rfis',
+  path: '/rfis',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SummaryRoute = SummaryRouteImport.update({
+  id: '/summary',
+  path: '/summary',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TrendsRoute = TrendsRouteImport.update({
+  id: '/trends',
+  path: '/trends',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ValidationRoute = ValidationRouteImport.update({
+  id: '/validation',
+  path: '/validation',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAreasRoute = AdminAreasRouteImport.update({
+  id: '/areas',
+  path: '/areas',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminCrewMixesRoute = AdminCrewMixesRouteImport.update({
@@ -192,11 +142,61 @@ const AdminCrewMixesRoute = AdminCrewMixesRouteImport.update({
   path: '/crew-mixes',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminAreasRoute = AdminAreasRouteImport.update({
-  id: '/areas',
-  path: '/areas',
+const AdminCvrTemplatesRoute = AdminCvrTemplatesRouteImport.update({
+  id: '/cvr-templates',
+  path: '/cvr-templates',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminFcoTemplatesRoute = AdminFcoTemplatesRouteImport.update({
+  id: '/fco-templates',
+  path: '/fco-templates',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminProjectsRoute = AdminProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminRolesRoute = AdminRolesRouteImport.update({
+  id: '/roles',
+  path: '/roles',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSchedulesRoute = AdminSchedulesRouteImport.update({
+  id: '/schedules',
+  path: '/schedules',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSubcontractorsRoute = AdminSubcontractorsRouteImport.update({
+  id: '/subcontractors',
+  path: '/subcontractors',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSystemRoute = AdminSystemRouteImport.update({
+  id: '/system',
+  path: '/system',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminUsersRoute = AdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AdminRoute,
+} as any)
+const CvrPrintIdRoute = CvrPrintIdRouteImport.update({
+  id: '/cvr-print/$id',
+  path: '/cvr-print/$id',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/cvr-print.$id.lazy').then((d) => d.Route))
+const FcoPrintIdRoute = FcoPrintIdRouteImport.update({
+  id: '/fco-print/$id',
+  path: '/fco-print/$id',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/fco-print.$id.lazy').then((d) => d.Route))
+const RfiPrintIdRoute = RfiPrintIdRouteImport.update({
+  id: '/rfi-print/$id',
+  path: '/rfi-print/$id',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/rfi-print.$id.lazy').then((d) => d.Route))
 const ApiCronRemindersRoute = ApiCronRemindersRouteImport.update({
   id: '/api/cron/reminders',
   path: '/api/cron/reminders',
@@ -438,116 +438,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/validation': {
-      id: '/validation'
-      path: '/validation'
-      fullPath: '/validation'
-      preLoaderRoute: typeof ValidationRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/trends': {
-      id: '/trends'
-      path: '/trends'
-      fullPath: '/trends'
-      preLoaderRoute: typeof TrendsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/summary': {
-      id: '/summary'
-      path: '/summary'
-      fullPath: '/summary'
-      preLoaderRoute: typeof SummaryRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/setup': {
-      id: '/setup'
-      path: '/setup'
-      fullPath: '/setup'
-      preLoaderRoute: typeof SetupRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/rfis': {
-      id: '/rfis'
-      path: '/rfis'
-      fullPath: '/rfis'
-      preLoaderRoute: typeof RfisRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/reporting': {
-      id: '/reporting'
-      path: '/reporting'
-      fullPath: '/reporting'
-      preLoaderRoute: typeof ReportingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/piping': {
-      id: '/piping'
-      path: '/piping'
-      fullPath: '/piping'
-      preLoaderRoute: typeof PipingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/pco': {
-      id: '/pco'
-      path: '/pco'
-      fullPath: '/pco'
-      preLoaderRoute: typeof PcoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/materials': {
-      id: '/materials'
-      path: '/materials'
-      fullPath: '/materials'
-      preLoaderRoute: typeof MaterialsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/help': {
-      id: '/help'
-      path: '/help'
-      fullPath: '/help'
-      preLoaderRoute: typeof HelpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/fco-log': {
-      id: '/fco-log'
-      path: '/fco-log'
-      fullPath: '/fco-log'
-      preLoaderRoute: typeof FcoLogRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/changelog': {
-      id: '/changelog'
-      path: '/changelog'
-      fullPath: '/changelog'
-      preLoaderRoute: typeof ChangelogRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cbs-sample': {
-      id: '/cbs-sample'
-      path: '/cbs-sample'
-      fullPath: '/cbs-sample'
-      preLoaderRoute: typeof CbsSampleRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/basis': {
-      id: '/basis'
-      path: '/basis'
-      fullPath: '/basis'
-      preLoaderRoute: typeof BasisRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin': {
-      id: '/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AdminRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$discipline': {
@@ -557,88 +452,123 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DisciplineRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/rfi-print/$id': {
-      id: '/rfi-print/$id'
-      path: '/rfi-print/$id'
-      fullPath: '/rfi-print/$id'
-      preLoaderRoute: typeof RfiPrintIdRouteImport
+    '/basis': {
+      id: '/basis'
+      path: '/basis'
+      fullPath: '/basis'
+      preLoaderRoute: typeof BasisRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/fco-print/$id': {
-      id: '/fco-print/$id'
-      path: '/fco-print/$id'
-      fullPath: '/fco-print/$id'
-      preLoaderRoute: typeof FcoPrintIdRouteImport
+    '/cbs-sample': {
+      id: '/cbs-sample'
+      path: '/cbs-sample'
+      fullPath: '/cbs-sample'
+      preLoaderRoute: typeof CbsSampleRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/cvr-print/$id': {
-      id: '/cvr-print/$id'
-      path: '/cvr-print/$id'
-      fullPath: '/cvr-print/$id'
-      preLoaderRoute: typeof CvrPrintIdRouteImport
+    '/changelog': {
+      id: '/changelog'
+      path: '/changelog'
+      fullPath: '/changelog'
+      preLoaderRoute: typeof ChangelogRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/users': {
-      id: '/admin/users'
-      path: '/users'
-      fullPath: '/admin/users'
-      preLoaderRoute: typeof AdminUsersRouteImport
-      parentRoute: typeof AdminRoute
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/admin/system': {
-      id: '/admin/system'
-      path: '/system'
-      fullPath: '/admin/system'
-      preLoaderRoute: typeof AdminSystemRouteImport
-      parentRoute: typeof AdminRoute
+    '/fco-log': {
+      id: '/fco-log'
+      path: '/fco-log'
+      fullPath: '/fco-log'
+      preLoaderRoute: typeof FcoLogRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/admin/subcontractors': {
-      id: '/admin/subcontractors'
-      path: '/subcontractors'
-      fullPath: '/admin/subcontractors'
-      preLoaderRoute: typeof AdminSubcontractorsRouteImport
-      parentRoute: typeof AdminRoute
+    '/help': {
+      id: '/help'
+      path: '/help'
+      fullPath: '/help'
+      preLoaderRoute: typeof HelpRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/admin/schedules': {
-      id: '/admin/schedules'
-      path: '/schedules'
-      fullPath: '/admin/schedules'
-      preLoaderRoute: typeof AdminSchedulesRouteImport
-      parentRoute: typeof AdminRoute
+    '/materials': {
+      id: '/materials'
+      path: '/materials'
+      fullPath: '/materials'
+      preLoaderRoute: typeof MaterialsRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/admin/roles': {
-      id: '/admin/roles'
-      path: '/roles'
-      fullPath: '/admin/roles'
-      preLoaderRoute: typeof AdminRolesRouteImport
-      parentRoute: typeof AdminRoute
+    '/pco': {
+      id: '/pco'
+      path: '/pco'
+      fullPath: '/pco'
+      preLoaderRoute: typeof PcoRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/admin/projects': {
-      id: '/admin/projects'
-      path: '/projects'
-      fullPath: '/admin/projects'
-      preLoaderRoute: typeof AdminProjectsRouteImport
-      parentRoute: typeof AdminRoute
+    '/piping': {
+      id: '/piping'
+      path: '/piping'
+      fullPath: '/piping'
+      preLoaderRoute: typeof PipingRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/admin/fco-templates': {
-      id: '/admin/fco-templates'
-      path: '/fco-templates'
-      fullPath: '/admin/fco-templates'
-      preLoaderRoute: typeof AdminFcoTemplatesRouteImport
-      parentRoute: typeof AdminRoute
+    '/reporting': {
+      id: '/reporting'
+      path: '/reporting'
+      fullPath: '/reporting'
+      preLoaderRoute: typeof ReportingRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/admin/cvr-templates': {
-      id: '/admin/cvr-templates'
-      path: '/cvr-templates'
-      fullPath: '/admin/cvr-templates'
-      preLoaderRoute: typeof AdminCvrTemplatesRouteImport
+    '/rfis': {
+      id: '/rfis'
+      path: '/rfis'
+      fullPath: '/rfis'
+      preLoaderRoute: typeof RfisRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/summary': {
+      id: '/summary'
+      path: '/summary'
+      fullPath: '/summary'
+      preLoaderRoute: typeof SummaryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/trends': {
+      id: '/trends'
+      path: '/trends'
+      fullPath: '/trends'
+      preLoaderRoute: typeof TrendsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/validation': {
+      id: '/validation'
+      path: '/validation'
+      fullPath: '/validation'
+      preLoaderRoute: typeof ValidationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/areas': {
+      id: '/admin/areas'
+      path: '/areas'
+      fullPath: '/admin/areas'
+      preLoaderRoute: typeof AdminAreasRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/crew-mixes': {
@@ -648,12 +578,82 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminCrewMixesRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/areas': {
-      id: '/admin/areas'
-      path: '/areas'
-      fullPath: '/admin/areas'
-      preLoaderRoute: typeof AdminAreasRouteImport
+    '/admin/cvr-templates': {
+      id: '/admin/cvr-templates'
+      path: '/cvr-templates'
+      fullPath: '/admin/cvr-templates'
+      preLoaderRoute: typeof AdminCvrTemplatesRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/admin/fco-templates': {
+      id: '/admin/fco-templates'
+      path: '/fco-templates'
+      fullPath: '/admin/fco-templates'
+      preLoaderRoute: typeof AdminFcoTemplatesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/projects': {
+      id: '/admin/projects'
+      path: '/projects'
+      fullPath: '/admin/projects'
+      preLoaderRoute: typeof AdminProjectsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/roles': {
+      id: '/admin/roles'
+      path: '/roles'
+      fullPath: '/admin/roles'
+      preLoaderRoute: typeof AdminRolesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/schedules': {
+      id: '/admin/schedules'
+      path: '/schedules'
+      fullPath: '/admin/schedules'
+      preLoaderRoute: typeof AdminSchedulesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/subcontractors': {
+      id: '/admin/subcontractors'
+      path: '/subcontractors'
+      fullPath: '/admin/subcontractors'
+      preLoaderRoute: typeof AdminSubcontractorsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/system': {
+      id: '/admin/system'
+      path: '/system'
+      fullPath: '/admin/system'
+      preLoaderRoute: typeof AdminSystemRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/users': {
+      id: '/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/cvr-print/$id': {
+      id: '/cvr-print/$id'
+      path: '/cvr-print/$id'
+      fullPath: '/cvr-print/$id'
+      preLoaderRoute: typeof CvrPrintIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/fco-print/$id': {
+      id: '/fco-print/$id'
+      path: '/fco-print/$id'
+      fullPath: '/fco-print/$id'
+      preLoaderRoute: typeof FcoPrintIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/rfi-print/$id': {
+      id: '/rfi-print/$id'
+      path: '/rfi-print/$id'
+      fullPath: '/rfi-print/$id'
+      preLoaderRoute: typeof RfiPrintIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/cron/reminders': {
       id: '/api/cron/reminders'

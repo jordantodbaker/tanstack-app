@@ -132,7 +132,11 @@ function extractSheet(ws: ExcelJS.Worksheet) {
   const levelColors: Record<number, { fill: string; text: string }> = {};
 
   const roots: CbsNode[] = [];
-  const stack: CbsNode[] = [];
+  // Open ancestors, in non-decreasing outline-level order. Parenting is
+  // cost-type aware (see below), so we track each open node's code prefix
+  // (everything but the trailing type segment) and its cost type alongside it.
+  const open: { level: number; prefix: string; type: string; node: CbsNode }[] =
+    [];
   const counts = { total: 0, original: 0, subRows: 0, materialRows: 0 };
   let idSeq = 0;
 
@@ -165,11 +169,47 @@ function extractSheet(ws: ExcelJS.Worksheet) {
     else if (rowType.includes("Material")) counts.materialRows++;
     else counts.original++;
 
+    // Cost type = the trailing code segment (0/S/M/L/E/O); prefix = the rest.
+    const dash = code.lastIndexOf("-");
+    const prefix = dash >= 0 ? code.slice(0, dash) : code;
+    const costType = (dash >= 0 ? code.slice(dash + 1) : "") || "0";
+
     const node: CbsNode = { id: idSeq++, name, code, level, rowType, fields, children: [] };
-    while (stack.length > 0 && stack[stack.length - 1].level >= level) stack.pop();
-    if (stack.length === 0) roots.push(node);
-    else stack[stack.length - 1].children.push(node);
-    stack.push(node);
+
+    // Close ancestors this row ends: anything deeper than it, plus same-level
+    // nodes that AREN'T a parallel cost-type variant of it (i.e. a different
+    // code prefix). Parallel variants — the 0/S/M rows that share a prefix and
+    // sit at the same level — stay open so a child can pick the right one.
+    for (let i = open.length - 1; i >= 0; i--) {
+      const x = open[i];
+      if (x.level > level || (x.level === level && x.prefix !== prefix)) {
+        open.splice(i, 1);
+      }
+    }
+
+    // Parent = nearest strictly-shallower ancestor of the SAME cost type; if
+    // there is none, the nearest type-"0" backbone ancestor. So Material rows
+    // only parent Material, Subcontract only Subcontract, Labor prefers Labor
+    // then falls back to 0, and the top M/S/L summaries hang off the 0 tree.
+    let parent: CbsNode | null = null;
+    for (let i = open.length - 1; i >= 0; i--) {
+      if (open[i].level < level && open[i].type === costType) {
+        parent = open[i].node;
+        break;
+      }
+    }
+    if (!parent && costType !== "0") {
+      for (let i = open.length - 1; i >= 0; i--) {
+        if (open[i].level < level && open[i].type === "0") {
+          parent = open[i].node;
+          break;
+        }
+      }
+    }
+
+    if (parent) parent.children.push(node);
+    else roots.push(node);
+    open.push({ level, prefix, type: costType, node });
   }
 
   return {

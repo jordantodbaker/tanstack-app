@@ -128,6 +128,7 @@ function FcoLogPage() {
   const {
     search,
     setSearch,
+    deferredSearch,
     statusFilter,
     setStatusFilter,
     disciplineFilter,
@@ -148,7 +149,7 @@ function FcoLogPage() {
       if (linkageFilter === "unlinked" && it.linkedCvrId !== null) return false;
       return matchesListFilters(
         it,
-        { search, statusFilter, disciplineFilter },
+        { search: deferredSearch, statusFilter, disciplineFilter },
         {
           status: (i) => i.status,
           discipline: (i) => i.discipline,
@@ -157,7 +158,7 @@ function FcoLogPage() {
         },
       );
     },
-    [search, statusFilter, disciplineFilter, linkageFilter, areaLabel],
+    [deferredSearch, statusFilter, disciplineFilter, linkageFilter, areaLabel],
   );
 
   const filtered = React.useMemo(

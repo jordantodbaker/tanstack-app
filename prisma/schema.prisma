@@ -58,7 +58,9 @@ model AuditEvent {
   note       String?
   createdAt  DateTime    @default(now())
 
-  @@index([entityType, entityId])
+  // Includes createdAt so the history read (filter by entity, order by createdAt
+  // desc) is fully index-ordered.
+  @@index([entityType, entityId, createdAt])
   @@index([projectId, createdAt])
 }
 
@@ -125,6 +127,9 @@ model ReminderLog {
 
   @@index([reminderType, entityId, recipientUserId, sentAt])
   @@index([projectId, sentAt])
+  // The daily cron's dedup read filters on sentAt alone; neither index above
+  // leads with it, so without this it's a seq scan on an append-only table.
+  @@index([sentAt])
 }
 
 // RFI (Request for Information) — upstream of an FCO. Field crew asks a

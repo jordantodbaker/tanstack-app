@@ -110,6 +110,7 @@ function ChangelogPage() {
   const {
     search,
     setSearch,
+    deferredSearch,
     statusFilter,
     setStatusFilter,
     disciplineFilter,
@@ -123,7 +124,7 @@ function ChangelogPage() {
     (it: ChangeLogListItem): boolean =>
       matchesListFilters(
         it,
-        { search, statusFilter, disciplineFilter },
+        { search: deferredSearch, statusFilter, disciplineFilter },
         {
           status: (i) => i.status,
           discipline: (i) => i.discipline,
@@ -131,7 +132,7 @@ function ChangelogPage() {
             `${i.cvrNumber} ${i.title} ${i.originator} ${i.approver} ${i.cbsCodes.join(` `)} ${areaLabel(i.area)}`,
         },
       ),
-    [search, statusFilter, disciplineFilter, areaLabel],
+    [deferredSearch, statusFilter, disciplineFilter, areaLabel],
   );
 
   const filtered = React.useMemo(

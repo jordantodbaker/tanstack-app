@@ -123,6 +123,7 @@ function RfiLogPage() {
   const {
     search,
     setSearch,
+    deferredSearch,
     statusFilter,
     setStatusFilter,
     disciplineFilter,
@@ -137,7 +138,7 @@ function RfiLogPage() {
     (it: RfiListItem): boolean =>
       matchesListFilters(
         it,
-        { search, statusFilter, disciplineFilter },
+        { search: deferredSearch, statusFilter, disciplineFilter },
         {
           status: (i) => i.status,
           discipline: (i) => i.discipline,
@@ -145,7 +146,7 @@ function RfiLogPage() {
             `${i.rfiNumber} ${i.subject} ${i.initiatedBy} ${i.assignedTo} ${i.drawingRefs.join(" ")} ${i.specRefs.join(" ")} ${areaLabel(i.locationArea)}`,
         },
       ),
-    [search, statusFilter, disciplineFilter, areaLabel],
+    [deferredSearch, statusFilter, disciplineFilter, areaLabel],
   );
 
   const filtered = React.useMemo(

@@ -43,10 +43,12 @@ afterEach(() => {
 
 // `HelpButton` loads the dialog with `React.lazy`. Transforming that module
 // graph on first use costs more than a `findBy*` default timeout allows, so
-// warm it once here rather than making every test wait on it.
+// warm it once here rather than making every test wait on it. The generous
+// hook timeout covers the full concurrent suite, where transforming this large
+// graph on a busy worker can exceed the default 10s.
 beforeAll(async () => {
   await import("./HelpDialog");
-});
+}, 30000);
 
 /** Opens the guide and waits for the lazily-loaded dialog to mount. */
 const openGuide = async () => {

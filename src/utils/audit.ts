@@ -42,6 +42,10 @@ export const fetchAuditEvents = createServerFn({ method: "GET" })
       const rows = await prisma.auditEvent.findMany({
         where: { entityType: data.entityType, entityId: data.entityId },
         orderBy: { createdAt: "desc" },
+        // Cap the history read — a heavily-edited entity accrues one row per
+        // changed field. The panel shows the most recent 200; older events are
+        // rarely needed and would bloat the payload of every history open.
+        take: 200,
       });
       return rows.map((r) => ({
         id: r.id,

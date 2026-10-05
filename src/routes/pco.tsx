@@ -101,7 +101,7 @@ function PcoLogPage() {
   });
 
   const { q } = Route.useSearch();
-  const { search, setSearch, statusFilter, setStatusFilter } =
+  const { search, setSearch, deferredSearch, statusFilter, setStatusFilter } =
     useListFilters<PcoStatus>(q);
 
   // Slim list payload drops `description` / `reasonNarrative` / `notes`;
@@ -111,14 +111,14 @@ function PcoLogPage() {
     (it: PcoListItem): boolean =>
       matchesListFilters(
         it,
-        { search, statusFilter, disciplineFilter: "" },
+        { search: deferredSearch, statusFilter, disciplineFilter: "" },
         {
           status: (i) => i.status,
           haystack: (i) =>
             `${i.pcoNumber} ${i.ownerReference} ${i.title} ${i.ownerRepName} ${i.ownerRepEmail} ${i.invoiceNumber}`,
         },
       ),
-    [search, statusFilter],
+    [deferredSearch, statusFilter],
   );
 
   const filtered = React.useMemo(

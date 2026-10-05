@@ -27,9 +27,15 @@ export function useListFilters<S extends string = string>(
   }, [q]);
   const [statusFilter, setStatusFilter] = React.useState<"" | S>("");
   const [disciplineFilter, setDisciplineFilter] = React.useState("");
+  // Bind the input to `search` (immediate, so the caret never lags) but drive
+  // the O(n) list filter + row reconcile off `deferredSearch` — React keeps
+  // typing at input priority and re-filters the list at transition priority, so
+  // the box stays responsive even on large logs.
+  const deferredSearch = React.useDeferredValue(search);
   return {
     search,
     setSearch,
+    deferredSearch,
     statusFilter,
     setStatusFilter,
     disciplineFilter,

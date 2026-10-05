@@ -130,6 +130,7 @@ function TrendLogPage() {
   const {
     search,
     setSearch,
+    deferredSearch,
     statusFilter,
     setStatusFilter,
     disciplineFilter,
@@ -142,7 +143,7 @@ function TrendLogPage() {
     (it: TrendListItem): boolean =>
       matchesListFilters(
         it,
-        { search, statusFilter, disciplineFilter },
+        { search: deferredSearch, statusFilter, disciplineFilter },
         {
           status: (i) => i.status,
           discipline: (i) => i.discipline,
@@ -150,7 +151,7 @@ function TrendLogPage() {
             `${i.trendNumber} ${i.title} ${i.initiatedBy} ${areaLabel(i.locationArea)}`,
         },
       ),
-    [search, statusFilter, disciplineFilter, areaLabel],
+    [deferredSearch, statusFilter, disciplineFilter, areaLabel],
   );
 
   const filtered = React.useMemo(

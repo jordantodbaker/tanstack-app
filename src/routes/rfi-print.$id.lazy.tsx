@@ -8,9 +8,9 @@ import {
 import { projectsQueryOptions } from "~/utils/projects";
 import { areasByProjectQueryOptions } from "~/utils/areas";
 import { formatAreaLabel } from "~/utils/areaLabels";
-import { QueryError } from "~/components/ui/list-page";
 import {
   PrintablePageShell,
+  PrintRecordGuard,
   Section,
   KvGrid,
   SignatureBlock,
@@ -36,43 +36,33 @@ function PrintableRfiPage() {
     areasByProjectQueryOptions(rfi?.projectId ?? null),
   );
 
-  if (!Number.isFinite(id)) {
-    return (
-      <main className="max-w-4xl mx-auto p-8">
-        <p className="text-sm text-red-700">Invalid RFI id.</p>
-      </main>
-    );
-  }
-  if (isError) {
-    return (
-      <main className="max-w-4xl mx-auto p-8">
-        <QueryError error={error} label="RFI" />
-      </main>
-    );
-  }
-  if (isPending || !rfi) {
-    return (
-      <main className="max-w-4xl mx-auto p-8">
-        <p className="text-sm text-slate-500">Loading RFI…</p>
-      </main>
-    );
-  }
-  const project = projects.find((p) => p.id === rfi.projectId);
-  const areaLabel = formatAreaLabel(rfi.locationArea, areas);
-
   return (
-    <PrintablePageShell
-      recordTitle="Request for Information"
-      recordNumber={rfi.rfiNumber || `RFI #${rfi.id}`}
-      statusLabel={RFI_STATUS_LABELS[rfi.status]}
-      project={project}
-      backTo="/rfis"
-      backLabel="Back to RFIs"
-      footerKind="RFI"
-      footerId={rfi.id}
+    <PrintRecordGuard
+      id={id}
+      label="RFI"
+      isPending={isPending}
+      isError={isError}
+      error={error}
+      data={rfi}
     >
-      <PrintableRfiBody rfi={rfi} areaLabel={areaLabel} />
-    </PrintablePageShell>
+      {(rfi) => (
+        <PrintablePageShell
+          recordTitle="Request for Information"
+          recordNumber={rfi.rfiNumber || `RFI #${rfi.id}`}
+          statusLabel={RFI_STATUS_LABELS[rfi.status]}
+          project={projects.find((p) => p.id === rfi.projectId)}
+          backTo="/rfis"
+          backLabel="Back to RFIs"
+          footerKind="RFI"
+          footerId={rfi.id}
+        >
+          <PrintableRfiBody
+            rfi={rfi}
+            areaLabel={formatAreaLabel(rfi.locationArea, areas)}
+          />
+        </PrintablePageShell>
+      )}
+    </PrintRecordGuard>
   );
 }
 

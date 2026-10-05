@@ -2,7 +2,60 @@ import * as React from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Printer } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { QueryError } from "~/components/ui/list-page";
 import type { ProjectOption } from "~/utils/projects";
+
+/**
+ * Loading / error / invalid-id gate shared by the printable routes. Each print
+ * page parses an `$id` param and fetches one record; this renders the three
+ * fallback states (invalid id, query error, pending) inside the standard print
+ * gutter, and otherwise hands the resolved record to `children` — narrowing it
+ * to non-`undefined` so the body never has to re-check. Replaces the identical
+ * guard block each print route used to inline.
+ */
+export function PrintRecordGuard<T>({
+  id,
+  label,
+  isPending,
+  isError,
+  error,
+  data,
+  children,
+}: {
+  /** Parsed `$id` route param; non-finite renders the invalid-id state. */
+  id: number;
+  /** Entity label woven into every message — "CVR", "FCO", "RFI". */
+  label: string;
+  isPending: boolean;
+  isError: boolean;
+  error: unknown;
+  data: T | null | undefined;
+  children: (data: NonNullable<T>) => React.ReactNode;
+}) {
+  const gutter = "max-w-4xl mx-auto p-8";
+  if (!Number.isFinite(id)) {
+    return (
+      <main className={gutter}>
+        <p className="text-sm text-red-700">Invalid {label} id.</p>
+      </main>
+    );
+  }
+  if (isError) {
+    return (
+      <main className={gutter}>
+        <QueryError error={error} label={label} />
+      </main>
+    );
+  }
+  if (isPending || data == null) {
+    return (
+      <main className={gutter}>
+        <p className="text-sm text-slate-500">Loading {label}…</p>
+      </main>
+    );
+  }
+  return <>{children(data)}</>;
+}
 
 /**
  * Shared chrome for the printable CVR / FCO / RFI routes. Owns the toolbar,

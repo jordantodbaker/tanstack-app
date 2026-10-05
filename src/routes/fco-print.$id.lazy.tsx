@@ -9,9 +9,9 @@ import {
 import { projectsQueryOptions } from "~/utils/projects";
 import { areasByProjectQueryOptions } from "~/utils/areas";
 import { formatAreaLabel } from "~/utils/areaLabels";
-import { QueryError } from "~/components/ui/list-page";
 import {
   PrintablePageShell,
+  PrintRecordGuard,
   Section,
   KvGrid,
   SignatureBlock,
@@ -41,43 +41,33 @@ function PrintableFcoPage() {
     areasByProjectQueryOptions(fco?.projectId ?? null),
   );
 
-  if (!Number.isFinite(id)) {
-    return (
-      <main className="max-w-4xl mx-auto p-8">
-        <p className="text-sm text-red-700">Invalid FCO id.</p>
-      </main>
-    );
-  }
-  if (isError) {
-    return (
-      <main className="max-w-4xl mx-auto p-8">
-        <QueryError error={error} label="FCO" />
-      </main>
-    );
-  }
-  if (isPending || !fco) {
-    return (
-      <main className="max-w-4xl mx-auto p-8">
-        <p className="text-sm text-slate-500">Loading FCO…</p>
-      </main>
-    );
-  }
-  const project = projects.find((p) => p.id === fco.projectId);
-  const areaLabel = formatAreaLabel(fco.locationArea, areas);
-
   return (
-    <PrintablePageShell
-      recordTitle="Field Change Order"
-      recordNumber={fco.fcoNumber || `FCO #${fco.id}`}
-      statusLabel={FCO_STATUS_LABELS[fco.status]}
-      project={project}
-      backTo="/fco-log"
-      backLabel="Back to FCO Log"
-      footerKind="FCO"
-      footerId={fco.id}
+    <PrintRecordGuard
+      id={id}
+      label="FCO"
+      isPending={isPending}
+      isError={isError}
+      error={error}
+      data={fco}
     >
-      <PrintableFcoBody fco={fco} areaLabel={areaLabel} />
-    </PrintablePageShell>
+      {(fco) => (
+        <PrintablePageShell
+          recordTitle="Field Change Order"
+          recordNumber={fco.fcoNumber || `FCO #${fco.id}`}
+          statusLabel={FCO_STATUS_LABELS[fco.status]}
+          project={projects.find((p) => p.id === fco.projectId)}
+          backTo="/fco-log"
+          backLabel="Back to FCO Log"
+          footerKind="FCO"
+          footerId={fco.id}
+        >
+          <PrintableFcoBody
+            fco={fco}
+            areaLabel={formatAreaLabel(fco.locationArea, areas)}
+          />
+        </PrintablePageShell>
+      )}
+    </PrintRecordGuard>
   );
 }
 

@@ -6,9 +6,9 @@ import {
 } from "~/utils/changelog";
 import { projectsQueryOptions } from "~/utils/projects";
 import { STATUS_LABELS, TYPE_LABELS } from "~/utils/changelogLabels";
-import { QueryError } from "~/components/ui/list-page";
 import {
   PrintablePageShell,
+  PrintRecordGuard,
   Section,
   KvGrid,
   SignatureBlock,
@@ -33,42 +33,30 @@ function PrintableCvrPage() {
   } = useQuery(changeLogQueryOptions(Number.isFinite(id) ? id : null));
   const { data: projects = [] } = useQuery(projectsQueryOptions());
 
-  if (!Number.isFinite(id)) {
-    return (
-      <main className="max-w-4xl mx-auto p-8">
-        <p className="text-sm text-red-700">Invalid CVR id.</p>
-      </main>
-    );
-  }
-  if (isError) {
-    return (
-      <main className="max-w-4xl mx-auto p-8">
-        <QueryError error={error} label="CVR" />
-      </main>
-    );
-  }
-  if (isPending || !cvr) {
-    return (
-      <main className="max-w-4xl mx-auto p-8">
-        <p className="text-sm text-slate-500">Loading CVR…</p>
-      </main>
-    );
-  }
-  const project = projects.find((p) => p.id === cvr.projectId);
-
   return (
-    <PrintablePageShell
-      recordTitle="Change Variation Request"
-      recordNumber={cvr.cvrNumber || `CVR #${cvr.id}`}
-      statusLabel={STATUS_LABELS[cvr.status]}
-      project={project}
-      backTo="/changelog"
-      backLabel="Back to Change Log"
-      footerKind="CVR"
-      footerId={cvr.id}
+    <PrintRecordGuard
+      id={id}
+      label="CVR"
+      isPending={isPending}
+      isError={isError}
+      error={error}
+      data={cvr}
     >
-      <PrintableCvrBody cvr={cvr} />
-    </PrintablePageShell>
+      {(cvr) => (
+        <PrintablePageShell
+          recordTitle="Change Variation Request"
+          recordNumber={cvr.cvrNumber || `CVR #${cvr.id}`}
+          statusLabel={STATUS_LABELS[cvr.status]}
+          project={projects.find((p) => p.id === cvr.projectId)}
+          backTo="/changelog"
+          backLabel="Back to Change Log"
+          footerKind="CVR"
+          footerId={cvr.id}
+        >
+          <PrintableCvrBody cvr={cvr} />
+        </PrintablePageShell>
+      )}
+    </PrintRecordGuard>
   );
 }
 

@@ -1,9 +1,8 @@
 import { createLazyFileRoute, Link } from "@tanstack/react-router";
 import * as React from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
-  Search,
   HardHat,
   AlertTriangle,
   ArrowUpRight,
@@ -12,14 +11,10 @@ import {
   ListChecks,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
-import { useListFilters } from "~/lib/use-list-filters";
 import { computeFcoStats } from "~/lib/list-stats";
-import { matchesListFilters } from "~/lib/list-filtering";
 import { makeFilteredExport } from "~/lib/filtered-export";
 import {
-  FCO_STATUSES,
   fcoListQueryOptions,
   fcoListFullQueryOptions,
   upsertFco,
@@ -27,7 +22,7 @@ import {
   promoteFcoToCvr,
   transitionFco,
   invalidateFcoQueries,
-  type FcoItem,
+  FCO_STATUSES,
   type FcoListItem,
   type FcoStatus,
   type UpsertFcoInput,
@@ -40,29 +35,21 @@ import {
   FcoStatusBadge,
 } from "~/components/FCOLog/FcoBadges";
 import { FcoDialog } from "~/components/FCOLog/FcoDialog";
+import { FilterSelect } from "~/components/ui/list-page";
 import {
-  FilterSelect,
-  StatCardRow,
-  TableEmptyState,
-  Th,
-} from "~/components/ui/list-page";
+  useListPage,
+  ListPageLayout,
+  ListTable,
+  BulkActionBar,
+  type ListColumn,
+} from "~/components/ui/list-view";
 import { areasByProjectQueryOptions } from "~/utils/areas";
-import {
-  disciplineById,
-  DISCIPLINE_FILTER_OPTIONS,
-} from "~/config/disciplines";
+import { disciplineById } from "~/config/disciplines";
 import { formatMoney } from "~/lib/formatting";
 import { fcoCsvColumns } from "~/utils/fcoLogCsv";
 import { ExportCsvButton } from "~/components/ExportCsvButton";
-import { SelectProjectBanner } from "~/components/SelectProjectBanner";
 import { formatAreaLabel } from "~/utils/areaLabels";
 import { FCO_TRANSITIONS } from "~/utils/workflow";
-import { useBulkActions } from "~/lib/use-bulk-selection";
-import {
-  BulkActionBar,
-  BulkHeaderCell,
-  BulkRowCell,
-} from "~/components/BulkActionBar";
 
 export const Route = createLazyFileRoute("/fco-log")({
   component: FcoLogPage,
@@ -72,12 +59,8 @@ function FcoLogPage() {
   const { projectId } = useSelectedProject();
   const queryClient = useQueryClient();
   const { data: items = [] } = useQuery(fcoListQueryOptions(projectId));
-  // Areas for label resolution. `locationArea` now holds the area id as a
-  // string (matching FefRow.area). Legacy free-text values won't resolve
-  // and fall through to displaying the raw string.
-  const { data: areas = [] } = useQuery(
-    areasByProjectQueryOptions(projectId),
-  );
+  const { data: areas = [] } = useQuery(areasByProjectQueryOptions(projectId));
+
   const areaLabel = React.useCallback(
     (raw: string) => formatAreaLabel(raw, areas),
     [areas],
@@ -85,208 +68,230 @@ function FcoLogPage() {
 
   // FCO can promote to a CVR — invalidate both worlds. The CVR helper
   // also busts cvrOptions (the FCO dialog's CVR picker) for us.
-  const invalidate = () => {
+  const invalidate = React.useCallback(() => {
     invalidateFcoQueries(queryClient, projectId);
     invalidateChangeLogQueries(queryClient, projectId);
-  };
+  }, [queryClient, projectId]);
 
-  const upsert = useMutation({
-    mutationFn: (input: UpsertFcoInput) => upsertFco({ data: input }),
-    onSuccess: invalidate,
-  });
-  const remove = useMutation({
-    mutationFn: (id: number) => deleteFco({ data: { id } }),
-    onSuccess: invalidate,
-  });
-  const promote = useMutation({
-    mutationFn: (id: number) => promoteFcoToCvr({ data: { fcoId: id } }),
-    onSuccess: invalidate,
-  });
-  const transition = useMutation({
-    mutationFn: (input: { id: number; action: string }) =>
-      transitionFco({ data: input }),
-    onSuccess: invalidate,
-  });
-
-  const { q } = Route.useSearch();
-  const {
-    search,
-    setSearch,
-    deferredSearch,
-    statusFilter,
-    setStatusFilter,
-    disciplineFilter,
-    setDisciplineFilter,
-  } = useListFilters<FcoStatus>(q);
+  // FCO-only linkage filter, ANDed with the shared filters.
   const [linkageFilter, setLinkageFilter] = React.useState<
     "" | "linked" | "unlinked"
   >("");
-
-  // Closure over the active filter UI state. Defined once so the same
-  // predicate runs against the slim list (table render) and the freshly
-  // fetched full list (CSV export). Search intentionally omits the long-
-  // text columns — they're not in the slim list payload anyway.
-  const matchesFilters = React.useCallback(
-    (it: FcoListItem): boolean => {
-      // FCO-only linkage predicate — applied alongside the shared filters.
+  const extraFilter = React.useCallback(
+    (it: FcoListItem) => {
       if (linkageFilter === "linked" && it.linkedCvrId === null) return false;
       if (linkageFilter === "unlinked" && it.linkedCvrId !== null) return false;
-      return matchesListFilters(
-        it,
-        { search: deferredSearch, statusFilter, disciplineFilter },
-        {
-          status: (i) => i.status,
-          discipline: (i) => i.discipline,
-          haystack: (i) =>
-            `${i.fcoNumber} ${i.title} ${areaLabel(i.locationArea)} ${i.initiatedBy} ${i.cbsCodes.join(" ")} ${i.drawingRefs.join(" ")} ${i.rfiNumbers.join(" ")} ${i.linkedCvrNumber ?? ""}`,
-        },
-      );
+      return true;
     },
-    [deferredSearch, statusFilter, disciplineFilter, linkageFilter, areaLabel],
+    [linkageFilter],
   );
 
-  const filtered = React.useMemo(
-    () => items.filter(matchesFilters),
-    [items, matchesFilters],
+  const accessors = React.useMemo(
+    () => ({
+      discipline: (i: FcoListItem) => i.discipline,
+      haystack: (i: FcoListItem) =>
+        `${i.fcoNumber} ${i.title} ${areaLabel(i.locationArea)} ${i.initiatedBy} ${i.cbsCodes.join(" ")} ${i.drawingRefs.join(" ")} ${i.rfiNumbers.join(" ")} ${i.linkedCvrNumber ?? ""}`,
+    }),
+    [areaLabel],
   );
 
-  // Bulk selection + actions over the currently-filtered rows.
-  const bulk = useBulkActions({
-    rows: filtered,
+  const list = useListPage<FcoListItem, FcoStatus, UpsertFcoInput>({
+    items,
+    projectId,
+    searchQ: Route.useSearch().q,
+    upsertFn: upsertFco,
+    deleteFn: deleteFco,
+    transitionFn: transitionFco,
+    promoteFn: (id) => promoteFcoToCvr({ data: { fcoId: id } }),
+    invalidate,
     transitions: FCO_TRANSITIONS,
     entityNoun: "FCO",
-    onTransition: (input) => transition.mutateAsync(input),
-    onDelete: (id) => remove.mutateAsync(id),
-    invalidate,
+    accessors,
+    extraFilter,
   });
 
   const stats = React.useMemo(() => computeFcoStats(items), [items]);
 
-  const projectScoped = projectId !== null;
-
-  function handleSubmit(input: Omit<UpsertFcoInput, "projectId">) {
-    if (!projectScoped) return Promise.resolve();
-    return upsert.mutateAsync({ ...input, projectId });
-  }
-
-  function handleDelete(id: number) {
-    return remove.mutateAsync(id);
-  }
-
-  function handlePromote(id: number) {
-    return promote.mutateAsync(id);
-  }
-
-  function handleTransition(input: { id: number; action: string }) {
-    return transition.mutateAsync(input);
-  }
+  const columns: ListColumn<FcoListItem>[] = [
+    {
+      header: "FCO #",
+      cellClassName: "align-top font-mono text-xs text-slate-700",
+      cell: (item) => item.fcoNumber || `#${item.id}`,
+    },
+    {
+      header: "Title / Location",
+      cellClassName: "align-top font-medium text-slate-800",
+      cell: (item) => (
+        <div className="flex items-start gap-1.5">
+          {item.workStopped && (
+            <AlertTriangle className="size-3.5 text-red-600 shrink-0 mt-0.5" />
+          )}
+          <div>
+            <div>{item.title}</div>
+            {item.locationArea && (
+              <div className="text-xs text-slate-500 mt-0.5">
+                {areaLabel(item.locationArea)}
+              </div>
+            )}
+            {item.drawingRefs.length > 0 && (
+              <div className="text-xs text-slate-400 font-mono mt-0.5 truncate max-w-md">
+                {item.drawingRefs.slice(0, 3).join(", ")}
+                {item.drawingRefs.length > 3 &&
+                  ` +${item.drawingRefs.length - 3}`}
+              </div>
+            )}
+          </div>
+        </div>
+      ),
+    },
+    {
+      header: "Status",
+      cellClassName: "align-top",
+      cell: (item) => <FcoStatusBadge status={item.status} />,
+    },
+    {
+      header: "Origin",
+      cellClassName: "align-top text-slate-700 text-xs",
+      cell: (item) => FCO_ORIGIN_LABELS[item.originType],
+    },
+    {
+      header: "Priority",
+      cellClassName: "align-top",
+      cell: (item) => <FcoPriorityBadge priority={item.priority} />,
+    },
+    {
+      header: "Discipline",
+      cellClassName: "align-top text-slate-700",
+      cell: (item) =>
+        item.discipline
+          ? (disciplineById[item.discipline]?.label ?? item.discipline)
+          : "—",
+    },
+    {
+      header: "Est. Cost",
+      headerClassName: "text-right",
+      cellClassName: "align-top text-right tabular-nums",
+      cell: (item) => (
+        <span
+          className={item.estimatedCost < 0 ? "text-red-600" : "text-slate-700"}
+        >
+          {item.estimatedCost ? `$${formatMoney(item.estimatedCost)}` : "—"}
+        </span>
+      ),
+    },
+    {
+      header: "Hours",
+      headerClassName: "text-right",
+      cellClassName: "align-top text-right tabular-nums text-slate-700",
+      cell: (item) => item.estimatedHours || "—",
+    },
+    {
+      header: "Initiated",
+      cellClassName: "align-top text-xs text-slate-500",
+      cell: (item) => (
+        <>
+          <div>{new Date(item.initiatedAt).toLocaleDateString()}</div>
+          {item.initiatedBy && (
+            <div className="text-slate-400">by {item.initiatedBy}</div>
+          )}
+        </>
+      ),
+    },
+    {
+      header: "CVR Link",
+      cellClassName: "align-top text-xs",
+      cell: (item) =>
+        item.linkedCvrId ? (
+          <span className="inline-flex items-center gap-1 rounded bg-violet-50 px-1.5 py-0.5 font-mono text-violet-700">
+            <LinkIcon className="size-3" />
+            {item.linkedCvrNumber || `#${item.linkedCvrId}`}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-slate-400">
+            <ArrowUpRight className="size-3" />
+            Not linked
+          </span>
+        ),
+    },
+  ];
 
   return (
-    <main className="p-4 max-w-7xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <HardHat className="size-6 text-amber-600" />
-            Field Change Order (FCO) Log
-          </h1>
-          <p className="text-sm text-slate-500">
-            Track changes originating in the field — RFIs, design conflicts,
-            site conditions — and promote them to CVRs in{" "}
-            <Link to="/changelog" className="text-red-700 hover:underline">
-              Change Log
-            </Link>{" "}
-            when approved.
-          </p>
-        </div>
+    <ListPageLayout
+      icon={HardHat}
+      iconClassName="text-amber-600"
+      title="Field Change Order (FCO) Log"
+      description={
+        <>
+          Track changes originating in the field — RFIs, design conflicts,
+          site conditions — and promote them to CVRs in{" "}
+          <Link to="/changelog" className="text-red-700 hover:underline">
+            Change Log
+          </Link>{" "}
+          when approved.
+        </>
+      }
+      newAction={
         <FcoDialog
           projectId={projectId}
           trigger={
-            <Button disabled={!projectScoped}>
+            <Button disabled={!list.projectScoped}>
               <Plus className="mr-1 size-4" />
               New FCO
             </Button>
           }
-          onSubmit={handleSubmit}
+          onSubmit={list.handleSubmit}
         />
-      </div>
-
-      {!projectScoped && (
-        <SelectProjectBanner>
-          Select a project from the header to start logging field changes.
-        </SelectProjectBanner>
-      )}
-
-      <StatCardRow
-        cards={[
-          {
-            label: "Total FCOs",
-            value: items.length.toString(),
-            icon: ListChecks,
-          },
-          {
-            label: "Open",
-            value: stats.openCount.toString(),
-            tone: "amber",
-            icon: Hourglass,
-          },
-          {
-            label: "Urgent / High",
-            value: stats.urgentCount.toString(),
-            tone: "red",
-            icon: AlertTriangle,
-          },
-          {
-            label: "Work Stopped",
-            value: stats.workStopped.toString(),
-            tone: stats.workStopped > 0 ? "red" : "slate",
-            icon: AlertTriangle,
-          },
-          {
-            label: "Linked to CVR",
-            value: stats.linkedCount.toString(),
-            tone: "violet",
-            icon: LinkIcon,
-          },
-          {
-            label: "Est. Cost Impact",
-            value: `$${formatMoney(stats.totalCost)}`,
-            tone: stats.totalCost >= 0 ? "slate" : "red",
-          },
-        ]}
-      />
-
-      {/* Filter bar */}
-      <div className="flex items-center gap-2 flex-wrap rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="relative w-full sm:w-auto">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-4 text-slate-400 pointer-events-none" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search FCO #, title, drawings, RFIs, CBS…"
-            className="pl-7 w-full sm:w-80"
-          />
-        </div>
-        <FilterSelect
-          label="Status"
-          value={statusFilter}
-          onChange={(v) => setStatusFilter(v as FcoStatus | "")}
-          options={[
-            { value: "", label: "All statuses" },
-            ...FCO_STATUSES.map((s) => ({
-              value: s,
-              label: FCO_STATUS_LABELS[s],
-            })),
-          ]}
-        />
-        <FilterSelect
-          label="Discipline"
-          value={disciplineFilter}
-          onChange={setDisciplineFilter}
-          options={[
-            { value: "", label: "All disciplines" },
-            ...DISCIPLINE_FILTER_OPTIONS,
-          ]}
-        />
+      }
+      projectScoped={list.projectScoped}
+      bannerText="Select a project from the header to start logging field changes."
+      cards={[
+        {
+          label: "Total FCOs",
+          value: items.length.toString(),
+          icon: ListChecks,
+        },
+        {
+          label: "Open",
+          value: stats.openCount.toString(),
+          tone: "amber",
+          icon: Hourglass,
+        },
+        {
+          label: "Urgent / High",
+          value: stats.urgentCount.toString(),
+          tone: "red",
+          icon: AlertTriangle,
+        },
+        {
+          label: "Work Stopped",
+          value: stats.workStopped.toString(),
+          tone: stats.workStopped > 0 ? "red" : "slate",
+          icon: AlertTriangle,
+        },
+        {
+          label: "Linked to CVR",
+          value: stats.linkedCount.toString(),
+          tone: "violet",
+          icon: LinkIcon,
+        },
+        {
+          label: "Est. Cost Impact",
+          value: `$${formatMoney(stats.totalCost)}`,
+          tone: stats.totalCost >= 0 ? "slate" : "red",
+        },
+      ]}
+      search={list.filters.search}
+      setSearch={list.filters.setSearch}
+      searchPlaceholder="Search FCO #, title, drawings, RFIs, CBS…"
+      statusFilter={list.filters.statusFilter}
+      setStatusFilter={(v) => list.filters.setStatusFilter(v as FcoStatus | "")}
+      statusOptions={[
+        { value: "", label: "All statuses" },
+        ...FCO_STATUSES.map((s) => ({ value: s, label: FCO_STATUS_LABELS[s] })),
+      ]}
+      disciplineFilter={list.filters.disciplineFilter}
+      setDisciplineFilter={list.filters.setDisciplineFilter}
+      extraFilters={
         <FilterSelect
           label="CVR Link"
           value={linkageFilter}
@@ -297,226 +302,43 @@ function FcoLogPage() {
             { value: "unlinked", label: "Not linked" },
           ]}
         />
-        {/* Count + Export wrapped together so on tablet they wrap as a unit
-            rather than the count grabbing `ml-auto` and leaving Export
-            stranded on its own row. */}
-        <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
-          <span className="text-xs text-slate-500">
-            Showing {filtered.length} of {items.length}
-          </span>
-          <ExportCsvButton
-            // List payload is slim — the CSV's narrative columns only ship via
-            // the full endpoint, pulled on demand and re-filtered to match the
-            // table (see makeFilteredExport).
-            getItems={makeFilteredExport(
-              queryClient,
-              fcoListFullQueryOptions(projectId),
-              matchesFilters,
-            )}
-            disabled={filtered.length === 0}
-            columns={fcoCsvColumns(areaLabel)}
-            filenamePrefix="fco-export"
-          />
-        </div>
-      </div>
-
-      <BulkActionBar {...bulk.bar} />
-
-      <FcoTable
-        items={filtered}
-        projectId={projectId}
-        areaLabel={areaLabel}
-        onSubmit={handleSubmit}
-        onDelete={handleDelete}
-        onPromote={handlePromote}
-        onTransition={handleTransition}
-        {...bulk.table}
-      />
-    </main>
-  );
-}
-
-function FcoTable({
-  items,
-  projectId,
-  areaLabel,
-  onSubmit,
-  onDelete,
-  onPromote,
-  onTransition,
-  selected,
-  onToggle,
-  onToggleAll,
-  allSelected,
-  someSelected,
-}: {
-  items: FcoListItem[];
-  projectId: number | null;
-  areaLabel: (raw: string) => string;
-  onSubmit: (input: Omit<UpsertFcoInput, "projectId">) => Promise<unknown>;
-  onDelete: (id: number) => Promise<unknown>;
-  onPromote: (id: number) => Promise<unknown>;
-  onTransition: (input: { id: number; action: string }) => Promise<unknown>;
-  selected: Set<number>;
-  onToggle: (id: number) => void;
-  onToggleAll: (next: boolean) => void;
-  allSelected: boolean;
-  someSelected: boolean;
-}) {
-  if (items.length === 0) {
-    return (
-      <TableEmptyState message="No field change orders match the current filters." />
-    );
-  }
-
-  return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-      <table className="w-full border-collapse text-sm">
-        <thead className="bg-slate-50">
-          <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-            <BulkHeaderCell
-              allSelected={allSelected}
-              someSelected={someSelected}
-              onToggleAll={onToggleAll}
-            />
-            <Th>FCO #</Th>
-            <Th>Title / Location</Th>
-            <Th>Status</Th>
-            <Th>Origin</Th>
-            <Th>Priority</Th>
-            <Th>Discipline</Th>
-            <Th className="text-right">Est. Cost</Th>
-            <Th className="text-right">Hours</Th>
-            <Th>Initiated</Th>
-            <Th>CVR Link</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <FcoRow
-              key={item.id}
-              item={item}
-              projectId={projectId}
-              areaLabel={areaLabel}
-              onSubmit={onSubmit}
-              onDelete={onDelete}
-              onPromote={onPromote}
-              onTransition={onTransition}
-              selected={selected.has(item.id)}
-              onToggle={() => onToggle(item.id)}
-            />
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function FcoRow({
-  item,
-  projectId,
-  areaLabel,
-  onSubmit,
-  onDelete,
-  onPromote,
-  onTransition,
-  selected,
-  onToggle,
-}: {
-  item: FcoListItem;
-  projectId: number | null;
-  areaLabel: (raw: string) => string;
-  onSubmit: (input: Omit<UpsertFcoInput, "projectId">) => Promise<unknown>;
-  onDelete: (id: number) => Promise<unknown>;
-  onPromote: (id: number) => Promise<unknown>;
-  onTransition: (input: { id: number; action: string }) => Promise<unknown>;
-  selected: boolean;
-  onToggle: () => void;
-}) {
-  const disciplineLabel = item.discipline
-    ? (disciplineById[item.discipline]?.label ?? item.discipline)
-    : "—";
-  const cellCls = "px-3 py-2 border-b border-slate-100 align-top";
-  const rowHighlight = item.workStopped
-    ? "bg-red-50/40 hover:bg-red-50"
-    : "hover:bg-slate-50";
-  return (
-    <FcoDialog
-      projectId={projectId}
-      trigger={
-        <tr className={`cursor-pointer transition-colors ${rowHighlight}`}>
-          <BulkRowCell checked={selected} onToggle={onToggle} />
-          <td className={`${cellCls} font-mono text-xs text-slate-700`}>
-            {item.fcoNumber || `#${item.id}`}
-          </td>
-          <td className={`${cellCls} font-medium text-slate-800`}>
-            <div className="flex items-start gap-1.5">
-              {item.workStopped && (
-                <AlertTriangle className="size-3.5 text-red-600 shrink-0 mt-0.5" />
-              )}
-              <div>
-                <div>{item.title}</div>
-                {item.locationArea && (
-                  <div className="text-xs text-slate-500 mt-0.5">
-                    {areaLabel(item.locationArea)}
-                  </div>
-                )}
-                {item.drawingRefs.length > 0 && (
-                  <div className="text-xs text-slate-400 font-mono mt-0.5 truncate max-w-md">
-                    {item.drawingRefs.slice(0, 3).join(", ")}
-                    {item.drawingRefs.length > 3 &&
-                      ` +${item.drawingRefs.length - 3}`}
-                  </div>
-                )}
-              </div>
-            </div>
-          </td>
-          <td className={cellCls}>
-            <FcoStatusBadge status={item.status} />
-          </td>
-          <td className={`${cellCls} text-slate-700 text-xs`}>
-            {FCO_ORIGIN_LABELS[item.originType]}
-          </td>
-          <td className={cellCls}>
-            <FcoPriorityBadge priority={item.priority} />
-          </td>
-          <td className={`${cellCls} text-slate-700`}>{disciplineLabel}</td>
-          <td
-            className={`${cellCls} text-right tabular-nums ${item.estimatedCost < 0 ? "text-red-600" : "text-slate-700"}`}
-          >
-            {item.estimatedCost
-              ? `$${formatMoney(item.estimatedCost)}`
-              : "—"}
-          </td>
-          <td className={`${cellCls} text-right tabular-nums text-slate-700`}>
-            {item.estimatedHours || "—"}
-          </td>
-          <td className={`${cellCls} text-xs text-slate-500`}>
-            <div>{new Date(item.initiatedAt).toLocaleDateString()}</div>
-            {item.initiatedBy && (
-              <div className="text-slate-400">by {item.initiatedBy}</div>
-            )}
-          </td>
-          <td className={`${cellCls} text-xs`}>
-            {item.linkedCvrId ? (
-              <span className="inline-flex items-center gap-1 rounded bg-violet-50 px-1.5 py-0.5 font-mono text-violet-700">
-                <LinkIcon className="size-3" />
-                {item.linkedCvrNumber || `#${item.linkedCvrId}`}
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-slate-400">
-                <ArrowUpRight className="size-3" />
-                Not linked
-              </span>
-            )}
-          </td>
-        </tr>
       }
-      initial={item}
-      onSubmit={onSubmit}
-      onDelete={onDelete}
-      onPromote={onPromote}
-      onTransition={onTransition}
-    />
+      filteredCount={list.filtered.length}
+      totalCount={items.length}
+      exportButton={
+        <ExportCsvButton
+          getItems={makeFilteredExport(
+            queryClient,
+            fcoListFullQueryOptions(projectId),
+            list.matchesFilters,
+          )}
+          disabled={list.filtered.length === 0}
+          columns={fcoCsvColumns(areaLabel)}
+          filenamePrefix="fco-export"
+        />
+      }
+      bulkBar={<BulkActionBar {...list.bulk.bar} />}
+    >
+      <ListTable
+        items={list.filtered}
+        columns={columns}
+        emptyMessage="No field change orders match the current filters."
+        bulk={list.bulk.table}
+        rowClassName={(item) =>
+          item.workStopped ? "bg-red-50/40 hover:bg-red-50" : undefined
+        }
+        renderRowDialog={(item, trigger) => (
+          <FcoDialog
+            projectId={projectId}
+            trigger={trigger}
+            initial={item}
+            onSubmit={list.handleSubmit}
+            onDelete={list.handleDelete}
+            onPromote={list.handlePromote}
+            onTransition={list.handleTransition}
+          />
+        )}
+      />
+    </ListPageLayout>
   );
 }

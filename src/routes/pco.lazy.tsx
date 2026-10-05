@@ -1,6 +1,6 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import * as React from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
   CircleDollarSign,
@@ -9,14 +9,10 @@ import {
   Hourglass,
   Plus,
   Receipt,
-  Search,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
 import { useSelectedProject } from "~/lib/selected-project";
-import { useListFilters } from "~/lib/use-list-filters";
 import { computePcoStats } from "~/lib/list-stats";
-import { matchesListFilters } from "~/lib/list-filtering";
 import { makeFilteredExport } from "~/lib/filtered-export";
 import {
   pcoListQueryOptions,
@@ -26,7 +22,6 @@ import {
   transitionPco,
   invalidatePcoQueries,
   PCO_STATUSES,
-  type PcoItem,
   type PcoListItem,
   type PcoStatus,
   type UpsertPcoInput,
@@ -40,21 +35,14 @@ import {
 } from "~/components/Pco/PcoBadges";
 import { PcoDialog } from "~/components/Pco/PcoDialog";
 import {
-  FilterSelect,
-  StatCardRow,
-  TableEmptyState,
-  Th,
-  clickableRowClass,
-} from "~/components/ui/list-page";
-import { formatMoney } from "~/lib/formatting";
-import { SelectProjectBanner } from "~/components/SelectProjectBanner";
-import { PCO_TRANSITIONS } from "~/utils/workflow";
-import { useBulkActions } from "~/lib/use-bulk-selection";
-import {
+  useListPage,
+  ListPageLayout,
+  ListTable,
   BulkActionBar,
-  BulkHeaderCell,
-  BulkRowCell,
-} from "~/components/BulkActionBar";
+  type ListColumn,
+} from "~/components/ui/list-view";
+import { formatMoney } from "~/lib/formatting";
+import { PCO_TRANSITIONS } from "~/utils/workflow";
 
 export const Route = createLazyFileRoute("/pco")({
   component: PcoLogPage,
@@ -66,335 +54,201 @@ function PcoLogPage() {
   const { data: items = [] } = useQuery(pcoListQueryOptions(projectId));
 
   // `invalidatePcoQueries` already busts the CVR list (a PCO upsert can
-  // re-link CVRs). Previously this route inlined `["changelog", …]`
-  // lowercase, which never matched the actual `["changeLog", …]` key, so
-  // the CVR list silently failed to refresh after a PCO save.
-  const invalidate = () => invalidatePcoQueries(queryClient, projectId);
-
-  const upsert = useMutation({
-    mutationFn: (input: UpsertPcoInput) => upsertPco({ data: input }),
-    onSuccess: invalidate,
-  });
-  const remove = useMutation({
-    mutationFn: (id: number) => deletePco({ data: { id } }),
-    onSuccess: invalidate,
-  });
-  const transition = useMutation({
-    mutationFn: (input: { id: number; action: string }) =>
-      transitionPco({ data: input }),
-    onSuccess: invalidate,
-  });
-
-  const { q } = Route.useSearch();
-  const { search, setSearch, deferredSearch, statusFilter, setStatusFilter } =
-    useListFilters<PcoStatus>(q);
-
-  // Slim list payload drops `description` / `reasonNarrative` / `notes`;
-  // search by PCO #, owner ref, title, owner rep, invoice covers the
-  // common cases without pulling multi-paragraph text on every visit.
-  const matchesFilters = React.useCallback(
-    (it: PcoListItem): boolean =>
-      matchesListFilters(
-        it,
-        { search: deferredSearch, statusFilter, disciplineFilter: "" },
-        {
-          status: (i) => i.status,
-          haystack: (i) =>
-            `${i.pcoNumber} ${i.ownerReference} ${i.title} ${i.ownerRepName} ${i.ownerRepEmail} ${i.invoiceNumber}`,
-        },
-      ),
-    [deferredSearch, statusFilter],
+  // re-link CVRs).
+  const invalidate = React.useCallback(
+    () => invalidatePcoQueries(queryClient, projectId),
+    [queryClient, projectId],
   );
 
-  const filtered = React.useMemo(
-    () => items.filter(matchesFilters),
-    [items, matchesFilters],
+  // PCO has no discipline/area dimension. Slim list payload drops
+  // `description` / `reasonNarrative` / `notes`; search by PCO #, owner ref,
+  // title, owner rep, invoice covers the common cases.
+  const accessors = React.useMemo(
+    () => ({
+      haystack: (i: PcoListItem) =>
+        `${i.pcoNumber} ${i.ownerReference} ${i.title} ${i.ownerRepName} ${i.ownerRepEmail} ${i.invoiceNumber}`,
+    }),
+    [],
   );
 
-  // Bulk selection + actions over the currently-filtered rows.
-  const bulk = useBulkActions({
-    rows: filtered,
+  const list = useListPage<PcoListItem, PcoStatus, UpsertPcoInput>({
+    items,
+    projectId,
+    searchQ: Route.useSearch().q,
+    upsertFn: upsertPco,
+    deleteFn: deletePco,
+    transitionFn: transitionPco,
+    invalidate,
     transitions: PCO_TRANSITIONS,
     entityNoun: "PCO",
-    onTransition: (input) => transition.mutateAsync(input),
-    onDelete: (id) => remove.mutateAsync(id),
-    invalidate,
+    accessors,
   });
 
   const stats = React.useMemo(() => computePcoStats(items), [items]);
 
-  const projectScoped = projectId !== null;
-
-  function handleSubmit(input: Omit<UpsertPcoInput, "projectId">) {
-    if (!projectScoped) return Promise.resolve();
-    return upsert.mutateAsync({ ...input, projectId });
-  }
-
-  function handleDelete(id: number) {
-    return remove.mutateAsync(id);
-  }
-
-  function handleTransition(input: { id: number; action: string }) {
-    return transition.mutateAsync(input);
-  }
+  const columns: ListColumn<PcoListItem>[] = [
+    {
+      header: "PCO #",
+      cellClassName: "align-top font-mono text-xs text-slate-700",
+      cell: (item) => item.pcoNumber || `#${item.id}`,
+    },
+    {
+      header: "Title",
+      cellClassName: "align-top font-medium text-slate-800",
+      cell: (item) => (
+        <>
+          <div>{item.title}</div>
+          {item.ownerRepName && (
+            <div className="text-xs text-slate-400 mt-0.5 truncate max-w-md">
+              {item.ownerRepName}
+            </div>
+          )}
+        </>
+      ),
+    },
+    {
+      header: "Status",
+      cellClassName: "align-top",
+      cell: (item) => <PcoStatusBadge status={item.status} />,
+    },
+    {
+      header: "Priority",
+      cellClassName: "align-top",
+      cell: (item) => <PcoPriorityBadge priority={item.priority} />,
+    },
+    {
+      header: "Requested",
+      headerClassName: "text-right",
+      cellClassName: "align-top text-right tabular-nums text-slate-700",
+      cell: (item) => formatMoney(item.requestedAmount),
+    },
+    {
+      header: "Approved",
+      headerClassName: "text-right",
+      cellClassName: "align-top text-right tabular-nums text-slate-700",
+      cell: (item) =>
+        item.approvedAmount > 0 ? formatMoney(item.approvedAmount) : "—",
+    },
+    {
+      header: "CVRs",
+      cellClassName: "align-top text-xs text-slate-500",
+      cell: (item) =>
+        item.linkedCvrs.length === 0 ? (
+          <span className="text-slate-400">—</span>
+        ) : (
+          <span>
+            {item.linkedCvrs.length}{" "}
+            {item.linkedCvrs.length === 1 ? "CVR" : "CVRs"}
+          </span>
+        ),
+    },
+    {
+      header: "Submitted",
+      cellClassName: "align-top text-xs text-slate-500",
+      cell: (item) =>
+        item.submittedAt
+          ? new Date(item.submittedAt).toLocaleDateString()
+          : "—",
+    },
+    {
+      header: "Owner ref",
+      cellClassName: "align-top font-mono text-xs text-slate-500",
+      cell: (item) => item.ownerReference || "—",
+    },
+  ];
 
   return (
-    <main className="p-4 max-w-7xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <Handshake className="size-6 text-sky-600" />
-            Owner Change Orders (PCOs)
-          </h1>
-          <p className="text-sm text-slate-500">
-            What the EPC is billing the owner. Bundle approved CVRs into a
-            PCO and track it from submission through invoicing to payment.
-          </p>
-        </div>
+    <ListPageLayout
+      icon={Handshake}
+      iconClassName="text-sky-600"
+      title="Owner Change Orders (PCOs)"
+      description="What the EPC is billing the owner. Bundle approved CVRs into a PCO and track it from submission through invoicing to payment."
+      newAction={
         <PcoDialog
           projectId={projectId}
           trigger={
-            <Button disabled={!projectScoped}>
+            <Button disabled={!list.projectScoped}>
               <Plus className="mr-1 size-4" />
               New PCO
             </Button>
           }
-          onSubmit={handleSubmit}
+          onSubmit={list.handleSubmit}
         />
-      </div>
-
-      {!projectScoped && (
-        <SelectProjectBanner>
-          Select a project from the header to start logging PCOs.
-        </SelectProjectBanner>
-      )}
-
-      <StatCardRow
-        cards={[
-          {
-            label: "Total PCOs",
-            value: items.length.toString(),
-            icon: ClipboardList,
-          },
-          {
-            label: `Open (${stats.openCount})`,
-            value: formatMoney(stats.openValue),
-            tone: "amber",
-            icon: Hourglass,
-          },
-          {
-            label: `Approved unbilled (${stats.approvedCount})`,
-            value: formatMoney(stats.approvedValue),
-            tone: "violet",
-            icon: CheckCircle2,
-          },
-          {
-            label: `Invoiced unpaid (${stats.invoicedCount})`,
-            value: formatMoney(stats.invoicedValue),
-            tone: stats.invoicedValue > 0 ? "red" : "slate",
-            icon: Receipt,
-          },
-          {
-            label: "Collected",
-            value: formatMoney(stats.closedValue),
-            tone: stats.closedValue > 0 ? "emerald" : "slate",
-            icon: CircleDollarSign,
-          },
-        ]}
-      />
-
-      <div className="flex items-center gap-2 flex-wrap rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="relative w-full sm:w-auto">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-4 text-slate-400 pointer-events-none" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search PCO #, owner ref, title, invoice #…"
-            className="pl-7 w-full sm:w-80"
-          />
-        </div>
-        <FilterSelect
-          label="Status"
-          value={statusFilter}
-          onChange={(v) => setStatusFilter(v as PcoStatus | "")}
-          options={[
-            { value: "", label: "All statuses" },
-            ...PCO_STATUSES.map((s) => ({
-              value: s,
-              label: PCO_STATUS_LABELS[s],
-            })),
-          ]}
-        />
-        <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
-          <span className="text-xs text-slate-500">
-            Showing {filtered.length} of {items.length}
-          </span>
-          <ExportCsvButton
-            getItems={makeFilteredExport(
-              queryClient,
-              pcoListFullQueryOptions(projectId),
-              matchesFilters,
-            )}
-            disabled={filtered.length === 0}
-            columns={pcoCsvColumns()}
-            filenamePrefix="pco-export"
-          />
-        </div>
-      </div>
-
-      <BulkActionBar {...bulk.bar} />
-
-      <PcoTable
-        items={filtered}
-        projectId={projectId}
-        onSubmit={handleSubmit}
-        onDelete={handleDelete}
-        onTransition={handleTransition}
-        {...bulk.table}
-      />
-    </main>
-  );
-}
-
-function PcoTable({
-  items,
-  projectId,
-  onSubmit,
-  onDelete,
-  onTransition,
-  selected,
-  onToggle,
-  onToggleAll,
-  allSelected,
-  someSelected,
-}: {
-  items: PcoListItem[];
-  projectId: number | null;
-  onSubmit: (input: Omit<UpsertPcoInput, "projectId">) => Promise<unknown>;
-  onDelete: (id: number) => Promise<unknown>;
-  onTransition: (input: { id: number; action: string }) => Promise<unknown>;
-  selected: Set<number>;
-  onToggle: (id: number) => void;
-  onToggleAll: (next: boolean) => void;
-  allSelected: boolean;
-  someSelected: boolean;
-}) {
-  if (items.length === 0) {
-    return <TableEmptyState message="No PCOs match the current filters." />;
-  }
-  return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-      <table className="w-full border-collapse text-sm">
-        <thead className="bg-slate-50">
-          <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-            <BulkHeaderCell
-              allSelected={allSelected}
-              someSelected={someSelected}
-              onToggleAll={onToggleAll}
-            />
-            <Th>PCO #</Th>
-            <Th>Title</Th>
-            <Th>Status</Th>
-            <Th>Priority</Th>
-            <Th className="text-right">Requested</Th>
-            <Th className="text-right">Approved</Th>
-            <Th>CVRs</Th>
-            <Th>Submitted</Th>
-            <Th>Owner ref</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <PcoRow
-              key={item.id}
-              item={item}
-              projectId={projectId}
-              onSubmit={onSubmit}
-              onDelete={onDelete}
-              onTransition={onTransition}
-              selected={selected.has(item.id)}
-              onToggle={() => onToggle(item.id)}
-            />
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function PcoRow({
-  item,
-  projectId,
-  onSubmit,
-  onDelete,
-  onTransition,
-  selected,
-  onToggle,
-}: {
-  item: PcoListItem;
-  projectId: number | null;
-  onSubmit: (input: Omit<UpsertPcoInput, "projectId">) => Promise<unknown>;
-  onDelete: (id: number) => Promise<unknown>;
-  onTransition: (input: { id: number; action: string }) => Promise<unknown>;
-  selected: boolean;
-  onToggle: () => void;
-}) {
-  const cellCls = "px-3 py-2 border-b border-slate-100 align-top";
-  return (
-    <PcoDialog
-      projectId={projectId}
-      trigger={
-        <tr className={clickableRowClass}>
-          <BulkRowCell checked={selected} onToggle={onToggle} />
-          <td className={`${cellCls} font-mono text-xs text-slate-700`}>
-            {item.pcoNumber || `#${item.id}`}
-          </td>
-          <td className={`${cellCls} font-medium text-slate-800`}>
-            <div>{item.title}</div>
-            {item.ownerRepName && (
-              <div className="text-xs text-slate-400 mt-0.5 truncate max-w-md">
-                {item.ownerRepName}
-              </div>
-            )}
-          </td>
-          <td className={cellCls}>
-            <PcoStatusBadge status={item.status} />
-          </td>
-          <td className={cellCls}>
-            <PcoPriorityBadge priority={item.priority} />
-          </td>
-          <td className={`${cellCls} text-right tabular-nums text-slate-700`}>
-            {formatMoney(item.requestedAmount)}
-          </td>
-          <td className={`${cellCls} text-right tabular-nums text-slate-700`}>
-            {item.approvedAmount > 0
-              ? formatMoney(item.approvedAmount)
-              : "—"}
-          </td>
-          <td className={`${cellCls} text-xs text-slate-500`}>
-            {item.linkedCvrs.length === 0 ? (
-              <span className="text-slate-400">—</span>
-            ) : (
-              <span>
-                {item.linkedCvrs.length}{" "}
-                {item.linkedCvrs.length === 1 ? "CVR" : "CVRs"}
-              </span>
-            )}
-          </td>
-          <td className={`${cellCls} text-xs text-slate-500`}>
-            {item.submittedAt
-              ? new Date(item.submittedAt).toLocaleDateString()
-              : "—"}
-          </td>
-          <td className={`${cellCls} font-mono text-xs text-slate-500`}>
-            {item.ownerReference || "—"}
-          </td>
-        </tr>
       }
-      initial={item}
-      onSubmit={onSubmit}
-      onDelete={onDelete}
-      onTransition={onTransition}
-    />
+      projectScoped={list.projectScoped}
+      bannerText="Select a project from the header to start logging PCOs."
+      cards={[
+        {
+          label: "Total PCOs",
+          value: items.length.toString(),
+          icon: ClipboardList,
+        },
+        {
+          label: `Open (${stats.openCount})`,
+          value: formatMoney(stats.openValue),
+          tone: "amber",
+          icon: Hourglass,
+        },
+        {
+          label: `Approved unbilled (${stats.approvedCount})`,
+          value: formatMoney(stats.approvedValue),
+          tone: "violet",
+          icon: CheckCircle2,
+        },
+        {
+          label: `Invoiced unpaid (${stats.invoicedCount})`,
+          value: formatMoney(stats.invoicedValue),
+          tone: stats.invoicedValue > 0 ? "red" : "slate",
+          icon: Receipt,
+        },
+        {
+          label: "Collected",
+          value: formatMoney(stats.closedValue),
+          tone: stats.closedValue > 0 ? "emerald" : "slate",
+          icon: CircleDollarSign,
+        },
+      ]}
+      search={list.filters.search}
+      setSearch={list.filters.setSearch}
+      searchPlaceholder="Search PCO #, owner ref, title, invoice #…"
+      statusFilter={list.filters.statusFilter}
+      setStatusFilter={(v) => list.filters.setStatusFilter(v as PcoStatus | "")}
+      statusOptions={[
+        { value: "", label: "All statuses" },
+        ...PCO_STATUSES.map((s) => ({ value: s, label: PCO_STATUS_LABELS[s] })),
+      ]}
+      filteredCount={list.filtered.length}
+      totalCount={items.length}
+      exportButton={
+        <ExportCsvButton
+          getItems={makeFilteredExport(
+            queryClient,
+            pcoListFullQueryOptions(projectId),
+            list.matchesFilters,
+          )}
+          disabled={list.filtered.length === 0}
+          columns={pcoCsvColumns()}
+          filenamePrefix="pco-export"
+        />
+      }
+      bulkBar={<BulkActionBar {...list.bulk.bar} />}
+    >
+      <ListTable
+        items={list.filtered}
+        columns={columns}
+        emptyMessage="No PCOs match the current filters."
+        bulk={list.bulk.table}
+        renderRowDialog={(item, trigger) => (
+          <PcoDialog
+            projectId={projectId}
+            trigger={trigger}
+            initial={item}
+            onSubmit={list.handleSubmit}
+            onDelete={list.handleDelete}
+            onTransition={list.handleTransition}
+          />
+        )}
+      />
+    </ListPageLayout>
   );
 }

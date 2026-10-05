@@ -53,6 +53,7 @@ export function useListPage<
   transitions,
   entityNoun,
   accessors,
+  extraFilter,
 }: {
   items: ListItem[];
   projectId: number | null;
@@ -75,6 +76,9 @@ export function useListPage<
     discipline?: (item: ListItem) => string | null | undefined;
     haystack: (item: ListItem) => string;
   };
+  /** Extra per-row predicate ANDed with the shared filters (e.g. FCO's
+   *  linked/unlinked filter). Must be stable across renders. */
+  extraFilter?: (item: ListItem) => boolean;
 }) {
   const upsert = useMutation({
     mutationFn: (input: UpsertInput & { projectId: number }) =>
@@ -114,8 +118,11 @@ export function useListPage<
   );
 
   const filtered = React.useMemo(
-    () => items.filter(matchesFilters),
-    [items, matchesFilters],
+    () =>
+      items.filter(
+        (it) => matchesFilters(it) && (extraFilter ? extraFilter(it) : true),
+      ),
+    [items, matchesFilters, extraFilter],
   );
 
   const bulk = useBulkActions({
@@ -260,6 +267,7 @@ export function ListPageLayout({
   statusOptions,
   disciplineFilter,
   setDisciplineFilter,
+  extraFilters,
   filteredCount,
   totalCount,
   exportButton,
@@ -284,6 +292,9 @@ export function ListPageLayout({
   /** Pass the discipline pair to show the discipline filter; omit for PCO. */
   disciplineFilter?: string;
   setDisciplineFilter?: (v: string) => void;
+  /** Extra filter controls rendered after the status/discipline selects
+   *  (e.g. FCO's linkage filter). */
+  extraFilters?: React.ReactNode;
   filteredCount: number;
   totalCount: number;
   /** The entity's `<ExportCsvButton>` (its CSV columns are entity-specific). */
@@ -340,6 +351,7 @@ export function ListPageLayout({
             ]}
           />
         )}
+        {extraFilters}
         <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
           <span className="text-xs text-slate-500">
             Showing {filteredCount} of {totalCount}

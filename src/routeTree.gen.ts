@@ -71,7 +71,7 @@ const ChangelogRoute = ChangelogRouteImport.update({
   id: '/changelog',
   path: '/changelog',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/changelog.lazy').then((d) => d.Route))
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -81,7 +81,7 @@ const FcoLogRoute = FcoLogRouteImport.update({
   id: '/fco-log',
   path: '/fco-log',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/fco-log.lazy').then((d) => d.Route))
 const HelpRoute = HelpRouteImport.update({
   id: '/help',
   path: '/help',
@@ -96,7 +96,7 @@ const PcoRoute = PcoRouteImport.update({
   id: '/pco',
   path: '/pco',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/pco.lazy').then((d) => d.Route))
 const PipingRoute = PipingRouteImport.update({
   id: '/piping',
   path: '/piping',
@@ -111,7 +111,7 @@ const RfisRoute = RfisRouteImport.update({
   id: '/rfis',
   path: '/rfis',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/rfis.lazy').then((d) => d.Route))
 const SetupRoute = SetupRouteImport.update({
   id: '/setup',
   path: '/setup',
@@ -126,7 +126,7 @@ const TrendsRoute = TrendsRouteImport.update({
   id: '/trends',
   path: '/trends',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/trends.lazy').then((d) => d.Route))
 const ValidationRoute = ValidationRouteImport.update({
   id: '/validation',
   path: '/validation',

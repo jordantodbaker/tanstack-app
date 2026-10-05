@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Users } from "lucide-react";
+import { Td, clickableRowClass } from "~/components/ui/list-page";
 import {
   AdminListPage,
   useAdminMutations,
@@ -63,26 +64,25 @@ function UserRow({
   isSelf: boolean;
   onSubmit: (input: UserFormState) => Promise<unknown>;
 }) {
-  const cellCls = "px-3 py-2 border-b border-slate-100 align-top";
   return (
     <UserDialog
       initial={user}
       isSelf={isSelf}
       onSubmit={onSubmit}
       trigger={
-        <tr className="cursor-pointer hover:bg-slate-50 transition-colors">
-          <td className={`${cellCls} font-medium text-slate-800`}>
+        <tr className={clickableRowClass}>
+          <Td className="align-top font-medium text-slate-800">
             {user.email}
             {isSelf && (
               <span className="ml-2 text-xs font-normal text-slate-400">
                 (you)
               </span>
             )}
-          </td>
-          <td className={`${cellCls} text-slate-700`}>
+          </Td>
+          <Td className="align-top text-slate-700">
             {ROLE_LABELS[user.role]}
-          </td>
-          <td className={`${cellCls} text-xs`}>
+          </Td>
+          <Td className="align-top text-xs">
             {user.role === "ADMINISTRATOR" ? (
               <span className="text-slate-400 italic">all (admin)</span>
             ) : user.projects.length === 0 ? (
@@ -100,10 +100,10 @@ function UserRow({
                 ))}
               </div>
             )}
-          </td>
-          <td className={`${cellCls} text-slate-500`}>
+          </Td>
+          <Td className="align-top text-slate-500">
             {new Date(user.createdAt).toLocaleDateString()}
-          </td>
+          </Td>
         </tr>
       }
     />

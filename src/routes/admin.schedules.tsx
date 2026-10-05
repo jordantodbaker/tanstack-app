@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarClock, Plus } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { Td, clickableRowClass } from "~/components/ui/list-page";
 import { ScheduleDialog } from "~/components/Admin/ScheduleDialog";
 import {
   AdminListPage,
@@ -71,14 +72,13 @@ function ScheduleRow({
   onSubmit: (input: UpsertScheduleInput) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;
 }) {
-  const cellCls = "px-3 py-2 border-b border-slate-100 align-top";
   return (
     <ScheduleDialog
       trigger={
-        <tr className="cursor-pointer hover:bg-slate-50 transition-colors">
-          <td className={`${cellCls} font-mono text-sm font-medium text-slate-800`}>
+        <tr className={clickableRowClass}>
+          <Td className="align-top font-mono text-sm font-medium text-slate-800">
             {schedule.name}
-          </td>
+          </Td>
         </tr>
       }
       initial={schedule}

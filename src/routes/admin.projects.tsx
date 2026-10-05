@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Shield } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { Td, clickableRowClass } from "~/components/ui/list-page";
 import { ProjectDialog } from "~/components/Admin/ProjectDialog";
 import {
   AdminListPage,
@@ -71,20 +72,19 @@ function ProjectRow({
   onSubmit: (input: UpsertProjectInput) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;
 }) {
-  const cellCls = "px-3 py-2 border-b border-slate-100";
   return (
     <ProjectDialog
       trigger={
-        <tr className="cursor-pointer hover:bg-slate-50 transition-colors">
-          <td className={`${cellCls} font-mono text-xs text-slate-700`}>
+        <tr className={clickableRowClass}>
+          <Td className="font-mono text-xs text-slate-700">
             {project.displayId}
-          </td>
-          <td className={`${cellCls} font-medium text-slate-800`}>
+          </Td>
+          <Td className="font-medium text-slate-800">
             {project.name}
-          </td>
-          <td className={`${cellCls} text-slate-500 max-w-md truncate`}>
+          </Td>
+          <Td className="text-slate-500 max-w-md truncate">
             {project.description || "—"}
-          </td>
+          </Td>
         </tr>
       }
       initial={project}

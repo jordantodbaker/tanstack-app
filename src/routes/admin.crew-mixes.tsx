@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Users2, Plus } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { Td, clickableRowClass } from "~/components/ui/list-page";
 import { CrewMixDialog } from "~/components/Admin/CrewMixDialog";
 import {
   AdminListPage,
@@ -90,7 +91,6 @@ function CrewMixRow({
   onSubmit: (input: UpsertCrewMixInput) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;
 }) {
-  const cellCls = "px-3 py-2 border-b border-slate-100 align-top";
   const avg = crewMixAverageRate(
     mix.members.map((m) => ({ roleName: m.roleName, count: m.count })),
     mix.schedule,
@@ -99,18 +99,18 @@ function CrewMixRow({
   return (
     <CrewMixDialog
       trigger={
-        <tr className="cursor-pointer hover:bg-slate-50 transition-colors">
-          <td className={`${cellCls} font-medium text-slate-800`}>
+        <tr className={clickableRowClass}>
+          <Td className="align-top font-medium text-slate-800">
             {mix.name}
-          </td>
-          <td className={`${cellCls} text-slate-700 font-mono text-xs`}>
+          </Td>
+          <Td className="align-top text-slate-700 font-mono text-xs">
             {mix.schedule === "" ? (
               <span className="text-amber-600">— (none)</span>
             ) : (
               mix.schedule
             )}
-          </td>
-          <td className={`${cellCls} text-slate-700 text-xs`}>
+          </Td>
+          <Td className="align-top text-slate-700 text-xs">
             {mix.members.length === 0 ? (
               <span className="text-amber-600">— (no roles)</span>
             ) : (
@@ -128,10 +128,10 @@ function CrewMixRow({
                 ))}
               </div>
             )}
-          </td>
-          <td className={`${cellCls} text-slate-700`}>
+          </Td>
+          <Td className="align-top text-slate-700">
             {mix.schedule === "" || avg === 0 ? "—" : `$${avg.toFixed(2)}`}
-          </td>
+          </Td>
         </tr>
       }
       initial={mix}

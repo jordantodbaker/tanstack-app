@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { HardHat, Plus } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { Td, clickableRowClass } from "~/components/ui/list-page";
 import { FcoTemplateDialog } from "~/components/Admin/FcoTemplateDialog";
 import {
   AdminListPage,
@@ -71,7 +72,6 @@ function Row({
   onSubmit: (input: UpsertFcoTemplateInput) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;
 }) {
-  const cellCls = "px-3 py-2 border-b border-slate-100 align-top";
   const disciplineLabel =
     t.discipline === ""
       ? "Any"
@@ -79,24 +79,24 @@ function Row({
   return (
     <FcoTemplateDialog
       trigger={
-        <tr className="cursor-pointer hover:bg-slate-50 transition-colors">
-          <td className={`${cellCls} font-medium text-slate-800`}>
+        <tr className={clickableRowClass}>
+          <Td className="align-top font-medium text-slate-800">
             <div>{t.name}</div>
             {t.templateDescription && (
               <div className="text-xs text-slate-500">
                 {t.templateDescription}
               </div>
             )}
-          </td>
-          <td className={`${cellCls} text-slate-700 text-xs`}>
+          </Td>
+          <Td className="align-top text-slate-700 text-xs">
             {disciplineLabel}
-          </td>
-          <td className={`${cellCls} text-slate-700 text-xs`}>
+          </Td>
+          <Td className="align-top text-slate-700 text-xs">
             {t.originType} / {t.priority}
-          </td>
-          <td className={`${cellCls} text-slate-700 tabular-nums`}>
+          </Td>
+          <Td className="align-top text-slate-700 tabular-nums">
             {t.usageCount}
-          </td>
+          </Td>
         </tr>
       }
       initial={t}

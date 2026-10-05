@@ -1,4 +1,5 @@
 import * as React from "react";
+import { cn } from "~/lib/utils";
 
 const TONE_CLASS = {
   slate: "text-slate-800",
@@ -122,6 +123,33 @@ export function Th({
     </th>
   );
 }
+
+/**
+ * Standard table-body cell — the shared padding + bottom border every admin/
+ * list row cell carries. Extra classes (alignment, font, colour, `text-right
+ * tabular-nums`, …) compose via `className`; note `align-top` is NOT in the
+ * base, so a cell opts into it explicitly the way the old per-route `cellCls`
+ * string did. Replaces that string, which was redeclared in every admin route.
+ */
+export function Td({
+  children,
+  className,
+  ...rest
+}: React.TdHTMLAttributes<HTMLTableCellElement>) {
+  return (
+    <td className={cn("px-3 py-2 border-b border-slate-100", className)} {...rest}>
+      {children}
+    </td>
+  );
+}
+
+/**
+ * Row className for a table row that opens its record on click (the row is the
+ * trigger of an entity dialog). Shared by the admin tables and the list-view
+ * tables so the hover/cursor affordance stays identical across both.
+ */
+export const clickableRowClass =
+  "cursor-pointer hover:bg-slate-50 transition-colors";
 
 export function TableEmptyState({ message }: { message: string }) {
   return (

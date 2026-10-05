@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { HardHat, Plus } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { Td, clickableRowClass } from "~/components/ui/list-page";
 import { SubcontractorDialog } from "~/components/Admin/SubcontractorDialog";
 import {
   AdminListPage,
@@ -73,26 +74,25 @@ function SubcontractorRow({
   onSubmit: (input: UpsertSubcontractorInput) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;
 }) {
-  const cellCls = "px-3 py-2 border-b border-slate-100 align-top";
   const disciplineLabels = sub.disciplines
     .map((id) => disciplineById[id]?.label ?? id)
     .sort();
   return (
     <SubcontractorDialog
       trigger={
-        <tr className="cursor-pointer hover:bg-slate-50 transition-colors">
-          <td className={`${cellCls} font-mono text-xs text-slate-700`}>
+        <tr className={clickableRowClass}>
+          <Td className="align-top font-mono text-xs text-slate-700">
             {sub.displayId}
-          </td>
-          <td className={`${cellCls} font-medium text-slate-800`}>
+          </Td>
+          <Td className="align-top font-medium text-slate-800">
             {sub.name}
             {sub.description && (
               <div className="mt-0.5 text-xs text-slate-500 max-w-md truncate">
                 {sub.description}
               </div>
             )}
-          </td>
-          <td className={`${cellCls} text-slate-700 text-xs`}>
+          </Td>
+          <Td className="align-top text-slate-700 text-xs">
             {disciplineLabels.length === 0 ? (
               <span className="text-slate-400">—</span>
             ) : (
@@ -107,8 +107,8 @@ function SubcontractorRow({
                 ))}
               </div>
             )}
-          </td>
-          <td className={`${cellCls} text-slate-700 text-xs`}>
+          </Td>
+          <Td className="align-top text-slate-700 text-xs">
             {sub.projects.length === 0 ? (
               <span className="text-slate-400">—</span>
             ) : (
@@ -124,7 +124,7 @@ function SubcontractorRow({
                 ))}
               </div>
             )}
-          </td>
+          </Td>
         </tr>
       }
       initial={sub}

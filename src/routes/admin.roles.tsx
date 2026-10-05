@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Users, Plus } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { Td, clickableRowClass } from "~/components/ui/list-page";
 import { RoleDialog } from "~/components/Admin/RoleDialog";
 import {
   AdminListPage,
@@ -76,18 +77,17 @@ function RoleRow({
   onSubmit: (input: UpsertRoleInput) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;
 }) {
-  const cellCls = "px-3 py-2 border-b border-slate-100 align-top";
   const disciplineLabels = role.disciplines
     .map((id) => disciplineById[id]?.label ?? id)
     .sort();
   return (
     <RoleDialog
       trigger={
-        <tr className="cursor-pointer hover:bg-slate-50 transition-colors">
-          <td className={`${cellCls} font-medium text-slate-800`}>
+        <tr className={clickableRowClass}>
+          <Td className="align-top font-medium text-slate-800">
             {role.name}
-          </td>
-          <td className={`${cellCls} text-slate-700 text-xs`}>
+          </Td>
+          <Td className="align-top text-slate-700 text-xs">
             {disciplineLabels.length === 0 ? (
               <span className="text-amber-600">
                 — (hidden from every Take Off)
@@ -104,12 +104,12 @@ function RoleRow({
                 ))}
               </div>
             )}
-          </td>
-          <td className={`${cellCls} text-slate-500 text-xs`}>
+          </Td>
+          <Td className="align-top text-slate-500 text-xs">
             {role.rates.length === 0
               ? "—"
               : `${role.rates.length} rate${role.rates.length === 1 ? "" : "s"}`}
-          </td>
+          </Td>
         </tr>
       }
       initial={role}

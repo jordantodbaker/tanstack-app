@@ -34,6 +34,7 @@ import {
   StatCardRow,
   TableEmptyState,
   Th,
+  clickableRowClass,
 } from "~/components/ui/list-page";
 import { areasByProjectQueryOptions } from "~/utils/areas";
 import {
@@ -354,7 +355,7 @@ function ChangelogRow({
   return (
     <ChangelogDialog
       trigger={
-        <tr className="cursor-pointer hover:bg-slate-50 transition-colors">
+        <tr className={clickableRowClass}>
           <BulkRowCell checked={selected} onToggle={onToggle} />
           <td className={`${cellCls} font-mono text-xs text-slate-700`}>
             {item.cvrNumber || "—"}

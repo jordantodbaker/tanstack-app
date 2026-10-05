@@ -16,6 +16,10 @@ import type {
 
 type ColorFn = (level: number) => CbsLevelColor;
 
+// The workbooks colour L0 and L1 the same gold. Override L0 (the discipline
+// roots) to a distinct red so the top of each hierarchy stands apart.
+const L0_COLOR: CbsLevelColor = { fill: "#C0504D", text: "#FFFFFF" };
+
 function rowTypeBadge(rowType: string): { label: string; title: string } | null {
   if (rowType.includes("Sub")) return { label: "S", title: "Sub-code row" };
   if (rowType.includes("Material")) return { label: "M", title: "Material row" };
@@ -198,7 +202,9 @@ function CbsHierarchy({ data }: { data: CbsData }) {
   const { meta } = data;
   const colorFor = React.useCallback<ColorFn>(
     (level) =>
-      meta.levelColors[String(level)] ?? { fill: "#ffffff", text: "#000000" },
+      level === 0
+        ? L0_COLOR
+        : (meta.levelColors[String(level)] ?? { fill: "#ffffff", text: "#000000" }),
     [meta.levelColors],
   );
 
@@ -261,8 +267,8 @@ function CbsHierarchy({ data }: { data: CbsData }) {
               title={`Level ${lvl}`}
               className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
               style={{
-                backgroundColor: levelColors[String(lvl)].fill,
-                color: levelColors[String(lvl)].text,
+                backgroundColor: colorFor(lvl).fill,
+                color: colorFor(lvl).text,
                 outline: "1px solid rgba(0,0,0,0.1)",
               }}
             >

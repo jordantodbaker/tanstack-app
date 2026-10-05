@@ -32,8 +32,8 @@ describe("CbsSampleView", () => {
     const civil = await screen.findByText("Civil", {}, { timeout: 20000 });
     const row = civil.closest('[role="treeitem"]');
     expect(row).not.toBeNull();
-    // Level-0 fill from the workbook palette (gold).
-    expect(row).toHaveStyle({ backgroundColor: "#FFD966" });
+    // L0 (discipline roots) is overridden to red to distinguish it from L1 gold.
+    expect(row).toHaveStyle({ backgroundColor: "#C0504D" });
   }, 25000);
 
   it("lazy-loads the Master CBS Dictionary only when its section is opened", async () => {

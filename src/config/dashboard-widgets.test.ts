@@ -61,12 +61,16 @@ describe("DASHBOARD_WIDGETS catalog", () => {
   // catalog id appears as a literal key. Catches the class of bug where a
   // widget is added to the catalog but never wired into the renderer map
   // (or vice-versa — a renderer for an id not in the catalog).
+  //
+  // The page component (and its renderer map) lives in the `.lazy.tsx` sibling
+  // — the eager `dashboard.tsx` holds only the route's loader — so the guard
+  // reads the lazy file where the map actually is.
   it("every catalog id is wired into the dashboard route's renderer map", () => {
     const routePath = path.resolve(
       __dirname,
       "..",
       "routes",
-      "dashboard.tsx",
+      "dashboard.lazy.tsx",
     );
     const source = fs.readFileSync(routePath, "utf8");
     for (const id of DASHBOARD_WIDGET_IDS) {

@@ -76,7 +76,7 @@ const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/dashboard.lazy').then((d) => d.Route))
 const FcoLogRoute = FcoLogRouteImport.update({
   id: '/fco-log',
   path: '/fco-log',
@@ -106,7 +106,7 @@ const ReportingRoute = ReportingRouteImport.update({
   id: '/reporting',
   path: '/reporting',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/reporting.lazy').then((d) => d.Route))
 const RfisRoute = RfisRouteImport.update({
   id: '/rfis',
   path: '/rfis',
@@ -131,7 +131,7 @@ const ValidationRoute = ValidationRouteImport.update({
   id: '/validation',
   path: '/validation',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/validation.lazy').then((d) => d.Route))
 const AdminAreasRoute = AdminAreasRouteImport.update({
   id: '/areas',
   path: '/areas',

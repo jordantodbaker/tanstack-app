@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { parseCbsDisplayCode } from "./cbs-tree";
 import {
   expandCbsDictionary,
   withCostType,
   type MasterCbsItem,
-} from "../../prisma/master-cbs";
+} from "./cbs-dictionary";
 
 function original(
   displayCode: string,
@@ -11,12 +12,7 @@ function original(
   flags: { sub?: boolean; material?: boolean } = {},
 ): MasterCbsItem {
   return {
-    l1: displayCode.slice(0, 3),
-    l2: displayCode.slice(4, 6),
-    l3: displayCode.slice(7, 9),
-    l4: displayCode.slice(9, 11),
-    l5: displayCode.slice(12, 14),
-    l6: displayCode.slice(15, 16),
+    ...parseCbsDisplayCode(displayCode),
     name,
     displayCode,
     uom: "LS",

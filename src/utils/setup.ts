@@ -4,6 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { prisma } from "../server/db";
 import { adminHandler, projectIdScopedHandler } from "./users.server";
+import { cbsTreeRowSelect } from "./cbs";
 import { Id, ProjectId, parseProjectIdInput } from "../lib/validators";
 
 const UpdateAllowedFefCbsItemsSchema = z.object({
@@ -16,23 +17,7 @@ export const fetchSetupCbsItems = createServerFn({ method: "GET" }).handler(
   () =>
     // No orderBy: the client sorts into dictionary order when it builds the
     // tree (`buildCbsTree`), so a DB sort would be thrown away.
-    prisma.cbsItem.findMany({
-      select: {
-        id: true,
-        l1: true,
-        l2: true,
-        l3: true,
-        l4: true,
-        l5: true,
-        l6: true,
-        displayCode: true,
-        name: true,
-        accountDescription: true,
-        l2Description: true,
-        uom: true,
-        rowType: true,
-      },
-    }),
+    prisma.cbsItem.findMany({ select: cbsTreeRowSelect }),
 );
 
 export const setupCbsItemsQueryOptions = () =>

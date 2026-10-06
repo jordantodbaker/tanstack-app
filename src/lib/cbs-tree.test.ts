@@ -7,7 +7,7 @@ import {
   getCbsLevel,
   getGroupL1,
   getNodeSelectionState,
-  nodeMatchesSearch,
+  parseCbsDisplayCode,
   pruneCbsTree,
   rowTypeBadge,
   selectionStateFromCounts,
@@ -23,12 +23,7 @@ function item(
 ): CbsTreeItem {
   return {
     id: nextId++,
-    l1: displayCode.slice(0, 3),
-    l2: displayCode.slice(4, 6),
-    l3: displayCode.slice(7, 9),
-    l4: displayCode.slice(9, 11),
-    l5: displayCode.slice(12, 14),
-    l6: displayCode.slice(15, 16),
+    ...parseCbsDisplayCode(displayCode),
     displayCode,
     name: "",
     accountDescription: "",
@@ -240,13 +235,13 @@ describe("buildCbsTree", () => {
     expect(tree[0].searchHaystack).toBe("601-00-0000-00-0 piping spool carbon steel");
   });
 
-  it("matches a node via descendant text without storing it on the ancestor", () => {
+  it("finds a node via descendant text without storing it on the ancestor", () => {
     const tree = buildCbsTree([
       item("601-00-0000-00-0"),
       item("601-01-0000-00-0", { name: "Bolt-up" }),
     ]);
     expect(tree[0].searchHaystack).not.toContain("bolt-up");
-    expect(nodeMatchesSearch(tree[0], "bolt-up")).toBe(true);
+    expect(filterCbsTree(tree, "bolt-up")).toHaveLength(1);
   });
 
   it("keeps both rows when display codes collide, with distinct path keys", () => {
@@ -264,28 +259,6 @@ describe("rowTypeBadge", () => {
     expect(rowTypeBadge("ORIGINAL")).toBeNull();
     expect(rowTypeBadge("SUB")?.label).toBe("S");
     expect(rowTypeBadge("MATERIAL")?.label).toBe("M");
-  });
-});
-
-describe("nodeMatchesSearch", () => {
-  const tree = buildCbsTree([
-    item("601-00-0000-00-0", { name: "Pipe Fab" }),
-    item("701-00-0000-00-0", { name: "Conduit" }),
-  ]);
-  const six = tree[0];
-  const seven = tree[1];
-
-  it("matches everything when the query is empty", () => {
-    expect(nodeMatchesSearch(six, "")).toBe(true);
-  });
-
-  it("matches when the lowercased query appears in the subtree haystack", () => {
-    expect(nodeMatchesSearch(six, "pipe")).toBe(true);
-    expect(nodeMatchesSearch(seven, "conduit")).toBe(true);
-  });
-
-  it("does not match when the query is absent from the subtree", () => {
-    expect(nodeMatchesSearch(six, "conduit")).toBe(false);
   });
 });
 

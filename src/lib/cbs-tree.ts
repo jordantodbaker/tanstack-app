@@ -109,6 +109,20 @@ function costType(item: CbsTreeItem): string {
   return item.l6 || BACKBONE_TYPE;
 }
 
+/** The stored level segments of a display code `XXX-YY-ZZWW-VV-T`. */
+export function parseCbsDisplayCode(
+  displayCode: string,
+): Pick<CbsTreeItem, "l1" | "l2" | "l3" | "l4" | "l5" | "l6"> {
+  return {
+    l1: displayCode.slice(0, 3),
+    l2: displayCode.slice(4, 6),
+    l3: displayCode.slice(7, 9),
+    l4: displayCode.slice(9, 11),
+    l5: displayCode.slice(12, 14),
+    l6: displayCode.slice(15, 16),
+  };
+}
+
 /** Everything but the trailing cost-type segment. */
 function codePrefix(code: string): string {
   const dash = code.lastIndexOf("-");
@@ -141,7 +155,7 @@ export function compareCbsDisplayCodes(a: string, b: string): number {
 }
 
 /** Pre-order sort: parents before children, cost-type twins adjacent. */
-export function sortCbsItems<T extends CbsTreeItem>(items: readonly T[]): T[] {
+function sortCbsItems<T extends CbsTreeItem>(items: readonly T[]): T[] {
   return [...items].sort(
     (a, b) => compareCbsDisplayCodes(a.displayCode, b.displayCode) || a.id - b.id,
   );
@@ -278,19 +292,6 @@ export function selectionStateFromCounts(
     counts.get(node.pathKey) ?? 0,
     node.descendantItemIds.length,
   );
-}
-
-/**
- * Returns true if this node or any of its descendants matches `lowerQuery`.
- * `lowerQuery` must already be lowercased; pass "" to match everything.
- */
-export function nodeMatchesSearch(
-  node: CbsTreeNode,
-  lowerQuery: string,
-): boolean {
-  if (!lowerQuery) return true;
-  if (node.searchHaystack.includes(lowerQuery)) return true;
-  return node.children.some((c) => nodeMatchesSearch(c, lowerQuery));
 }
 
 /**

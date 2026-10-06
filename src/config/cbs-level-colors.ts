@@ -28,7 +28,7 @@ export const CBS_DEFAULT_LEVEL_COLOR: CbsLevelColor = {
 
 // The workbook colours L0 and L1 the same gold. Override L0 (the discipline
 // roots) to a distinct red so the top of each hierarchy stands apart.
-export const CBS_L0_COLOR: CbsLevelColor = { fill: "#C0504D", text: "#FFFFFF" };
+const CBS_L0_COLOR: CbsLevelColor = { fill: "#C0504D", text: "#FFFFFF" };
 
 /** The row colour for a code level — shared by the Setup and Project CBS trees. */
 export function cbsColorForLevel(level: number): CbsLevelColor {

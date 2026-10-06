@@ -1,7 +1,6 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Loader2, X } from "lucide-react";
-import { SearchBox } from "~/components/SearchBox";
 import { useSelectedProject } from "~/lib/selected-project";
 import {
   cbsItemDetailQueryOptions,
@@ -9,12 +8,7 @@ import {
   type CbsItemDetail,
   type ProjectCbsDictionaryItem,
 } from "~/utils/cbs";
-import {
-  buildCbsTree,
-  collectExpandableKeys,
-  pruneCbsTree,
-  type CbsTreeNode,
-} from "~/lib/cbs-tree";
+import { buildCbsTree, pruneCbsTree, type CbsTreeNode } from "~/lib/cbs-tree";
 import {
   cbsColorForLevel,
   type CbsLevelColor,
@@ -24,6 +18,8 @@ import {
   CbsTreePanel,
   flattenVisibleCbsNodes,
 } from "~/components/CbsTree/CbsTreePanel";
+import { CbsTreeToolbar } from "~/components/CbsTree/CbsTreeToolbar";
+import { useCbsTreeExpansion } from "~/components/CbsTree/useCbsTreeExpansion";
 
 /**
  * The CBS items available on the selected project: the dictionary rows
@@ -34,7 +30,9 @@ import {
  * ~/config/cbs-level-colors); the tree itself is the shared CbsTreePanel.
  */
 
-type Node = CbsTreeNode<ProjectCbsDictionaryItem>;
+// Rows and the detail header only need the shared tree fields; the full
+// column set is fetched per selected row.
+type Node = CbsTreeNode;
 
 /** Detail-panel rows in the workbook's column order. */
 const DETAIL_FIELDS: {
@@ -171,52 +169,6 @@ function CountsLegend({ counts }: { counts: Counts }) {
   );
 }
 
-/** Search box + expand/collapse-all + (while searching) a match count. */
-function HierarchyToolbar({
-  query,
-  setQuery,
-  onExpandAll,
-  onCollapseAll,
-  matchCount,
-}: {
-  query: string;
-  setQuery: (v: string) => void;
-  onExpandAll: () => void;
-  onCollapseAll: () => void;
-  matchCount: number | null;
-}) {
-  return (
-    <div className="mb-3 flex flex-wrap items-center gap-2">
-      <SearchBox
-        value={query}
-        onChange={setQuery}
-        placeholder="Search code or name…"
-        ariaLabel="Search this CBS hierarchy"
-        className="h-8 w-64"
-      />
-      <button
-        type="button"
-        onClick={onExpandAll}
-        className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-      >
-        Expand all
-      </button>
-      <button
-        type="button"
-        onClick={onCollapseAll}
-        className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-      >
-        Collapse all
-      </button>
-      {matchCount !== null && (
-        <span className="text-xs text-slate-500">
-          {matchCount.toLocaleString()} match{matchCount === 1 ? "" : "es"}
-        </span>
-      )}
-    </div>
-  );
-}
-
 /** The collapsible tree + toolbar + detail for one CBS dataset. Owns the state
  *  and derivation; the presentational pieces above take plain props. */
 function CbsHierarchy({
@@ -226,7 +178,7 @@ function CbsHierarchy({
   items: ProjectCbsDictionaryItem[];
   nodes: Node[];
 }) {
-  const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set());
+  const { expanded, toggle, expandAll, collapseAll } = useCbsTreeExpansion(nodes);
   const [selected, setSelected] = React.useState<Node | null>(null);
   const [query, setQuery] = React.useState("");
 
@@ -236,16 +188,6 @@ function CbsHierarchy({
     [needle, nodes],
   );
 
-  const toggle = React.useCallback((key: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }, []);
-
-  const expandableKeys = React.useMemo(() => collectExpandableKeys(nodes), [nodes]);
   const counts = React.useMemo(() => countRows(items), [items]);
 
   const flat = React.useMemo(
@@ -256,13 +198,18 @@ function CbsHierarchy({
   return (
     <div className="px-4 pb-4 md:px-5">
       <CountsLegend counts={counts} />
-      <HierarchyToolbar
+      <CbsTreeToolbar
         query={query}
-        setQuery={setQuery}
-        onExpandAll={() => setExpanded(new Set(expandableKeys))}
-        onCollapseAll={() => setExpanded(new Set())}
-        matchCount={needle ? matches : null}
-      />
+        onQueryChange={setQuery}
+        onExpandAll={expandAll}
+        onCollapseAll={collapseAll}
+      >
+        {needle && (
+          <span className="text-xs text-slate-500">
+            {matches.toLocaleString()} match{matches === 1 ? "" : "es"}
+          </span>
+        )}
+      </CbsTreeToolbar>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_22rem]">
         <CbsTreePanel

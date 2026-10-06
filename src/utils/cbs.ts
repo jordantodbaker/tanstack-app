@@ -192,6 +192,27 @@ export const fetchCbsItemsByL1EndsWith = createServerFn({ method: "GET" })
   });
 
 /**
+ * The columns a `CbsItem` row needs to be placed and rendered in the CBS tree
+ * (`CbsTreeItem` in ~/lib/cbs-tree). Shared by the Setup catalog query and
+ * the project dictionary query so both stay aligned with the tree's type.
+ */
+export const cbsTreeRowSelect = {
+  id: true,
+  l1: true,
+  l2: true,
+  l3: true,
+  l4: true,
+  l5: true,
+  l6: true,
+  displayCode: true,
+  name: true,
+  uom: true,
+  accountDescription: true,
+  l2Description: true,
+  rowType: true,
+} satisfies Prisma.CbsItemSelect;
+
+/**
  * The expanded CBS Dictionary rows (originals + generated S/M twins) that a
  * project has selected on the Setup page — feeds the Project CBS page's Code
  * Book (originals only) and Master CBS Dictionary sections. Only the fields
@@ -206,21 +227,7 @@ export const fetchProjectCbsDictionary = createServerFn({ method: "GET" })
       prisma.cbsItem.findMany({
         where: { allowedInProjects: { some: { id: projectId } } },
         orderBy: { id: "asc" },
-        select: {
-          id: true,
-          l1: true,
-          l2: true,
-          l3: true,
-          l4: true,
-          l5: true,
-          l6: true,
-          displayCode: true,
-          name: true,
-          uom: true,
-          accountDescription: true,
-          l2Description: true,
-          rowType: true,
-        },
+        select: cbsTreeRowSelect,
       }),
     ),
   );

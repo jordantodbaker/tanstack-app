@@ -12,7 +12,6 @@ import {
 import { currentUserQueryOptions, hasAtLeastRole } from "~/utils/users";
 import {
   buildCbsTree,
-  collectExpandableKeys,
   computeCbsSelectionCounts,
   filterCbsTree,
   getNodeSelectionState,
@@ -24,9 +23,9 @@ import {
   CbsTreePanel,
   flattenVisibleCbsNodes,
 } from "~/components/CbsTree/CbsTreePanel";
+import { CbsTreeToolbar } from "~/components/CbsTree/CbsTreeToolbar";
+import { useCbsTreeExpansion } from "~/components/CbsTree/useCbsTreeExpansion";
 import { Checkbox } from "~/components/ui/checkbox";
-import { Input } from "~/components/ui/input";
-import { Button } from "~/components/ui/button";
 import { ProjectSelect } from "~/components/ProjectSelect";
 import { useSelectedProject } from "~/lib/selected-project";
 import { logger } from "~/lib/logger";
@@ -121,9 +120,7 @@ function CbsTreeEditor({
   const [selectedIds, setSelectedIds] = React.useState<Set<number>>(
     () => new Set(initialAllowedIds),
   );
-  const [expanded, setExpanded] = React.useState<Set<string>>(
-    () => new Set(),
-  );
+  const { expanded, toggle, expandAll, collapseAll } = useCbsTreeExpansion(tree);
   const [search, setSearch] = React.useState("");
   const deferredSearch = React.useDeferredValue(search);
   const isFiltering = search !== deferredSearch;
@@ -158,8 +155,6 @@ function CbsTreeEditor({
     () => filterCbsTree(tree, needle),
     [tree, needle],
   );
-  const expandableKeys = React.useMemo(() => collectExpandableKeys(tree), [tree]);
-
   // Only the visible rows are flattened; the panel virtualizes those, so
   // "Expand all" over the whole catalog stays cheap.
   const flat = React.useMemo(
@@ -168,15 +163,6 @@ function CbsTreeEditor({
   );
 
   const totalSelected = selectedIds.size;
-
-  const toggleExpand = React.useCallback((pathKey: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(pathKey)) next.delete(pathKey);
-      else next.add(pathKey);
-      return next;
-    });
-  }, []);
 
   // Compute the delta inside the setSelectedIds updater so we always read
   // the latest *queued* selection, not a render-stale ref. With a ref,
@@ -238,27 +224,13 @@ function CbsTreeEditor({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 flex-wrap">
-        <Input
-          placeholder="Search by code, name, or description…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="max-w-sm"
-        />
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setExpanded(new Set(expandableKeys))}
-        >
-          Expand all
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setExpanded(new Set())}
-        >
-          Collapse all
-        </Button>
+      <CbsTreeToolbar
+        query={search}
+        onQueryChange={setSearch}
+        placeholder="Search by code, name, or description…"
+        onExpandAll={expandAll}
+        onCollapseAll={collapseAll}
+      >
         <span className="ml-auto text-sm text-slate-600">
           {totalSelected.toLocaleString()} selected
           {mutation.isPending && (
@@ -268,7 +240,7 @@ function CbsTreeEditor({
             <span className="ml-2 text-red-600">save failed</span>
           )}
         </span>
-      </div>
+      </CbsTreeToolbar>
 
       <div className="flex flex-wrap items-center gap-1 text-xs text-slate-500">
         <span className="mr-1">Level colours:</span>
@@ -279,7 +251,7 @@ function CbsTreeEditor({
         flat={flat}
         expanded={expanded}
         forceOpen={isSearching}
-        onToggle={toggleExpand}
+        onToggle={toggle}
         renderLeading={renderCheckbox}
         emptyMessage="No matches."
       >

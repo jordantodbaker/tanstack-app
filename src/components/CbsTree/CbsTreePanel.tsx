@@ -14,7 +14,8 @@ import {
  * row) and the Project CBS page (with a detail panel). Rows are flattened to
  * the currently-visible set and virtualized, so "Expand all" over thousands
  * of nodes stays cheap and scroll/select/toggle never re-render the whole
- * tree.
+ * tree. Rows only read `CbsTreeItem` fields, so any `CbsTreeNode<T>` tree is
+ * accepted as plain `CbsTreeNode`s.
  */
 
 /** Depth-first flatten of the nodes that are currently visible: a node's
@@ -37,25 +38,13 @@ export function flattenVisibleCbsNodes<T extends CbsTreeItem>(
   return out;
 }
 
-type RowProps<T extends CbsTreeItem> = {
-  node: CbsTreeNode<T>;
-  hasChildren: boolean;
-  isOpen: boolean;
-  isSelected: boolean;
-  onToggle: (key: string) => void;
-  onSelect?: (node: CbsTreeNode<T>) => void;
-  color: CbsLevelColor;
-  /** Optional control rendered between the chevron and the code (Setup's checkbox). */
-  leading?: React.ReactNode;
-};
-
 /**
  * One flattened tree row. Memoized and fed only primitives + stable refs
  * (`isOpen`/`isSelected` booleans, a stable `color`, stable callbacks) so that
  * scrolling the virtual list — and selecting/toggling — re-renders only the
  * rows whose own state changed, not the whole tree.
  */
-const CbsRowInner = React.memo(function CbsRow<T extends CbsTreeItem>({
+const CbsRow = React.memo(function CbsRow({
   node,
   hasChildren,
   isOpen,
@@ -64,7 +53,17 @@ const CbsRowInner = React.memo(function CbsRow<T extends CbsTreeItem>({
   onSelect,
   color,
   leading,
-}: RowProps<T>) {
+}: {
+  node: CbsTreeNode;
+  hasChildren: boolean;
+  isOpen: boolean;
+  isSelected: boolean;
+  onToggle: (key: string) => void;
+  onSelect?: (node: CbsTreeNode) => void;
+  color: CbsLevelColor;
+  /** Optional control rendered between the chevron and the code (Setup's checkbox). */
+  leading?: React.ReactNode;
+}) {
   const { item } = node;
   const badge = rowTypeBadge(item.rowType);
   const label = item.name || item.accountDescription || item.displayCode;
@@ -124,10 +123,6 @@ const CbsRowInner = React.memo(function CbsRow<T extends CbsTreeItem>({
     </div>
   );
 });
-// React.memo erases the generic; restore it for callers.
-const CbsRow = CbsRowInner as unknown as <T extends CbsTreeItem>(
-  props: RowProps<T>,
-) => React.ReactElement;
 
 /** The per-level colour legend shown above a tree. */
 export function CbsLevelLegend({ className = "" }: { className?: string }) {
@@ -154,7 +149,7 @@ export function CbsLevelLegend({ className = "" }: { className?: string }) {
   );
 }
 
-export function CbsTreePanel<T extends CbsTreeItem>({
+export function CbsTreePanel({
   flat,
   expanded,
   forceOpen,
@@ -166,14 +161,14 @@ export function CbsTreePanel<T extends CbsTreeItem>({
   children,
 }: {
   /** The visible rows — see `flattenVisibleCbsNodes`. */
-  flat: CbsTreeNode<T>[];
+  flat: CbsTreeNode[];
   expanded: Set<string>;
   /** Treat every node as open (while searching). */
   forceOpen: boolean;
   selectedKey?: string | null;
   onToggle: (key: string) => void;
-  onSelect?: (node: CbsTreeNode<T>) => void;
-  renderLeading?: (node: CbsTreeNode<T>) => React.ReactNode;
+  onSelect?: (node: CbsTreeNode) => void;
+  renderLeading?: (node: CbsTreeNode) => React.ReactNode;
   emptyMessage: string;
   /** Overlay content (e.g. a load mask) rendered inside the bordered panel. */
   children?: React.ReactNode;

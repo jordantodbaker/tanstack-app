@@ -26,45 +26,19 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { unzipSync, zipSync, strToU8, strFromU8 } from "fflate";
-import { compareCbsDisplayCodes } from "../src/lib/cbs-tree";
+import {
+  compareCbsDisplayCodes,
+  parseCbsDisplayCode,
+} from "../src/lib/cbs-tree";
+import {
+  expandCbsDictionary,
+  type MasterCbsItem,
+} from "../src/lib/cbs-dictionary";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const MASTER_CBS_PATH = join(__dirname, "data", "MasterCBS.xlsx");
 
-/** Mirrors the Prisma `CbsRowType` enum. */
-export type CbsRowType = "ORIGINAL" | "SUB" | "MATERIAL";
-
-export type MasterCbsItem = {
-  l1: string;
-  l2: string;
-  l3: string;
-  l4: string;
-  l5: string;
-  l6: string;
-  name: string;
-  displayCode: string;
-  uom: string;
-  subReporting: boolean | null;
-  materialCode: boolean | null;
-  materialType: string | null;
-  costCenter: string | null;
-  costClassification: string | null;
-  status: string | null;
-  accountDescription: string;
-  l2Description: string | null;
-  core: string | null;
-  coreExtension: string | null;
-  wbs: string | null;
-  p6CostAccount: string | null;
-  gl: string | null;
-  discipline: string | null;
-  costCode: string;
-  description: string | null;
-  notes: string | null;
-  displayDescription: string;
-  rowType: CbsRowType;
-  generatedFrom: string | null;
-};
+export type { CbsRowType, MasterCbsItem } from "../src/lib/cbs-dictionary";
 
 export type MasterCbsReport = {
   source: string;
@@ -84,8 +58,6 @@ export type MasterCbsReport = {
 
 const DISPLAY_CODE_RE = /^[0-9A-Z]{3}-[0-9A-Z]{2}-[0-9A-Z]{4}-[0-9A-Z]{2}-[0-9A-Z]$/;
 
-const SUB_GL = "5200";
-const MATERIAL_GL = "5100";
 
 /**
  * ExcelJS throws on the `colorFilter` autofilter nodes inside Excel Tables.
@@ -127,96 +99,6 @@ function toBool(v: string): boolean | null {
   if (t === "YES" || t === "Y" || t === "TRUE") return true;
   if (t === "NO" || t === "N" || t === "FALSE") return false;
   return null;
-}
-
-/** "Civil" + "Materials" → "Civil Materials"; "Shop Materials" stays as is. */
-function suffixName(name: string, suffix: string): string {
-  const base = name.trim();
-  if (!base) return suffix;
-  if (base.toLowerCase().endsWith(suffix.toLowerCase())) return base;
-  return `${base} ${suffix}`;
-}
-
-function segmentsOf(displayCode: string) {
-  return {
-    l1: displayCode.slice(0, 3),
-    l2: displayCode.slice(4, 6),
-    l3: displayCode.slice(7, 9),
-    l4: displayCode.slice(9, 11),
-    l5: displayCode.slice(12, 14),
-    l6: displayCode.slice(15, 16),
-  };
-}
-
-/** Swap the trailing cost-type segment: "601-05-0000-00-0" + "S" → "…-S". */
-export function withCostType(displayCode: string, type: string): string {
-  return `${displayCode.slice(0, 15)}${type}`;
-}
-
-function generateTwin(
-  original: MasterCbsItem,
-  type: "S" | "M",
-): MasterCbsItem {
-  const displayCode = withCostType(original.displayCode, type);
-  const name = suffixName(
-    original.name,
-    type === "S" ? "Subcontracts" : "Materials",
-  );
-  return {
-    ...original,
-    ...segmentsOf(displayCode),
-    name,
-    displayCode,
-    costCode: displayCode.replace(/-/g, ""),
-    gl: type === "S" ? SUB_GL : MATERIAL_GL,
-    displayDescription: `${displayCode}:  ${name}`,
-    rowType: type === "S" ? "SUB" : "MATERIAL",
-    generatedFrom: original.displayCode,
-  };
-}
-
-/**
- * Expands original rows into the dictionary: each original is followed by its
- * generated S and M twins (skipped when that code already exists). Exported so
- * the generation rule can be unit-tested without a workbook.
- */
-export function expandCbsDictionary(originals: MasterCbsItem[]): {
-  items: MasterCbsItem[];
-  generatedSub: number;
-  generatedMaterial: number;
-  skippedExistingSub: number;
-  skippedExistingMaterial: number;
-} {
-  const existing = new Set(originals.map((o) => o.displayCode));
-  const items: MasterCbsItem[] = [];
-  const stats = {
-    generatedSub: 0,
-    generatedMaterial: 0,
-    skippedExistingSub: 0,
-    skippedExistingMaterial: 0,
-  };
-  for (const o of originals) {
-    items.push(o);
-    if (o.subReporting === true) {
-      const twin = generateTwin(o, "S");
-      if (existing.has(twin.displayCode)) stats.skippedExistingSub++;
-      else {
-        existing.add(twin.displayCode);
-        items.push(twin);
-        stats.generatedSub++;
-      }
-    }
-    if (o.materialCode === true) {
-      const twin = generateTwin(o, "M");
-      if (existing.has(twin.displayCode)) stats.skippedExistingMaterial++;
-      else {
-        existing.add(twin.displayCode);
-        items.push(twin);
-        stats.generatedMaterial++;
-      }
-    }
-  }
-  return { items, ...stats };
 }
 
 export async function loadMasterCbs(
@@ -301,7 +183,7 @@ export async function loadMasterCbs(
     if (sheetCostCode && sheetCostCode !== costCode) report.costCodeMismatches++;
 
     const item: MasterCbsItem = {
-      ...segmentsOf(displayCode),
+      ...parseCbsDisplayCode(displayCode),
       name,
       displayCode,
       uom: text("UOM"),

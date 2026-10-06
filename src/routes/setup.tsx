@@ -2,12 +2,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { qk } from "~/lib/query-keys";
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, Settings } from "lucide-react";
-import {
-  CBS_HEADER_COLOR,
-  CBS_LEGEND_LEVELS,
-  cbsColorForLevel,
-} from "~/config/cbs-level-colors";
+import { Settings } from "lucide-react";
 import { LoadMask } from "~/components/LoadMask";
 import {
   setupCbsItemsQueryOptions,
@@ -17,11 +12,18 @@ import {
 import { currentUserQueryOptions, hasAtLeastRole } from "~/utils/users";
 import {
   buildCbsTree,
+  collectExpandableKeys,
+  computeCbsSelectionCounts,
   filterCbsTree,
   getNodeSelectionState,
-  rowTypeBadge,
+  selectionStateFromCounts,
   type CbsTreeNode,
 } from "~/lib/cbs-tree";
+import {
+  CbsLevelLegend,
+  CbsTreePanel,
+  flattenVisibleCbsNodes,
+} from "~/components/CbsTree/CbsTreePanel";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
@@ -150,26 +152,21 @@ function CbsTreeEditor({
     },
   });
 
+  const needle = deferredSearch.trim().toLowerCase();
+  const isSearching = needle.length > 0;
   const filteredTree = React.useMemo(
-    () => filterCbsTree(tree, deferredSearch.trim().toLowerCase()),
-    [tree, deferredSearch],
+    () => filterCbsTree(tree, needle),
+    [tree, needle],
+  );
+  const expandableKeys = React.useMemo(() => collectExpandableKeys(tree), [tree]);
+
+  // Only the visible rows are flattened; the panel virtualizes those, so
+  // "Expand all" over the whole catalog stays cheap.
+  const flat = React.useMemo(
+    () => flattenVisibleCbsNodes(filteredTree, expanded, isSearching),
+    [filteredTree, expanded, isSearching],
   );
 
-  const allPathKeys = React.useMemo(() => {
-    const keys: string[] = [];
-    function walk(nodes: CbsTreeNode[]) {
-      for (const n of nodes) {
-        if (n.children.length > 0) {
-          keys.push(n.pathKey);
-          walk(n.children);
-        }
-      }
-    }
-    walk(tree);
-    return keys;
-  }, [tree]);
-
-  const isSearching = deferredSearch.trim().length > 0;
   const totalSelected = selectedIds.size;
 
   const toggleExpand = React.useCallback((pathKey: string) => {
@@ -212,6 +209,33 @@ function CbsTreeEditor({
     [mutate],
   );
 
+  // One bottom-up pass per selection change instead of walking every visible
+  // row's descendant list on each render.
+  const selectionCounts = React.useMemo(
+    () => computeCbsSelectionCounts(tree, selectedIds),
+    [tree, selectedIds],
+  );
+
+  const renderCheckbox = React.useCallback(
+    (node: CbsTreeNode) => {
+      const state = selectionStateFromCounts(node, selectionCounts);
+      const item = node.item;
+      const label = item.name || item.accountDescription || item.displayCode;
+      return (
+        <Checkbox
+          checked={
+            state === "indeterminate" ? "indeterminate" : state === "checked"
+          }
+          onCheckedChange={() => toggleNode(node)}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={`Toggle ${label}`}
+          className="border-current/50 bg-white/80"
+        />
+      );
+    },
+    [selectionCounts, toggleNode],
+  );
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 flex-wrap">
@@ -224,7 +248,7 @@ function CbsTreeEditor({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => setExpanded(new Set(allPathKeys))}
+          onClick={() => setExpanded(new Set(expandableKeys))}
         >
           Expand all
         </Button>
@@ -248,160 +272,19 @@ function CbsTreeEditor({
 
       <div className="flex flex-wrap items-center gap-1 text-xs text-slate-500">
         <span className="mr-1">Level colours:</span>
-        {CBS_LEGEND_LEVELS.map((lvl) => {
-          const c = cbsColorForLevel(lvl);
-          return (
-            <span
-              key={lvl}
-              title={`Level ${lvl}`}
-              className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
-              style={{
-                backgroundColor: c.fill,
-                color: c.text,
-                outline: "1px solid rgba(0,0,0,0.1)",
-              }}
-            >
-              L{lvl}
-            </span>
-          );
-        })}
+        <CbsLevelLegend />
       </div>
 
-      <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div
-          className="flex items-center gap-2 px-3 py-2 text-xs font-semibold"
-          style={{
-            backgroundColor: CBS_HEADER_COLOR.fill,
-            color: CBS_HEADER_COLOR.text,
-          }}
-        >
-          CBS code &amp; name
-          <span className="ml-auto opacity-80">UOM</span>
-        </div>
+      <CbsTreePanel
+        flat={flat}
+        expanded={expanded}
+        forceOpen={isSearching}
+        onToggle={toggleExpand}
+        renderLeading={renderCheckbox}
+        emptyMessage="No matches."
+      >
         {isFiltering && <LoadMask label="Filtering…" size="sm" rounded />}
-        {filteredTree.length === 0 ? (
-          <div className="p-4 text-sm text-slate-500">No matches.</div>
-        ) : (
-          <ul role="tree">
-            {filteredTree.map((node) => (
-              <TreeRow
-                key={node.pathKey}
-                node={node}
-                depth={0}
-                selectedIds={selectedIds}
-                expanded={expanded}
-                isSearching={isSearching}
-                onToggleExpand={toggleExpand}
-                onToggleSelect={toggleNode}
-              />
-            ))}
-          </ul>
-        )}
-      </div>
+      </CbsTreePanel>
     </div>
   );
 }
-
-type TreeRowProps = {
-  node: CbsTreeNode;
-  depth: number;
-  selectedIds: Set<number>;
-  expanded: Set<string>;
-  /** When true, every node with children is treated as open without
-   *  needing to live in `expanded`. */
-  isSearching: boolean;
-  onToggleExpand: (pathKey: string) => void;
-  onToggleSelect: (node: CbsTreeNode) => void;
-};
-
-const TreeRow = React.memo(function TreeRow({
-  node,
-  depth,
-  selectedIds,
-  expanded,
-  isSearching,
-  onToggleExpand,
-  onToggleSelect,
-}: TreeRowProps) {
-  const hasChildren = node.children.length > 0;
-  const isOpen =
-    (isSearching && hasChildren) || expanded.has(node.pathKey);
-  const state = getNodeSelectionState(node, selectedIds);
-  const item = node.item;
-  const label = item.name || item.accountDescription || item.displayCode;
-  const code = item.displayCode;
-  const badge = rowTypeBadge(item.rowType);
-
-  // Same colour-by-code-level scheme as the Project CBS page.
-  const color = cbsColorForLevel(node.level);
-
-  return (
-    <li role="treeitem" aria-expanded={hasChildren ? isOpen : undefined}>
-      <div
-        className="flex items-center gap-2 border-b border-black/5 py-1 pr-3 text-sm transition-[filter] hover:brightness-95"
-        style={{
-          backgroundColor: color.fill,
-          color: color.text,
-          paddingLeft: depth * 18 + 8,
-        }}
-      >
-        {hasChildren ? (
-          <button
-            type="button"
-            onClick={() => onToggleExpand(node.pathKey)}
-            className="grid size-4 shrink-0 place-items-center rounded hover:bg-black/10"
-            aria-label={isOpen ? "Collapse" : "Expand"}
-          >
-            <ChevronRight
-              size={13}
-              className={`transition-transform ${isOpen ? "rotate-90" : ""}`}
-            />
-          </button>
-        ) : (
-          <span className="size-4 shrink-0 text-center opacity-40">·</span>
-        )}
-        <Checkbox
-          checked={
-            state === "indeterminate" ? "indeterminate" : state === "checked"
-          }
-          onCheckedChange={() => onToggleSelect(node)}
-          aria-label={`Toggle ${label}`}
-          className="border-current/50 bg-white/80"
-        />
-        <span className="shrink-0 font-mono text-xs tabular-nums opacity-80">
-          {code}
-        </span>
-        <span className="truncate font-medium">{label}</span>
-        {badge && (
-          <span
-            title={badge.title}
-            className="shrink-0 rounded border border-current/30 px-1 text-[10px] leading-4 font-semibold opacity-70"
-          >
-            {badge.label}
-          </span>
-        )}
-        {item.uom && (
-          <span className="ml-auto shrink-0 font-mono text-[11px] opacity-70">
-            {item.uom}
-          </span>
-        )}
-      </div>
-      {hasChildren && isOpen && (
-        <ul role="group">
-          {node.children.map((child) => (
-            <TreeRow
-              key={child.pathKey}
-              node={child}
-              depth={depth + 1}
-              selectedIds={selectedIds}
-              expanded={expanded}
-              isSearching={isSearching}
-              onToggleExpand={onToggleExpand}
-              onToggleSelect={onToggleSelect}
-            />
-          ))}
-        </ul>
-      )}
-    </li>
-  );
-});

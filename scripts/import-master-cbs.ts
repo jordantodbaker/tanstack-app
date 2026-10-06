@@ -14,12 +14,73 @@
 // twins) are created but NOT auto-added to any allow-list; the run reports how
 // many, so you can grant them in Setup if needed.
 //
+// Existing rows are compared column-by-column against the workbook and only
+// the ones that actually differ are written (in chunked transactions), so a
+// routine re-import after a small workbook edit is a handful of round trips
+// rather than one per row.
+//
 // Run:  npx tsx scripts/import-master-cbs.ts [--dry-run]
 import "dotenv/config";
 import { prisma } from "../src/server/db";
-import { formatMasterCbsReport, loadMasterCbs } from "../prisma/master-cbs";
+import {
+  formatMasterCbsReport,
+  loadMasterCbs,
+  type MasterCbsItem,
+} from "../prisma/master-cbs";
 
 const dryRun = process.argv.includes("--dry-run");
+const CHUNK = 200;
+
+const FIELDS = [
+  "l1",
+  "l2",
+  "l3",
+  "l4",
+  "l5",
+  "l6",
+  "name",
+  "displayCode",
+  "uom",
+  "subReporting",
+  "materialCode",
+  "materialType",
+  "costCenter",
+  "costClassification",
+  "status",
+  "accountDescription",
+  "l2Description",
+  "core",
+  "coreExtension",
+  "wbs",
+  "p6CostAccount",
+  "gl",
+  "discipline",
+  "description",
+  "notes",
+  "displayDescription",
+  "rowType",
+  "generatedFrom",
+] as const satisfies readonly (keyof MasterCbsItem)[];
+
+// Stored columns are nullable where the workbook value is not (e.g.
+// displayDescription), so compare against a loosened view of the row.
+type ExistingRow = {
+  [K in (typeof FIELDS)[number]]: MasterCbsItem[K] | null;
+} & { costCode: string };
+
+/** The subset of columns in `next` that differ from the stored row. */
+function changedFields(
+  existing: ExistingRow,
+  next: MasterCbsItem,
+): Partial<MasterCbsItem> | null {
+  let diff: Partial<MasterCbsItem> | null = null;
+  for (const f of FIELDS) {
+    if (existing[f] !== next[f]) {
+      (diff ??= {})[f] = next[f] as never;
+    }
+  }
+  return diff;
+}
 
 async function main() {
   const { items, report } = await loadMasterCbs();
@@ -34,23 +95,43 @@ async function main() {
     );
   }
 
-  const existing = await prisma.cbsItem.findMany({ select: { costCode: true } });
-  const existingCodes = new Set(existing.map((e) => e.costCode));
-  const newCodes = new Set(items.map((i) => i.costCode));
+  const existing = await prisma.cbsItem.findMany({
+    select: Object.fromEntries([...FIELDS, "costCode"].map((f) => [f, true])) as {
+      [K in (typeof FIELDS)[number] | "costCode"]: true;
+    },
+  });
+  const existingByCost = new Map(existing.map((e) => [e.costCode, e]));
 
-  const toDelete = [...existingCodes].filter((c) => !newCodes.has(c));
-  const toCreate = items.filter((i) => !existingCodes.has(i.costCode));
-  const toUpdate = items.filter((i) => existingCodes.has(i.costCode));
+  const toDelete = existing
+    .filter((e) => !byCost.has(e.costCode))
+    .map((e) => e.costCode);
+  const toCreate = items.filter((i) => !existingByCost.has(i.costCode));
+  const toUpdate: { costCode: string; data: Partial<MasterCbsItem> }[] = [];
+  let unchanged = 0;
+  for (const it of items) {
+    const prior = existingByCost.get(it.costCode);
+    if (!prior) continue;
+    const diff = changedFields(prior, it);
+    if (diff) toUpdate.push({ costCode: it.costCode, data: diff });
+    else unchanged++;
+  }
 
   console.log(
-    `\nDictionary rows: ${items.length} | DB existing: ${existingCodes.size}`,
+    `\nDictionary rows: ${items.length} | DB existing: ${existing.length}`,
   );
   console.log(
-    `Plan → create ${toCreate.length}, update ${toUpdate.length}, delete (stale) ${toDelete.length}`,
+    `Plan → create ${toCreate.length}, update ${toUpdate.length}, unchanged ${unchanged}, delete (stale) ${toDelete.length}`,
   );
   if (dryRun) {
     if (toDelete.length) {
       console.log(`Stale codes (first 20): ${toDelete.slice(0, 20).join(", ")}`);
+    }
+    if (toUpdate.length) {
+      const sample = toUpdate
+        .slice(0, 10)
+        .map((u) => `${u.costCode} [${Object.keys(u.data).join(", ")}]`)
+        .join("; ");
+      console.log(`Changed rows (first 10): ${sample}`);
     }
     console.log("\n--dry-run: no changes written.");
     return;
@@ -68,16 +149,20 @@ async function main() {
   }
   if (toCreate.length) console.log(`Created ${toCreate.length} new CbsItems.`);
 
-  let updated = 0;
-  for (const it of toUpdate) {
-    // Update in place — keeps the row id, so allow-list join rows survive.
-    await prisma.cbsItem.update({ where: { costCode: it.costCode }, data: it });
-    updated++;
-    if (updated % 1000 === 0) {
-      console.log(`  updated ${updated}/${toUpdate.length}…`);
-    }
+  // Update in place — keeps the row id, so allow-list join rows survive. Each
+  // chunk is one transaction (one round trip) rather than one per row.
+  for (let i = 0; i < toUpdate.length; i += CHUNK) {
+    const chunk = toUpdate.slice(i, i + CHUNK);
+    await prisma.$transaction(
+      chunk.map((u) =>
+        prisma.cbsItem.update({ where: { costCode: u.costCode }, data: u.data }),
+      ),
+    );
+    console.log(
+      `  updated ${Math.min(i + CHUNK, toUpdate.length)}/${toUpdate.length}…`,
+    );
   }
-  console.log(`Updated ${updated} existing CbsItems.`);
+  console.log(`Updated ${toUpdate.length} changed CbsItems (${unchanged} unchanged).`);
 
   const finalCount = await prisma.cbsItem.count();
   console.log(`\nFinal CbsItem count: ${finalCount}`);

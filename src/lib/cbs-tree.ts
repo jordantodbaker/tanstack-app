@@ -51,10 +51,9 @@ export type CbsTreeNode<T extends CbsTreeItem = CbsTreeItem> = {
   children: CbsTreeNode<T>[];
   /** This node's item id followed by every descendant's. */
   descendantItemIds: number[];
-  /** Pre-lowercased searchable text for this node (own item only). */
+  /** Pre-lowercased searchable text for this node (own item only). Subtree
+   *  matching walks children instead of storing every ancestor's text again. */
   searchHaystack: string;
-  /** Pre-lowercased searchable text covering this node and all descendants. */
-  subtreeHaystack: string;
 };
 
 const LEVEL_DEFAULT = "00";
@@ -214,10 +213,6 @@ export function buildCbsTree<T extends CbsTreeItem>(
     const children = node.children.map(toOutput);
     const descendantItemIds: number[] = [node.item.id];
     for (const c of children) descendantItemIds.push(...c.descendantItemIds);
-    const own =
-      `${node.item.displayCode} ${node.item.name} ${node.item.accountDescription}`.toLowerCase();
-    let subtree = own;
-    for (const c of children) subtree += "\n" + c.subtreeHaystack;
     return {
       pathKey: keys.get(node)!,
       depth: node.depth,
@@ -225,8 +220,8 @@ export function buildCbsTree<T extends CbsTreeItem>(
       item: node.item,
       children,
       descendantItemIds,
-      searchHaystack: own,
-      subtreeHaystack: subtree,
+      searchHaystack:
+        `${node.item.displayCode} ${node.item.name} ${node.item.accountDescription}`.toLowerCase(),
     };
   }
 
@@ -235,6 +230,14 @@ export function buildCbsTree<T extends CbsTreeItem>(
 
 export type SelectionState = "checked" | "unchecked" | "indeterminate";
 
+function selectionState(selected: number, total: number): SelectionState {
+  if (selected === 0) return "unchecked";
+  if (selected === total) return "checked";
+  return "indeterminate";
+}
+
+/** Selection state of one node by walking its descendant ids — fine for a
+ *  single click; use `computeCbsSelectionCounts` when rendering many rows. */
 export function getNodeSelectionState(
   node: CbsTreeNode,
   selectedIds: Set<number>,
@@ -243,9 +246,38 @@ export function getNodeSelectionState(
   for (const id of node.descendantItemIds) {
     if (selectedIds.has(id)) selected++;
   }
-  if (selected === 0) return "unchecked";
-  if (selected === node.descendantItemIds.length) return "checked";
-  return "indeterminate";
+  return selectionState(selected, node.descendantItemIds.length);
+}
+
+/**
+ * Selected-descendant count for every node, keyed by pathKey, in one
+ * bottom-up pass (O(n) per selection change) — so rendering thousands of
+ * rows doesn't re-walk each node's descendant list per row.
+ */
+export function computeCbsSelectionCounts(
+  nodes: CbsTreeNode[],
+  selectedIds: Set<number>,
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  const rec = (n: CbsTreeNode): number => {
+    let selected = selectedIds.has(n.item.id) ? 1 : 0;
+    for (const c of n.children) selected += rec(c);
+    counts.set(n.pathKey, selected);
+    return selected;
+  };
+  for (const n of nodes) rec(n);
+  return counts;
+}
+
+/** Selection state from a `computeCbsSelectionCounts` map. */
+export function selectionStateFromCounts(
+  node: CbsTreeNode,
+  counts: Map<string, number>,
+): SelectionState {
+  return selectionState(
+    counts.get(node.pathKey) ?? 0,
+    node.descendantItemIds.length,
+  );
 }
 
 /**
@@ -257,13 +289,16 @@ export function nodeMatchesSearch(
   lowerQuery: string,
 ): boolean {
   if (!lowerQuery) return true;
-  return node.subtreeHaystack.includes(lowerQuery);
+  if (node.searchHaystack.includes(lowerQuery)) return true;
+  return node.children.some((c) => nodeMatchesSearch(c, lowerQuery));
 }
 
 /**
  * Single-pass filter that prunes nodes whose subtrees don't contain
- * `lowerQuery`. Returns the original `nodes` array when the query is empty so
- * callers can fast-path on reference identity.
+ * `lowerQuery`. A self-match keeps its whole subtree intact (same object);
+ * a descendant-only match yields a copy with just the matching children.
+ * Returns the original `nodes` array when the query is empty so callers can
+ * fast-path on reference identity.
  */
 export function filterCbsTree<T extends CbsTreeItem>(
   nodes: CbsTreeNode<T>[],
@@ -272,14 +307,12 @@ export function filterCbsTree<T extends CbsTreeItem>(
   if (!lowerQuery) return nodes;
   const out: CbsTreeNode<T>[] = [];
   for (const n of nodes) {
-    if (!n.subtreeHaystack.includes(lowerQuery)) continue;
     if (n.searchHaystack.includes(lowerQuery)) {
-      // Self matches — keep entire subtree intact.
       out.push(n);
-    } else {
-      // Only descendants match — recurse.
-      out.push({ ...n, children: filterCbsTree(n.children, lowerQuery) });
+      continue;
     }
+    const kids = filterCbsTree(n.children, lowerQuery);
+    if (kids.length > 0) out.push({ ...n, children: kids });
   }
   return out;
 }
@@ -298,7 +331,6 @@ export function pruneCbsTree<T extends CbsTreeItem>(
   const rec = (list: CbsTreeNode<T>[]): CbsTreeNode<T>[] => {
     const out: CbsTreeNode<T>[] = [];
     for (const n of list) {
-      if (!n.subtreeHaystack.includes(lowerQuery)) continue;
       const selfMatch = n.searchHaystack.includes(lowerQuery);
       const kids = rec(n.children);
       if (selfMatch || kids.length > 0) {

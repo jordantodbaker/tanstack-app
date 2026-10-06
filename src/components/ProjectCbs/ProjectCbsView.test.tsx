@@ -59,27 +59,11 @@ function item(
     l5: displayCode.slice(12, 14),
     l6: displayCode.slice(15, 16),
     displayCode,
-    costCode: displayCode.replace(/-/g, ""),
     name,
     uom: "LS",
-    rowType: "ORIGINAL",
-    generatedFrom: null,
-    subReporting: null,
-    materialCode: null,
-    materialType: null,
-    costCenter: null,
-    costClassification: null,
-    status: "Active",
     accountDescription: name,
     l2Description: null,
-    core: null,
-    coreExtension: null,
-    wbs: null,
-    p6CostAccount: null,
-    gl: null,
-    discipline: null,
-    description: null,
-    notes: null,
+    rowType: "ORIGINAL",
     ...over,
   };
 }
@@ -87,12 +71,8 @@ function item(
 // A small slice of the Civil dictionary: a root, its generated M twin, an L1
 // account and a leaf under it.
 const FIXTURE: ProjectCbsDictionaryItem[] = [
-  item("100-00-0000-00-0", "Civil", { subReporting: true, materialCode: true }),
-  item("100-00-0000-00-M", "Civil Materials", {
-    rowType: "MATERIAL",
-    generatedFrom: "100-00-0000-00-0",
-    gl: "5100",
-  }),
+  item("100-00-0000-00-0", "Civil"),
+  item("100-00-0000-00-M", "Civil Materials", { rowType: "MATERIAL" }),
   item("101-00-0000-00-0", "Civil Shop Materials"),
   item("101-05-0000-00-0", "Earthwork & Trenching"),
   item("101-05-0500-00-M", "Topsoil", { uom: "CY" }),

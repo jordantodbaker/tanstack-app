@@ -14,8 +14,9 @@ const UpdateAllowedFefCbsItemsSchema = z.object({
 
 export const fetchSetupCbsItems = createServerFn({ method: "GET" }).handler(
   () =>
+    // No orderBy: the client sorts into dictionary order when it builds the
+    // tree (`buildCbsTree`), so a DB sort would be thrown away.
     prisma.cbsItem.findMany({
-      orderBy: { displayCode: "asc" },
       select: {
         id: true,
         l1: true,

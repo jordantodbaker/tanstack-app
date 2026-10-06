@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildCbsTree,
   compareCbsDisplayCodes,
+  computeCbsSelectionCounts,
   filterCbsTree,
   getCbsLevel,
   getGroupL1,
@@ -9,6 +10,7 @@ import {
   nodeMatchesSearch,
   pruneCbsTree,
   rowTypeBadge,
+  selectionStateFromCounts,
   type CbsTreeItem,
   type CbsTreeNode,
 } from "./cbs-tree";
@@ -238,13 +240,13 @@ describe("buildCbsTree", () => {
     expect(tree[0].searchHaystack).toBe("601-00-0000-00-0 piping spool carbon steel");
   });
 
-  it("subtreeHaystack contains text from descendants", () => {
+  it("matches a node via descendant text without storing it on the ancestor", () => {
     const tree = buildCbsTree([
       item("601-00-0000-00-0"),
       item("601-01-0000-00-0", { name: "Bolt-up" }),
     ]);
     expect(tree[0].searchHaystack).not.toContain("bolt-up");
-    expect(tree[0].subtreeHaystack).toContain("bolt-up");
+    expect(nodeMatchesSearch(tree[0], "bolt-up")).toBe(true);
   });
 
   it("keeps both rows when display codes collide, with distinct path keys", () => {
@@ -366,5 +368,43 @@ describe("getNodeSelectionState", () => {
 
   it("ignores selected ids that aren't descendants of this node", () => {
     expect(getNodeSelectionState(node, new Set([999]))).toBe("unchecked");
+  });
+});
+
+describe("computeCbsSelectionCounts / selectionStateFromCounts", () => {
+  const items = [
+    item("601-00-0000-00-0"),
+    item("601-01-0000-00-0"),
+    item("601-01-0500-00-0"),
+    item("601-02-0000-00-0"),
+  ];
+  const [root, l01, leaf, l02] = items.map((i) => i.id);
+  const tree = buildCbsTree(items);
+  const rootNode = tree[0];
+  const l01Node = find(tree, "601-01-0000-00-0")!;
+  const l02Node = find(tree, "601-02-0000-00-0")!;
+
+  it("counts selected ids per node bottom-up, including the node itself", () => {
+    const counts = computeCbsSelectionCounts(tree, new Set([leaf, l02]));
+    expect(counts.get(rootNode.pathKey)).toBe(2);
+    expect(counts.get(l01Node.pathKey)).toBe(1);
+    expect(counts.get(l02Node.pathKey)).toBe(1);
+  });
+
+  it("agrees with getNodeSelectionState for every node", () => {
+    const selected = new Set([root, l01, leaf]);
+    const counts = computeCbsSelectionCounts(tree, selected);
+    for (const n of [rootNode, l01Node, l02Node]) {
+      expect(selectionStateFromCounts(n, counts)).toBe(
+        getNodeSelectionState(n, selected),
+      );
+    }
+    expect(selectionStateFromCounts(l01Node, counts)).toBe("checked");
+    expect(selectionStateFromCounts(rootNode, counts)).toBe("indeterminate");
+    expect(selectionStateFromCounts(l02Node, counts)).toBe("unchecked");
+  });
+
+  it("treats a node missing from the map as unchecked", () => {
+    expect(selectionStateFromCounts(rootNode, new Map())).toBe("unchecked");
   });
 });

@@ -1,33 +1,37 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronRight, Loader2, X } from "lucide-react";
 import { SearchBox } from "~/components/SearchBox";
 import { useSelectedProject } from "~/lib/selected-project";
 import {
+  cbsItemDetailQueryOptions,
   projectCbsDictionaryQueryOptions,
+  type CbsItemDetail,
   type ProjectCbsDictionaryItem,
 } from "~/utils/cbs";
 import {
   buildCbsTree,
   collectExpandableKeys,
   pruneCbsTree,
-  rowTypeBadge,
   type CbsTreeNode,
 } from "~/lib/cbs-tree";
 import {
-  CBS_HEADER_COLOR,
-  CBS_LEGEND_LEVELS,
   cbsColorForLevel,
   type CbsLevelColor,
 } from "~/config/cbs-level-colors";
+import {
+  CbsLevelLegend,
+  CbsTreePanel,
+  flattenVisibleCbsNodes,
+} from "~/components/CbsTree/CbsTreePanel";
 
 /**
- * Web view of the selected project's CBS: the dictionary rows toggled on the
- * Setup page, laid out as colour-by-level collapsible hierarchies. Two
- * sections share one dataset — the Code Book shows the original Master CBS
- * rows only, the Master CBS Dictionary adds the generated S/M twins. Colours
- * mirror the workbook's outline fills (see ~/config/cbs-level-colors).
+ * The CBS items available on the selected project: the dictionary rows
+ * toggled on the Setup page, laid out as colour-by-level collapsible
+ * hierarchies. Two sections share one dataset — the Code Book shows the
+ * original Master CBS rows only, the Master CBS Dictionary adds the generated
+ * S/M twins. Colours mirror the workbook's outline fills (see
+ * ~/config/cbs-level-colors); the tree itself is the shared CbsTreePanel.
  */
 
 type Node = CbsTreeNode<ProjectCbsDictionaryItem>;
@@ -35,7 +39,7 @@ type Node = CbsTreeNode<ProjectCbsDictionaryItem>;
 /** Detail-panel rows in the workbook's column order. */
 const DETAIL_FIELDS: {
   label: string;
-  get: (i: ProjectCbsDictionaryItem) => string | null | undefined;
+  get: (i: CbsItemDetail) => string | null | undefined;
 }[] = [
   { label: "UOM", get: (i) => i.uom },
   { label: "Sub Code", get: (i) => yesNo(i.subReporting) },
@@ -88,107 +92,6 @@ function countRows(items: readonly ProjectCbsDictionaryItem[]): Counts {
   return c;
 }
 
-/**
- * One flattened tree row. Memoized and fed only primitives + stable refs
- * (`isOpen`/`isSelected` booleans, a stable `color`, stable callbacks) so that
- * scrolling the virtual list — and selecting/toggling — re-renders only the
- * rows whose own state changed, not the whole tree.
- */
-const CbsRow = React.memo(function CbsRow({
-  node,
-  hasChildren,
-  isOpen,
-  isSelected,
-  onToggle,
-  onSelect,
-  color,
-}: {
-  node: Node;
-  hasChildren: boolean;
-  isOpen: boolean;
-  isSelected: boolean;
-  onToggle: (key: string) => void;
-  onSelect: (node: Node) => void;
-  color: CbsLevelColor;
-}) {
-  const { item } = node;
-  const badge = rowTypeBadge(item.rowType);
-
-  return (
-    <div
-      role="treeitem"
-      aria-level={node.depth + 1}
-      aria-expanded={hasChildren ? isOpen : undefined}
-      aria-selected={isSelected}
-      onClick={() => onSelect(node)}
-      style={{
-        backgroundColor: color.fill,
-        color: color.text,
-        paddingLeft: 8 + node.depth * 18,
-      }}
-      className={`flex cursor-pointer items-center gap-2 border-b border-black/5 py-1 pr-3 text-sm transition-[filter] hover:brightness-95 ${
-        isSelected ? "ring-2 ring-inset ring-sky-900/60" : ""
-      }`}
-    >
-      {hasChildren ? (
-        <button
-          type="button"
-          aria-label={isOpen ? "Collapse" : "Expand"}
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggle(node.pathKey);
-          }}
-          className="grid size-4 shrink-0 place-items-center rounded hover:bg-black/10"
-        >
-          <ChevronRight
-            size={13}
-            className={`transition-transform ${isOpen ? "rotate-90" : ""}`}
-          />
-        </button>
-      ) : (
-        <span className="size-4 shrink-0 text-center opacity-40">·</span>
-      )}
-      <span className="shrink-0 font-mono text-xs tabular-nums opacity-80">
-        {item.displayCode}
-      </span>
-      <span className="truncate font-medium">{item.name}</span>
-      {badge && (
-        <span
-          title={badge.title}
-          className="shrink-0 rounded border border-current/30 px-1 text-[10px] leading-4 font-semibold opacity-70"
-        >
-          {badge.label}
-        </span>
-      )}
-      {item.uom && (
-        <span className="ml-auto shrink-0 font-mono text-[11px] opacity-70">
-          {item.uom}
-        </span>
-      )}
-    </div>
-  );
-});
-
-/** Depth-first flatten of the nodes that are currently visible: a node's
- *  children are included only when it's expanded (or a search forces it open). */
-function flattenVisible(
-  nodes: Node[],
-  expanded: Set<string>,
-  forceExpand: boolean,
-): Node[] {
-  const out: Node[] = [];
-  const walk = (list: Node[]) => {
-    for (const n of list) {
-      out.push(n);
-      if (n.children.length > 0 && (forceExpand || expanded.has(n.pathKey))) {
-        walk(n.children);
-      }
-    }
-  };
-  walk(nodes);
-  return out;
-}
-
 function DetailPanel({
   node,
   color,
@@ -199,8 +102,13 @@ function DetailPanel({
   onClose: () => void;
 }) {
   const { item } = node;
-  const rows = DETAIL_FIELDS.map((f) => ({ label: f.label, value: f.get(item) }))
-    .filter((r): r is { label: string; value: string } => !!r.value);
+  // The tree only carries the slim row; the full column set is fetched when a
+  // row is selected (and cached for the session).
+  const detail = useQuery(cbsItemDetailQueryOptions(item.id));
+  const rows = detail.data
+    ? DETAIL_FIELDS.map((f) => ({ label: f.label, value: f.get(detail.data) }))
+        .filter((r): r is { label: string; value: string } => !!r.value)
+    : [];
   return (
     <div className="flex h-full flex-col">
       <div
@@ -225,14 +133,24 @@ function DetailPanel({
           <X size={15} />
         </button>
       </div>
-      <dl className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto px-4 py-2 text-sm">
-        {rows.map((r) => (
-          <div key={r.label} className="grid grid-cols-[9rem_1fr] gap-2 py-1.5">
-            <dt className="text-xs font-medium text-slate-500">{r.label}</dt>
-            <dd className="break-words text-slate-800">{r.value}</dd>
-          </div>
-        ))}
-      </dl>
+      {detail.isPending ? (
+        <div className="flex items-center gap-2 px-4 py-6 text-sm text-slate-500">
+          <Loader2 size={14} className="animate-spin" /> Loading detail…
+        </div>
+      ) : detail.isError ? (
+        <p className="px-4 py-6 text-sm text-red-600">
+          Failed to load this row's detail.
+        </p>
+      ) : (
+        <dl className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto px-4 py-2 text-sm">
+          {rows.map((r) => (
+            <div key={r.label} className="grid grid-cols-[9rem_1fr] gap-2 py-1.5">
+              <dt className="text-xs font-medium text-slate-500">{r.label}</dt>
+              <dd className="break-words text-slate-800">{r.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
     </div>
   );
 }
@@ -248,25 +166,7 @@ function CountsLegend({ counts }: { counts: Counts }) {
         {counts.original.toLocaleString()} original · {counts.subRows} sub ·{" "}
         {counts.materialRows} material
       </span>
-      <span className="ml-1 flex flex-wrap items-center gap-1">
-        {CBS_LEGEND_LEVELS.map((lvl) => {
-          const c = cbsColorForLevel(lvl);
-          return (
-            <span
-              key={lvl}
-              title={`Level ${lvl}`}
-              className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
-              style={{
-                backgroundColor: c.fill,
-                color: c.text,
-                outline: "1px solid rgba(0,0,0,0.1)",
-              }}
-            >
-              L{lvl}
-            </span>
-          );
-        })}
-      </span>
+      <CbsLevelLegend className="ml-1" />
     </div>
   );
 }
@@ -317,95 +217,6 @@ function HierarchyToolbar({
   );
 }
 
-/** The virtualized, scrollable tree panel (header bar + windowed rows). */
-function TreePanel({
-  flat,
-  expanded,
-  needle,
-  selectedKey,
-  onToggle,
-  onSelect,
-  query,
-}: {
-  flat: Node[];
-  expanded: Set<string>;
-  needle: string;
-  selectedKey: string | null;
-  onToggle: (key: string) => void;
-  onSelect: (node: Node) => void;
-  query: string;
-}) {
-  // Virtualize so only the rows in view are in the DOM — "Expand all" over
-  // thousands of nodes stays cheap, and scroll/select/toggle never re-render
-  // the whole tree.
-  const scrollRef = React.useRef<HTMLDivElement | null>(null);
-  const rowVirtualizer = useVirtualizer({
-    count: flat.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => 29,
-    overscan: 12,
-  });
-
-  return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-      <div
-        className="flex items-center gap-2 px-3 py-2 text-xs font-semibold"
-        style={{
-          backgroundColor: CBS_HEADER_COLOR.fill,
-          color: CBS_HEADER_COLOR.text,
-        }}
-      >
-        CBS code &amp; name
-        <span className="ml-auto opacity-80">UOM</span>
-      </div>
-      {flat.length === 0 ? (
-        <p className="p-6 text-center text-sm text-slate-500">
-          {query ? `No rows match “${query}”.` : "No CBS items selected."}
-        </p>
-      ) : (
-        <div
-          ref={scrollRef}
-          role="tree"
-          aria-label="CBS hierarchy"
-          className="max-h-[70vh] overflow-auto"
-        >
-          <div
-            style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}
-          >
-            {rowVirtualizer.getVirtualItems().map((vi) => {
-              const node = flat[vi.index];
-              return (
-                <div
-                  key={node.pathKey}
-                  data-index={vi.index}
-                  ref={rowVirtualizer.measureElement}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    transform: `translateY(${vi.start}px)`,
-                  }}
-                >
-                  <CbsRow
-                    node={node}
-                    hasChildren={node.children.length > 0}
-                    isOpen={needle.length > 0 || expanded.has(node.pathKey)}
-                    isSelected={selectedKey === node.pathKey}
-                    onToggle={onToggle}
-                    onSelect={onSelect}
-                    color={cbsColorForLevel(node.level)}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 /** The collapsible tree + toolbar + detail for one CBS dataset. Owns the state
  *  and derivation; the presentational pieces above take plain props. */
 function CbsHierarchy({
@@ -438,7 +249,7 @@ function CbsHierarchy({
   const counts = React.useMemo(() => countRows(items), [items]);
 
   const flat = React.useMemo(
-    () => flattenVisible(visibleNodes, expanded, needle.length > 0),
+    () => flattenVisibleCbsNodes(visibleNodes, expanded, needle.length > 0),
     [visibleNodes, expanded, needle],
   );
 
@@ -454,14 +265,16 @@ function CbsHierarchy({
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_22rem]">
-        <TreePanel
+        <CbsTreePanel
           flat={flat}
           expanded={expanded}
-          needle={needle}
+          forceOpen={needle.length > 0}
           selectedKey={selected?.pathKey ?? null}
           onToggle={toggle}
           onSelect={setSelected}
-          query={query}
+          emptyMessage={
+            query ? `No rows match “${query}”.` : "No CBS items selected."
+          }
         />
 
         <aside className="hidden rounded-lg border border-slate-200 bg-white shadow-sm lg:block lg:self-start">

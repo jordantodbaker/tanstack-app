@@ -193,9 +193,11 @@ export const fetchCbsItemsByL1EndsWith = createServerFn({ method: "GET" })
 
 /**
  * The expanded CBS Dictionary rows (originals + generated S/M twins) that a
- * project has selected on the Setup page, with every workbook column — feeds
- * the Project CBS page's Code Book (originals only) and Master CBS Dictionary
- * sections. Project-scoped so any member of the project can view it.
+ * project has selected on the Setup page — feeds the Project CBS page's Code
+ * Book (originals only) and Master CBS Dictionary sections. Only the fields
+ * the tree needs are shipped (a project can allow the whole ~7k-row catalog);
+ * the full column set for one row comes from `fetchCbsItemDetail` on demand.
+ * Project-scoped so any member of the project can view it.
  */
 export const fetchProjectCbsDictionary = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
@@ -213,27 +215,11 @@ export const fetchProjectCbsDictionary = createServerFn({ method: "GET" })
           l5: true,
           l6: true,
           displayCode: true,
-          costCode: true,
           name: true,
           uom: true,
-          rowType: true,
-          generatedFrom: true,
-          subReporting: true,
-          materialCode: true,
-          materialType: true,
-          costCenter: true,
-          costClassification: true,
-          status: true,
           accountDescription: true,
           l2Description: true,
-          core: true,
-          coreExtension: true,
-          wbs: true,
-          p6CostAccount: true,
-          gl: true,
-          discipline: true,
-          description: true,
-          notes: true,
+          rowType: true,
         },
       }),
     ),
@@ -249,6 +235,50 @@ export const projectCbsDictionaryQueryOptions = (projectId: number) =>
     queryFn: () => fetchProjectCbsDictionary({ data: projectId }),
     // Changes only when Setup saves (which invalidates this key) or the CBS
     // is re-imported; don't re-ship ~thousands of rows on every page mount.
+    staleTime: Infinity,
+  });
+
+/** Every workbook column for one dictionary row — the Project CBS detail panel. */
+export const fetchCbsItemDetail = createServerFn({ method: "GET" })
+  .inputValidator((input: unknown) => Id.parse(input))
+  .handler(({ data: id }) =>
+    prisma.cbsItem.findUniqueOrThrow({
+      where: { id },
+      select: {
+        id: true,
+        displayCode: true,
+        costCode: true,
+        name: true,
+        uom: true,
+        rowType: true,
+        generatedFrom: true,
+        subReporting: true,
+        materialCode: true,
+        materialType: true,
+        costCenter: true,
+        costClassification: true,
+        status: true,
+        accountDescription: true,
+        l2Description: true,
+        core: true,
+        coreExtension: true,
+        wbs: true,
+        p6CostAccount: true,
+        gl: true,
+        discipline: true,
+        description: true,
+        notes: true,
+      },
+    }),
+  );
+
+export type CbsItemDetail = Awaited<ReturnType<typeof fetchCbsItemDetail>>;
+
+export const cbsItemDetailQueryOptions = (id: number) =>
+  queryOptions({
+    queryKey: qk.cbs.itemDetail(id),
+    queryFn: () => fetchCbsItemDetail({ data: id }),
+    // Catalog data; changes only on a CBS re-import.
     staleTime: Infinity,
   });
 

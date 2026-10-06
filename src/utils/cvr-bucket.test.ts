@@ -19,7 +19,7 @@ describe("resolveCvrBucket", () => {
         resolveCvrBucket({ cbsCodes: ["293-10-2000-00-L"], discipline: "" }),
       ).toBe("grout");
       expect(
-        resolveCvrBucket({ cbsCodes: ["201-05-0000-00-M"], discipline: "" }),
+        resolveCvrBucket({ cbsCodes: ["240-05-0000-00-L"], discipline: "" }),
       ).toBe("concrete");
     });
 

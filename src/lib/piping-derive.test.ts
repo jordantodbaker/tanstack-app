@@ -8,53 +8,56 @@ import {
 } from "./piping-derive";
 
 /**
- * Modelled on the real catalog, which keys the three metallurgy families
+ * Modelled on the real Master CBS, which keys the metallurgy families
  * differently in the same two segments:
- *   603 (shop)      → "…ST00-00-C"   the Standard bore rollup
- *   633 (install)   → "…0000-MB-C"   bore repeated in the last segment
- *   638 (install)   → "…0000-00-C"   plain bore rollup
+ *   610 (shop fab)  → "…0000-LB-L"  bore repeated in the last segment
+ *   640 (install)   → "…0000-00-L"  plain bore rollup
+ *   645 (copper)    → only schedule-qualified rows below the bore
  *
- * 634 stands for a metallurgy the *project* has only enabled at the rollup
- * level — the catalog has bore-level codes for it, but this project's CBS
- * scope doesn't include them, so only the parent is reachable.
+ * 641 stands for a metallurgy whose bore-level codes this project has not
+ * enabled: only its summary row is in reach, and the ladder must NOT settle
+ * for that.
+ *
+ * Every row below the metallurgy summary is cost type `L`; the summary itself
+ * is `0`, which is why the ladder stops at the bore.
  */
 const CATALOG = new Map([
   [
-    "603MBST0000C",
+    "610MB0000MBL",
     {
-      displayCode: "603-MB-ST00-00-C",
-      name: "Shop Fab Carbon Steel Medium Bore Standard",
+      displayCode: "610-MB-0000-MB-L",
+      name: "Shop Fab Carbon Steel Medium Bore",
       uom: "LF",
     },
   ],
   [
-    "633MB0000MBC",
+    "640MB000000L",
     {
-      displayCode: "633-MB-0000-MB-C",
+      displayCode: "640-MB-0000-00-L",
       name: "Install Carbon Steel Medium Bore",
       uom: "LF",
     },
   ],
   [
-    "638MB000000C",
+    "645MB000000L",
     {
-      displayCode: "638-MB-0000-00-C",
+      displayCode: "645-MB-0000-00-L",
       name: "Install Copper Medium Bore",
       uom: "LF",
     },
   ],
   [
-    "63400000000C",
+    "641000000000",
     {
-      displayCode: "634-00-0000-00-C",
+      displayCode: "641-00-0000-00-0",
       name: "Install Stainless Steel",
       uom: "LF",
     },
   ],
   [
-    "60300000000C",
+    "610000000000",
     {
-      displayCode: "603-00-0000-00-C",
+      displayCode: "610-00-0000-00-0",
       name: "Shop Fab Carbon Steel",
       uom: "LF",
     },
@@ -63,44 +66,50 @@ const CATALOG = new Map([
 const find = (code: string) => CATALOG.get(code);
 
 describe("pipingCostCodes", () => {
-  it("offers the bore-level shapes first, then the metallurgy parent", () => {
-    expect(pipingCostCodes("603", "MB")).toEqual([
-      "603MBST0000C",
-      "603MB0000MBC",
-      "603MB000000C",
-      "60300000000C",
+  it("offers the two bore-level shapes and stops there", () => {
+    expect(pipingCostCodes("610", "MB")).toEqual([
+      "610MB0000MBL",
+      "610MB000000L",
     ]);
   });
 
   it("returns nothing when either half is missing", () => {
     expect(pipingCostCodes("", "MB")).toEqual([]);
-    expect(pipingCostCodes("603", "")).toEqual([]);
+    expect(pipingCostCodes("610", "")).toEqual([]);
+  });
+
+  it("composes codes of the catalog's own 12-character width", () => {
+    for (const code of pipingCostCodes("640", "LB", {
+      sizeCode: "12",
+      feCode: "ER",
+    })) {
+      expect(code).toHaveLength(12);
+    }
   });
 });
 
 describe("resolveCbsStamp", () => {
-  it("resolves a Shop row to the Standard bore rollup, as it always did", () => {
-    expect(resolveCbsStamp("603", "MB", find)).toEqual({
-      id: "603-MB-ST00-00-C",
-      name: "Shop Fab Carbon Steel Medium Bore Standard",
+  it("resolves a Shop row to the bore rollup that repeats the bore", () => {
+    expect(resolveCbsStamp("610", "MB", find)).toEqual({
+      id: "610-MB-0000-MB-L",
+      name: "Shop Fab Carbon Steel Medium Bore",
       unit: "LF",
     });
   });
 
-  it("resolves a Field row to the 633-series install rollup", () => {
-    // The shape this series uses repeats the bore in the last segment. It has
-    // no "ST00" code at all, which is why Field rows resolved to nothing until
-    // the lookup tried more than one shape.
-    expect(resolveCbsStamp("633", "MB", find)).toEqual({
-      id: "633-MB-0000-MB-C",
+  it("resolves a Field row to the plain install bore rollup", () => {
+    // The install series leaves the last segment blank where shop repeats the
+    // bore. Trying only one shape is why Field rows resolved to nothing.
+    expect(resolveCbsStamp("640", "MB", find)).toEqual({
+      id: "640-MB-0000-00-L",
       name: "Install Carbon Steel Medium Bore",
       unit: "LF",
     });
   });
 
-  it("resolves a Field row to the plain bore rollup for 638–643", () => {
-    expect(resolveCbsStamp("638", "MB", find)).toEqual({
-      id: "638-MB-0000-00-C",
+  it("resolves the copper/brass/aluminium series to its plain bore rollup", () => {
+    expect(resolveCbsStamp("645", "MB", find)).toEqual({
+      id: "645-MB-0000-00-L",
       name: "Install Copper Medium Bore",
       unit: "LF",
     });
@@ -110,27 +119,37 @@ describe("resolveCbsStamp", () => {
     // Nothing was looked up, so nothing is known — and the row's current item
     // may be a Name the estimator picked by hand.
     expect(resolveCbsStamp("", "MB", find)).toBeUndefined();
-    expect(resolveCbsStamp("603", "", find)).toBeUndefined();
+    expect(resolveCbsStamp("610", "", find)).toBeUndefined();
   });
 
-  it("falls back to the metallurgy parent when no bore-level code is reachable", () => {
-    // The row still selected a real thing — Stainless, Field, medium bore — so
-    // a broader-but-correct item beats leaving the row blank.
-    expect(resolveCbsStamp("634", "MB", find)).toEqual({
-      id: "634-00-0000-00-C",
-      name: "Install Stainless Steel",
-      unit: "LF",
+  it("clears rather than settling for the metallurgy summary row", () => {
+    // 641's summary (641-00-0000-00-0) is in the catalog, but it is a cost type
+    // "0" rollup, not a cost account. Stamping it would put hours against a
+    // summary — and because every L1 has one, a stale metallurgy code would
+    // resolve to an unrelated account instead of failing visibly.
+    expect(resolveCbsStamp("641", "MB", find)).toEqual({
+      id: "",
+      name: "",
+      unit: "",
     });
   });
 
-  it("prefers the bore-level code over the parent when both are reachable", () => {
-    // 603 has both "603-MB-ST00-00-C" and its parent "603-00-0000-00-C" in
-    // reach; the more specific one has to win, or every row would collapse to
-    // the metallurgy rollup.
-    expect(resolveCbsStamp("603", "MB", find)).toEqual({
-      id: "603-MB-ST00-00-C",
-      name: "Shop Fab Carbon Steel Medium Bore Standard",
-      unit: "LF",
+  it("never resolves a non-piping account that shares a stale code", () => {
+    // 603 is "Pipe Shop Support Services & Supplies" in the Master CBS, and
+    // was Carbon Steel's shop code in the previous one. A row still carrying
+    // the old code must resolve to nothing, not to the support account.
+    const withSupport = (code: string) =>
+      code === "603000000000"
+        ? {
+            displayCode: "603-00-0000-00-0",
+            name: "Pipe Shop Support Services & Supplies",
+            uom: "LS",
+          }
+        : undefined;
+    expect(resolveCbsStamp("603", "MB", withSupport)).toEqual({
+      id: "",
+      name: "",
+      unit: "",
     });
   });
 
@@ -149,7 +168,7 @@ describe("resolveCbsStamp", () => {
  * Fabricate / Erect narrowing.
  *
  * The catalog fuses the choice onto a nominal size inside segment 3 —
- * `633-LB-12ER-00-C`, `633-LB-12FB-00-C`. There is deliberately NO bore-level
+ * `640-LB-12ER-00-L`, `640-LB-12FB-00-L`. There is deliberately NO bore-level
  * "…-00ER-…" rollup, so the narrowing only applies to a row that has resolved
  * a size code; otherwise the row falls back to the ladder it always used.
  *
@@ -175,7 +194,7 @@ describe("pipingSizeCode", () => {
   });
 
   it("gives the same digits different meanings per bore class", () => {
-    // 633-SB-1000-ST-C is 1"; 633-MB-1000-ST-C is 10". Only the bore segment
+    // 640-SB-1000-…-L is 1"; 640-MB-1000-…-L is 10". Only the bore segment
     // beside the code tells them apart.
     expect(pipingSizeCode("1", "SB")).toBe("10");
     expect(pipingSizeCode("10", "MB")).toBe("10");
@@ -228,8 +247,13 @@ describe("fabricationHint", () => {
     expect(fabricationHint(row)).toEqual({ sizeCode: "12", feCode: "ER" });
   });
 
-  it("is undefined without a work type", () => {
-    expect(fabricationHint({ ...row, fabricateErect: "" })).toBeUndefined();
+  it("keeps the size code when the row has no work type yet", () => {
+    // The size alone narrows to the nominal-size rollup, which is a real
+    // catalog row ("Shop Fab Carbon Steel Large Bore 12\"").
+    expect(fabricationHint({ ...row, fabricateErect: "" })).toEqual({
+      sizeCode: "12",
+      feCode: undefined,
+    });
   });
 
   it("is undefined without a usable size", () => {
@@ -240,43 +264,45 @@ describe("fabricationHint", () => {
   });
 });
 
-describe("pipingCostCodes with Fabricate / Erect", () => {
-  it("puts the fabrication code ahead of every rollup", () => {
-    const codes = pipingCostCodes("633", "LB", { sizeCode: "12", feCode: "ER" });
-    expect(codes[0]).toBe("633LB12ER00C");
-    // 633-LB-12ER-00-C, normalized.
-    expect(codes).toHaveLength(5);
+describe("pipingCostCodes with size and Fabricate / Erect", () => {
+  const ROLLUPS = ["640LB0000LBL", "640LB000000L"];
+
+  it("puts the work-type codes ahead of every rollup", () => {
+    const codes = pipingCostCodes("640", "LB", { sizeCode: "12", feCode: "ER" });
+    expect(codes.slice(0, 2)).toEqual(["640LB12ER00L", "640LB12ERSTL"]);
   });
 
   it("builds the Fabricate variant from the same inputs", () => {
     expect(
-      pipingCostCodes("633", "LB", { sizeCode: "12", feCode: "FB" })[0],
-    ).toBe("633LB12FB00C");
+      pipingCostCodes("640", "LB", { sizeCode: "12", feCode: "FB" })[0],
+    ).toBe("640LB12FB00L");
   });
 
-  it("leaves the ladder untouched when there is no fabrication hint", () => {
-    expect(pipingCostCodes("633", "LB")).toEqual([
-      "633LBST0000C",
-      "633LB0000LBC",
-      "633LB000000C",
-      "63300000000C",
+  it("narrows to the nominal-size rollups with a size but no work type", () => {
+    expect(pipingCostCodes("640", "LB", { sizeCode: "12" })).toEqual([
+      "640LB1200STL",
+      "640LB120000L",
+      ...ROLLUPS,
     ]);
   });
 
-  it("keeps the rollups below the fabrication code as a fallback", () => {
+  it("leaves the ladder at the bore level with no hint at all", () => {
+    expect(pipingCostCodes("640", "LB")).toEqual(ROLLUPS);
+  });
+
+  it("keeps the rollups below the narrower codes as a fallback", () => {
     // A project whose enabled scope stops at the bore level still resolves,
     // just less specifically.
-    const codes = pipingCostCodes("633", "LB", { sizeCode: "12", feCode: "ER" });
-    expect(codes.slice(1)).toEqual([
-      "633LBST0000C",
-      "633LB0000LBC",
-      "633LB000000C",
-      "63300000000C",
+    const codes = pipingCostCodes("640", "LB", { sizeCode: "12", feCode: "ER" });
+    expect(codes.slice(2)).toEqual([
+      "640LB1200STL",
+      "640LB120000L",
+      ...ROLLUPS,
     ]);
   });
 });
 
-describe("resolveCbsStamp with Fabricate / Erect", () => {
+describe("resolveCbsStamp with size and Fabricate / Erect", () => {
   /** Stands in for a project's enabled catalog. */
   const catalog = (codes: Record<string, string>) => (code: string) =>
     codes[code]
@@ -284,42 +310,60 @@ describe("resolveCbsStamp with Fabricate / Erect", () => {
       : undefined;
 
   const CATALOG = catalog({
-    "633LB12ER00C": "Install Carbon Steel Large Bore - Erect",
-    "633LB12FB00C": "Install Carbon Steel Large Bore - Field Fabricate",
-    "633LB0000LBC": "Install Carbon Steel Large Bore",
-    "63300000000C": "Install Carbon Steel",
+    "640LB12ER00L": "Install Carbon Steel Large Bore 12\" - Erect",
+    "640LB12FB00L": "Install Carbon Steel Large Bore 12\" - Field Fabricate",
+    "640LB1200STL": "Install Carbon Steel Large Bore 12\"",
+    "640LB000000L": "Install Carbon Steel Large Bore",
   });
 
   it("selects the Erect item when the row says Erect", () => {
     expect(
-      resolveCbsStamp("633", "LB", CATALOG, { sizeCode: "12", feCode: "ER" }),
-    ).toMatchObject({ name: "Install Carbon Steel Large Bore - Erect" });
+      resolveCbsStamp("640", "LB", CATALOG, { sizeCode: "12", feCode: "ER" }),
+    ).toMatchObject({ name: 'Install Carbon Steel Large Bore 12" - Erect' });
   });
 
   it("selects the Fabricate item when the row says Fabricate", () => {
     expect(
-      resolveCbsStamp("633", "LB", CATALOG, { sizeCode: "12", feCode: "FB" }),
+      resolveCbsStamp("640", "LB", CATALOG, { sizeCode: "12", feCode: "FB" }),
     ).toMatchObject({
-      name: "Install Carbon Steel Large Bore - Field Fabricate",
+      name: 'Install Carbon Steel Large Bore 12" - Field Fabricate',
     });
   });
 
-  it("falls back to the bore rollup when the row has no work type", () => {
-    expect(resolveCbsStamp("633", "LB", CATALOG)).toMatchObject({
+  it("selects the nominal-size item when the row has a size but no work type", () => {
+    expect(
+      resolveCbsStamp("640", "LB", CATALOG, { sizeCode: "12" }),
+    ).toMatchObject({ name: 'Install Carbon Steel Large Bore 12"' });
+  });
+
+  it("falls back to the bore rollup when the row has no size", () => {
+    expect(resolveCbsStamp("640", "LB", CATALOG)).toMatchObject({
       name: "Install Carbon Steel Large Bore",
     });
   });
 
   it("falls back when the project hasn't enabled the fabrication code", () => {
-    const narrow = catalog({ "633LB0000LBC": "Install Carbon Steel Large Bore" });
+    const narrow = catalog({ "640LB000000L": "Install Carbon Steel Large Bore" });
     expect(
-      resolveCbsStamp("633", "LB", narrow, { sizeCode: "12", feCode: "ER" }),
+      resolveCbsStamp("640", "LB", narrow, { sizeCode: "12", feCode: "ER" }),
     ).toMatchObject({ name: "Install Carbon Steel Large Bore" });
+  });
+
+  it("uses the schedule-qualified row for a series that has no plain work-type code", () => {
+    // Copper, brass, aluminium and the high alloys only carry "…{FE}{ST|XH|XX}".
+    const copper = catalog({
+      "645LB12FBSTL": 'Field Fab Copper LB: 12" Sch Standard or less',
+    });
+    expect(
+      resolveCbsStamp("645", "LB", copper, { sizeCode: "12", feCode: "FB" }),
+    ).toMatchObject({
+      name: 'Field Fab Copper LB: 12" Sch Standard or less',
+    });
   });
 
   it("still clears the item when nothing in the ladder matches", () => {
     expect(
-      resolveCbsStamp("633", "LB", catalog({}), { sizeCode: "12", feCode: "ER" }),
+      resolveCbsStamp("640", "LB", catalog({}), { sizeCode: "12", feCode: "ER" }),
     ).toEqual({ id: "", name: "", unit: "" });
   });
 });

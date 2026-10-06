@@ -385,22 +385,22 @@ describe("fill-down over the non-derived take-off columns", () => {
 describe("piping-sheet range writes", () => {
   const pipingCtx: WriteCtx = {
     ...ctx,
-    // Mirrors the real catalog's shapes: the shop code carries a "…ST0000C"
-    // item, the install code carries a bore rollup instead and no "ST0000C" at
-    // all. "NOCODE" stands for a metallurgy code the catalog doesn't cover.
+    // Mirrors the real catalog's shapes: the shop series repeats the bore in
+    // the last segment, the install series leaves it blank. "NOCODE" stands for
+    // a metallurgy code the catalog doesn't cover.
     cbsOptions: [
       ...ctx.cbsOptions,
       {
-        displayCode: "SHOPCS-MB-ST00-00-C",
-        costCode: "SHOPCSMBST0000C",
-        name: "Shop Fab CS Medium Bore Standard",
+        displayCode: "SHOPCS-MB-0000-MB-L",
+        costCode: "SHOPCSMB0000MBL",
+        name: "Shop Fab CS Medium Bore",
         uom: "LF",
         displayDescription: null,
         subReporting: null,
       },
       {
-        displayCode: "FLDCS-MB-0000-MB-C",
-        costCode: "FLDCSMB0000MBC",
+        displayCode: "FLDCS-MB-0000-00-L",
+        costCode: "FLDCSMB000000L",
         name: "Install CS Medium Bore",
         uom: "LF",
         displayDescription: null,
@@ -480,8 +480,8 @@ describe("piping-sheet range writes", () => {
     expect(resolveCellWrite("shopField", "Shop", row, pipingCtx)).toEqual({
       shopField: "Shop",
       metallurgyCode: "SHOPCS",
-      id: "SHOPCS-MB-ST00-00-C",
-      name: "Shop Fab CS Medium Bore Standard",
+      id: "SHOPCS-MB-0000-MB-L",
+      name: "Shop Fab CS Medium Bore",
       unit: "LF",
     });
   });
@@ -492,14 +492,14 @@ describe("piping-sheet range writes", () => {
     const row = makeFefRow({
       weldGroupDescription: "CS 150#",
       boreSize: "MB",
-      id: "SHOPCS-MB-ST00-00-C",
-      name: "Shop Fab CS Medium Bore Standard",
+      id: "SHOPCS-MB-0000-MB-L",
+      name: "Shop Fab CS Medium Bore",
       unit: "LF",
     });
     expect(resolveCellWrite("shopField", "Field", row, pipingCtx)).toEqual({
       shopField: "Field",
       metallurgyCode: "FLDCS",
-      id: "FLDCS-MB-0000-MB-C",
+      id: "FLDCS-MB-0000-00-L",
       name: "Install CS Medium Bore",
       unit: "LF",
     });
@@ -511,8 +511,8 @@ describe("piping-sheet range writes", () => {
     const row = makeFefRow({
       weldGroupDescription: "XS 150#",
       boreSize: "MB",
-      id: "SHOPCS-MB-ST00-00-C",
-      name: "Shop Fab CS Medium Bore Standard",
+      id: "SHOPCS-MB-0000-MB-L",
+      name: "Shop Fab CS Medium Bore",
       unit: "LF",
     });
     expect(resolveCellWrite("shopField", "Field", row, pipingCtx)).toEqual({

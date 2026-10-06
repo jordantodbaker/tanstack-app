@@ -22,6 +22,16 @@ export type DisciplineData = {
   items?: NavItem[];
 };
 
+/**
+ * Master CBS L1 convention (prisma/data/MasterCBS.xlsx): each discipline owns
+ * a block XY0–XY9 of overhead accounts — XY0 summary, XY1 materials, XY2 field
+ * staff, XY3 support services, XY4 equipment, XY5 facilities, XY6 mob/demob,
+ * XY7 training, XY9 testing — followed by its direct-labor accounts (X10 and
+ * up) and a subcontracts account (X90 / 629 / 990). The materials ("01"/"31")
+ * and support-labor ("02"/"32") suffix rules in DisciplineRoute, materials.tsx
+ * and piping.tsx rely on that layout. Re-check these lists when the master
+ * changes: an L1 missing here is invisible to its discipline's take-off page.
+ */
 export const disciplinesData: DisciplineData[] = [
   { id: "setup", label: "Setup", to: "/setup" },
   {
@@ -54,31 +64,31 @@ export const disciplinesData: DisciplineData[] = [
     id: "engineering",
     label: "Engineering",
     to: "/engineering",
-    l1Codes: ["020", "022", "023", "024", "025", "026", "027", "028"],
+    l1Codes: ["020", "022", "024", "025", "026", "027", "028"],
   },
   {
     id: "procurement",
     label: "Procurement",
     to: "/procurement",
-    l1Codes: ["030", "031", "032", "033"],
+    l1Codes: ["030", "032", "033", "034"],
   },
   {
     id: "indirects",
     label: "Indirects",
     to: "/indirects",
-    l1Codes: ["050", "052"],
+    l1Codes: ["050", "052", "053", "054", "055", "056", "057", "058", "059"],
   },
   {
     id: "demolition",
     label: "Demolition",
     to: "/demolition",
-    l1Codes: ["090", "091", "092", "093", "099"],
+    l1Codes: ["090", "091", "092", "093", "094", "096", "097", "098"],
   },
   {
     id: "civil",
     label: "Civil",
     to: "/civil",
-    l1Codes: ["100", "101", "102", "103", "131", "132", "133", "134", "135", "136", "137"],
+    l1Codes: ["100", "101", "102", "104", "105", "109", "110", "111", "112", "113"],
   },
   {
     id: "concrete",
@@ -87,34 +97,39 @@ export const disciplinesData: DisciplineData[] = [
     summaryLabel: "Concrete & Grout",
     to: "/concrete",
     // "290" moved to the new Grout discipline below.
-    l1Codes: ["200", "201", "202", "203", "231", "232", "233"],
+    l1Codes: ["200", "231", "232", "233", "234", "239", "240", "250", "260"],
   },
   {
     id: "grout",
     label: "Grout",
     to: "/grout",
-    l1Codes: ["290", "291", "292", "293"],
+    l1Codes: ["290", "291", "292", "293", "294", "295"],
   },
   {
     id: "steel",
     label: "Structural Steel",
     to: "/steel",
-    l1Codes: ["300", "301", "302", "303", "330", "331", "332", "333", "390", "391"],
+    l1Codes: [
+      "300", "301", "302", "303", "304", "307", "309", "310", "311", "312",
+      "330", "331", "332", "334", "339", "340", "390",
+    ],
   },
   {
     id: "buildings",
     label: "Buildings",
     to: "/buildings",
-    l1Codes: ["400", "401", "402", "403", "407"],
+    l1Codes: ["400", "401", "402", "404", "410"],
   },
   {
     id: "equipment",
     label: "Equipment",
     to: "/equipment",
     l1Codes: [
-      "500", "501", "502", "503",
-      "530", "531", "532", "533", "534", "535", "536", "537", "538", "539", "540",
-      "590",
+      // Equipment shop
+      "500", "501", "502", "503", "504", "507", "509", "510",
+      // Equipment installation
+      "530", "531", "532", "534", "539",
+      "540", "541", "545", "550", "555", "560", "565", "570", "575", "580",
     ],
   },
   {
@@ -122,11 +137,14 @@ export const disciplinesData: DisciplineData[] = [
     label: "Piping",
     to: "/piping",
     l1Codes: [
-      "600", "601", "602", "603", "604", "605", "606", "607", "608", "609",
-      "610", "611", "612", "613",
-      "630", "631", "632", "633", "634", "635", "636", "637", "638", "639",
-      "640", "641", "642", "643",
-      "680", "681", "690", "691",
+      // Pipe shop (fabrication)
+      "600", "601", "602", "603", "604", "607", "609",
+      "610", "611", "612", "613", "614", "615", "616", "617", "618", "619", "620",
+      "625", "629",
+      // Field install
+      "630", "631", "632", "634", "639",
+      "640", "641", "642", "643", "644", "645", "646", "647", "648", "649", "650",
+      "680",
     ],
   },
   {
@@ -134,32 +152,32 @@ export const disciplinesData: DisciplineData[] = [
     label: "Electric",
     summaryLabel: "Electrical",
     to: "/electric",
-    l1Codes: ["700", "701", "702", "703", "790"],
+    l1Codes: ["700", "701", "702", "704", "709", "710", "790"],
   },
   {
     id: "instruments",
     label: "Instruments & Controls",
     summaryLabel: "Instrumentation",
     to: "/instruments",
-    l1Codes: ["800", "801", "802", "803", "890"],
+    l1Codes: ["800", "801", "802", "804", "810"],
   },
   {
     id: "coatings",
     label: "Coatings",
     to: "/coatings",
-    l1Codes: ["900", "901", "902", "903", "904", "905"],
+    l1Codes: ["900", "901", "902", "904", "910", "911", "912", "913", "990"],
   },
   {
     id: "commissioning",
     label: "Commissioning",
     to: "/commissioning",
-    l1Codes: ["950", "951", "952"],
+    l1Codes: ["950", "951", "952", "953", "954", "959"],
   },
   {
     id: "operations",
     label: "Operations",
     to: "/operations",
-    l1Codes: ["960", "961", "962"],
+    l1Codes: ["960", "961", "962", "963", "964", "965", "966", "967"],
   },
   {
     id: "contingency",

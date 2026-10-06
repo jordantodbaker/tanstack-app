@@ -48,42 +48,6 @@ export function deriveLaborHours(
 }
 
 /**
- * The CBS cost codes a piping row could resolve to for its metallurgy code +
- * bore size, most specific first, so a caller taking the first available match
- * lands on the closest parent of what the row actually selected.
- *
- * Bore level — three shapes, because the catalog uses three, and every
- * (metallurgy, bore) pair in it matches exactly one:
- *
- *   {m}{bore}ST0000C      the Standard bore rollup. Every shop code except
- *                         Grooved: `603-MB-ST00-00-C`, "Shop Fab Carbon Steel
- *                         Medium Bore Standard". No install code has this shape.
- *   {m}{bore}0000{bore}C  the install bore rollup for 633–637, which repeats the
- *                         bore in the last segment: `633-MB-0000-MB-C`,
- *                         "Install Carbon Steel Medium Bore".
- *   {m}{bore}000000C      the plain bore rollup. Install codes 638–643 and shop
- *                         Grooved: `638-MB-0000-00-C`, "Install Copper Medium
- *                         Bore".
- *
- * Metallurgy level — the parent of all of those:
- *
- *   {m}00000000C          `633-00-0000-00-C`, "Install Carbon Steel".
- *
- * The parent is not redundant: callers resolve against the *project's* enabled
- * CBS items, not the whole catalog, so a project whose scope stops at the
- * metallurgy level has no bore-level code to hit. Falling back gives the row a
- * correct-but-broader item instead of nothing at all.
- *
- * Ordered rather than branched on Shop/Field. The shapes don't overlap within a
- * metallurgy code, so first-match is unambiguous, and a shop row still resolves
- * to exactly what it resolved to before this list existed — the install shapes
- * simply never matched, which is why Field rows used to resolve to nothing.
- *
- * Both inputs are required even though the last candidate ignores the bore: a
- * row with no size yet hasn't finished selecting anything, and stamping the
- * metallurgy rollup onto it would overwrite a Name the estimator picked by hand.
- */
-/**
  * The two-character size code the CBS catalog uses inside segment 3, or
  * `undefined` when the row's size can't produce one.
  *
@@ -95,8 +59,8 @@ export function deriveLaborHours(
  *
  * So "10" means 1" under SB and 10" under MB; only the bore segment beside it
  * disambiguates. Verified against the catalog's own names
- * ("...Small Bore 1\"" is 633-SB-1000-ST-C, "...Medium Bore 10\"" is
- * 633-MB-1000-ST-C).
+ * ("...Small Bore 1\"" is 640-SB-1000-00-L, "...Medium Bore 10\"" is
+ * 640-MB-1000-00-L).
  *
  * A size that doesn't land on a whole inch (or a whole tenth under SB) has no
  * code — the caller falls back to the bore-level rollup rather than inventing
@@ -111,7 +75,7 @@ export function pipingSizeCode(
 
   if (boreSize === "SB") {
     // Tenths, TRUNCATED. Every small-bore step is a clean tenth except 3/4",
-    // which the catalog writes "07" rather than "08" (633-SB-0700-ST-C is
+    // which the catalog writes "07" rather than "08" (640-SB-0700-00-L is
     // named '...Small Bore .75"'). Rounding to the nearest tenth first keeps
     // binary float noise out of it — 0.3 * 10 is 2.9999999999999996.
     const tenths = Math.floor(Math.round(n * 10 * 1000) / 1000);
@@ -128,6 +92,13 @@ export function pipingSizeCode(
   return String(inches).padStart(2, "0");
 }
 
+/**
+ * How far below the bore level a row can aim: its nominal size code, and its
+ * Fabricate/Erect choice once it has made one. Either may be absent — a row
+ * fills these in as the estimator works through it.
+ */
+export type CbsNarrowing = { sizeCode?: string; feCode?: "FB" | "ER" };
+
 /** Catalog abbreviation for the Fabricate / Erect picker, or `undefined` when
  *  the row hasn't chosen one. */
 export function fabricateErectCode(
@@ -138,27 +109,68 @@ export function fabricateErectCode(
   return undefined;
 }
 
+/**
+ * The CBS cost codes a piping row could resolve to for its metallurgy code +
+ * bore size, most specific first, so a caller taking the first available match
+ * lands on the closest parent of what the row actually selected.
+ *
+ * Shapes, as the Master CBS writes them (shop fab 610–620, install 640–650;
+ * every row below the metallurgy summary is cost type `L`):
+ *
+ *   {m}{bore}{NN}{FB|ER}00L  size + work type. `640-LB-12ER-00-L`, "Install
+ *                            Carbon Steel Large Bore 12" - Erect".
+ *   {m}{bore}{NN}{FB|ER}STL  the same, where the series only carries the
+ *                            schedule-qualified rows. `645-LB-12FB-ST-L`,
+ *                            "Field Fab Copper LB: 12" Sch Standard or less".
+ *                            Copper, Brass, Aluminium and the high alloys have
+ *                            no "…{FE}00…" rollup at all.
+ *   {m}{bore}{NN}00STL       the nominal-size rollup. `610-LB-1200-ST-L`,
+ *                            "Shop Fab Carbon Steel Large Bore 12"".
+ *   {m}{bore}{NN}0000L       the same for the series that leaves the schedule
+ *                            segment blank. `641-LB-1200-00-L`.
+ *   {m}{bore}0000{bore}L     the bore rollup that repeats the bore — the shop
+ *                            series. `610-LB-0000-LB-L`, "Shop Fab Carbon
+ *                            Steel Large Bore".
+ *   {m}{bore}000000L         the plain bore rollup — the install series and
+ *                            Grooved. `640-LB-0000-00-L`.
+ *
+ * The ladder deliberately stops at the bore. The metallurgy-level row
+ * (`640-00-0000-00-0`) is a cost type `0` SUMMARY, not a cost account — the
+ * master carries no labor row there — so stamping it would put hours against a
+ * rollup. Worse, `{m}000000000` matches the summary of *any* L1, so a stale or
+ * mistyped metallurgy code would resolve confidently to an unrelated account
+ * (603 is "Pipe Shop Support Services & Supplies", not Carbon Steel). Ending
+ * at the bore means a code that isn't a real piping series resolves to
+ * nothing, and the row shows a blank item rather than a plausible wrong one.
+ *
+ * Ordered rather than branched on Shop/Field. The shapes don't overlap within a
+ * metallurgy code, so first-match is unambiguous.
+ *
+ * Both inputs are required even though the last candidate ignores the bore: a
+ * row with no size yet hasn't finished selecting anything, and stamping the
+ * metallurgy rollup onto it would overwrite a Name the estimator picked by hand.
+ */
 export function pipingCostCodes(
   metallurgyCode: string,
   boreSize: string,
-  /** Size + Fabricate/Erect, when the row has both. Adds a more specific
-   *  candidate ahead of the rollups; omit and the ladder is unchanged. */
-  fabrication?: { sizeCode: string; feCode: "FB" | "ER" },
+  /** The row's nominal size code, and its Fabricate/Erect choice when it has
+   *  made one. Each adds more specific candidates ahead of the rollups; omit
+   *  and the ladder starts at the bore level. */
+  fabrication?: CbsNarrowing,
 ): string[] {
   if (!metallurgyCode || !boreSize) return [];
+  const m = metallurgyCode;
+  const b = boreSize;
+  const size = fabrication?.sizeCode;
+  const fe = fabrication?.feCode;
   return [
-    // {m}{bore}{size}{FB|ER}00C — 633-LB-12ER-00-C, "Install Carbon Steel
-    // Large Bore - Erect". The catalog only carries Fabricate/Erect fused to a
-    // NOMINAL SIZE; there is no bore-level "…-00ER-…" rollup, so this
-    // candidate exists only when the row has resolved a size code. It sits
-    // first because it is strictly more specific than everything below.
-    ...(fabrication
-      ? [`${metallurgyCode}${boreSize}${fabrication.sizeCode}${fabrication.feCode}00C`]
-      : []),
-    `${metallurgyCode}${boreSize}ST0000C`,
-    `${metallurgyCode}${boreSize}0000${boreSize}C`,
-    `${metallurgyCode}${boreSize}000000C`,
-    `${metallurgyCode}00000000C`,
+    // Work type is fused to a NOMINAL SIZE in the catalog; there is no
+    // bore-level "…-00ER-…" rollup, so these exist only once the row has
+    // resolved a size code.
+    ...(size && fe ? [`${m}${b}${size}${fe}00L`, `${m}${b}${size}${fe}STL`] : []),
+    ...(size ? [`${m}${b}${size}00STL`, `${m}${b}${size}0000L`] : []),
+    `${m}${b}0000${b}L`,
+    `${m}${b}000000L`,
   ];
 }
 
@@ -191,7 +203,7 @@ export function resolveCbsStamp(
   metallurgyCode: string,
   boreSize: string,
   find: (costCode: string) => CbsStampSource | undefined,
-  fabrication?: { sizeCode: string; feCode: "FB" | "ER" },
+  fabrication?: CbsNarrowing,
 ): CbsStamp | undefined {
   const codes = pipingCostCodes(metallurgyCode, boreSize, fabrication);
   if (codes.length === 0) return undefined;
@@ -205,17 +217,20 @@ export function resolveCbsStamp(
 }
 
 /**
- * The fabrication hint for a row, or `undefined` when it hasn't chosen a
- * Fabricate/Erect value or its size doesn't map to a catalog size code.
+ * How far a row can narrow below the bore level, or `undefined` when its size
+ * doesn't map to a catalog size code — the one input the narrowing can't do
+ * without.
  *
  * Convenience so every caller derives the hint the same way rather than each
  * remembering to pair `pipingSizeCode` with `fabricateErectCode`.
  */
 export function fabricationHint(
   row: Pick<FefRow, "size" | "boreSize" | "fabricateErect">,
-): { sizeCode: string; feCode: "FB" | "ER" } | undefined {
-  const feCode = fabricateErectCode(row.fabricateErect);
-  if (!feCode) return undefined;
+): (CbsNarrowing & { sizeCode: string }) | undefined {
+  // The size alone already narrows the row to its nominal-size rollup, so the
+  // hint survives a row that hasn't chosen Fabricate/Erect yet. Without a
+  // size there is nothing below the bore level to aim at.
   const sizeCode = pipingSizeCode(row.size, row.boreSize);
-  return sizeCode ? { sizeCode, feCode } : undefined;
+  if (!sizeCode) return undefined;
+  return { sizeCode, feCode: fabricateErectCode(row.fabricateErect) };
 }

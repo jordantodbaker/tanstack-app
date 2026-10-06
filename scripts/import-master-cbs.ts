@@ -15,7 +15,7 @@
 // many, so you can grant them in Setup if needed.
 //
 // Existing rows are compared column-by-column against the workbook and only
-// the ones that actually differ are written (in chunked transactions), so a
+// the ones that actually differ are written (in small parallel batches), so a
 // routine re-import after a small workbook edit is a handful of round trips
 // rather than one per row.
 //
@@ -27,60 +27,16 @@ import {
   loadMasterCbs,
   type MasterCbsItem,
 } from "../prisma/master-cbs";
+import {
+  CBS_IMPORT_FIELDS,
+  changedCbsFields,
+  type CbsImportField,
+} from "../src/lib/cbs-import-diff";
 
 const dryRun = process.argv.includes("--dry-run");
-const CHUNK = 200;
-
-const FIELDS = [
-  "l1",
-  "l2",
-  "l3",
-  "l4",
-  "l5",
-  "l6",
-  "name",
-  "displayCode",
-  "uom",
-  "subReporting",
-  "materialCode",
-  "materialType",
-  "costCenter",
-  "costClassification",
-  "status",
-  "accountDescription",
-  "l2Description",
-  "core",
-  "coreExtension",
-  "wbs",
-  "p6CostAccount",
-  "gl",
-  "discipline",
-  "description",
-  "notes",
-  "displayDescription",
-  "rowType",
-  "generatedFrom",
-] as const satisfies readonly (keyof MasterCbsItem)[];
-
-// Stored columns are nullable where the workbook value is not (e.g.
-// displayDescription), so compare against a loosened view of the row.
-type ExistingRow = {
-  [K in (typeof FIELDS)[number]]: MasterCbsItem[K] | null;
-} & { costCode: string };
-
-/** The subset of columns in `next` that differ from the stored row. */
-function changedFields(
-  existing: ExistingRow,
-  next: MasterCbsItem,
-): Partial<MasterCbsItem> | null {
-  let diff: Partial<MasterCbsItem> | null = null;
-  for (const f of FIELDS) {
-    if (existing[f] !== next[f]) {
-      (diff ??= {})[f] = next[f] as never;
-    }
-  }
-  return diff;
-}
+// Parallel updates per batch — kept at the adapter's default pool size so a
+// batch never queues on connections.
+const CHUNK = 10;
 
 async function main() {
   const { items, report } = await loadMasterCbs();
@@ -96,9 +52,9 @@ async function main() {
   }
 
   const existing = await prisma.cbsItem.findMany({
-    select: Object.fromEntries([...FIELDS, "costCode"].map((f) => [f, true])) as {
-      [K in (typeof FIELDS)[number] | "costCode"]: true;
-    },
+    select: Object.fromEntries(
+      [...CBS_IMPORT_FIELDS, "costCode"].map((f) => [f, true]),
+    ) as { [K in CbsImportField | "costCode"]: true },
   });
   const existingByCost = new Map(existing.map((e) => [e.costCode, e]));
 
@@ -111,7 +67,7 @@ async function main() {
   for (const it of items) {
     const prior = existingByCost.get(it.costCode);
     if (!prior) continue;
-    const diff = changedFields(prior, it);
+    const diff = changedCbsFields(prior, it);
     if (diff) toUpdate.push({ costCode: it.costCode, data: diff });
     else unchanged++;
   }
@@ -149,11 +105,15 @@ async function main() {
   }
   if (toCreate.length) console.log(`Created ${toCreate.length} new CbsItems.`);
 
-  // Update in place — keeps the row id, so allow-list join rows survive. Each
-  // chunk is one transaction (one round trip) rather than one per row.
+  // Update in place — keeps the row id, so allow-list join rows survive.
+  // Rows are updated in small parallel batches rather than one transaction
+  // per chunk: a 200-row transaction exceeds Prisma's 5 s transaction limit
+  // against a remote pooler, and atomicity isn't needed — each update is
+  // keyed by costCode and the change detection above makes a re-run after a
+  // partial failure pick up exactly where it left off.
   for (let i = 0; i < toUpdate.length; i += CHUNK) {
     const chunk = toUpdate.slice(i, i + CHUNK);
-    await prisma.$transaction(
+    await Promise.all(
       chunk.map((u) =>
         prisma.cbsItem.update({ where: { costCode: u.costCode }, data: u.data }),
       ),

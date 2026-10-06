@@ -19,6 +19,7 @@
     "seed-test": "tsx prisma/seed-test.ts",
     "backfill-numbers": "tsx prisma/backfill-number-sequences.ts",
     "cbs:import": "tsx scripts/import-master-cbs.ts",
+    "piping:sync-codes": "tsx scripts/sync-piping-group-codes.ts",
     "check:client-leak": "tsx scripts/check-client-leak.ts",
     "postinstall": "prisma generate"
   },

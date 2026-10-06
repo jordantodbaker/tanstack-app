@@ -42,6 +42,7 @@ import {
   deriveLaborHours,
   fabricationHint,
   resolveCbsStamp,
+  type CbsNarrowing,
   type PipingFactorLookup,
 } from "./piping-derive";
 import { computeBoreSize } from "./utils";
@@ -365,7 +366,7 @@ function cbsStamp(
   metallurgyCode: string,
   boreSize: string,
   idx: WriteIndex,
-  fabrication?: { sizeCode: string; feCode: "FB" | "ER" },
+  fabrication?: CbsNarrowing,
 ): Partial<FefRow> {
   const stamp = resolveCbsStamp(
     metallurgyCode,

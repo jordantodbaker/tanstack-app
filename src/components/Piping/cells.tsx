@@ -128,7 +128,7 @@ export function ShopFieldSelectCell({ getValue, row, table }: CellProps) {
 /**
  * Fabricate / Erect — the two work types the piping cost codes separate. The
  * catalog fuses the choice onto a NOMINAL SIZE inside segment 3
- * (633-LB-12ER-00-C, 633-LB-12FB-00-C), so it only sharpens the CBS match on a
+ * (640-LB-12ER-00-L, 640-LB-12FB-00-L), so it only sharpens the CBS match on a
  * row that also has a size; without one the row keeps resolving to its bore
  * rollup.
  *
@@ -191,6 +191,7 @@ export function WeldGroupSelectCell({ getValue, row, table }: CellProps) {
           metallurgyCode,
           rowData.boreSize,
           finder(table.options.meta?.cbsOptions ?? []),
+          fabricationHint(rowData),
         );
         table.options.meta?.updateRow?.(row.index, {
           weldGroupDescription: classification,
@@ -418,6 +419,7 @@ export function TaskCodeSelectCell({ getValue, row, table }: CellProps) {
           rowData.metallurgyCode,
           rowData.boreSize,
           finder(table.options.meta?.cbsOptions ?? []),
+          fabricationHint(rowData),
         );
         table.options.meta?.updateRow?.(row.index, {
           taskCode: newCode,
@@ -444,6 +446,8 @@ export function PipingSizeCell({ getValue, row, table }: CellProps) {
           rowData.metallurgyCode,
           boreSize,
           finder(table.options.meta?.cbsOptions ?? []),
+          // The new size/bore, not the row's stale pair.
+          fabricationHint({ ...rowData, size: value, boreSize }),
         );
         const laborHours = deriveLaborHours(
           { ...rowData, size: value },

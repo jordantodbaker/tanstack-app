@@ -2,7 +2,12 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { qk } from "~/lib/query-keys";
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Settings } from "lucide-react";
+import { ChevronRight, Settings } from "lucide-react";
+import {
+  CBS_HEADER_COLOR,
+  CBS_LEGEND_LEVELS,
+  cbsColorForLevel,
+} from "~/config/cbs-level-colors";
 import { LoadMask } from "~/components/LoadMask";
 import {
   setupCbsItemsQueryOptions,
@@ -14,6 +19,7 @@ import {
   buildCbsTree,
   filterCbsTree,
   getNodeSelectionState,
+  rowTypeBadge,
   type CbsTreeNode,
 } from "~/lib/cbs-tree";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -135,6 +141,9 @@ function CbsTreeEditor({
       queryClient.invalidateQueries({
         queryKey: qk.setup.allowedCbsL1Codes(projectId),
       });
+      queryClient.invalidateQueries({
+        queryKey: qk.cbs.projectDictionary(projectId),
+      });
     },
     onError: (err, vars) => {
       logger.error("setup updateAllowedFefCbsItems failed", { err, vars });
@@ -237,12 +246,43 @@ function CbsTreeEditor({
         </span>
       </div>
 
-      <div className="relative border border-slate-200 rounded-md bg-white">
+      <div className="flex flex-wrap items-center gap-1 text-xs text-slate-500">
+        <span className="mr-1">Level colours:</span>
+        {CBS_LEGEND_LEVELS.map((lvl) => {
+          const c = cbsColorForLevel(lvl);
+          return (
+            <span
+              key={lvl}
+              title={`Level ${lvl}`}
+              className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
+              style={{
+                backgroundColor: c.fill,
+                color: c.text,
+                outline: "1px solid rgba(0,0,0,0.1)",
+              }}
+            >
+              L{lvl}
+            </span>
+          );
+        })}
+      </div>
+
+      <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div
+          className="flex items-center gap-2 px-3 py-2 text-xs font-semibold"
+          style={{
+            backgroundColor: CBS_HEADER_COLOR.fill,
+            color: CBS_HEADER_COLOR.text,
+          }}
+        >
+          CBS code &amp; name
+          <span className="ml-auto opacity-80">UOM</span>
+        </div>
         {isFiltering && <LoadMask label="Filtering…" size="sm" rounded />}
         {filteredTree.length === 0 ? (
           <div className="p-4 text-sm text-slate-500">No matches.</div>
         ) : (
-          <ul role="tree" className="py-1">
+          <ul role="tree">
             {filteredTree.map((node) => (
               <TreeRow
                 key={node.pathKey}
@@ -288,43 +328,62 @@ const TreeRow = React.memo(function TreeRow({
     (isSearching && hasChildren) || expanded.has(node.pathKey);
   const state = getNodeSelectionState(node, selectedIds);
   const item = node.item;
-  const label = item?.name || item?.accountDescription || node.segment;
-  const code = item?.displayCode ?? node.segment;
+  const label = item.name || item.accountDescription || item.displayCode;
+  const code = item.displayCode;
+  const badge = rowTypeBadge(item.rowType);
+
+  // Same colour-by-code-level scheme as the Project CBS page.
+  const color = cbsColorForLevel(node.level);
 
   return (
     <li role="treeitem" aria-expanded={hasChildren ? isOpen : undefined}>
       <div
-        className="flex items-center gap-2 py-1 pr-2 hover:bg-slate-50"
-        style={{ paddingLeft: depth * 18 + 8 }}
+        className="flex items-center gap-2 border-b border-black/5 py-1 pr-3 text-sm transition-[filter] hover:brightness-95"
+        style={{
+          backgroundColor: color.fill,
+          color: color.text,
+          paddingLeft: depth * 18 + 8,
+        }}
       >
-        <button
-          type="button"
-          onClick={() => hasChildren && onToggleExpand(node.pathKey)}
-          className="flex h-5 w-5 items-center justify-center text-slate-400 hover:text-slate-700 disabled:opacity-0"
-          disabled={!hasChildren}
-          aria-label={isOpen ? "Collapse" : "Expand"}
-        >
-          {hasChildren ? (
-            isOpen ? (
-              <ChevronDown size={14} />
-            ) : (
-              <ChevronRight size={14} />
-            )
-          ) : null}
-        </button>
+        {hasChildren ? (
+          <button
+            type="button"
+            onClick={() => onToggleExpand(node.pathKey)}
+            className="grid size-4 shrink-0 place-items-center rounded hover:bg-black/10"
+            aria-label={isOpen ? "Collapse" : "Expand"}
+          >
+            <ChevronRight
+              size={13}
+              className={`transition-transform ${isOpen ? "rotate-90" : ""}`}
+            />
+          </button>
+        ) : (
+          <span className="size-4 shrink-0 text-center opacity-40">·</span>
+        )}
         <Checkbox
           checked={
             state === "indeterminate" ? "indeterminate" : state === "checked"
           }
           onCheckedChange={() => onToggleSelect(node)}
           aria-label={`Toggle ${label}`}
+          className="border-current/50 bg-white/80"
         />
-        <span className="font-mono text-xs text-slate-500 tabular-nums">
+        <span className="shrink-0 font-mono text-xs tabular-nums opacity-80">
           {code}
         </span>
-        <span className="text-sm text-slate-800 truncate">{label}</span>
-        {item?.uom && (
-          <span className="ml-auto text-xs text-slate-400">{item.uom}</span>
+        <span className="truncate font-medium">{label}</span>
+        {badge && (
+          <span
+            title={badge.title}
+            className="shrink-0 rounded border border-current/30 px-1 text-[10px] leading-4 font-semibold opacity-70"
+          >
+            {badge.label}
+          </span>
+        )}
+        {item.uom && (
+          <span className="ml-auto shrink-0 font-mono text-[11px] opacity-70">
+            {item.uom}
+          </span>
         )}
       </div>
       {hasChildren && isOpen && (

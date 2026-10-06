@@ -38,3 +38,6 @@ coverage/
 # littered these into the repo once.
 *.bak
 *.orig
+
+# Excel lock files left behind while a workbook is open
+prisma/data/~$*

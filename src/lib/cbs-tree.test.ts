@@ -1,60 +1,77 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCbsTree,
+  compareCbsDisplayCodes,
   filterCbsTree,
+  getCbsLevel,
   getGroupL1,
   getNodeSelectionState,
   nodeMatchesSearch,
+  pruneCbsTree,
+  rowTypeBadge,
   type CbsTreeItem,
   type CbsTreeNode,
 } from "./cbs-tree";
 
-function item(overrides: Partial<CbsTreeItem> & { id: number }): CbsTreeItem {
+let nextId = 1;
+/** Build an item from its display code; segments are derived from the code. */
+function item(
+  displayCode: string,
+  overrides: Partial<CbsTreeItem> = {},
+): CbsTreeItem {
   return {
-    l1: "000",
-    l2: "00",
-    l3: "00",
-    l4: "00",
-    l5: "00",
-    l6: "00",
-    displayCode: "0",
+    id: nextId++,
+    l1: displayCode.slice(0, 3),
+    l2: displayCode.slice(4, 6),
+    l3: displayCode.slice(7, 9),
+    l4: displayCode.slice(9, 11),
+    l5: displayCode.slice(12, 14),
+    l6: displayCode.slice(15, 16),
+    displayCode,
     name: "",
     accountDescription: "",
     l2Description: null,
     uom: "",
+    rowType: "ORIGINAL",
     ...overrides,
   };
 }
 
-function findByPath(
-  nodes: CbsTreeNode[],
-  pathKey: string,
-): CbsTreeNode | undefined {
+function find(nodes: CbsTreeNode[], code: string): CbsTreeNode | undefined {
   for (const n of nodes) {
-    if (n.pathKey === pathKey) return n;
-    const found = findByPath(n.children, pathKey);
+    if (n.item.displayCode === code) return n;
+    const found = find(n.children, code);
     if (found) return found;
   }
   return undefined;
 }
 
+function parentOf(nodes: CbsTreeNode[], code: string): string | null {
+  const walk = (list: CbsTreeNode[], parent: string | null): string | null | undefined => {
+    for (const n of list) {
+      if (n.item.displayCode === code) return parent;
+      const r = walk(n.children, n.item.displayCode);
+      if (r !== undefined) return r;
+    }
+    return undefined;
+  };
+  return walk(nodes, null) ?? null;
+}
+
 describe("getGroupL1", () => {
-  it("returns the L1 code unchanged when it is shorter than 3 chars", () => {
+  it("returns the input unchanged when it is too short or non-numeric", () => {
     expect(getGroupL1("")).toBe("");
     expect(getGroupL1("12")).toBe("12");
-  });
-
-  it("returns the L1 code unchanged when the first two chars are not numeric", () => {
     expect(getGroupL1("ABC")).toBe("ABC");
   });
 
-  it("buckets L1 codes under 100 by their second digit (0X0)", () => {
+  it("buckets 0xx codes to 0x0", () => {
     expect(getGroupL1("010")).toBe("010");
     expect(getGroupL1("051")).toBe("050");
     expect(getGroupL1("099")).toBe("090");
   });
 
-  it("buckets L1 codes 100 and over by their leading digit (X00)", () => {
+  it("buckets x.. codes to x00", () => {
     expect(getGroupL1("101")).toBe("100");
     expect(getGroupL1("250")).toBe("200");
     expect(getGroupL1("601")).toBe("600");
@@ -62,128 +79,220 @@ describe("getGroupL1", () => {
   });
 });
 
+describe("getCbsLevel", () => {
+  it("counts the group root as 0, the L1 account as 1, then one per segment", () => {
+    expect(getCbsLevel(item("600-00-0000-00-0"))).toBe(0);
+    expect(getCbsLevel(item("601-00-0000-00-0"))).toBe(1);
+    expect(getCbsLevel(item("601-05-0000-00-0"))).toBe(2);
+    expect(getCbsLevel(item("601-05-1000-00-L"))).toBe(3);
+    expect(getCbsLevel(item("601-05-1050-00-L"))).toBe(4);
+    expect(getCbsLevel(item("601-05-1050-10-L"))).toBe(5);
+  });
+
+  it("stops at the first '00' segment so trailing markers don't count", () => {
+    // Pipe Shop convention: "-ST" in the last slot is a schedule marker.
+    expect(getCbsLevel(item("610-LB-1200-ST-L"))).toBe(3);
+    expect(getCbsLevel(item("610-LB-0000-LB-L"))).toBe(2);
+  });
+
+  it("treats a group root's S/M twin as level 1 (one below the root)", () => {
+    expect(getCbsLevel(item("100-00-0000-00-M"))).toBe(1);
+    expect(getCbsLevel(item("010-00-0000-00-S"))).toBe(1);
+  });
+});
+
+describe("compareCbsDisplayCodes", () => {
+  it("orders parents before children and twins 0 → S → M → others", () => {
+    const codes = [
+      "601-05-0000-00-M",
+      "601-05-1000-00-L",
+      "601-05-0000-00-S",
+      "601-00-0000-00-0",
+      "601-05-0000-00-0",
+      "601-05-0000-00-L",
+    ];
+    expect([...codes].sort(compareCbsDisplayCodes)).toEqual([
+      "601-00-0000-00-0",
+      "601-05-0000-00-0",
+      "601-05-0000-00-S",
+      "601-05-0000-00-M",
+      "601-05-0000-00-L",
+      "601-05-1000-00-L",
+    ]);
+  });
+});
+
 describe("buildCbsTree", () => {
-  it("groups items under their getGroupL1 bucket as the first level", () => {
+  it("nests L1 accounts under their group root and segments under the account", () => {
     const tree = buildCbsTree([
-      item({ id: 1, l1: "601" }),
-      item({ id: 2, l1: "699" }),
-      item({ id: 3, l1: "701" }),
+      item("601-05-0000-00-0"),
+      item("600-00-0000-00-0"),
+      item("601-00-0000-00-0"),
+      item("699-00-0000-00-0"),
+      item("701-00-0000-00-0"),
     ]);
-    expect(tree.map((n) => n.segment)).toEqual(["600", "700"]);
-    const six = tree[0];
-    expect(six.children.map((c) => c.segment).sort()).toEqual(["601", "699"]);
+    expect(tree.map((n) => n.item.displayCode)).toEqual([
+      "600-00-0000-00-0",
+      "701-00-0000-00-0", // no 700 root present → 701 is a root itself
+    ]);
+    expect(tree[0].children.map((c) => c.item.displayCode)).toEqual([
+      "601-00-0000-00-0",
+      "699-00-0000-00-0",
+    ]);
+    expect(parentOf(tree, "601-05-0000-00-0")).toBe("601-00-0000-00-0");
+    expect(find(tree, "601-05-0000-00-0")?.depth).toBe(2);
   });
 
-  it("skips creating a child level when the bucket key already equals the L1 code", () => {
-    // L1 "010" buckets to "010" itself — no extra child should be created.
-    const tree = buildCbsTree([item({ id: 1, l1: "010" })]);
+  it("keeps a 0x0 group root that is its own L1 as a single node", () => {
+    const tree = buildCbsTree([item("010-00-0000-00-0"), item("012-00-0000-00-0")]);
     expect(tree).toHaveLength(1);
-    expect(tree[0].segment).toBe("010");
-    expect(tree[0].item?.id).toBe(1);
-    expect(tree[0].children).toHaveLength(0);
+    expect(tree[0].item.displayCode).toBe("010-00-0000-00-0");
+    expect(tree[0].children.map((c) => c.item.displayCode)).toEqual([
+      "012-00-0000-00-0",
+    ]);
   });
 
-  it("only descends levels until a LEVEL_DEFAULT ('00') segment is seen", () => {
+  it("hangs a group root's S/M twins directly under the root, beside its accounts", () => {
     const tree = buildCbsTree([
-      item({ id: 1, l1: "601", l2: "01", l3: "02", l4: "00", l5: "03" }),
+      item("100-00-0000-00-0"),
+      item("100-00-0000-00-S", { rowType: "SUB" }),
+      item("100-00-0000-00-M", { rowType: "MATERIAL" }),
+      item("101-00-0000-00-0"),
+      item("101-00-0000-00-M", { rowType: "MATERIAL" }),
     ]);
-    // l4 = "00" stops descent, so l5 must NOT appear.
-    const node = findByPath(tree, "600|601|01|02");
-    expect(node).toBeDefined();
-    expect(node?.item?.id).toBe(1);
-    expect(findByPath(tree, "600|601|01|02|00")).toBeUndefined();
+    expect(tree[0].children.map((c) => c.item.displayCode)).toEqual([
+      "100-00-0000-00-S",
+      "100-00-0000-00-M",
+      "101-00-0000-00-0",
+      "101-00-0000-00-M",
+    ]);
+    // The account's twin parents to the root, not to the root's twin.
+    expect(parentOf(tree, "101-00-0000-00-M")).toBe("100-00-0000-00-0");
   });
 
-  it("sorts children alphabetically at every level", () => {
+  it("parents cost-type rows to the nearest ancestor of the same type, else the backbone", () => {
     const tree = buildCbsTree([
-      item({ id: 1, l1: "601", l2: "02" }),
-      item({ id: 2, l1: "601", l2: "01" }),
-      item({ id: 3, l1: "601", l2: "03" }),
+      item("101-00-0000-00-0"),
+      item("101-00-0000-00-M"),
+      item("101-05-0000-00-0"),
+      item("101-05-0000-00-M"),
+      item("101-05-0500-00-M"),
+      item("101-15-0000-00-0"),
+      item("101-15-0500-00-M"),
+      item("101-15-0700-00-L"),
     ]);
-    const l1 = findByPath(tree, "600|601");
-    expect(l1?.children.map((c) => c.segment)).toEqual(["01", "02", "03"]);
+    expect(parentOf(tree, "101-05-0000-00-M")).toBe("101-00-0000-00-M");
+    expect(parentOf(tree, "101-05-0500-00-M")).toBe("101-05-0000-00-M");
+    // No M twin at 101-15 → climbs to the account-level M summary.
+    expect(parentOf(tree, "101-15-0500-00-M")).toBe("101-00-0000-00-M");
+    // No L ancestor at all → nearest backbone row.
+    expect(parentOf(tree, "101-15-0700-00-L")).toBe("101-15-0000-00-0");
+  });
+
+  it("collapses a row whose intermediate code is absent up to the nearest existing ancestor", () => {
+    const tree = buildCbsTree([
+      item("541-12-0000-00-L"),
+      item("541-12-0500-00-L"),
+      item("541-12-1050-00-L"), // no 541-12-1000-00-L
+    ]);
+    const node = find(tree, "541-12-1050-00-L")!;
+    expect(parentOf(tree, "541-12-1050-00-L")).toBe("541-12-0000-00-L");
+    expect(node.depth).toBe(1);
+    expect(node.level).toBe(4); // colour still reflects the code depth
+  });
+
+  it("follows the Pipe Shop letter-coded lineage, ignoring trailing markers", () => {
+    const tree = buildCbsTree([
+      item("610-00-0000-00-0"),
+      item("610-LB-0000-LB-L"),
+      item("610-LB-1200-ST-L"),
+      item("610-LB-12FB-00-L"),
+      item("610-LB-12FB-ST-L"),
+      item("610-LB-1400-ST-L"),
+    ]);
+    expect(parentOf(tree, "610-LB-1200-ST-L")).toBe("610-LB-0000-LB-L");
+    expect(parentOf(tree, "610-LB-12FB-00-L")).toBe("610-LB-1200-ST-L");
+    expect(parentOf(tree, "610-LB-12FB-ST-L")).toBe("610-LB-12FB-00-L");
+    expect(parentOf(tree, "610-LB-1400-ST-L")).toBe("610-LB-0000-LB-L");
   });
 
   it("collects descendantItemIds across the whole subtree", () => {
-    const tree = buildCbsTree([
-      item({ id: 1, l1: "601", l2: "01" }),
-      item({ id: 2, l1: "601", l2: "02" }),
-      item({ id: 3, l1: "601", l2: "02", l3: "01" }),
-    ]);
-    const bucket = findByPath(tree, "600");
-    expect(bucket?.descendantItemIds.sort()).toEqual([1, 2, 3]);
-    const l201 = findByPath(tree, "600|601|02");
-    expect(l201?.descendantItemIds.sort()).toEqual([2, 3]);
+    const a = item("601-00-0000-00-0");
+    const b = item("601-01-0000-00-0");
+    const c = item("601-02-0000-00-0");
+    const d = item("601-02-0100-00-0");
+    const tree = buildCbsTree([a, b, c, d]);
+    expect(tree[0].descendantItemIds.sort()).toEqual([a.id, b.id, c.id, d.id].sort());
+    expect(find(tree, "601-02-0000-00-0")?.descendantItemIds.sort()).toEqual(
+      [c.id, d.id].sort(),
+    );
   });
 
   it("precomputes a lowercased searchHaystack from displayCode/name/description", () => {
     const tree = buildCbsTree([
-      item({
-        id: 1,
-        l1: "601",
-        displayCode: "601",
+      item("601-00-0000-00-0", {
         name: "Piping Spool",
         accountDescription: "Carbon Steel",
       }),
     ]);
-    const leaf = findByPath(tree, "600|601");
-    expect(leaf?.searchHaystack).toBe("601 piping spool carbon steel");
+    expect(tree[0].searchHaystack).toBe("601-00-0000-00-0 piping spool carbon steel");
   });
 
-  it("subtreeHaystack contains text from descendants even if parent has no item", () => {
+  it("subtreeHaystack contains text from descendants", () => {
     const tree = buildCbsTree([
-      item({
-        id: 1,
-        l1: "601",
-        l2: "01",
-        displayCode: "601-01",
-        name: "Bolt-up",
-        accountDescription: "",
-      }),
+      item("601-00-0000-00-0"),
+      item("601-01-0000-00-0", { name: "Bolt-up" }),
     ]);
-    const bucket = findByPath(tree, "600");
-    expect(bucket?.searchHaystack).toBe("");
-    expect(bucket?.subtreeHaystack).toContain("bolt-up");
+    expect(tree[0].searchHaystack).not.toContain("bolt-up");
+    expect(tree[0].subtreeHaystack).toContain("bolt-up");
   });
 
-  it("keeps only the first item when two items collide on the same path", () => {
-    const tree = buildCbsTree([
-      item({ id: 7, l1: "601", name: "first" }),
-      item({ id: 99, l1: "601", name: "second" }),
-    ]);
-    const leaf = findByPath(tree, "600|601");
-    expect(leaf?.item?.id).toBe(7);
-    expect(leaf?.descendantItemIds).toEqual([7]);
+  it("keeps both rows when display codes collide, with distinct path keys", () => {
+    const first = item("601-00-0000-00-0", { name: "first" });
+    const second = item("601-00-0000-00-0", { name: "second" });
+    const tree = buildCbsTree([first, second]);
+    expect(tree.map((n) => n.item.name)).toEqual(["first", "second"]);
+    expect(tree[0].pathKey).toBe("601-00-0000-00-0");
+    expect(tree[1].pathKey).toBe(`601-00-0000-00-0#${second.id}`);
+  });
+});
+
+describe("rowTypeBadge", () => {
+  it("marks generated rows only", () => {
+    expect(rowTypeBadge("ORIGINAL")).toBeNull();
+    expect(rowTypeBadge("SUB")?.label).toBe("S");
+    expect(rowTypeBadge("MATERIAL")?.label).toBe("M");
   });
 });
 
 describe("nodeMatchesSearch", () => {
   const tree = buildCbsTree([
-    item({ id: 1, l1: "601", displayCode: "601", name: "Pipe Fab" }),
-    item({ id: 2, l1: "701", displayCode: "701", name: "Conduit" }),
+    item("601-00-0000-00-0", { name: "Pipe Fab" }),
+    item("701-00-0000-00-0", { name: "Conduit" }),
   ]);
-  const sixHundred = tree.find((n) => n.segment === "600")!;
-  const sevenHundred = tree.find((n) => n.segment === "700")!;
+  const six = tree[0];
+  const seven = tree[1];
 
   it("matches everything when the query is empty", () => {
-    expect(nodeMatchesSearch(sixHundred, "")).toBe(true);
+    expect(nodeMatchesSearch(six, "")).toBe(true);
   });
 
   it("matches when the lowercased query appears in the subtree haystack", () => {
-    expect(nodeMatchesSearch(sixHundred, "pipe")).toBe(true);
-    expect(nodeMatchesSearch(sevenHundred, "conduit")).toBe(true);
+    expect(nodeMatchesSearch(six, "pipe")).toBe(true);
+    expect(nodeMatchesSearch(seven, "conduit")).toBe(true);
   });
 
   it("does not match when the query is absent from the subtree", () => {
-    expect(nodeMatchesSearch(sixHundred, "conduit")).toBe(false);
+    expect(nodeMatchesSearch(six, "conduit")).toBe(false);
   });
 });
 
 describe("filterCbsTree", () => {
   const tree = buildCbsTree([
-    item({ id: 1, l1: "601", l2: "01", displayCode: "601-01", name: "Spool" }),
-    item({ id: 2, l1: "601", l2: "02", displayCode: "601-02", name: "Bolt" }),
-    item({ id: 3, l1: "701", l2: "01", displayCode: "701-01", name: "Wire" }),
+    item("600-00-0000-00-0", { name: "Pipe" }),
+    item("601-00-0000-00-0", { name: "Spool" }),
+    item("601-01-0000-00-0", { name: "Bolt" }),
+    item("700-00-0000-00-0", { name: "Wire" }),
   ]);
 
   it("returns the original nodes array by reference when the query is empty", () => {
@@ -192,52 +301,70 @@ describe("filterCbsTree", () => {
 
   it("prunes top-level subtrees that don't contain the query", () => {
     const filtered = filterCbsTree(tree, "wire");
-    expect(filtered.map((n) => n.segment)).toEqual(["700"]);
+    expect(filtered.map((n) => n.item.name)).toEqual(["Wire"]);
   });
 
   it("preserves identity of a subtree whose own haystack matches", () => {
-    // "spool" only matches the l2=01 leaf's own searchHaystack — its parent
-    // (l1=601) only matches via descendants, so the parent must be a NEW
-    // object while the matching leaf is kept verbatim.
+    // "spool" matches 601's own haystack, so 601 is kept verbatim (with its
+    // non-matching child) while its parent 600 is a new object.
     const filtered = filterCbsTree(tree, "spool");
-    const filteredL1 = findByPath(filtered, "600|601")!;
-    const originalL1 = findByPath(tree, "600|601")!;
-    expect(filteredL1).not.toBe(originalL1);
-
-    const filteredLeaf = findByPath(filtered, "600|601|01")!;
-    const originalLeaf = findByPath(tree, "600|601|01")!;
-    expect(filteredLeaf).toBe(originalLeaf);
+    expect(filtered[0]).not.toBe(tree[0]);
+    expect(filtered[0].children[0]).toBe(tree[0].children[0]);
+    expect(filtered[0].children[0].children).toHaveLength(1);
   });
 
   it("recurses into descendant-only matches and only keeps matching children", () => {
     const filtered = filterCbsTree(tree, "bolt");
-    const l1 = findByPath(filtered, "600|601")!;
-    expect(l1.children.map((c) => c.segment)).toEqual(["02"]);
+    expect(filtered[0].children[0].children.map((c) => c.item.name)).toEqual([
+      "Bolt",
+    ]);
+  });
+});
+
+describe("pruneCbsTree", () => {
+  const tree = buildCbsTree([
+    item("600-00-0000-00-0", { name: "Pipe" }),
+    item("601-00-0000-00-0", { name: "Spool" }),
+    item("601-01-0000-00-0", { name: "Bolt" }),
+    item("601-02-0000-00-0", { name: "Gasket" }),
+  ]);
+
+  it("keeps matches plus their ancestors and drops non-matching children of a match", () => {
+    const { nodes, matches } = pruneCbsTree(tree, "spool");
+    expect(matches).toBe(1);
+    expect(nodes[0].item.name).toBe("Pipe");
+    expect(nodes[0].children[0].item.name).toBe("Spool");
+    expect(nodes[0].children[0].children).toHaveLength(0);
+  });
+
+  it("counts every self-match", () => {
+    expect(pruneCbsTree(tree, "601").matches).toBe(3);
   });
 });
 
 describe("getNodeSelectionState", () => {
-  const tree = buildCbsTree([
-    item({ id: 1, l1: "601", l2: "01" }),
-    item({ id: 2, l1: "601", l2: "02" }),
-    item({ id: 3, l1: "601", l2: "03" }),
-  ]);
-  const bucket = findByPath(tree, "600|601")!;
+  const items = [
+    item("601-00-0000-00-0"),
+    item("601-01-0000-00-0"),
+    item("601-02-0000-00-0"),
+  ];
+  const [a, b, c] = items.map((i) => i.id);
+  const node = buildCbsTree(items)[0];
 
   it("returns 'unchecked' when no descendants are selected", () => {
-    expect(getNodeSelectionState(bucket, new Set())).toBe("unchecked");
+    expect(getNodeSelectionState(node, new Set())).toBe("unchecked");
   });
 
   it("returns 'checked' when every descendant is selected", () => {
-    expect(getNodeSelectionState(bucket, new Set([1, 2, 3]))).toBe("checked");
+    expect(getNodeSelectionState(node, new Set([a, b, c]))).toBe("checked");
   });
 
   it("returns 'indeterminate' when only some descendants are selected", () => {
-    expect(getNodeSelectionState(bucket, new Set([1]))).toBe("indeterminate");
-    expect(getNodeSelectionState(bucket, new Set([1, 2]))).toBe("indeterminate");
+    expect(getNodeSelectionState(node, new Set([a]))).toBe("indeterminate");
+    expect(getNodeSelectionState(node, new Set([b, c]))).toBe("indeterminate");
   });
 
   it("ignores selected ids that aren't descendants of this node", () => {
-    expect(getNodeSelectionState(bucket, new Set([999]))).toBe("unchecked");
+    expect(getNodeSelectionState(node, new Set([999]))).toBe("unchecked");
   });
 });

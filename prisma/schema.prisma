@@ -1325,8 +1325,21 @@ model PeriodMeasurement {
   @@unique([periodId, bucket])
 }
 
+/// How a CbsItem row entered the dictionary: straight from the Master CBS
+/// workbook, or generated from an original's Sub Code / Material Code flag
+/// (see prisma/master-cbs.ts).
+enum CbsRowType {
+  ORIGINAL
+  SUB
+  MATERIAL
+}
+
+/// The expanded CBS Dictionary: every Master CBS row plus the generated S / M
+/// twins. Level segments l1–l6 are derived from `displayCode`
+/// (`XXX-YY-ZZWW-VV-T`): l1 = XXX, l2 = YY, l3 = ZZ, l4 = WW, l5 = VV, and
+/// l6 = T, the cost type (0 summary / S sub / M material / L labor / …).
 model CbsItem {
-  id                 Int       @id @default(autoincrement())
+  id                 Int        @id @default(autoincrement())
   l1                 String
   l2                 String
   l3                 String
@@ -1343,15 +1356,23 @@ model CbsItem {
   wbs                String?
   p6CostAccount      String?
   gl                 String?
-  costTypePC         String?
-  costTypeSpectrum   String?
-  costCategory       String?
   discipline         String?
+  /// The workbook's "Sub Code" flag (YES = a subcontract twin is generated).
   subReporting       Boolean?
-  costCode           String    @unique
+  /// The workbook's "Material Code" flag (YES = a material twin is generated).
+  materialCode       Boolean?
+  materialType       String?
+  costCenter         String?
+  costClassification String?
+  status             String?
+  notes              String?
+  rowType            CbsRowType @default(ORIGINAL)
+  /// For SUB / MATERIAL rows: the displayCode of the original they came from.
+  generatedFrom      String?
+  costCode           String     @unique
   description        String?
   displayDescription String?
-  allowedInProjects  Project[] @relation("ProjectAllowedFefCbsItems")
+  allowedInProjects  Project[]  @relation("ProjectAllowedFefCbsItems")
 
   // Hot path: discipline routes filter by `l1 IN (...)` on every load.
   @@index([l1])

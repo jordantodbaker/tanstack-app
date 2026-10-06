@@ -1,29 +1,36 @@
-// Re-imports the CBS master from `prisma/data/cbs.csv` into the `CbsItem` table
-// WITHOUT touching anything else (projects, FEF rows, change logs, etc.).
+// Re-imports the CBS Dictionary from `prisma/data/MasterCBS.xlsx` into the
+// `CbsItem` table WITHOUT touching anything else (projects, FEF rows, change
+// logs, etc.). This is the regular "the CBS changed" process:
+//
+//   1. Drop the new workbook in at prisma/data/MasterCBS.xlsx
+//   2. npm run cbs:import -- --dry-run     (review the plan + workbook report)
+//   3. npm run cbs:import
 //
 // Unlike the full `seedBaseData()`, this preserves each project's CBS allow-list:
 // it upserts by the unique `costCode`, so existing items keep their row id (and
 // therefore their `ProjectAllowedFefCbsItems` join rows). Items whose costCode no
-// longer appears in the CSV are deleted (their allow-list entries cascade away —
-// the code is gone). Brand-new items are created but NOT auto-added to any
-// allow-list; the run reports how many, so you can grant them in Setup if needed.
+// longer appears in the dictionary are deleted (their allow-list entries cascade
+// away — the code is gone). Brand-new items (including newly generated S/M
+// twins) are created but NOT auto-added to any allow-list; the run reports how
+// many, so you can grant them in Setup if needed.
 //
-// Run:  npx tsx scripts/import-cbs.ts
+// Run:  npx tsx scripts/import-master-cbs.ts [--dry-run]
 import "dotenv/config";
 import { prisma } from "../src/server/db";
-import { loadCbsItems } from "../prisma/seed";
+import { formatMasterCbsReport, loadMasterCbs } from "../prisma/master-cbs";
+
+const dryRun = process.argv.includes("--dry-run");
 
 async function main() {
-  const items = loadCbsItems();
+  const { items, report } = await loadMasterCbs();
+  console.log(formatMasterCbsReport(report));
 
   // Guard: costCode is the upsert key and is @unique — refuse to run on data
   // that would violate it rather than fail halfway through.
   const byCost = new Map(items.map((i) => [i.costCode, i]));
-  const emptyCost = items.filter((i) => i.costCode.trim() === "").length;
-  if (emptyCost > 0 || byCost.size !== items.length) {
+  if (byCost.size !== items.length) {
     throw new Error(
-      `CSV not loadable: ${emptyCost} empty costCode(s), ` +
-        `${items.length - byCost.size} duplicate costCode(s). Fix cbs.csv first.`,
+      `Dictionary not loadable: ${items.length - byCost.size} duplicate costCode(s) after expansion.`,
     );
   }
 
@@ -36,11 +43,18 @@ async function main() {
   const toUpdate = items.filter((i) => existingCodes.has(i.costCode));
 
   console.log(
-    `CSV rows: ${items.length} | DB existing: ${existingCodes.size}`,
+    `\nDictionary rows: ${items.length} | DB existing: ${existingCodes.size}`,
   );
   console.log(
     `Plan → create ${toCreate.length}, update ${toUpdate.length}, delete (stale) ${toDelete.length}`,
   );
+  if (dryRun) {
+    if (toDelete.length) {
+      console.log(`Stale codes (first 20): ${toDelete.slice(0, 20).join(", ")}`);
+    }
+    console.log("\n--dry-run: no changes written.");
+    return;
+  }
 
   if (toDelete.length) {
     const del = await prisma.cbsItem.deleteMany({

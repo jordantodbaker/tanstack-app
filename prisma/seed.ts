@@ -5,6 +5,7 @@
 import "dotenv/config";
 
 import { prisma } from "../src/server/db";
+import { formatMasterCbsReport, loadMasterCbs } from "./master-cbs";
 import { Project } from "~/lib/types";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
@@ -256,55 +257,13 @@ function loadCompositeRates() {
   return roles;
 }
 
-export function loadCbsItems() {
-  const csvPath = join(__dirname, "data", "cbs.csv");
-  const lines = readFileSync(csvPath, "utf-8").split(/\r?\n/);
-
-  // Skip header row and any trailing empty lines
-  return lines
-    .slice(1)
-    .filter((line) => line.trim() !== "")
-    .map((line) => {
-      const cols = parseCSVLine(line);
-      const or = (v: string) => v.trim() || null;
-      const toBool = (v: string): boolean | null => {
-        const t = v.trim().toUpperCase();
-        if (t === "YES") return true;
-        if (t === "NO") return false;
-        return null;
-      };
-      return {
-        l1: cols[0]?.trim() ?? "",
-        l2: cols[1]?.trim() ?? "",
-        l3: cols[2]?.trim() ?? "",
-        l4: cols[3]?.trim() ?? "",
-        l5: cols[4]?.trim() ?? "",
-        l6: cols[5]?.trim() ?? "",
-        name: cols[6]?.trim() ?? "",
-        displayCode: cols[7]?.trim() ?? "",
-        uom: cols[8]?.trim() ?? "",
-        subReporting: toBool(cols[9] ?? ""),
-        accountDescription: cols[10]?.trim() ?? "",
-        l2Description: or(cols[11] ?? ""),
-        core: or(cols[12] ?? ""),
-        coreExtension: or(cols[13] ?? ""),
-        wbs: or(cols[14] ?? ""),
-        p6CostAccount: or(cols[15] ?? ""),
-        gl: or(cols[16] ?? ""),
-        costTypePC: or(cols[17] ?? ""),
-        costTypeSpectrum: or(cols[18] ?? ""),
-        costCategory: or(cols[19] ?? ""),
-        discipline: or(cols[20] ?? ""),
-        costCode: cols[21]?.trim() ?? "",
-        description: or(cols[22] ?? ""),
-        displayDescription: `${or(cols[7] ?? "")}:  ${or(cols[6] ?? "")}`,
-      };
-    });
-}
+// The CBS Dictionary is loaded from prisma/data/MasterCBS.xlsx — see
+// prisma/master-cbs.ts (also used by scripts/import-master-cbs.ts for live-DB
+// re-imports that keep project allow-lists).
 
 /**
  * Wipes and reseeds the reference data every project needs: projects, the CBS
- * master, piping groups/factors, and composite role rates. Exported so the
+ * dictionary, piping groups/factors, and composite role rates. Exported so the
  * test-data seed (`seed-test.ts`) can run the same baseline before adding its
  * sample CVRs / FCOs / FEF rows / snapshots / reporting periods on top.
  *
@@ -327,7 +286,8 @@ export async function seedBaseData() {
 
   await prisma.project.createMany({ data: seedProjects });
 
-  const cbsItems = loadCbsItems();
+  const { items: cbsItems, report } = await loadMasterCbs();
+  console.log(formatMasterCbsReport(report));
   const batchSize = 500;
   for (let i = 0; i < cbsItems.length; i += batchSize) {
     await prisma.cbsItem.createMany({ data: cbsItems.slice(i, i + batchSize) });

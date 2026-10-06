@@ -1,3 +1,25 @@
+/**
+ * The CBS hierarchy shared by the Setup page (allow-list editor) and the CBS
+ * Sample page (colour-by-depth viewer). One builder so both pages agree on
+ * parent/child expansion.
+ *
+ * Ancestry comes from the display code `XXX-YY-ZZWW-VV-T`: the group root
+ * (`getGroupL1`: 601 → 600, 012 → 010), then the L1 account when it differs
+ * from its group, then each further non-"00" segment (YY, ZZ, WW, VV),
+ * stopping at the first "00". A row whose immediate ancestor code is absent
+ * nests under the nearest ancestor that does exist, so the tree never shows
+ * placeholder rows and depth = real nesting depth.
+ *
+ * Parenting is cost-type aware (T = 0 backbone / S sub / M material / L, E,
+ * O, D, …): a row parents to the nearest existing ancestor of its OWN cost
+ * type, else to the nearest "0" backbone ancestor. So Material rows nest under
+ * Material summaries, Subcontract under Subcontract, Labor prefers Labor and
+ * falls back to the backbone, and the S/M twins of a group root hang one level
+ * below it. This mirrors the hierarchy of the Master CBS Dictionary workbook.
+ */
+
+export type CbsRowType = "ORIGINAL" | "SUB" | "MATERIAL";
+
 export type CbsTreeItem = {
   id: number;
   l1: string;
@@ -5,20 +27,29 @@ export type CbsTreeItem = {
   l3: string;
   l4: string;
   l5: string;
+  /** The trailing cost-type segment of the display code ("0", "S", "M", "L", …). */
   l6: string;
   displayCode: string;
   name: string;
   accountDescription: string;
   l2Description: string | null;
   uom: string;
+  rowType: CbsRowType;
 };
 
-export type CbsTreeNode = {
+export type CbsTreeNode<T extends CbsTreeItem = CbsTreeItem> = {
+  /** Unique key for React/expand state — the display code (plus the row id
+   *  only if a catalog ever carries duplicate codes). */
   pathKey: string;
+  /** Nesting depth in the built tree (0 = root). Drives indentation. */
   depth: number;
-  segment: string;
-  item: CbsTreeItem | null;
-  children: CbsTreeNode[];
+  /** Code level (see `getCbsLevel`). Drives colouring, like the workbook's
+   *  colour-by-outline-level; can exceed `depth` when an intermediate code
+   *  is absent and the row collapsed up to a shallower ancestor. */
+  level: number;
+  item: T;
+  children: CbsTreeNode<T>[];
+  /** This node's item id followed by every descendant's. */
   descendantItemIds: number[];
   /** Pre-lowercased searchable text for this node (own item only). */
   searchHaystack: string;
@@ -27,6 +58,7 @@ export type CbsTreeNode = {
 };
 
 const LEVEL_DEFAULT = "00";
+const BACKBONE_TYPE = "0";
 
 export function getGroupL1(l1: string): string {
   if (l1.length < 3) return l1;
@@ -36,84 +68,160 @@ export function getGroupL1(l1: string): string {
   return `${l1[0]}00`;
 }
 
-function getPath(item: CbsTreeItem): string[] {
-  const group = getGroupL1(item.l1);
-  const path: string[] = [group];
-  if (item.l1 !== group) path.push(item.l1);
-  if (item.l2 !== LEVEL_DEFAULT) {
-    path.push(item.l2);
-    if (item.l3 !== LEVEL_DEFAULT) {
-      path.push(item.l3);
-      if (item.l4 !== LEVEL_DEFAULT) {
-        path.push(item.l4);
-        if (item.l5 !== LEVEL_DEFAULT) {
-          path.push(item.l5);
-        }
-      }
-    }
+/**
+ * An item's lineage key plus the keys of its ancestors, nearest first. The key
+ * is the L1 followed by the chain of leading non-"00" segments (stopping at
+ * the first "00", so trailing markers such as the Pipe Shop's "-ST"/"-LB"
+ * suffixes don't count): 601-05-1050-00 → "601|05|10|50", and its ancestors
+ * are "601|05|10", "601|05", "601", then the group root "600".
+ */
+function lineage(item: CbsTreeItem): {
+  key: string;
+  ancestors: string[];
+  level: number;
+} {
+  const chain: string[] = [];
+  for (const seg of [item.l2, item.l3, item.l4, item.l5]) {
+    if (seg === LEVEL_DEFAULT) break;
+    chain.push(seg);
   }
-  return path;
+  const keyAt = (n: number) => [item.l1, ...chain.slice(0, n)].join("|");
+  const ancestors: string[] = [];
+  for (let n = chain.length - 1; n >= 0; n--) ancestors.push(keyAt(n));
+  const group = getGroupL1(item.l1);
+  if (group !== item.l1) ancestors.push(group);
+  let level = ancestors.length;
+  // A cost-type twin of a group root sits one level below it, like the
+  // workbook outline.
+  if (level === 0 && costType(item) !== BACKBONE_TYPE) level = 1;
+  return { key: keyAt(chain.length), ancestors, level };
 }
 
-export function buildCbsTree(items: CbsTreeItem[]): CbsTreeNode[] {
-  type BuildNode = {
-    pathKey: string;
-    depth: number;
-    segment: string;
-    item: CbsTreeItem | null;
-    children: Map<string, BuildNode>;
-  };
+/**
+ * Code level of an item: 0 for a group root (600-00-0000-00-0), 1 for an L1
+ * account (601-00-…), then +1 per leading non-"00" segment; a group root's
+ * S/M twin counts as 1.
+ */
+export function getCbsLevel(item: CbsTreeItem): number {
+  return lineage(item).level;
+}
 
-  const root: { children: Map<string, BuildNode> } = { children: new Map() };
+function costType(item: CbsTreeItem): string {
+  return item.l6 || BACKBONE_TYPE;
+}
 
-  function ensureNode(item: CbsTreeItem): BuildNode {
-    const path = getPath(item);
-    let parent: { children: Map<string, BuildNode> } = root;
-    let pathKey = "";
-    let node!: BuildNode;
-    let depth = 0;
-    for (const segment of path) {
-      depth++;
-      pathKey = pathKey ? `${pathKey}|${segment}` : segment;
-      const existing = parent.children.get(segment);
-      if (existing) {
-        node = existing;
-      } else {
-        node = {
-          pathKey,
-          depth,
-          segment,
-          item: null,
-          children: new Map(),
-        };
-        parent.children.set(segment, node);
+/** Everything but the trailing cost-type segment. */
+function codePrefix(code: string): string {
+  const dash = code.lastIndexOf("-");
+  return dash >= 0 ? code.slice(0, dash) : code;
+}
+
+// Within one prefix: the backbone row first, then its Sub and Material twins
+// (the workbook order), then any other cost types alphabetically.
+const TYPE_RANK: Record<string, number> = { [BACKBONE_TYPE]: 0, S: 1, M: 2 };
+function typeRank(type: string): number {
+  return TYPE_RANK[type] ?? 3;
+}
+
+/**
+ * Dictionary order for display codes: by code prefix (parents before
+ * children), then backbone → S → M → other cost types. Shared with the
+ * workbook loader so stored row ids follow the same order.
+ */
+export function compareCbsDisplayCodes(a: string, b: string): number {
+  const pa = codePrefix(a);
+  const pb = codePrefix(b);
+  if (pa !== pb) return pa < pb ? -1 : 1;
+  const ta = a.slice(pa.length + 1) || BACKBONE_TYPE;
+  const tb = b.slice(pb.length + 1) || BACKBONE_TYPE;
+  const ra = typeRank(ta);
+  const rb = typeRank(tb);
+  if (ra !== rb) return ra - rb;
+  if (ta !== tb) return ta < tb ? -1 : 1;
+  return 0;
+}
+
+/** Pre-order sort: parents before children, cost-type twins adjacent. */
+export function sortCbsItems<T extends CbsTreeItem>(items: readonly T[]): T[] {
+  return [...items].sort(
+    (a, b) => compareCbsDisplayCodes(a.displayCode, b.displayCode) || a.id - b.id,
+  );
+}
+
+export function buildCbsTree<T extends CbsTreeItem>(
+  items: readonly T[],
+): CbsTreeNode<T>[] {
+  type Build = { depth: number; level: number; item: T; children: Build[] };
+
+  const roots: Build[] = [];
+  // Every placed node keyed by "lineage|type" so a row can find the nearest
+  // existing ancestor of its own cost type, then of the "0" backbone. The
+  // first row to claim a key keeps it (sorted order → the backbone-most row).
+  const placed = new Map<string, Build>();
+  const seenKeys = new Map<string, number>();
+  const keys = new Map<Build, string>();
+
+  for (const item of sortCbsItems(items)) {
+    const type = costType(item);
+    const { key, ancestors, level } = lineage(item);
+    const isGroupRoot = ancestors.length === 0;
+
+    let parent: Build | null = null;
+    for (const a of ancestors) {
+      const hit = placed.get(`${a}|${type}`);
+      if (hit) {
+        parent = hit;
+        break;
       }
-      parent = node;
     }
-    return node;
+    if (!parent && type !== BACKBONE_TYPE) {
+      for (const a of ancestors) {
+        const hit = placed.get(`${a}|${BACKBONE_TYPE}`);
+        if (hit) {
+          parent = hit;
+          break;
+        }
+      }
+      // A cost-type twin of a group root (Civil Materials under Civil) hangs
+      // off its own backbone row.
+      if (!parent && isGroupRoot) {
+        parent = placed.get(`${key}|${BACKBONE_TYPE}`) ?? null;
+      }
+    }
+
+    const node: Build = {
+      depth: parent ? parent.depth + 1 : 0,
+      level,
+      item,
+      children: [],
+    };
+    if (parent) parent.children.push(node);
+    else roots.push(node);
+    // A group root's twins sit beside the root's other children (Civil
+    // Subcontracts next to Civil Shop Materials), so they never act as
+    // ancestors — only the backbone root does.
+    const actsAsAncestor = !(isGroupRoot && type !== BACKBONE_TYPE);
+    if (actsAsAncestor && !placed.has(`${key}|${type}`)) {
+      placed.set(`${key}|${type}`, node);
+    }
+
+    const dupes = seenKeys.get(item.displayCode) ?? 0;
+    seenKeys.set(item.displayCode, dupes + 1);
+    keys.set(node, dupes ? `${item.displayCode}#${item.id}` : item.displayCode);
   }
 
-  for (const item of items) {
-    const node = ensureNode(item);
-    if (!node.item) node.item = item;
-  }
-
-  function toOutput(node: BuildNode): CbsTreeNode {
-    const children = Array.from(node.children.values())
-      .sort((a, b) => a.segment.localeCompare(b.segment))
-      .map(toOutput);
-    const descendantItemIds: number[] = [];
-    if (node.item) descendantItemIds.push(node.item.id);
+  function toOutput(node: Build): CbsTreeNode<T> {
+    const children = node.children.map(toOutput);
+    const descendantItemIds: number[] = [node.item.id];
     for (const c of children) descendantItemIds.push(...c.descendantItemIds);
-    const own = node.item
-      ? `${node.item.displayCode} ${node.item.name} ${node.item.accountDescription}`.toLowerCase()
-      : "";
+    const own =
+      `${node.item.displayCode} ${node.item.name} ${node.item.accountDescription}`.toLowerCase();
     let subtree = own;
     for (const c of children) subtree += "\n" + c.subtreeHaystack;
     return {
-      pathKey: node.pathKey,
+      pathKey: keys.get(node)!,
       depth: node.depth,
-      segment: node.segment,
+      level: node.level,
       item: node.item,
       children,
       descendantItemIds,
@@ -122,9 +230,7 @@ export function buildCbsTree(items: CbsTreeItem[]): CbsTreeNode[] {
     };
   }
 
-  return Array.from(root.children.values())
-    .sort((a, b) => a.segment.localeCompare(b.segment))
-    .map(toOutput);
+  return roots.map(toOutput);
 }
 
 export type SelectionState = "checked" | "unchecked" | "indeterminate";
@@ -159,12 +265,12 @@ export function nodeMatchesSearch(
  * `lowerQuery`. Returns the original `nodes` array when the query is empty so
  * callers can fast-path on reference identity.
  */
-export function filterCbsTree(
-  nodes: CbsTreeNode[],
+export function filterCbsTree<T extends CbsTreeItem>(
+  nodes: CbsTreeNode<T>[],
   lowerQuery: string,
-): CbsTreeNode[] {
+): CbsTreeNode<T>[] {
   if (!lowerQuery) return nodes;
-  const out: CbsTreeNode[] = [];
+  const out: CbsTreeNode<T>[] = [];
   for (const n of nodes) {
     if (!n.subtreeHaystack.includes(lowerQuery)) continue;
     if (n.searchHaystack.includes(lowerQuery)) {
@@ -176,4 +282,57 @@ export function filterCbsTree(
     }
   }
   return out;
+}
+
+/**
+ * Strict filter for the viewer: keeps only nodes that match `lowerQuery`
+ * themselves plus their ancestors (a matching parent does NOT keep its
+ * non-matching children), and counts the matches.
+ */
+export function pruneCbsTree<T extends CbsTreeItem>(
+  nodes: CbsTreeNode<T>[],
+  lowerQuery: string,
+): { nodes: CbsTreeNode<T>[]; matches: number } {
+  if (!lowerQuery) return { nodes, matches: 0 };
+  let matches = 0;
+  const rec = (list: CbsTreeNode<T>[]): CbsTreeNode<T>[] => {
+    const out: CbsTreeNode<T>[] = [];
+    for (const n of list) {
+      if (!n.subtreeHaystack.includes(lowerQuery)) continue;
+      const selfMatch = n.searchHaystack.includes(lowerQuery);
+      const kids = rec(n.children);
+      if (selfMatch || kids.length > 0) {
+        if (selfMatch) matches++;
+        out.push({ ...n, children: kids });
+      }
+    }
+    return out;
+  };
+  return { nodes: rec(nodes), matches };
+}
+
+/** The "S" / "M" marker shown beside generated rows; null for originals. */
+export function rowTypeBadge(
+  rowType: CbsRowType,
+): { label: string; title: string } | null {
+  if (rowType === "SUB") return { label: "S", title: "Generated sub-code row" };
+  if (rowType === "MATERIAL") {
+    return { label: "M", title: "Generated material row" };
+  }
+  return null;
+}
+
+/** Path keys of every node that has children — for "Expand all". */
+export function collectExpandableKeys(nodes: CbsTreeNode[]): string[] {
+  const keys: string[] = [];
+  const walk = (list: CbsTreeNode[]) => {
+    for (const n of list) {
+      if (n.children.length > 0) {
+        keys.push(n.pathKey);
+        walk(n.children);
+      }
+    }
+  };
+  walk(nodes);
+  return keys;
 }

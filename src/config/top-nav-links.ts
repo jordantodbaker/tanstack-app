@@ -17,7 +17,7 @@ export type TopNavLink = {
     | "/trends"
     | "/pco"
     | "/reporting"
-    | "/cbs-sample"
+    | "/project-cbs"
     | "/setup";
   label: string;
   /** If true, render only for admins (Field Estimate Form is admin-only). */
@@ -32,6 +32,6 @@ export const TOP_NAV_LINKS: ReadonlyArray<TopNavLink> = [
   { to: "/trends", label: "Trends" },
   { to: "/pco", label: "PCOs" },
   { to: "/reporting", label: "Reporting" },
-  { to: "/cbs-sample", label: "CBS Sample" },
+  { to: "/project-cbs", label: "Project CBS" },
   { to: "/setup", label: "Field Estimate Form", adminOnly: true },
 ];

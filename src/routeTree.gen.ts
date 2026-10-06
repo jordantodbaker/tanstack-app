@@ -13,7 +13,6 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as DisciplineRouteImport } from './routes/$discipline'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as BasisRouteImport } from './routes/basis'
-import { Route as CbsSampleRouteImport } from './routes/cbs-sample'
 import { Route as ChangelogRouteImport } from './routes/changelog'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as FcoLogRouteImport } from './routes/fco-log'
@@ -21,6 +20,7 @@ import { Route as HelpRouteImport } from './routes/help'
 import { Route as MaterialsRouteImport } from './routes/materials'
 import { Route as PcoRouteImport } from './routes/pco'
 import { Route as PipingRouteImport } from './routes/piping'
+import { Route as ProjectCbsRouteImport } from './routes/project-cbs'
 import { Route as ReportingRouteImport } from './routes/reporting'
 import { Route as RfisRouteImport } from './routes/rfis'
 import { Route as SetupRouteImport } from './routes/setup'
@@ -62,11 +62,6 @@ const BasisRoute = BasisRouteImport.update({
   path: '/basis',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CbsSampleRoute = CbsSampleRouteImport.update({
-  id: '/cbs-sample',
-  path: '/cbs-sample',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ChangelogRoute = ChangelogRouteImport.update({
   id: '/changelog',
   path: '/changelog',
@@ -100,6 +95,11 @@ const PcoRoute = PcoRouteImport.update({
 const PipingRoute = PipingRouteImport.update({
   id: '/piping',
   path: '/piping',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProjectCbsRoute = ProjectCbsRouteImport.update({
+  id: '/project-cbs',
+  path: '/project-cbs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReportingRoute = ReportingRouteImport.update({
@@ -208,7 +208,6 @@ export interface FileRoutesByFullPath {
   '/$discipline': typeof DisciplineRoute
   '/admin': typeof AdminRouteWithChildren
   '/basis': typeof BasisRoute
-  '/cbs-sample': typeof CbsSampleRoute
   '/changelog': typeof ChangelogRoute
   '/dashboard': typeof DashboardRoute
   '/fco-log': typeof FcoLogRoute
@@ -216,6 +215,7 @@ export interface FileRoutesByFullPath {
   '/materials': typeof MaterialsRoute
   '/pco': typeof PcoRoute
   '/piping': typeof PipingRoute
+  '/project-cbs': typeof ProjectCbsRoute
   '/reporting': typeof ReportingRoute
   '/rfis': typeof RfisRoute
   '/setup': typeof SetupRoute
@@ -242,7 +242,6 @@ export interface FileRoutesByTo {
   '/$discipline': typeof DisciplineRoute
   '/admin': typeof AdminRouteWithChildren
   '/basis': typeof BasisRoute
-  '/cbs-sample': typeof CbsSampleRoute
   '/changelog': typeof ChangelogRoute
   '/dashboard': typeof DashboardRoute
   '/fco-log': typeof FcoLogRoute
@@ -250,6 +249,7 @@ export interface FileRoutesByTo {
   '/materials': typeof MaterialsRoute
   '/pco': typeof PcoRoute
   '/piping': typeof PipingRoute
+  '/project-cbs': typeof ProjectCbsRoute
   '/reporting': typeof ReportingRoute
   '/rfis': typeof RfisRoute
   '/setup': typeof SetupRoute
@@ -277,7 +277,6 @@ export interface FileRoutesById {
   '/$discipline': typeof DisciplineRoute
   '/admin': typeof AdminRouteWithChildren
   '/basis': typeof BasisRoute
-  '/cbs-sample': typeof CbsSampleRoute
   '/changelog': typeof ChangelogRoute
   '/dashboard': typeof DashboardRoute
   '/fco-log': typeof FcoLogRoute
@@ -285,6 +284,7 @@ export interface FileRoutesById {
   '/materials': typeof MaterialsRoute
   '/pco': typeof PcoRoute
   '/piping': typeof PipingRoute
+  '/project-cbs': typeof ProjectCbsRoute
   '/reporting': typeof ReportingRoute
   '/rfis': typeof RfisRoute
   '/setup': typeof SetupRoute
@@ -313,7 +313,6 @@ export interface FileRouteTypes {
     | '/$discipline'
     | '/admin'
     | '/basis'
-    | '/cbs-sample'
     | '/changelog'
     | '/dashboard'
     | '/fco-log'
@@ -321,6 +320,7 @@ export interface FileRouteTypes {
     | '/materials'
     | '/pco'
     | '/piping'
+    | '/project-cbs'
     | '/reporting'
     | '/rfis'
     | '/setup'
@@ -347,7 +347,6 @@ export interface FileRouteTypes {
     | '/$discipline'
     | '/admin'
     | '/basis'
-    | '/cbs-sample'
     | '/changelog'
     | '/dashboard'
     | '/fco-log'
@@ -355,6 +354,7 @@ export interface FileRouteTypes {
     | '/materials'
     | '/pco'
     | '/piping'
+    | '/project-cbs'
     | '/reporting'
     | '/rfis'
     | '/setup'
@@ -381,7 +381,6 @@ export interface FileRouteTypes {
     | '/$discipline'
     | '/admin'
     | '/basis'
-    | '/cbs-sample'
     | '/changelog'
     | '/dashboard'
     | '/fco-log'
@@ -389,6 +388,7 @@ export interface FileRouteTypes {
     | '/materials'
     | '/pco'
     | '/piping'
+    | '/project-cbs'
     | '/reporting'
     | '/rfis'
     | '/setup'
@@ -416,7 +416,6 @@ export interface RootRouteChildren {
   DisciplineRoute: typeof DisciplineRoute
   AdminRoute: typeof AdminRouteWithChildren
   BasisRoute: typeof BasisRoute
-  CbsSampleRoute: typeof CbsSampleRoute
   ChangelogRoute: typeof ChangelogRoute
   DashboardRoute: typeof DashboardRoute
   FcoLogRoute: typeof FcoLogRoute
@@ -424,6 +423,7 @@ export interface RootRouteChildren {
   MaterialsRoute: typeof MaterialsRoute
   PcoRoute: typeof PcoRoute
   PipingRoute: typeof PipingRoute
+  ProjectCbsRoute: typeof ProjectCbsRoute
   ReportingRoute: typeof ReportingRoute
   RfisRoute: typeof RfisRoute
   SetupRoute: typeof SetupRoute
@@ -464,13 +464,6 @@ declare module '@tanstack/react-router' {
       path: '/basis'
       fullPath: '/basis'
       preLoaderRoute: typeof BasisRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cbs-sample': {
-      id: '/cbs-sample'
-      path: '/cbs-sample'
-      fullPath: '/cbs-sample'
-      preLoaderRoute: typeof CbsSampleRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/changelog': {
@@ -520,6 +513,13 @@ declare module '@tanstack/react-router' {
       path: '/piping'
       fullPath: '/piping'
       preLoaderRoute: typeof PipingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/project-cbs': {
+      id: '/project-cbs'
+      path: '/project-cbs'
+      fullPath: '/project-cbs'
+      preLoaderRoute: typeof ProjectCbsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reporting': {
@@ -698,7 +698,6 @@ const rootRouteChildren: RootRouteChildren = {
   DisciplineRoute: DisciplineRoute,
   AdminRoute: AdminRouteWithChildren,
   BasisRoute: BasisRoute,
-  CbsSampleRoute: CbsSampleRoute,
   ChangelogRoute: ChangelogRoute,
   DashboardRoute: DashboardRoute,
   FcoLogRoute: FcoLogRoute,
@@ -706,6 +705,7 @@ const rootRouteChildren: RootRouteChildren = {
   MaterialsRoute: MaterialsRoute,
   PcoRoute: PcoRoute,
   PipingRoute: PipingRoute,
+  ProjectCbsRoute: ProjectCbsRoute,
   ReportingRoute: ReportingRoute,
   RfisRoute: RfisRoute,
   SetupRoute: SetupRoute,

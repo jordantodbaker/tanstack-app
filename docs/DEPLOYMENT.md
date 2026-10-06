@@ -432,6 +432,33 @@ follow-up feature (a scheduled job marking and removing eligible projects).
 
 ---
 
+## 11a. Updating the CBS
+
+The CBS lives in `prisma/data/MasterCBS.xlsx` (sheet "Master CBS"). The app
+stores the *expanded* CBS Dictionary in `CbsItem`: every workbook row plus a
+generated `S` (sub-code) twin for rows with Sub Code = YES and an `M`
+(material) twin for rows with Material Code = YES, skipped when the workbook
+already carries that code. Level segments are derived from the Display Code,
+not from the workbook's L1–L7 helper columns. See `prisma/master-cbs.ts`.
+
+When a new master arrives:
+
+1. Replace `prisma/data/MasterCBS.xlsx` (same sheet/column layout).
+2. `npm run cbs:import -- --dry-run` — prints the workbook report (duplicate
+   codes, invalid rows, generated-twin counts) and the create/update/delete
+   plan without writing anything. Fix the workbook if the report flags
+   duplicates you didn't expect.
+3. `DATABASE_URL=<env-url> npm run cbs:import` — upserts by cost code so
+   existing rows keep their ids and every project's Setup allow-list
+   survives. Codes that no longer exist are deleted (and drop out of the
+   allow-lists). Brand-new codes, including newly generated S/M twins, are
+   NOT auto-added to any project — grant them on the Setup page.
+
+The full seed (`prisma db seed`) loads the same workbook but wipes projects
+first; use it only for a fresh database.
+
+---
+
 ## 12. Open items / future work
 
 The following are not blockers for v1 production but should be tracked:

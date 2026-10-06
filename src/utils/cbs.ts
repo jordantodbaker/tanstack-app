@@ -4,7 +4,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { Prisma } from "../generated/prisma/client";
 import { prisma } from "../server/db";
 import { z } from "zod";
-import { Id } from "~/lib/validators";
+import { Id, parseProjectIdInput } from "~/lib/validators";
+import { projectIdScopedHandler } from "./users.server";
 
 const StringArr = z.array(z.string());
 const StringArrParser = (input: unknown) => StringArr.parse(input);
@@ -188,6 +189,67 @@ export const fetchCbsItemsByL1EndsWith = createServerFn({ method: "GET" })
         accountDescription: true,
       },
     });
+  });
+
+/**
+ * The expanded CBS Dictionary rows (originals + generated S/M twins) that a
+ * project has selected on the Setup page, with every workbook column — feeds
+ * the Project CBS page's Code Book (originals only) and Master CBS Dictionary
+ * sections. Project-scoped so any member of the project can view it.
+ */
+export const fetchProjectCbsDictionary = createServerFn({ method: "GET" })
+  .inputValidator(parseProjectIdInput)
+  .handler(
+    projectIdScopedHandler(({ data: projectId }) =>
+      prisma.cbsItem.findMany({
+        where: { allowedInProjects: { some: { id: projectId } } },
+        orderBy: { id: "asc" },
+        select: {
+          id: true,
+          l1: true,
+          l2: true,
+          l3: true,
+          l4: true,
+          l5: true,
+          l6: true,
+          displayCode: true,
+          costCode: true,
+          name: true,
+          uom: true,
+          rowType: true,
+          generatedFrom: true,
+          subReporting: true,
+          materialCode: true,
+          materialType: true,
+          costCenter: true,
+          costClassification: true,
+          status: true,
+          accountDescription: true,
+          l2Description: true,
+          core: true,
+          coreExtension: true,
+          wbs: true,
+          p6CostAccount: true,
+          gl: true,
+          discipline: true,
+          description: true,
+          notes: true,
+        },
+      }),
+    ),
+  );
+
+export type ProjectCbsDictionaryItem = Awaited<
+  ReturnType<typeof fetchProjectCbsDictionary>
+>[number];
+
+export const projectCbsDictionaryQueryOptions = (projectId: number) =>
+  queryOptions({
+    queryKey: qk.cbs.projectDictionary(projectId),
+    queryFn: () => fetchProjectCbsDictionary({ data: projectId }),
+    // Changes only when Setup saves (which invalidates this key) or the CBS
+    // is re-imported; don't re-ship ~thousands of rows on every page mount.
+    staleTime: Infinity,
   });
 
 /**

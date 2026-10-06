@@ -29,6 +29,7 @@ export const fetchSetupCbsItems = createServerFn({ method: "GET" }).handler(
         accountDescription: true,
         l2Description: true,
         uom: true,
+        rowType: true,
       },
     }),
 );

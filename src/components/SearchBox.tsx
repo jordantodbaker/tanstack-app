@@ -3,7 +3,7 @@ import { cn } from "~/lib/utils";
 
 /**
  * A plain search `<input>` with the app's standard styling and an optional
- * leading magnifier. Shared across features (the Help guide, the Project CBS
+ * leading magnifier. Shared across features (the Help guide, the CBS dictionary
  * tree, …) so the search affordance stays consistent. `showIcon` off drops the
  * icon (and its left padding) for compact placements; `className` carries the
  * per-placement size (e.g. `h-8 w-64`).

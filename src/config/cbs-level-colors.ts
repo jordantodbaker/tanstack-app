@@ -1,5 +1,5 @@
 /**
- * Colour-by-level scheme for the Project CBS page, lifted from the Master CBS
+ * Colour-by-level scheme for the CBS dictionary pages, lifted from the Master CBS
  * Dictionary workbook's own fills so the web view mirrors the sheet. Keyed by
  * the code level (`getCbsLevel` in ~/lib/cbs-tree): 0 = group root, 1 = L1
  * account (and a root's S/M twins), then one step per further code segment.
@@ -30,7 +30,7 @@ export const CBS_DEFAULT_LEVEL_COLOR: CbsLevelColor = {
 // roots) to a distinct red so the top of each hierarchy stands apart.
 const CBS_L0_COLOR: CbsLevelColor = { fill: "#C0504D", text: "#FFFFFF" };
 
-/** The row colour for a code level — shared by the Setup and Project CBS trees. */
+/** The row colour for a code level — shared by every CBS tree. */
 export function cbsColorForLevel(level: number): CbsLevelColor {
   if (level === 0) return CBS_L0_COLOR;
   return CBS_LEVEL_COLORS[level] ?? CBS_DEFAULT_LEVEL_COLOR;

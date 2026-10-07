@@ -1,18 +1,19 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Loader2, X } from "lucide-react";
-import { useSelectedProject } from "~/lib/selected-project";
 import {
   cbsItemDetailQueryOptions,
-  projectCbsDictionaryQueryOptions,
   type CbsItemDetail,
-  type ProjectCbsDictionaryItem,
+  type CbsTreeRow,
 } from "~/utils/cbs";
-import { buildCbsTree, pruneCbsTree, type CbsTreeNode } from "~/lib/cbs-tree";
 import {
-  cbsColorForLevel,
-  type CbsLevelColor,
-} from "~/config/cbs-level-colors";
+  buildCbsTree,
+  cbsFlagBadges,
+  pruneCbsTree,
+  type CbsBadge,
+  type CbsTreeNode,
+} from "~/lib/cbs-tree";
+import { cbsColorForLevel, type CbsLevelColor } from "~/config/cbs-level-colors";
 import {
   CbsLevelLegend,
   CbsTreePanel,
@@ -22,17 +23,24 @@ import { CbsTreeToolbar } from "~/components/CbsTree/CbsTreeToolbar";
 import { useCbsTreeExpansion } from "~/components/CbsTree/useCbsTreeExpansion";
 
 /**
- * The CBS items available on the selected project: the dictionary rows
- * toggled on the Setup page, laid out as colour-by-level collapsible
- * hierarchies. Two sections share one dataset — the Code Book shows the
- * original Master CBS rows only, the Master CBS Dictionary adds the generated
- * S/M twins. Colours mirror the workbook's outline fills (see
+ * The two-section CBS Dictionary browser: a Code Book of original rows and a
+ * Master CBS Dictionary that adds the generated S/M rows, each a
+ * colour-by-level collapsible hierarchy with a detail panel.
+ *
+ * `CbsDictionaryBrowser` is one such dataset on its own (the project-scoped
+ * Project Cost Code List); `CbsDictionarySections` stacks two of them for the
+ * admin-only Master CBS page. Colours mirror the workbook's outline fills (see
  * ~/config/cbs-level-colors); the tree itself is the shared CbsTreePanel.
  */
 
 // Rows and the detail header only need the shared tree fields; the full
 // column set is fetched per selected row.
 type Node = CbsTreeNode;
+
+/** For views that list only original rows: a badge reports what the row itself
+ *  carries (its Sub Code / Material Code) rather than what it is. */
+export const cbsFlagBadgesFor = (node: Node): readonly CbsBadge[] =>
+  cbsFlagBadges(node.item);
 
 /** Detail-panel rows in the workbook's column order. */
 const DETAIL_FIELDS: {
@@ -67,7 +75,7 @@ function yesNo(v: boolean | null): string | null {
   return null;
 }
 
-function rowTypeLabel(rowType: ProjectCbsDictionaryItem["rowType"]): string {
+function rowTypeLabel(rowType: CbsTreeRow["rowType"]): string {
   if (rowType === "SUB") return "Generated - Sub Code";
   if (rowType === "MATERIAL") return "Generated - Material Code";
   return "Original";
@@ -80,7 +88,7 @@ type Counts = {
   materialRows: number;
 };
 
-function countRows(items: readonly ProjectCbsDictionaryItem[]): Counts {
+function countRows(items: readonly CbsTreeRow[]): Counts {
   const c: Counts = { total: items.length, original: 0, subRows: 0, materialRows: 0 };
   for (const i of items) {
     if (i.rowType === "SUB") c.subRows++;
@@ -153,31 +161,57 @@ function DetailPanel({
   );
 }
 
-/** Row-count pills + the per-level colour legend. */
-function CountsLegend({ counts }: { counts: Counts }) {
+/**
+ * Row-count pills + the per-level colour legend. The row-type breakdown is
+ * only worth showing where generated rows can actually appear; a Code Book
+ * view would just read "… · 0 sub · 0 material".
+ */
+function CountsLegend({
+  counts,
+  showRowTypes,
+}: {
+  counts: Counts;
+  showRowTypes: boolean;
+}) {
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2">
       <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
         {counts.total.toLocaleString()} rows
       </span>
-      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
-        {counts.original.toLocaleString()} original · {counts.subRows} sub ·{" "}
-        {counts.materialRows} material
-      </span>
+      {showRowTypes && (
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
+          {counts.original.toLocaleString()} original ·{" "}
+          {counts.subRows.toLocaleString()} sub ·{" "}
+          {counts.materialRows.toLocaleString()} material
+        </span>
+      )}
       <CbsLevelLegend className="ml-1" />
     </div>
   );
 }
 
-/** The collapsible tree + toolbar + detail for one CBS dataset. Owns the state
- *  and derivation; the presentational pieces above take plain props. */
-function CbsHierarchy({
+/**
+ * The searchable tree + toolbar + detail panel for one set of CBS rows. Owns
+ * the state and derivation; the presentational pieces above take plain props.
+ *
+ * Usable on its own (a single-section page) or inside `CbsSection` (one of
+ * several collapsible datasets). Builds its tree on mount, so a section that
+ * mounts it lazily still pays for the build only when opened.
+ */
+export function CbsDictionaryBrowser({
   items,
-  nodes,
+  badgesFor,
+  sourceNote,
+  emptyMessage,
+  showRowTypeCounts = true,
 }: {
-  items: ProjectCbsDictionaryItem[];
-  nodes: Node[];
+  items: CbsTreeRow[];
+  badgesFor?: (node: Node) => readonly CbsBadge[];
+  sourceNote: string;
+  emptyMessage: string;
+  showRowTypeCounts?: boolean;
 }) {
+  const nodes = React.useMemo(() => buildCbsTree(items), [items]);
   const { expanded, toggle, expandAll, collapseAll } = useCbsTreeExpansion(nodes);
   const [selected, setSelected] = React.useState<Node | null>(null);
   const [query, setQuery] = React.useState("");
@@ -197,7 +231,7 @@ function CbsHierarchy({
 
   return (
     <div className="px-4 pb-4 md:px-5">
-      <CountsLegend counts={counts} />
+      <CountsLegend counts={counts} showRowTypes={showRowTypeCounts} />
       <CbsTreeToolbar
         query={query}
         onQueryChange={setQuery}
@@ -213,15 +247,14 @@ function CbsHierarchy({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_22rem]">
         <CbsTreePanel
+          badgesFor={badgesFor}
           flat={flat}
           expanded={expanded}
           forceOpen={needle.length > 0}
           selectedKey={selected?.pathKey ?? null}
           onToggle={toggle}
           onSelect={setSelected}
-          emptyMessage={
-            query ? `No rows match “${query}”.` : "No CBS items selected."
-          }
+          emptyMessage={query ? `No rows match “${query}”.` : emptyMessage}
         />
 
         <aside className="hidden rounded-lg border border-slate-200 bg-white shadow-sm lg:block lg:self-start">
@@ -240,33 +273,30 @@ function CbsHierarchy({
         </aside>
       </div>
 
-      <p className="mt-2 text-[11px] text-slate-400">
-        Source: the Master CBS Dictionary (prisma/data/MasterCBS.xlsx), limited
-        to the items selected for this project on the Setup page. Colours
-        mirror the workbook's outline levels.
-      </p>
+      <p className="mt-2 text-[11px] text-slate-400">{sourceNote}</p>
     </div>
   );
 }
 
-/** A collapsible section over one view of the project's dictionary. */
+/** A collapsible section over one view of a dictionary. */
 function CbsSection({
   title,
   description,
   items,
+  badgesFor,
+  sourceNote,
+  emptyMessage,
   defaultOpen = false,
 }: {
   title: string;
   description: string;
-  items: ProjectCbsDictionaryItem[];
+  items: CbsTreeRow[];
+  badgesFor?: (node: Node) => readonly CbsBadge[];
+  sourceNote: string;
+  emptyMessage: string;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = React.useState(defaultOpen);
-  // Build the tree only once the section is opened (and keep it afterwards).
-  const nodes = React.useMemo(
-    () => (open ? buildCbsTree(items) : null),
-    [open, items],
-  );
 
   return (
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -288,76 +318,78 @@ function CbsSection({
           {items.length.toLocaleString()} rows
         </span>
       </button>
-      {open && nodes && (
+      {/* Mounted only while open, so a closed section never builds its tree. */}
+      {open && (
         <div className="border-t border-slate-100">
-          <CbsHierarchy items={items} nodes={nodes} />
+          <CbsDictionaryBrowser
+            items={items}
+            badgesFor={badgesFor}
+            sourceNote={sourceNote}
+            emptyMessage={emptyMessage}
+          />
         </div>
       )}
     </section>
   );
 }
 
-function ProjectCbsSections({ projectId }: { projectId: number }) {
-  const query = useQuery(projectCbsDictionaryQueryOptions(projectId));
+const MASTER_SOURCE_NOTE =
+  "Source: the Master CBS Dictionary (prisma/data/MasterCBS.xlsx), in full — no project allow-list applied. Colours mirror the workbook's outline levels.";
+const MASTER_EMPTY = "No CBS items in the catalog.";
 
-  if (query.isPending) {
-    return (
-      <div className="flex items-center gap-2 px-4 py-10 text-sm text-slate-500">
-        <Loader2 size={16} className="animate-spin" /> Loading CBS data…
-      </div>
-    );
-  }
-  if (query.isError) {
-    return (
-      <p className="px-4 py-10 text-sm text-red-600">
-        Failed to load this project's CBS.
-      </p>
-    );
-  }
-
-  const items = query.data;
-  const originals = items.filter((i) => i.rowType === "ORIGINAL");
+/**
+ * The whole catalog as two collapsible datasets: a Code Book of original rows
+ * and the full dictionary including the generated S/M rows. The Admin → Master
+ * CBS page; project-scoped pages render a single `CbsDictionaryBrowser`.
+ */
+export function CbsDictionarySections({ items }: { items: CbsTreeRow[] }) {
+  const originals = React.useMemo(
+    () => items.filter((i) => i.rowType === "ORIGINAL"),
+    [items],
+  );
 
   return (
     <div className="flex flex-col gap-4">
       <CbsSection
         title="CBS Code Book"
-        description="The project's selected Master CBS rows — original rows only (no generated S/M)."
+        description="Every Master CBS row — original rows only. S / M mark a row's own Sub Code / Material Code."
         items={originals}
+        badgesFor={cbsFlagBadgesFor}
+        sourceNote={MASTER_SOURCE_NOTE}
+        emptyMessage={MASTER_EMPTY}
         defaultOpen
       />
       <CbsSection
         title="Master CBS Dictionary"
-        description="The project's selected dictionary rows — originals plus the generated S/M rows."
+        description="The complete dictionary — every original row plus the generated S/M rows."
         items={items}
+        sourceNote={MASTER_SOURCE_NOTE}
+        emptyMessage={MASTER_EMPTY}
         defaultOpen
       />
     </div>
   );
 }
 
-export function ProjectCbsView() {
-  const { projectId } = useSelectedProject();
-
-  return (
-    <div className="mx-auto max-w-7xl px-4 py-6 md:px-8">
-      <header className="mb-4">
-        <h1 className="text-2xl font-bold text-slate-800">Project CBS</h1>
-        <p className="mt-1 max-w-3xl text-sm text-slate-500">
-          The CBS items available on this project — the dictionary rows
-          selected on the Setup page — as a colour-coded, collapsible
-          hierarchy. Colours and grouping mirror the Master CBS Dictionary
-          workbook.
-        </p>
-      </header>
-
-      {projectId === null ? (
-        <p className="text-sm text-slate-500">
-          Choose a project to see its available CBS items.
-        </p>
-      ) : (
-        <ProjectCbsSections key={projectId} projectId={projectId} />
-      )}
-    </div>
-  );
+/** Shared pending / error chrome for whichever query feeds the sections. */
+export function CbsDictionaryStatus({
+  isPending,
+  isError,
+  errorMessage,
+}: {
+  isPending: boolean;
+  isError: boolean;
+  errorMessage: string;
+}) {
+  if (isPending) {
+    return (
+      <div className="flex items-center gap-2 px-4 py-10 text-sm text-slate-500">
+        <Loader2 size={16} className="animate-spin" /> Loading CBS data…
+      </div>
+    );
+  }
+  if (isError) {
+    return <p className="px-4 py-10 text-sm text-red-600">{errorMessage}</p>;
+  }
+  return null;
 }

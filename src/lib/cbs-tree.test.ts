@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCbsTree,
+  cbsFlagBadges,
+  cbsRowTypeBadges,
   compareCbsDisplayCodes,
   computeCbsSelectionCounts,
   filterCbsTree,
@@ -259,6 +261,42 @@ describe("rowTypeBadge", () => {
     expect(rowTypeBadge("ORIGINAL")).toBeNull();
     expect(rowTypeBadge("SUB")?.label).toBe("S");
     expect(rowTypeBadge("MATERIAL")?.label).toBe("M");
+  });
+});
+
+describe("cbsFlagBadges", () => {
+  const labels = (over: Partial<CbsTreeItem>) =>
+    cbsFlagBadges(item("601-05-0000-00-0", over)).map((b) => b.label);
+
+  it("badges the workbook's Sub Code and Material Code flags", () => {
+    expect(labels({ subReporting: true, materialCode: false })).toEqual(["S"]);
+    expect(labels({ subReporting: false, materialCode: true })).toEqual(["M"]);
+  });
+
+  it("shows both when a row carries both flags", () => {
+    expect(labels({ subReporting: true, materialCode: true })).toEqual(["S", "M"]);
+  });
+
+  it("shows nothing for NO, blank or absent flags", () => {
+    expect(labels({ subReporting: false, materialCode: false })).toEqual([]);
+    expect(labels({ subReporting: null, materialCode: null })).toEqual([]);
+    expect(labels({})).toEqual([]);
+  });
+
+  it("reads the flags, not the row type", () => {
+    // An original row with Sub Code = YES is badged; a generated SUB row whose
+    // own flags are off is not. The two badge schemes are independent.
+    expect(labels({ rowType: "ORIGINAL", subReporting: true })).toEqual(["S"]);
+    expect(labels({ rowType: "SUB", subReporting: false })).toEqual([]);
+  });
+});
+
+describe("cbsRowTypeBadges", () => {
+  it("wraps the row-type badge as a list", () => {
+    expect(cbsRowTypeBadges(item("601-05-0000-00-S", { rowType: "SUB" }))).toEqual([
+      { label: "S", title: "Generated sub-code row" },
+    ]);
+    expect(cbsRowTypeBadges(item("601-05-0000-00-0"))).toEqual([]);
   });
 });
 

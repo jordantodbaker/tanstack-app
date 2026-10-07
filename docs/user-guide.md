@@ -45,7 +45,8 @@ The **Summary** page ties them together into a *living budget*: as-bid estimate
 ### Navigation
 
 - **Top nav:** Dashboard · Change Log · FCO Log · RFIs · Trends · PCOs ·
-  Reporting · Field Estimate Form *(admins)*.
+  Reporting · Project Cost Code List · Field Estimate Form *(admins)*.
+  Anything that doesn't fit the window collapses into a **More** menu.
 - **Sidebar:** Setup, the **Summary** group (Summary · Basis · Validation), the
   **disciplines** (Civil, Concrete, Steel, Piping, Electrical, … plus
   Engineering, Procurement, Administration, etc.), Materials, Recently viewed,
@@ -131,9 +132,12 @@ paste, fill, and clear skip them.
 
 For bringing in many rows at once, the **Paste from Excel** button opens an
 importer. Paste your columns in this order — **CBS Code · Description · Quantity ·
-Labor Factor · Labor Rate · Area** — and the importer detects and skips a header
-row and cleans commas / `$` from numbers. Each **CBS Code** is matched against
-the catalog to fill Name and Unit. Any row whose CBS code belongs to a
+Labor Factor · Labor Rate · Area · Role · Schedule · Notes** — and the importer
+detects and skips a header row and cleans commas / `$` from numbers. Trailing
+columns are optional, so a shorter block is fine as long as the order matches;
+**Export CSV** emits exactly this set first, so an exported sheet round-trips.
+Each **CBS Code** is matched against the catalog to fill Name and Unit. Any row
+whose CBS code belongs to a
 **different discipline** is routed to that discipline's Take Off automatically
 (and saved there), with a note telling you how many rows were routed.
 
@@ -158,8 +162,31 @@ Cost = Total Cost**.
 
 ### Setup (admins)
 
-Project configuration — which CBS accounts (L1 codes) are in play for the
-project. This controls which disciplines and CBS items appear.
+Project configuration — which **CBS items** a project may use. This controls
+which disciplines appear in the sidebar and which items the pickers offer.
+
+The tree is the full CBS Dictionary, coloured by level the way the source
+workbook colours it. Ticking a parent allows everything beneath it; a
+half-filled box means only some of its children are allowed. Rows badged **S**
+or **M** are the generated subcontract and material versions of the row above
+them — allow those too if the project will book cost against them.
+
+> **After a CBS update:** new codes are never granted automatically. Come back
+> here and allow the new items each project needs, or its pickers won't offer
+> them.
+
+### Project Cost Code List
+
+A read-only list of the cost codes available on the selected project — exactly
+what an admin allowed in Setup — as a colour-coded, collapsible hierarchy you
+can search. Select a row to see its full detail: unit, cost code, account, cost
+classification, discipline, description and more.
+
+Only the **original** Master CBS rows are listed. **S** means a code's own
+**Sub Code** is YES, **M** means its **Material Code** is YES, and a code
+carrying both shows both. The generated subcontract and material rows are not
+listed here, since those badges already tell you which codes have them; admins
+can see both views over the whole catalog under **Admin → Master CBS**.
 
 > **Saving:** edits autosave as you go (debounced). No "Save" button to hunt for.
 
@@ -294,6 +321,11 @@ Admins configure the shared data the rest of the app draws on:
   Support Labor rates).
 - **Crew Mixes** — named crews of members with wages; the average drives a row's
   labor rate when "Use Crew Mix" is on.
+- **Master CBS** — the complete CBS Dictionary, in the same browser as
+  the **Project Cost Code List** but with no project allow-list applied and both views, so it shows every
+  account including ones no project has been granted. Read-only; the catalog
+  changes only through a CBS import. Use it to look an account up before
+  granting it on the Setup page. It ignores the selected project entirely.
 - **CVR / FCO Templates** — reusable field sets to pre-fill new records.
 - **Users** — accounts and roles.
 - **System** — system-level settings and maintenance.

@@ -74,6 +74,8 @@ function item(displayCode: string, name: string, rowType: CbsTreeItem["rowType"]
     accountDescription: name,
     l2Description: null,
     rowType,
+    subReporting: null,
+    materialCode: null,
   };
 }
 

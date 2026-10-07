@@ -5,7 +5,7 @@ import { Button } from "~/components/ui/button";
 /**
  * Search box + Expand all / Collapse all for a CBS tree, with a trailing slot
  * for page-specific status (match count, selected count, saving…). Shared by
- * the Setup editor and the Project CBS viewer.
+ * the Setup editor and the CBS dictionary viewers.
  */
 export function CbsTreeToolbar({
   query,

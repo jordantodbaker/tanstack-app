@@ -35,6 +35,11 @@ export type CbsTreeItem = {
   l2Description: string | null;
   uom: string;
   rowType: CbsRowType;
+  /** The workbook's "Sub Code" flag. Optional so fixtures and callers that
+   *  don't badge by flag need not carry it. */
+  subReporting?: boolean | null;
+  /** The workbook's "Material Code" flag. */
+  materialCode?: boolean | null;
 };
 
 export type CbsTreeNode<T extends CbsTreeItem = CbsTreeItem> = {
@@ -353,6 +358,32 @@ export function rowTypeBadge(
     return { label: "M", title: "Generated material row" };
   }
   return null;
+}
+
+/** One marker shown beside a row. */
+export type CbsBadge = { label: string; title: string };
+
+/** Badges by row type — what a generated row IS. Used where generated rows
+ *  sit alongside their originals (Setup, the Master CBS Dictionary). */
+export function cbsRowTypeBadges(item: CbsTreeItem): CbsBadge[] {
+  const badge = rowTypeBadge(item.rowType);
+  return badge ? [badge] : [];
+}
+
+/**
+ * Badges by the workbook's own flags — what a row HAS. Used where only
+ * original rows are listed (the CBS Code Book), so the row itself shows
+ * whether it carries a sub code, a material code, or both.
+ */
+export function cbsFlagBadges(item: CbsTreeItem): CbsBadge[] {
+  const out: CbsBadge[] = [];
+  if (item.subReporting === true) {
+    out.push({ label: "S", title: "Sub Code: YES" });
+  }
+  if (item.materialCode === true) {
+    out.push({ label: "M", title: "Material Code: YES" });
+  }
+  return out;
 }
 
 /** Path keys of every node that has children — for "Expand all". */

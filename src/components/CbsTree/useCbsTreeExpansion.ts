@@ -3,7 +3,7 @@ import { collectExpandableKeys, type CbsTreeNode } from "~/lib/cbs-tree";
 
 /**
  * Expand/collapse state for a CBS tree — shared by the Setup editor and the
- * Project CBS viewer. `expandAll` opens every node of the full `nodes` tree
+ * CBS dictionary viewers. `expandAll` opens every node of the full `nodes` tree
  * (not just the currently filtered view) so a later cleared search shows the
  * whole catalog open.
  */

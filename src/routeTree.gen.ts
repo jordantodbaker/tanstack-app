@@ -20,7 +20,7 @@ import { Route as HelpRouteImport } from './routes/help'
 import { Route as MaterialsRouteImport } from './routes/materials'
 import { Route as PcoRouteImport } from './routes/pco'
 import { Route as PipingRouteImport } from './routes/piping'
-import { Route as ProjectCbsRouteImport } from './routes/project-cbs'
+import { Route as ProjectCostCodesRouteImport } from './routes/project-cost-codes'
 import { Route as ReportingRouteImport } from './routes/reporting'
 import { Route as RfisRouteImport } from './routes/rfis'
 import { Route as SetupRouteImport } from './routes/setup'
@@ -31,6 +31,7 @@ import { Route as AdminAreasRouteImport } from './routes/admin.areas'
 import { Route as AdminCrewMixesRouteImport } from './routes/admin.crew-mixes'
 import { Route as AdminCvrTemplatesRouteImport } from './routes/admin.cvr-templates'
 import { Route as AdminFcoTemplatesRouteImport } from './routes/admin.fco-templates'
+import { Route as AdminMasterCbsRouteImport } from './routes/admin.master-cbs'
 import { Route as AdminProjectsRouteImport } from './routes/admin.projects'
 import { Route as AdminRolesRouteImport } from './routes/admin.roles'
 import { Route as AdminSchedulesRouteImport } from './routes/admin.schedules'
@@ -97,9 +98,9 @@ const PipingRoute = PipingRouteImport.update({
   path: '/piping',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ProjectCbsRoute = ProjectCbsRouteImport.update({
-  id: '/project-cbs',
-  path: '/project-cbs',
+const ProjectCostCodesRoute = ProjectCostCodesRouteImport.update({
+  id: '/project-cost-codes',
+  path: '/project-cost-codes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReportingRoute = ReportingRouteImport.update({
@@ -150,6 +151,11 @@ const AdminCvrTemplatesRoute = AdminCvrTemplatesRouteImport.update({
 const AdminFcoTemplatesRoute = AdminFcoTemplatesRouteImport.update({
   id: '/fco-templates',
   path: '/fco-templates',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminMasterCbsRoute = AdminMasterCbsRouteImport.update({
+  id: '/master-cbs',
+  path: '/master-cbs',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminProjectsRoute = AdminProjectsRouteImport.update({
@@ -215,7 +221,7 @@ export interface FileRoutesByFullPath {
   '/materials': typeof MaterialsRoute
   '/pco': typeof PcoRoute
   '/piping': typeof PipingRoute
-  '/project-cbs': typeof ProjectCbsRoute
+  '/project-cost-codes': typeof ProjectCostCodesRoute
   '/reporting': typeof ReportingRoute
   '/rfis': typeof RfisRoute
   '/setup': typeof SetupRoute
@@ -226,6 +232,7 @@ export interface FileRoutesByFullPath {
   '/admin/crew-mixes': typeof AdminCrewMixesRoute
   '/admin/cvr-templates': typeof AdminCvrTemplatesRoute
   '/admin/fco-templates': typeof AdminFcoTemplatesRoute
+  '/admin/master-cbs': typeof AdminMasterCbsRoute
   '/admin/projects': typeof AdminProjectsRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/schedules': typeof AdminSchedulesRoute
@@ -249,7 +256,7 @@ export interface FileRoutesByTo {
   '/materials': typeof MaterialsRoute
   '/pco': typeof PcoRoute
   '/piping': typeof PipingRoute
-  '/project-cbs': typeof ProjectCbsRoute
+  '/project-cost-codes': typeof ProjectCostCodesRoute
   '/reporting': typeof ReportingRoute
   '/rfis': typeof RfisRoute
   '/setup': typeof SetupRoute
@@ -260,6 +267,7 @@ export interface FileRoutesByTo {
   '/admin/crew-mixes': typeof AdminCrewMixesRoute
   '/admin/cvr-templates': typeof AdminCvrTemplatesRoute
   '/admin/fco-templates': typeof AdminFcoTemplatesRoute
+  '/admin/master-cbs': typeof AdminMasterCbsRoute
   '/admin/projects': typeof AdminProjectsRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/schedules': typeof AdminSchedulesRoute
@@ -284,7 +292,7 @@ export interface FileRoutesById {
   '/materials': typeof MaterialsRoute
   '/pco': typeof PcoRoute
   '/piping': typeof PipingRoute
-  '/project-cbs': typeof ProjectCbsRoute
+  '/project-cost-codes': typeof ProjectCostCodesRoute
   '/reporting': typeof ReportingRoute
   '/rfis': typeof RfisRoute
   '/setup': typeof SetupRoute
@@ -295,6 +303,7 @@ export interface FileRoutesById {
   '/admin/crew-mixes': typeof AdminCrewMixesRoute
   '/admin/cvr-templates': typeof AdminCvrTemplatesRoute
   '/admin/fco-templates': typeof AdminFcoTemplatesRoute
+  '/admin/master-cbs': typeof AdminMasterCbsRoute
   '/admin/projects': typeof AdminProjectsRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/schedules': typeof AdminSchedulesRoute
@@ -320,7 +329,7 @@ export interface FileRouteTypes {
     | '/materials'
     | '/pco'
     | '/piping'
-    | '/project-cbs'
+    | '/project-cost-codes'
     | '/reporting'
     | '/rfis'
     | '/setup'
@@ -331,6 +340,7 @@ export interface FileRouteTypes {
     | '/admin/crew-mixes'
     | '/admin/cvr-templates'
     | '/admin/fco-templates'
+    | '/admin/master-cbs'
     | '/admin/projects'
     | '/admin/roles'
     | '/admin/schedules'
@@ -354,7 +364,7 @@ export interface FileRouteTypes {
     | '/materials'
     | '/pco'
     | '/piping'
-    | '/project-cbs'
+    | '/project-cost-codes'
     | '/reporting'
     | '/rfis'
     | '/setup'
@@ -365,6 +375,7 @@ export interface FileRouteTypes {
     | '/admin/crew-mixes'
     | '/admin/cvr-templates'
     | '/admin/fco-templates'
+    | '/admin/master-cbs'
     | '/admin/projects'
     | '/admin/roles'
     | '/admin/schedules'
@@ -388,7 +399,7 @@ export interface FileRouteTypes {
     | '/materials'
     | '/pco'
     | '/piping'
-    | '/project-cbs'
+    | '/project-cost-codes'
     | '/reporting'
     | '/rfis'
     | '/setup'
@@ -399,6 +410,7 @@ export interface FileRouteTypes {
     | '/admin/crew-mixes'
     | '/admin/cvr-templates'
     | '/admin/fco-templates'
+    | '/admin/master-cbs'
     | '/admin/projects'
     | '/admin/roles'
     | '/admin/schedules'
@@ -423,7 +435,7 @@ export interface RootRouteChildren {
   MaterialsRoute: typeof MaterialsRoute
   PcoRoute: typeof PcoRoute
   PipingRoute: typeof PipingRoute
-  ProjectCbsRoute: typeof ProjectCbsRoute
+  ProjectCostCodesRoute: typeof ProjectCostCodesRoute
   ReportingRoute: typeof ReportingRoute
   RfisRoute: typeof RfisRoute
   SetupRoute: typeof SetupRoute
@@ -515,11 +527,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PipingRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/project-cbs': {
-      id: '/project-cbs'
-      path: '/project-cbs'
-      fullPath: '/project-cbs'
-      preLoaderRoute: typeof ProjectCbsRouteImport
+    '/project-cost-codes': {
+      id: '/project-cost-codes'
+      path: '/project-cost-codes'
+      fullPath: '/project-cost-codes'
+      preLoaderRoute: typeof ProjectCostCodesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reporting': {
@@ -590,6 +602,13 @@ declare module '@tanstack/react-router' {
       path: '/fco-templates'
       fullPath: '/admin/fco-templates'
       preLoaderRoute: typeof AdminFcoTemplatesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/master-cbs': {
+      id: '/admin/master-cbs'
+      path: '/master-cbs'
+      fullPath: '/admin/master-cbs'
+      preLoaderRoute: typeof AdminMasterCbsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/projects': {
@@ -670,6 +689,7 @@ interface AdminRouteChildren {
   AdminCrewMixesRoute: typeof AdminCrewMixesRoute
   AdminCvrTemplatesRoute: typeof AdminCvrTemplatesRoute
   AdminFcoTemplatesRoute: typeof AdminFcoTemplatesRoute
+  AdminMasterCbsRoute: typeof AdminMasterCbsRoute
   AdminProjectsRoute: typeof AdminProjectsRoute
   AdminRolesRoute: typeof AdminRolesRoute
   AdminSchedulesRoute: typeof AdminSchedulesRoute
@@ -683,6 +703,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminCrewMixesRoute: AdminCrewMixesRoute,
   AdminCvrTemplatesRoute: AdminCvrTemplatesRoute,
   AdminFcoTemplatesRoute: AdminFcoTemplatesRoute,
+  AdminMasterCbsRoute: AdminMasterCbsRoute,
   AdminProjectsRoute: AdminProjectsRoute,
   AdminRolesRoute: AdminRolesRoute,
   AdminSchedulesRoute: AdminSchedulesRoute,
@@ -705,7 +726,7 @@ const rootRouteChildren: RootRouteChildren = {
   MaterialsRoute: MaterialsRoute,
   PcoRoute: PcoRoute,
   PipingRoute: PipingRoute,
-  ProjectCbsRoute: ProjectCbsRoute,
+  ProjectCostCodesRoute: ProjectCostCodesRoute,
   ReportingRoute: ReportingRoute,
   RfisRoute: RfisRoute,
   SetupRoute: SetupRoute,

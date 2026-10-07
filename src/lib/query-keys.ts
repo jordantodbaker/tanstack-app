@@ -160,8 +160,10 @@ export const qk = {
     /** The expanded dictionary rows a project has selected in Setup. */
     projectDictionary: (projectId: number) =>
       ["cbsProjectDictionary", projectId] as const,
-    /** Every column of one dictionary row (Project CBS detail panel). */
+    /** Every column of one dictionary row (CBS dictionary detail panel). */
     itemDetail: (id: number) => ["cbsItemDetail", id] as const,
+    /** The whole dictionary, ignoring project allow-lists (Admin → Master CBS). */
+    masterDictionary: () => ["cbsMasterDictionary"] as const,
     itemsByL1FilteredAll: () => ["cbsItemsByL1Filtered"] as const,
     itemsByL1Filtered: (input: {
       l1Values: string[];

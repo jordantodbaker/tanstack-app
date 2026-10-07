@@ -453,9 +453,34 @@ When a new master arrives:
    survives. Codes that no longer exist are deleted (and drop out of the
    allow-lists). Brand-new codes, including newly generated S/M twins, are
    NOT auto-added to any project — grant them on the Setup page.
+4. `DATABASE_URL=<env-url> npm run piping:sync-codes` (preview with
+   `-- --dry-run`) — pushes the piping metallurgy codes from
+   `prisma/data/piping_groups.csv` into `PipingGroup.installCode` /
+   `shopCode`. Those two columns are what the Piping take-off composes cost
+   codes from, and they are NOT derived from the workbook, so a renumbered
+   piping series leaves them stale and piping rows silently stop
+   auto-populating their CBS id/name. Touches only those two columns.
+5. **Re-check the hard-coded code tables below**, then smoke-test one take-off
+   page per discipline: pick a CBS item and confirm the id, name and unit
+   populate.
 
 The full seed (`prisma db seed`) loads the same workbook but wipes projects
 first; use it only for a fresh database.
+
+### Code tables a CBS renumbering invalidates
+
+Several places hold CBS codes that are *not* read from the workbook at
+runtime. A CBS update doesn't fail loudly when these go stale — pickers just
+come up empty or auto-population stops — so re-check each one against the new
+master. All of them broke on the October 2026 update.
+
+| What | Where | Symptom when stale |
+|---|---|---|
+| Per-discipline L1 account lists | `src/config/disciplines-data.ts` | A discipline's Take Off picker shows almost nothing |
+| Piping metallurgy codes (shop / install) | `prisma/data/piping_groups.csv` → `PipingGroup` | Piping rows don't auto-populate id/name (step 4 above) |
+| Piping cost-code shapes and cost type | `pipingCostCodes` in `src/lib/piping-derive.ts` | Same, and the doc comment there records the expected shapes |
+| Bore-size bands | `computeBoreSize` in `src/lib/utils.ts` | A size bands into a bore series that has no item for it |
+| Materials / support-labor L1 suffixes | `src/components/DisciplineRoute.tsx`, `src/routes/materials.tsx`, `src/routes/piping.tsx` | Rows land on the wrong sheet |
 
 ---
 

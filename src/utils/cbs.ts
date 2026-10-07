@@ -5,7 +5,10 @@ import { Prisma } from "../generated/prisma/client";
 import { prisma } from "../server/db";
 import { z } from "zod";
 import { Id, parseProjectIdInput } from "~/lib/validators";
-import { projectIdScopedHandler } from "./users.server";
+import {
+  adminHandlerNoInput,
+  projectIdScopedHandler,
+} from "./users.server";
 
 const StringArr = z.array(z.string());
 const StringArrParser = (input: unknown) => StringArr.parse(input);
@@ -210,12 +213,16 @@ export const cbsTreeRowSelect = {
   accountDescription: true,
   l2Description: true,
   rowType: true,
+  // The workbook's Sub Code / Material Code flags — the Code Book badges a row
+  // by what it carries, since that section lists no generated rows.
+  subReporting: true,
+  materialCode: true,
 } satisfies Prisma.CbsItemSelect;
 
 /**
  * The expanded CBS Dictionary rows (originals + generated S/M twins) that a
- * project has selected on the Setup page — feeds the Project CBS page's Code
- * Book (originals only) and Master CBS Dictionary sections. Only the fields
+ * project has selected on the Setup page — feeds the Project Cost Code List
+ * (originals only) and, unfiltered, the Admin Master CBS page. Only the fields
  * the tree needs are shipped (a project can allow the whole ~7k-row catalog);
  * the full column set for one row comes from `fetchCbsItemDetail` on demand.
  * Project-scoped so any member of the project can view it.
@@ -232,9 +239,35 @@ export const fetchProjectCbsDictionary = createServerFn({ method: "GET" })
     ),
   );
 
-export type ProjectCbsDictionaryItem = Awaited<
-  ReturnType<typeof fetchProjectCbsDictionary>
->[number];
+/** One dictionary row as the CBS tree views receive it. */
+export type CbsTreeRow = Prisma.CbsItemGetPayload<{
+  select: typeof cbsTreeRowSelect;
+}>;
+
+export type ProjectCbsDictionaryItem = CbsTreeRow;
+
+/**
+ * The WHOLE expanded CBS Dictionary, ignoring every project allow-list — the
+ * Admin → Master CBS page. Admin-only, since it exposes accounts a given
+ * project was deliberately not granted.
+ */
+export const fetchMasterCbsDictionary = createServerFn({ method: "GET" })
+  .handler(
+    adminHandlerNoInput(() =>
+      prisma.cbsItem.findMany({
+        orderBy: { id: "asc" },
+        select: cbsTreeRowSelect,
+      }),
+    ),
+  );
+
+export const masterCbsDictionaryQueryOptions = () =>
+  queryOptions({
+    queryKey: qk.cbs.masterDictionary(),
+    queryFn: () => fetchMasterCbsDictionary(),
+    // The catalog changes only on a CBS re-import.
+    staleTime: Infinity,
+  });
 
 export const projectCbsDictionaryQueryOptions = (projectId: number) =>
   queryOptions({
@@ -245,7 +278,7 @@ export const projectCbsDictionaryQueryOptions = (projectId: number) =>
     staleTime: Infinity,
   });
 
-/** Every workbook column for one dictionary row — the Project CBS detail panel. */
+/** Every workbook column for one dictionary row — the detail panel. */
 export const fetchCbsItemDetail = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => Id.parse(input))
   .handler(({ data: id }) =>

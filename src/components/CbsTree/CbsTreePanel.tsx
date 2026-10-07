@@ -1,7 +1,12 @@
 import * as React from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronRight } from "lucide-react";
-import { rowTypeBadge, type CbsTreeItem, type CbsTreeNode } from "~/lib/cbs-tree";
+import {
+  cbsRowTypeBadges,
+  type CbsBadge,
+  type CbsTreeItem,
+  type CbsTreeNode,
+} from "~/lib/cbs-tree";
 import {
   CBS_HEADER_COLOR,
   CBS_LEGEND_LEVELS,
@@ -11,7 +16,7 @@ import {
 
 /**
  * The colour-by-level CBS tree shared by the Setup page (with a checkbox per
- * row) and the Project CBS page (with a detail panel). Rows are flattened to
+ * row) and the CBS dictionary pages (with a detail panel). Rows are flattened to
  * the currently-visible set and virtualized, so "Expand all" over thousands
  * of nodes stays cheap and scroll/select/toggle never re-render the whole
  * tree. Rows only read `CbsTreeItem` fields, so any `CbsTreeNode<T>` tree is
@@ -38,6 +43,9 @@ export function flattenVisibleCbsNodes<T extends CbsTreeItem>(
   return out;
 }
 
+const defaultBadgesFor = (node: CbsTreeNode): readonly CbsBadge[] =>
+  cbsRowTypeBadges(node.item);
+
 /**
  * One flattened tree row. Memoized and fed only primitives + stable refs
  * (`isOpen`/`isSelected` booleans, a stable `color`, stable callbacks) so that
@@ -53,6 +61,7 @@ const CbsRow = React.memo(function CbsRow({
   onSelect,
   color,
   leading,
+  badges,
 }: {
   node: CbsTreeNode;
   hasChildren: boolean;
@@ -63,9 +72,11 @@ const CbsRow = React.memo(function CbsRow({
   color: CbsLevelColor;
   /** Optional control rendered between the chevron and the code (Setup's checkbox). */
   leading?: React.ReactNode;
+  /** Markers shown after the name, resolved by the panel so this memoized row
+   *  receives a plain array rather than a fresh callback each render. */
+  badges: readonly CbsBadge[];
 }) {
   const { item } = node;
-  const badge = rowTypeBadge(item.rowType);
   const label = item.name || item.accountDescription || item.displayCode;
 
   return (
@@ -107,14 +118,15 @@ const CbsRow = React.memo(function CbsRow({
         {item.displayCode}
       </span>
       <span className="truncate font-medium">{label}</span>
-      {badge && (
+      {badges.map((b) => (
         <span
-          title={badge.title}
+          key={b.label}
+          title={b.title}
           className="shrink-0 rounded border border-current/30 px-1 text-[10px] leading-4 font-semibold opacity-70"
         >
-          {badge.label}
+          {b.label}
         </span>
-      )}
+      ))}
       {item.uom && (
         <span className="ml-auto shrink-0 font-mono text-[11px] opacity-70">
           {item.uom}
@@ -157,6 +169,7 @@ export function CbsTreePanel({
   onToggle,
   onSelect,
   renderLeading,
+  badgesFor = defaultBadgesFor,
   emptyMessage,
   children,
 }: {
@@ -169,6 +182,10 @@ export function CbsTreePanel({
   onToggle: (key: string) => void;
   onSelect?: (node: CbsTreeNode) => void;
   renderLeading?: (node: CbsTreeNode) => React.ReactNode;
+  /** Which markers a row shows. Defaults to the row-type badge (what a
+   *  generated row IS); the CBS Code Book passes `cbsFlagBadges` instead,
+   *  because that section lists no generated rows. */
+  badgesFor?: (node: CbsTreeNode) => readonly CbsBadge[];
   emptyMessage: string;
   /** Overlay content (e.g. a load mask) rendered inside the bordered panel. */
   children?: React.ReactNode;
@@ -230,6 +247,7 @@ export function CbsTreePanel({
                     onSelect={onSelect}
                     color={cbsColorForLevel(node.level)}
                     leading={renderLeading?.(node)}
+                    badges={badgesFor(node)}
                   />
                 </div>
               );

@@ -39,6 +39,7 @@ const ADMIN_LINKS = [
   { to: "/admin/schedules", label: "Schedules" },
   { to: "/admin/roles", label: "Roles" },
   { to: "/admin/crew-mixes", label: "Crew Mixes" },
+  { to: "/admin/master-cbs", label: "Master CBS" },
   { to: "/admin/cvr-templates", label: "CVR Templates" },
   { to: "/admin/fco-templates", label: "FCO Templates" },
   { to: "/admin/users", label: "Users" },

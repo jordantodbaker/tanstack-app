@@ -130,7 +130,7 @@ export const HELP_SECTIONS: HelpSection[] = [
           {
             kind: "ul",
             items: [
-              "Top nav — Dashboard, Change Log, FCO Log, RFIs, Trends, PCOs, Reporting. Anything that does not fit your window collapses into a “More” menu.",
+              "Top nav — Dashboard, Change Log, FCO Log, RFIs, Trends, PCOs, Reporting, Project Cost Code List. Anything that does not fit your window collapses into a “More” menu.",
               "Sidebar — the Summary group (Summary, Basis, Validation), the disciplines (Civil, Concrete, Steel, Piping, Electrical and the rest), Materials, and Recently viewed.",
               "A warning triangle next to a discipline means its Take Off has rows that cannot compute a cost yet. The Validation page lists them.",
             ],
@@ -370,7 +370,33 @@ export const HELP_SECTIONS: HelpSection[] = [
         blocks: [
           {
             kind: "p",
-            text: "Setup is project configuration: which CBS accounts a project uses and the defaults the discipline pages inherit. Only administrators see or reach it, and the disciplines a project shows in the sidebar follow from what you allow here.",
+            text: "Setup is project configuration: which CBS items a project may use, and the defaults the discipline pages inherit. Only administrators see or reach it, and the disciplines a project shows in the sidebar follow from what you allow here.",
+          },
+          {
+            kind: "p",
+            text: "The tree is the full CBS Dictionary, coloured by level the way the source workbook colours it. Ticking a parent allows everything beneath it; a half-filled box means only some of its children are allowed. Rows marked S or M are the generated subcontract and material versions of the row above them, so allow those too if the project will book cost against them.",
+          },
+          {
+            kind: "p",
+            text: "A CBS update never grants new codes automatically. After one, come back here and allow the new items a project needs, or its pickers will not offer them.",
+          },
+        ],
+      },
+      {
+        id: "project-cost-codes",
+        title: "Project Cost Code List",
+        blocks: [
+          {
+            kind: "p",
+            text: "The Project Cost Code List shows the cost codes available on the selected project — exactly the ones an administrator allowed in Setup — as a colour-coded, collapsible hierarchy you can search. It is a reference view: nothing here changes the estimate.",
+          },
+          {
+            kind: "ul",
+            items: [
+              "Only the original Master CBS rows are listed. S means a code's own Sub Code is YES and M means its Material Code is YES; a code with both shows both.",
+              "The generated subcontract and material rows are not listed here — the badges already tell you which codes have them. Administrators can see both views over the whole catalog under Admin → Master CBS.",
+              "Select any row to see its full detail: unit, cost code, account, cost classification, discipline, description and more.",
+            ],
           },
         ],
       },
@@ -679,6 +705,21 @@ export const HELP_SECTIONS: HelpSection[] = [
               "Subcontractors — the sub directory used across the estimate and the logs.",
               "CVR and FCO Templates — reusable field sets that pre-fill a new record. Worth building for the changes your projects raise over and over.",
             ],
+          },
+        ],
+      },
+      {
+        id: "admin-master-cbs",
+        title: "Master CBS",
+        minRole: "ADMINISTRATOR",
+        blocks: [
+          {
+            kind: "p",
+            text: "Master CBS is the complete CBS Dictionary in the same browser as the Project Cost Code List, but with no project allow-list applied and both the Code Book and full-dictionary views — it lists every account, including ones no project has been granted. It ignores the selected project entirely.",
+          },
+          {
+            kind: "p",
+            text: "Use it to look an account up before granting it to a project on the Setup page. It is read-only: the catalog itself changes only through a CBS import.",
           },
         ],
       },

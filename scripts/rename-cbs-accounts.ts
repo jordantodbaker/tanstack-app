@@ -12,6 +12,11 @@
 // Run:  npx tsx scripts/rename-cbs-accounts.ts [--dry-run]
 import "dotenv/config";
 import { prisma } from "../src/server/db";
+import {
+  cbsDisplayDescription,
+  planCbsRenames,
+  type CbsRename,
+} from "../src/lib/cbs-rename-plan";
 
 const dryRun = process.argv.includes("--dry-run");
 
@@ -20,12 +25,7 @@ const dryRun = process.argv.includes("--dry-run");
  * MasterCBS.xlsx (sheet "Master CBS", column H = "Name"), so a future import
  * carries the new name rather than reverting it.
  */
-const RENAMES: {
-  displayCode: string;
-  from: string;
-  to: string;
-  workbookCell: string;
-}[] = [
+const RENAMES: CbsRename[] = [
   {
     // The 300 division covers shop fabrication (300–312) AND field erection
     // (330–390), so the division name should not say "Shop Fabrication".
@@ -45,34 +45,33 @@ const RENAMES: {
 ];
 
 async function main() {
-  const codes = RENAMES.map((r) => r.displayCode);
   const rows = await prisma.cbsItem.findMany({
-    where: { displayCode: { in: codes } },
+    where: { displayCode: { in: RENAMES.map((r) => r.displayCode) } },
     select: { id: true, displayCode: true, name: true },
   });
-  const byCode = new Map(rows.map((r) => [r.displayCode, r]));
 
+  // The decision per entry — including the refusal rule — lives in
+  // src/lib/cbs-rename-plan.ts so it can be unit-tested without a database.
+  const outcomes = planCbsRenames(RENAMES, rows);
   const todo: { id: number; displayCode: string; to: string }[] = [];
-  for (const r of RENAMES) {
-    const row = byCode.get(r.displayCode);
-    if (!row) {
-      console.log(`  SKIP   ${r.displayCode} — not in the catalog`);
-      continue;
+  for (const o of outcomes) {
+    switch (o.kind) {
+      case "missing":
+        console.log(`  SKIP   ${o.displayCode} — not in the catalog`);
+        break;
+      case "current":
+        console.log(`  OK     ${o.displayCode} already "${o.name}"`);
+        break;
+      case "stale":
+        console.log(
+          `  STALE  ${o.displayCode} is "${o.actual}", expected "${o.expected}" — left alone`,
+        );
+        break;
+      case "rename":
+        console.log(`  RENAME ${o.displayCode} "${o.from}" → "${o.to}"`);
+        todo.push({ id: o.id, displayCode: o.displayCode, to: o.to });
+        break;
     }
-    if (row.name === r.to) {
-      console.log(`  OK     ${r.displayCode} already "${r.to}"`);
-      continue;
-    }
-    if (row.name !== r.from) {
-      // Refuse rather than overwrite a name nobody expected — the workbook
-      // may have been re-imported with something different since.
-      console.log(
-        `  STALE  ${r.displayCode} is "${row.name}", expected "${r.from}" — left alone`,
-      );
-      continue;
-    }
-    console.log(`  RENAME ${r.displayCode} "${row.name}" → "${r.to}"`);
-    todo.push({ id: row.id, displayCode: r.displayCode, to: r.to });
   }
 
   if (todo.length === 0) {
@@ -89,7 +88,7 @@ async function main() {
       where: { id: t.id },
       data: {
         name: t.to,
-        displayDescription: `${t.displayCode}:  ${t.to}`,
+        displayDescription: cbsDisplayDescription(t.displayCode, t.to),
       },
     });
   }

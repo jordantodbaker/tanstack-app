@@ -18,6 +18,10 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { prisma } from "../src/server/db";
+import {
+  parsePipingGroupCodes,
+  planPipingGroupSync,
+} from "../src/lib/piping-group-sync";
 
 const dryRun = process.argv.includes("--dry-run");
 const CSV = join(
@@ -28,47 +32,8 @@ const CSV = join(
   "piping_groups.csv",
 );
 
-function parseCsvLine(line: string): string[] {
-  const out: string[] = [];
-  let field = "";
-  let inQuote = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (inQuote) {
-      if (c === '"') {
-        if (line[i + 1] === '"') {
-          field += '"';
-          i++;
-        } else inQuote = false;
-      } else field += c;
-    } else if (c === '"') inQuote = true;
-    else if (c === ",") {
-      out.push(field);
-      field = "";
-    } else field += c;
-  }
-  out.push(field);
-  return out;
-}
-
-/** classification → { installCode, shopCode }, first row wins. */
-function loadCodes(): Map<string, { installCode: string; shopCode: string }> {
-  const lines = readFileSync(CSV, "utf-8").split(/\r?\n/);
-  const map = new Map<string, { installCode: string; shopCode: string }>();
-  for (const line of lines.slice(1)) {
-    if (line.trim() === "") continue;
-    const cols = parseCsvLine(line);
-    const classification = (cols[1] ?? "").trim();
-    const installCode = (cols[2] ?? "").trim();
-    const shopCode = (cols[3] ?? "").trim();
-    if (!classification || !installCode || !shopCode) continue;
-    if (!map.has(classification)) map.set(classification, { installCode, shopCode });
-  }
-  return map;
-}
-
 async function main() {
-  const wanted = loadCodes();
+  const wanted = parsePipingGroupCodes(readFileSync(CSV, "utf-8"));
   console.log(`CSV: ${wanted.size} material classification(s)`);
 
   const groups = await prisma.pipingGroup.findMany({
@@ -80,40 +45,16 @@ async function main() {
     },
   });
 
-  const stale: { id: number; installCode: string; shopCode: string }[] = [];
-  const unknown = new Set<string>();
-  let current = 0;
-  for (const g of groups) {
-    const want = wanted.get(g.materialClassification);
-    if (!want) {
-      unknown.add(g.materialClassification);
-      continue;
-    }
-    if (g.installCode === want.installCode && g.shopCode === want.shopCode) {
-      current++;
-      continue;
-    }
-    stale.push({ id: g.id, ...want });
-  }
+  // Which rows are stale — see src/lib/piping-group-sync.ts, kept pure so the
+  // matching rules are unit-tested without a database.
+  const { stale, current, unknown, changes } = planPipingGroupSync(wanted, groups);
 
   console.log(
     `DB: ${groups.length} group(s) → ${stale.length} to update, ${current} already current` +
-      (unknown.size ? `, ${unknown.size} not in the CSV` : ""),
+      (unknown.length ? `, ${unknown.length} not in the CSV` : ""),
   );
   for (const c of unknown) console.log(`  not in CSV: "${c}"`);
-
-  // Show what changes, grouped by classification rather than per group row.
-  const byClass = new Map<string, string>();
-  for (const g of groups) {
-    const want = wanted.get(g.materialClassification);
-    if (!want) continue;
-    if (g.installCode === want.installCode && g.shopCode === want.shopCode) continue;
-    byClass.set(
-      g.materialClassification,
-      `${g.installCode}/${g.shopCode} → ${want.installCode}/${want.shopCode}`,
-    );
-  }
-  for (const [cls, change] of byClass) console.log(`  ${change}  ${cls}`);
+  for (const c of changes) console.log(`  ${c.description}  ${c.classification}`);
 
   if (stale.length === 0) {
     console.log("\nNothing to do.");

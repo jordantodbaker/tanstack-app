@@ -378,6 +378,10 @@ export const HELP_SECTIONS: HelpSection[] = [
           },
           {
             kind: "p",
+            text: "Click any row to see its full detail in the panel on the right — unit, cost code, account, cost classification, discipline, description and more. Clicking a row only opens its detail; ticking the checkbox is what changes the allow-list.",
+          },
+          {
+            kind: "p",
             text: "A CBS update never grants new codes automatically. After one, come back here and allow the new items a project needs, or its pickers will not offer them.",
           },
         ],

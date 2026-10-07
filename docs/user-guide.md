@@ -188,6 +188,11 @@ carrying both shows both. The generated subcontract and material rows are not
 listed here, since those badges already tell you which codes have them; admins
 can see both views over the whole catalog under **Admin → Master CBS**.
 
+Click any row to see its full detail in the panel on the right — unit, cost
+code, account, cost classification, discipline, description and more. Clicking
+a row only opens its detail; ticking the checkbox is what changes the
+allow-list.
+
 > **Saving:** edits autosave as you go (debounced). No "Save" button to hunt for.
 
 ---

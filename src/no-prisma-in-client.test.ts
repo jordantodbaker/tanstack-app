@@ -1,10 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
-// This file walks the src tree synchronously. On its own it finishes in well
-// under a second, but in a full run 96 files compete for the same disk and it
-// can cross the 5s default — an intermittent failure that says nothing about
-// the code. Give the scan room rather than loosening the global timeout.
-vi.setConfig({ testTimeout: 30_000 });
-
+import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 

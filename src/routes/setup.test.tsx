@@ -52,7 +52,12 @@ import {
   allowedFefCbsItemIdsQueryOptions,
   updateAllowedFefCbsItems,
 } from "~/utils/setup";
-import { cbsCatalogQueryOptions, type CbsTreeRow } from "~/utils/cbs";
+import {
+  cbsCatalogQueryOptions,
+  cbsItemDetailQueryOptions,
+  type CbsItemDetail,
+  type CbsTreeRow,
+} from "~/utils/cbs";
 import { parseCbsDisplayCode, type CbsTreeItem } from "~/lib/cbs-tree";
 
 type SetupItem = CbsTreeRow;
@@ -86,10 +91,46 @@ const topsoil = item("101-05-0500-00-M", "Topsoil", "MATERIAL");
 const piping = item("600-00-0000-00-0", "Piping");
 const CATALOG = [civil, shop, earthwork, topsoil, piping];
 
+/** The full column set the detail panel fetches for one row. */
+function detail(row: CbsTreeRow, over: Partial<CbsItemDetail> = {}): CbsItemDetail {
+  return {
+    id: row.id,
+    displayCode: row.displayCode,
+    costCode: row.displayCode.replace(/-/g, ""),
+    name: row.name,
+    uom: row.uom,
+    rowType: row.rowType,
+    generatedFrom: null,
+    subReporting: null,
+    materialCode: null,
+    materialType: null,
+    costCenter: null,
+    costClassification: null,
+    status: "Active",
+    accountDescription: row.name,
+    l2Description: null,
+    core: null,
+    coreExtension: null,
+    wbs: null,
+    p6CostAccount: null,
+    gl: null,
+    discipline: null,
+    description: null,
+    notes: null,
+    ...over,
+  };
+}
+
 function renderSetup(allowedIds: number[]) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   qc.setQueryData(cbsCatalogQueryOptions().queryKey, CATALOG);
   qc.setQueryData(allowedFefCbsItemIdsQueryOptions(1).queryKey, allowedIds);
+  for (const row of CATALOG) {
+    qc.setQueryData(
+      cbsItemDetailQueryOptions(row.id).queryKey,
+      detail(row, { costCenter: "2010", description: `About ${row.name}.` }),
+    );
+  }
   const SetupPage = Route.options.component!;
   return render(
     <QueryClientProvider client={qc}>
@@ -166,5 +207,55 @@ describe("Setup page", () => {
     expect(await within(tree).findByText("Topsoil")).toBeInTheDocument();
     expect(within(tree).getByText("Earthwork & Trenching")).toBeInTheDocument();
     expect(within(tree).queryByText("Piping")).toBeNull();
+  });
+
+  it("shows a placeholder until a row is selected", () => {
+    renderSetup([]);
+    expect(
+      screen.getByText(/Select a row to see its full CBS detail/),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the clicked row's detail, and swaps it when another is clicked", () => {
+    renderSetup([]);
+    fireEvent.click(screen.getByText("Civil"));
+    expect(screen.getByText("About Civil.")).toBeInTheDocument();
+    expect(screen.getByText("2010")).toBeInTheDocument();
+    // The header repeats the code; the list carries the cost code.
+    expect(screen.getByText("100000000000")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Piping"));
+    expect(screen.getByText("About Piping.")).toBeInTheDocument();
+    expect(screen.queryByText("About Civil.")).toBeNull();
+  });
+
+  it("closes the detail back to the placeholder", () => {
+    renderSetup([]);
+    fireEvent.click(screen.getByText("Civil"));
+    fireEvent.click(screen.getByRole("button", { name: "Close details" }));
+    expect(screen.queryByText("About Civil.")).toBeNull();
+    expect(
+      screen.getByText(/Select a row to see its full CBS detail/),
+    ).toBeInTheDocument();
+  });
+
+  it("selecting a row does not toggle its checkbox", () => {
+    // The row is clickable for selection AND carries a checkbox; the two must
+    // not fire together, or browsing the tree would silently edit the
+    // allow-list.
+    renderSetup([]);
+    fireEvent.click(screen.getByText("Civil"));
+    expect(checkbox("Civil")).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByText("0 selected")).toBeInTheDocument();
+    expect(updateAllowedFefCbsItems).not.toHaveBeenCalled();
+  });
+
+  it("ticking the checkbox does not select the row", () => {
+    renderSetup([]);
+    fireEvent.click(checkbox("Civil"));
+    expect(screen.getByText("4 selected")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Select a row to see its full CBS detail/),
+    ).toBeInTheDocument();
   });
 });

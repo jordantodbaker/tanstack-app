@@ -23,6 +23,7 @@ import {
   CbsTreePanel,
   flattenVisibleCbsNodes,
 } from "~/components/Cbs/CbsTreePanel";
+import { CbsDetailPanel } from "~/components/Cbs/CbsDetailPanel";
 import { CbsTreeToolbar } from "~/components/Cbs/CbsTreeToolbar";
 import { useCbsTreeExpansion } from "~/components/Cbs/useCbsTreeExpansion";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -52,7 +53,7 @@ function SetupPage() {
   const tree = React.useMemo(() => buildCbsTree(items), [items]);
 
   return (
-    <main className="p-4 max-w-5xl">
+    <main className="p-4 max-w-7xl">
       <h1 className="text-2xl font-bold mb-4 flex items-center gap-2">
         <Settings className="size-7" />
         Setup
@@ -121,6 +122,7 @@ function CbsTreeEditor({
     () => new Set(initialAllowedIds),
   );
   const { expanded, toggle, expandAll, collapseAll } = useCbsTreeExpansion(tree);
+  const [selected, setSelected] = React.useState<CbsTreeNode | null>(null);
   const [search, setSearch] = React.useState("");
   const deferredSearch = React.useDeferredValue(search);
   const isFiltering = search !== deferredSearch;
@@ -247,16 +249,22 @@ function CbsTreeEditor({
         <CbsLevelLegend />
       </div>
 
-      <CbsTreePanel
-        flat={flat}
-        expanded={expanded}
-        forceOpen={isSearching}
-        onToggle={toggle}
-        renderLeading={renderCheckbox}
-        emptyMessage="No matches."
-      >
-        {isFiltering && <LoadMask label="Filtering…" size="sm" rounded />}
-      </CbsTreePanel>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_22rem]">
+        <CbsTreePanel
+          flat={flat}
+          expanded={expanded}
+          forceOpen={isSearching}
+          selectedKey={selected?.pathKey ?? null}
+          onToggle={toggle}
+          onSelect={setSelected}
+          renderLeading={renderCheckbox}
+          emptyMessage="No matches."
+        >
+          {isFiltering && <LoadMask label="Filtering…" size="sm" rounded />}
+        </CbsTreePanel>
+
+        <CbsDetailPanel selected={selected} onClose={() => setSelected(null)} />
+      </div>
     </div>
   );
 }

@@ -29,6 +29,14 @@ export default defineConfig({
     // DB-backed tests live in the integration config, which keeps the default
     // pool since it mutates a shared database serially.
     pool: "threads",
+    // Vitest defaults to 5s per test, which this suite outgrew. Nothing here
+    // is slow on its own — the heaviest tests are a few hundred ms — but 98
+    // files running in parallel contend for disk and CPU, and the handful that
+    // walk the src tree or render the whole help guide would intermittently
+    // cross 5s. Those failures said nothing about the code, and chasing them
+    // cost more than a hung test costs: a real hang now fails in 30s instead
+    // of 5s, on a suite that takes ~70s anyway.
+    testTimeout: 30_000,
     setupFiles: ["./vitest.setup.ts"],
     coverage: {
       provider: "v8",

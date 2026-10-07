@@ -5,10 +5,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Settings } from "lucide-react";
 import { LoadMask } from "~/components/LoadMask";
 import {
-  setupCbsItemsQueryOptions,
   allowedFefCbsItemIdsQueryOptions,
   updateAllowedFefCbsItems,
 } from "~/utils/setup";
+import { cbsCatalogQueryOptions } from "~/utils/cbs";
 import { currentUserQueryOptions, hasAtLeastRole } from "~/utils/users";
 import {
   buildCbsTree,
@@ -22,9 +22,9 @@ import {
   CbsLevelLegend,
   CbsTreePanel,
   flattenVisibleCbsNodes,
-} from "~/components/CbsTree/CbsTreePanel";
-import { CbsTreeToolbar } from "~/components/CbsTree/CbsTreeToolbar";
-import { useCbsTreeExpansion } from "~/components/CbsTree/useCbsTreeExpansion";
+} from "~/components/Cbs/CbsTreePanel";
+import { CbsTreeToolbar } from "~/components/Cbs/CbsTreeToolbar";
+import { useCbsTreeExpansion } from "~/components/Cbs/useCbsTreeExpansion";
 import { Checkbox } from "~/components/ui/checkbox";
 import { ProjectSelect } from "~/components/ProjectSelect";
 import { useSelectedProject } from "~/lib/selected-project";
@@ -42,12 +42,12 @@ export const Route = createFileRoute("/setup")({
     }
   },
   loader: ({ context }) =>
-    context.queryClient.ensureQueryData(setupCbsItemsQueryOptions()),
+    context.queryClient.ensureQueryData(cbsCatalogQueryOptions()),
   component: SetupPage,
 });
 
 function SetupPage() {
-  const { data: items = [] } = useQuery(setupCbsItemsQueryOptions());
+  const { data: items = [] } = useQuery(cbsCatalogQueryOptions());
   const { projectId } = useSelectedProject();
   const tree = React.useMemo(() => buildCbsTree(items), [items]);
 
@@ -141,7 +141,7 @@ function CbsTreeEditor({
         queryKey: qk.setup.allowedCbsL1Codes(projectId),
       });
       queryClient.invalidateQueries({
-        queryKey: qk.cbs.projectDictionary(projectId),
+        queryKey: qk.cbs.projectCostCodes(projectId),
       });
     },
     onError: (err, vars) => {

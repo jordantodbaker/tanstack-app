@@ -20,6 +20,7 @@
     "backfill-numbers": "tsx prisma/backfill-number-sequences.ts",
     "cbs:import": "tsx scripts/import-master-cbs.ts",
     "piping:sync-codes": "tsx scripts/sync-piping-group-codes.ts",
+    "cbs:rename": "tsx scripts/rename-cbs-accounts.ts",
     "check:client-leak": "tsx scripts/check-client-leak.ts",
     "postinstall": "prisma generate"
   },
@@ -73,7 +74,7 @@
     "@vitest/coverage-v8": "^4.1.9",
     "exceljs": "^4.4.0",
     "fflate": "^0.8.3",
-    "jsdom": "^29.1.1",
+    "happy-dom": "^20.14.5",
     "playwright-core": "^1.62.1",
     "prisma": "^7.6.0",
     "tailwindcss": "^4.2.2",

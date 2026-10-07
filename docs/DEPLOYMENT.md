@@ -463,6 +463,13 @@ When a new master arrives:
 5. **Re-check the hard-coded code tables below**, then smoke-test one take-off
    page per discipline: pick a CBS item and confirm the id, name and unit
    populate.
+6. **Re-apply any account renames** — `npm run piping:sync-codes` aside, the
+   import takes every account's name straight from the workbook, so a name
+   edited only in the database is reverted. `scripts/rename-cbs-accounts.ts`
+   (`npm run cbs:rename`, preview with `-- --dry-run`) holds the renames that
+   have been applied this way, each recording the workbook cell the same edit
+   belongs in. Fix the workbook and the entry becomes a no-op; the script
+   refuses to touch a name that doesn't match what it expects.
 
 The full seed (`prisma db seed`) loads the same workbook but wipes projects
 first; use it only for a fresh database.

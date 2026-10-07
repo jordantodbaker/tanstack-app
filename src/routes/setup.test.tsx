@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
@@ -50,13 +50,12 @@ vi.mock("~/utils/setup", async (importOriginal) => ({
 import { Route } from "./setup";
 import {
   allowedFefCbsItemIdsQueryOptions,
-  fetchSetupCbsItems,
-  setupCbsItemsQueryOptions,
   updateAllowedFefCbsItems,
 } from "~/utils/setup";
+import { cbsCatalogQueryOptions, type CbsTreeRow } from "~/utils/cbs";
 import { parseCbsDisplayCode, type CbsTreeItem } from "~/lib/cbs-tree";
 
-type SetupItem = Awaited<ReturnType<typeof fetchSetupCbsItems>>[number];
+type SetupItem = CbsTreeRow;
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -72,7 +71,6 @@ function item(displayCode: string, name: string, rowType: CbsTreeItem["rowType"]
     name,
     uom: "LS",
     accountDescription: name,
-    l2Description: null,
     rowType,
     subReporting: null,
     materialCode: null,
@@ -90,7 +88,7 @@ const CATALOG = [civil, shop, earthwork, topsoil, piping];
 
 function renderSetup(allowedIds: number[]) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  qc.setQueryData(setupCbsItemsQueryOptions().queryKey, CATALOG);
+  qc.setQueryData(cbsCatalogQueryOptions().queryKey, CATALOG);
   qc.setQueryData(allowedFefCbsItemIdsQueryOptions(1).queryKey, allowedIds);
   const SetupPage = Route.options.component!;
   return render(

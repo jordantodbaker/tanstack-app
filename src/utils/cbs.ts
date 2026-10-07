@@ -196,8 +196,13 @@ export const fetchCbsItemsByL1EndsWith = createServerFn({ method: "GET" })
 
 /**
  * The columns a `CbsItem` row needs to be placed and rendered in the CBS tree
- * (`CbsTreeItem` in ~/lib/cbs-tree). Shared by the Setup catalog query and
- * the project dictionary query so both stay aligned with the tree's type.
+ * (`CbsTreeItem` in ~/lib/cbs-tree). Shared by every tree query so they stay
+ * aligned with the tree's type.
+ *
+ * Deliberately lean: these payloads run to thousands of rows, and the detail
+ * panel fetches the full column set for the one row it shows
+ * (`fetchCbsItemDetail`). Add a column here only if the TREE needs it —
+ * `l2Description` used to ride along unread and cost ~330 KB a load.
  */
 export const cbsTreeRowSelect = {
   id: true,
@@ -211,7 +216,6 @@ export const cbsTreeRowSelect = {
   name: true,
   uom: true,
   accountDescription: true,
-  l2Description: true,
   rowType: true,
   // The workbook's Sub Code / Material Code flags — the Code Book badges a row
   // by what it carries, since that section lists no generated rows.
@@ -219,60 +223,65 @@ export const cbsTreeRowSelect = {
   materialCode: true,
 } satisfies Prisma.CbsItemSelect;
 
-/**
- * The expanded CBS Dictionary rows (originals + generated S/M twins) that a
- * project has selected on the Setup page — feeds the Project Cost Code List
- * (originals only) and, unfiltered, the Admin Master CBS page. Only the fields
- * the tree needs are shipped (a project can allow the whole ~7k-row catalog);
- * the full column set for one row comes from `fetchCbsItemDetail` on demand.
- * Project-scoped so any member of the project can view it.
- */
-export const fetchProjectCbsDictionary = createServerFn({ method: "GET" })
-  .inputValidator(parseProjectIdInput)
-  .handler(
-    projectIdScopedHandler(({ data: projectId }) =>
-      prisma.cbsItem.findMany({
-        where: { allowedInProjects: { some: { id: projectId } } },
-        orderBy: { id: "asc" },
-        select: cbsTreeRowSelect,
-      }),
-    ),
-  );
-
-/** One dictionary row as the CBS tree views receive it. */
+/** One row as the CBS tree views receive it. */
 export type CbsTreeRow = Prisma.CbsItemGetPayload<{
   select: typeof cbsTreeRowSelect;
 }>;
 
-export type ProjectCbsDictionaryItem = CbsTreeRow;
-
 /**
- * The WHOLE expanded CBS Dictionary, ignoring every project allow-list — the
- * Admin → Master CBS page. Admin-only, since it exposes accounts a given
- * project was deliberately not granted.
+ * The cost codes a project may use: the ORIGINAL Master CBS rows it has been
+ * granted on the Setup page — the Project Cost Code List.
+ *
+ * Generated S/M rows are filtered out server-side rather than in the browser.
+ * The page has never shown them (an original's own S / M badge says whether it
+ * carries them), and they were ~19% of the rows shipped.
+ *
+ * Project-scoped, so any member of the project can view it.
  */
-export const fetchMasterCbsDictionary = createServerFn({ method: "GET" })
+export const fetchProjectCostCodes = createServerFn({ method: "GET" })
+  .inputValidator(parseProjectIdInput)
   .handler(
-    adminHandlerNoInput(() =>
+    projectIdScopedHandler(({ data: projectId }) =>
       prisma.cbsItem.findMany({
+        where: {
+          rowType: "ORIGINAL",
+          allowedInProjects: { some: { id: projectId } },
+        },
         orderBy: { id: "asc" },
         select: cbsTreeRowSelect,
       }),
     ),
   );
 
-export const masterCbsDictionaryQueryOptions = () =>
+/**
+ * The WHOLE catalog, ignoring every project allow-list. Feeds both
+ * administrator-only CBS trees — Setup's allow-list editor and Admin → Master
+ * CBS — under ONE query key, so visiting both doesn't download it twice.
+ *
+ * Admin-guarded: it exposes accounts a given project was deliberately not
+ * granted, and both callers are admin-only routes anyway.
+ */
+export const fetchCbsCatalog = createServerFn({ method: "GET" }).handler(
+  adminHandlerNoInput(() =>
+    prisma.cbsItem.findMany({
+      orderBy: { id: "asc" },
+      select: cbsTreeRowSelect,
+    }),
+  ),
+);
+
+export const cbsCatalogQueryOptions = () =>
   queryOptions({
-    queryKey: qk.cbs.masterDictionary(),
-    queryFn: () => fetchMasterCbsDictionary(),
+    queryKey: qk.cbs.catalog(),
+    queryFn: () => fetchCbsCatalog(),
     // The catalog changes only on a CBS re-import.
     staleTime: Infinity,
   });
 
-export const projectCbsDictionaryQueryOptions = (projectId: number) =>
+export const projectCostCodesQueryOptions = (projectId: number) =>
   queryOptions({
-    queryKey: qk.cbs.projectDictionary(projectId),
-    queryFn: () => fetchProjectCbsDictionary({ data: projectId }),
+    queryKey: qk.cbs.projectCostCodes(projectId),
+    queryFn: () => fetchProjectCostCodes({ data: projectId }),
     // Changes only when Setup saves (which invalidates this key) or the CBS
     // is re-imported; don't re-ship ~thousands of rows on every page mount.
     staleTime: Infinity,

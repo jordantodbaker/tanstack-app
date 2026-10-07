@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
@@ -36,7 +36,7 @@ vi.mock("~/lib/selected-project", () => ({
 }));
 
 import { Route } from "./admin.master-cbs";
-import { masterCbsDictionaryQueryOptions, type CbsTreeRow } from "~/utils/cbs";
+import { cbsCatalogQueryOptions, type CbsTreeRow } from "~/utils/cbs";
 import { parseCbsDisplayCode } from "~/lib/cbs-tree";
 
 afterEach(cleanup);
@@ -54,7 +54,6 @@ function item(
     name,
     uom: "LS",
     accountDescription: name,
-    l2Description: null,
     rowType: "ORIGINAL",
     subReporting: null,
     materialCode: null,
@@ -70,7 +69,7 @@ const CATALOG: CbsTreeRow[] = [
 
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  qc.setQueryData(masterCbsDictionaryQueryOptions().queryKey, CATALOG);
+  qc.setQueryData(cbsCatalogQueryOptions().queryKey, CATALOG);
   const Page = Route.options.component!;
   return render(
     <QueryClientProvider client={qc}>

@@ -157,13 +157,14 @@ export const qk = {
         input.pageSize,
         input.projectId,
       ] as const,
-    /** The expanded dictionary rows a project has selected in Setup. */
-    projectDictionary: (projectId: number) =>
-      ["cbsProjectDictionary", projectId] as const,
+    /** The original rows a project has been granted in Setup. */
+    projectCostCodes: (projectId: number) =>
+      ["cbsProjectCostCodes", projectId] as const,
     /** Every column of one dictionary row (CBS dictionary detail panel). */
     itemDetail: (id: number) => ["cbsItemDetail", id] as const,
-    /** The whole dictionary, ignoring project allow-lists (Admin → Master CBS). */
-    masterDictionary: () => ["cbsMasterDictionary"] as const,
+    /** The whole catalog, ignoring project allow-lists — shared by Setup's
+     *  allow-list editor and Admin → Master CBS. */
+    catalog: () => ["cbsCatalog"] as const,
     itemsByL1FilteredAll: () => ["cbsItemsByL1Filtered"] as const,
     itemsByL1Filtered: (input: {
       l1Values: string[];
@@ -174,7 +175,6 @@ export const qk = {
 
   // ── Project setup (which CBS items a project may use) ────────────────────
   setup: {
-    cbsItems: () => ["setupCbsItems"] as const,
     allowedFefCbsItemIds: (projectId: number) =>
       ["allowedFefCbsItemIds", projectId] as const,
     allowedCbsL1Codes: (projectId: number) =>

@@ -1,10 +1,19 @@
+/**
+ * The project CBS allow-list — which `CbsItem`s a project may use, as edited on
+ * the Setup page. Everything here is about that join table: reading a project's
+ * allowed ids, deriving the L1 codes the sidebar filters disciplines by, and
+ * the admin-only write.
+ *
+ * It is NOT the Setup page's whole data layer. The catalog the editor renders
+ * comes from `cbsCatalogQueryOptions` in ./cbs, shared with Admin → Master CBS
+ * under one query key so an admin who visits both downloads it once.
+ */
 import { queryOptions } from "@tanstack/react-query";
 import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { prisma } from "../server/db";
 import { adminHandler, projectIdScopedHandler } from "./users.server";
-import { cbsTreeRowSelect } from "./cbs";
 import { Id, ProjectId, parseProjectIdInput } from "../lib/validators";
 
 const UpdateAllowedFefCbsItemsSchema = z.object({
@@ -12,22 +21,6 @@ const UpdateAllowedFefCbsItemsSchema = z.object({
   addIds: z.array(Id),
   removeIds: z.array(Id),
 });
-
-export const fetchSetupCbsItems = createServerFn({ method: "GET" }).handler(
-  () =>
-    // No orderBy: the client sorts into dictionary order when it builds the
-    // tree (`buildCbsTree`), so a DB sort would be thrown away.
-    prisma.cbsItem.findMany({ select: cbsTreeRowSelect }),
-);
-
-export const setupCbsItemsQueryOptions = () =>
-  queryOptions({
-    queryKey: qk.setup.cbsItems(),
-    queryFn: () => fetchSetupCbsItems(),
-    // The CBS catalog rarely changes within a session, so cache forever.
-    // Avoids re-shipping the entire CbsItem table on every /setup visit.
-    staleTime: Infinity,
-  });
 
 export const fetchAllowedFefCbsItemIds = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)

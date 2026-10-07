@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ProjectCostCodeListView } from "~/components/ProjectCostCodes/ProjectCostCodeListView";
+import { ProjectCostCodeListView } from "~/components/Cbs/ProjectCostCodeListView";
 
 /**
  * The cost codes available on the selected project: the Master CBS rows

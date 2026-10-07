@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 import * as React from "react";
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";

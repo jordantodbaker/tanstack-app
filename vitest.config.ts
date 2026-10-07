@@ -11,7 +11,11 @@ export default defineConfig({
   },
   test: {
     // Node by default (fast — most tests are pure logic). Component tests opt
-    // into a DOM with a `// @vitest-environment jsdom` docblock per file.
+    // into a DOM with a `// @vitest-environment happy-dom` docblock per file.
+    // happy-dom rather than jsdom: the 16 DOM files spend roughly a third
+    // as long on environment setup, and none of them needs jsdom's extra
+    // fidelity. The two places that did (window.confirm, a writable
+    // navigator.clipboard) are stubbed in those files.
     environment: "node",
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     // Integration tests need a real DB and run via vitest.integration.config.ts.

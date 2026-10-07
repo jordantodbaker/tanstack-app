@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 import * as React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
@@ -108,8 +108,12 @@ function selectRange(
 }
 
 beforeEach(() => {
-  Object.assign(navigator, {
-    clipboard: { writeText: vi.fn(), readText: vi.fn() },
+  // defineProperty, not Object.assign: `navigator.clipboard` is a getter-only
+  // accessor in happy-dom, so a plain assignment throws.
+  Object.defineProperty(navigator, "clipboard", {
+    value: { writeText: vi.fn(), readText: vi.fn() },
+    configurable: true,
+    writable: true,
   });
 });
 

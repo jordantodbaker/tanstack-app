@@ -86,7 +86,7 @@ function generateTwin(
   };
 }
 
-export type CbsDictionaryExpansion = {
+type CbsDictionaryExpansion = {
   items: MasterCbsItem[];
   generatedSub: number;
   generatedMaterial: number;

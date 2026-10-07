@@ -11,7 +11,6 @@ import {
   getNodeSelectionState,
   parseCbsDisplayCode,
   pruneCbsTree,
-  rowTypeBadge,
   selectionStateFromCounts,
   type CbsTreeItem,
   type CbsTreeNode,
@@ -29,7 +28,6 @@ function item(
     displayCode,
     name: "",
     accountDescription: "",
-    l2Description: null,
     uom: "",
     rowType: "ORIGINAL",
     ...overrides,
@@ -75,6 +73,45 @@ describe("getGroupL1", () => {
     expect(getGroupL1("250")).toBe("200");
     expect(getGroupL1("601")).toBe("600");
     expect(getGroupL1("999")).toBe("900");
+  });
+
+  it("keeps 95X / 96X / 97X as their own divisions, not part of 900", () => {
+    // Startup & Commissioning, Operations & Maintenance and Contingency each
+    // have their own summary row beside Coatings & Insulation.
+    expect(getGroupL1("950")).toBe("950");
+    expect(getGroupL1("952")).toBe("950");
+    expect(getGroupL1("959")).toBe("950");
+    expect(getGroupL1("960")).toBe("960");
+    expect(getGroupL1("967")).toBe("960");
+    expect(getGroupL1("970")).toBe("970");
+  });
+
+  it("keeps 29X Grout as its own division, not part of 200 Concrete", () => {
+    expect(getGroupL1("290")).toBe("290");
+    expect(getGroupL1("291")).toBe("290");
+    expect(getGroupL1("295")).toBe("290");
+  });
+
+  it("still folds the rest of the 900 block into Coatings", () => {
+    expect(getGroupL1("900")).toBe("900");
+    expect(getGroupL1("913")).toBe("900");
+    // 990 is "Coatings & Insulation Subcontracts" — it really is part of 900.
+    expect(getGroupL1("990")).toBe("900");
+  });
+
+  it("still folds Concrete's own accounts into 200", () => {
+    expect(getGroupL1("200")).toBe("200");
+    expect(getGroupL1("231")).toBe("200");
+    expect(getGroupL1("240")).toBe("200");
+    expect(getGroupL1("260")).toBe("200");
+  });
+
+  it("keeps the shop/field halves of one division together", () => {
+    // 330 Steel Erection, 530 Equipment Installation and 630 Install Piping
+    // share a division with their shop half.
+    expect(getGroupL1("330")).toBe("300");
+    expect(getGroupL1("530")).toBe("500");
+    expect(getGroupL1("630")).toBe("600");
   });
 });
 
@@ -140,6 +177,50 @@ describe("buildCbsTree", () => {
     ]);
     expect(parentOf(tree, "601-05-0000-00-0")).toBe("601-00-0000-00-0");
     expect(find(tree, "601-05-0000-00-0")?.depth).toBe(2);
+  });
+
+  it("roots Grout beside Concrete, keeping Concrete's own accounts inside it", () => {
+    const tree = buildCbsTree([
+      item("200-00-0000-00-0", { name: "Concrete" }),
+      item("240-00-0000-00-0", { name: "Cast in Place Concrete" }),
+      item("290-00-0000-00-0", { name: "Grout" }),
+      item("295-00-0000-00-0", { name: "Install Grout" }),
+    ]);
+    expect(tree.map((n) => n.item.displayCode)).toEqual([
+      "200-00-0000-00-0",
+      "290-00-0000-00-0",
+    ]);
+    expect(tree[0].children.map((c) => c.item.displayCode)).toEqual([
+      "240-00-0000-00-0",
+    ]);
+    expect(parentOf(tree, "295-00-0000-00-0")).toBe("290-00-0000-00-0");
+  });
+
+  it("roots 950 / 960 / 970 beside 900 rather than inside it", () => {
+    const tree = buildCbsTree([
+      item("900-00-0000-00-0", { name: "Coatings & Insulation" }),
+      item("913-00-0000-00-0", { name: "Refractory" }),
+      item("990-00-0000-00-0", { name: "Coatings & Insulation Subcontracts" }),
+      item("950-00-0000-00-0", { name: "Startup & Commissioning" }),
+      item("952-00-0000-00-0", { name: "S&C Field Staff" }),
+      item("960-00-0000-00-0", { name: "Operations & Maintenance" }),
+      item("967-00-0000-00-0", { name: "Operations Training" }),
+      item("970-00-0000-00-0", { name: "Contingency" }),
+    ]);
+    expect(tree.map((n) => n.item.displayCode)).toEqual([
+      "900-00-0000-00-0",
+      "950-00-0000-00-0",
+      "960-00-0000-00-0",
+      "970-00-0000-00-0",
+    ]);
+    // Coatings keeps its own accounts, including the subcontracts account.
+    expect(tree[0].children.map((c) => c.item.displayCode)).toEqual([
+      "913-00-0000-00-0",
+      "990-00-0000-00-0",
+    ]);
+    // The new divisions carry their own children.
+    expect(parentOf(tree, "952-00-0000-00-0")).toBe("950-00-0000-00-0");
+    expect(parentOf(tree, "967-00-0000-00-0")).toBe("960-00-0000-00-0");
   });
 
   it("keeps a 0x0 group root that is its own L1 as a single node", () => {
@@ -256,14 +337,6 @@ describe("buildCbsTree", () => {
   });
 });
 
-describe("rowTypeBadge", () => {
-  it("marks generated rows only", () => {
-    expect(rowTypeBadge("ORIGINAL")).toBeNull();
-    expect(rowTypeBadge("SUB")?.label).toBe("S");
-    expect(rowTypeBadge("MATERIAL")?.label).toBe("M");
-  });
-});
-
 describe("cbsFlagBadges", () => {
   const labels = (over: Partial<CbsTreeItem>) =>
     cbsFlagBadges(item("601-05-0000-00-0", over)).map((b) => b.label);
@@ -292,10 +365,16 @@ describe("cbsFlagBadges", () => {
 });
 
 describe("cbsRowTypeBadges", () => {
-  it("wraps the row-type badge as a list", () => {
+  it("badges a generated row by what it is", () => {
     expect(cbsRowTypeBadges(item("601-05-0000-00-S", { rowType: "SUB" }))).toEqual([
       { label: "S", title: "Generated sub-code row" },
     ]);
+    expect(
+      cbsRowTypeBadges(item("601-05-0000-00-M", { rowType: "MATERIAL" })),
+    ).toEqual([{ label: "M", title: "Generated material row" }]);
+  });
+
+  it("badges an original row with nothing", () => {
     expect(cbsRowTypeBadges(item("601-05-0000-00-0"))).toEqual([]);
   });
 });

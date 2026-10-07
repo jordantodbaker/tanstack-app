@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 import { describe, it, expect, afterEach, vi } from "vitest";
 import {
   render,
@@ -37,10 +37,7 @@ vi.mock("~/lib/selected-project", () => ({
 }));
 
 import { ProjectCostCodeListView } from "./ProjectCostCodeListView";
-import {
-  projectCbsDictionaryQueryOptions,
-  type ProjectCbsDictionaryItem,
-} from "~/utils/cbs";
+import { projectCostCodesQueryOptions, type CbsTreeRow } from "~/utils/cbs";
 import { parseCbsDisplayCode } from "~/lib/cbs-tree";
 
 afterEach(cleanup);
@@ -49,8 +46,8 @@ let nextId = 1;
 function item(
   displayCode: string,
   name: string,
-  over: Partial<ProjectCbsDictionaryItem> = {},
-): ProjectCbsDictionaryItem {
+  over: Partial<CbsTreeRow> = {},
+): CbsTreeRow {
   return {
     id: nextId++,
     ...parseCbsDisplayCode(displayCode),
@@ -58,7 +55,6 @@ function item(
     name,
     uom: "LS",
     accountDescription: name,
-    l2Description: null,
     rowType: "ORIGINAL",
     subReporting: null,
     materialCode: null,
@@ -66,11 +62,11 @@ function item(
   };
 }
 
-// A small slice of the Civil dictionary: a root carrying both flags, its
-// generated M twin (which must NOT be listed), an L1 account and a leaf.
-const FIXTURE: ProjectCbsDictionaryItem[] = [
+// What the server returns: ORIGINAL rows only. `fetchProjectCostCodes`
+// filters out the generated S/M rows in SQL, so the page never sees them and
+// does no filtering of its own — the fixture mirrors that contract.
+const FIXTURE: CbsTreeRow[] = [
   item("100-00-0000-00-0", "Civil", { subReporting: true, materialCode: true }),
-  item("100-00-0000-00-M", "Civil Materials", { rowType: "MATERIAL" }),
   item("101-00-0000-00-0", "Civil Shop Materials", { materialCode: true }),
   item("101-05-0000-00-0", "Earthwork & Trenching"),
   item("101-05-0500-00-0", "Topsoil", { uom: "CY" }),
@@ -78,7 +74,7 @@ const FIXTURE: ProjectCbsDictionaryItem[] = [
 
 function renderView() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  qc.setQueryData(projectCbsDictionaryQueryOptions(1).queryKey, FIXTURE);
+  qc.setQueryData(projectCostCodesQueryOptions(1).queryKey, FIXTURE);
   return render(
     <QueryClientProvider client={qc}>
       <ProjectCostCodeListView />
@@ -103,15 +99,25 @@ describe("ProjectCostCodeListView", () => {
     ).toBeNull();
   });
 
-  it("lists original rows only, never the generated S/M rows", () => {
+  it("renders every row the server returns, re-filtering nothing", () => {
+    // The ORIGINAL filter lives in the query now. Re-adding a client-side
+    // filter here would drop rows and break this count.
     renderView();
     fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
     const tree = screen.getByRole("tree");
     expect(within(tree).getByText("Civil")).toBeInTheDocument();
+    expect(within(tree).getByText("Earthwork & Trenching")).toBeInTheDocument();
     expect(within(tree).getByText("Topsoil")).toBeInTheDocument();
-    expect(within(tree).queryByText("Civil Materials")).toBeNull();
-    // 5 fixture rows minus the one generated row.
     expect(screen.getByText("4 rows")).toBeInTheDocument();
+  });
+
+  it("reads the project cost-code query, not the unfiltered dictionary", () => {
+    // Seeding only `projectCostCodesQueryOptions` is the guard: if the page
+    // switched back to a query that ships generated rows, its key would miss
+    // the seeded data and the tree would never render.
+    renderView();
+    expect(screen.getByRole("tree")).toBeInTheDocument();
+    expect(screen.queryByText(/Loading CBS data/)).toBeNull();
   });
 
   it("omits the row-type breakdown, which would always read zero", () => {

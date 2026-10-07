@@ -11,7 +11,7 @@ export const CBS_HEADER_COLOR: CbsLevelColor = {
   text: "#FFFFFF",
 };
 
-export const CBS_LEVEL_COLORS: Record<number, CbsLevelColor> = {
+const CBS_LEVEL_COLORS: Record<number, CbsLevelColor> = {
   0: { fill: "#FFD966", text: "#000000" },
   1: { fill: "#FFD966", text: "#000000" },
   2: { fill: "#4472C4", text: "#FFFFFF" },
@@ -21,7 +21,7 @@ export const CBS_LEVEL_COLORS: Record<number, CbsLevelColor> = {
 };
 
 /** Styling for a level deeper than the workbook ever used. */
-export const CBS_DEFAULT_LEVEL_COLOR: CbsLevelColor = {
+const CBS_DEFAULT_LEVEL_COLOR: CbsLevelColor = {
   fill: "#F3F4F6",
   text: "#000000",
 };

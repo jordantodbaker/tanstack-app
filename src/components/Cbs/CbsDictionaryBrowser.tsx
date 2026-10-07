@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, Loader2, X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import {
   cbsItemDetailQueryOptions,
   type CbsItemDetail,
@@ -18,19 +18,17 @@ import {
   CbsLevelLegend,
   CbsTreePanel,
   flattenVisibleCbsNodes,
-} from "~/components/CbsTree/CbsTreePanel";
-import { CbsTreeToolbar } from "~/components/CbsTree/CbsTreeToolbar";
-import { useCbsTreeExpansion } from "~/components/CbsTree/useCbsTreeExpansion";
+} from "~/components/Cbs/CbsTreePanel";
+import { CbsTreeToolbar } from "~/components/Cbs/CbsTreeToolbar";
+import { useCbsTreeExpansion } from "~/components/Cbs/useCbsTreeExpansion";
 
 /**
- * The two-section CBS Dictionary browser: a Code Book of original rows and a
- * Master CBS Dictionary that adds the generated S/M rows, each a
- * colour-by-level collapsible hierarchy with a detail panel.
+ * One CBS dataset as a searchable, colour-by-level hierarchy with a detail
+ * panel — the Project Cost Code List renders this directly, and
+ * `CbsDictionarySections` stacks two of them for Admin → Master CBS.
  *
- * `CbsDictionaryBrowser` is one such dataset on its own (the project-scoped
- * Project Cost Code List); `CbsDictionarySections` stacks two of them for the
- * admin-only Master CBS page. Colours mirror the workbook's outline fills (see
- * ~/config/cbs-level-colors); the tree itself is the shared CbsTreePanel.
+ * Colours mirror the workbook's outline fills (see ~/config/cbs-level-colors);
+ * the tree itself is the shared `CbsTreePanel`.
  */
 
 // Rows and the detail header only need the shared tree fields; the full
@@ -278,98 +276,6 @@ export function CbsDictionaryBrowser({
   );
 }
 
-/** A collapsible section over one view of a dictionary. */
-function CbsSection({
-  title,
-  description,
-  items,
-  badgesFor,
-  sourceNote,
-  emptyMessage,
-  defaultOpen = false,
-}: {
-  title: string;
-  description: string;
-  items: CbsTreeRow[];
-  badgesFor?: (node: Node) => readonly CbsBadge[];
-  sourceNote: string;
-  emptyMessage: string;
-  defaultOpen?: boolean;
-}) {
-  const [open, setOpen] = React.useState(defaultOpen);
-
-  return (
-    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50"
-      >
-        <ChevronRight
-          size={18}
-          className={`shrink-0 text-slate-400 transition-transform ${open ? "rotate-90" : ""}`}
-        />
-        <div className="min-w-0">
-          <h2 className="text-base font-bold text-slate-800">{title}</h2>
-          <p className="truncate text-xs text-slate-500">{description}</p>
-        </div>
-        <span className="ml-auto shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-          {items.length.toLocaleString()} rows
-        </span>
-      </button>
-      {/* Mounted only while open, so a closed section never builds its tree. */}
-      {open && (
-        <div className="border-t border-slate-100">
-          <CbsDictionaryBrowser
-            items={items}
-            badgesFor={badgesFor}
-            sourceNote={sourceNote}
-            emptyMessage={emptyMessage}
-          />
-        </div>
-      )}
-    </section>
-  );
-}
-
-const MASTER_SOURCE_NOTE =
-  "Source: the Master CBS Dictionary (prisma/data/MasterCBS.xlsx), in full — no project allow-list applied. Colours mirror the workbook's outline levels.";
-const MASTER_EMPTY = "No CBS items in the catalog.";
-
-/**
- * The whole catalog as two collapsible datasets: a Code Book of original rows
- * and the full dictionary including the generated S/M rows. The Admin → Master
- * CBS page; project-scoped pages render a single `CbsDictionaryBrowser`.
- */
-export function CbsDictionarySections({ items }: { items: CbsTreeRow[] }) {
-  const originals = React.useMemo(
-    () => items.filter((i) => i.rowType === "ORIGINAL"),
-    [items],
-  );
-
-  return (
-    <div className="flex flex-col gap-4">
-      <CbsSection
-        title="CBS Code Book"
-        description="Every Master CBS row — original rows only. S / M mark a row's own Sub Code / Material Code."
-        items={originals}
-        badgesFor={cbsFlagBadgesFor}
-        sourceNote={MASTER_SOURCE_NOTE}
-        emptyMessage={MASTER_EMPTY}
-        defaultOpen
-      />
-      <CbsSection
-        title="Master CBS Dictionary"
-        description="The complete dictionary — every original row plus the generated S/M rows."
-        items={items}
-        sourceNote={MASTER_SOURCE_NOTE}
-        emptyMessage={MASTER_EMPTY}
-        defaultOpen
-      />
-    </div>
-  );
-}
 
 /** Shared pending / error chrome for whichever query feeds the sections. */
 export function CbsDictionaryStatus({

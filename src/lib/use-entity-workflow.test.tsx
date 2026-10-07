@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import type { Transition } from "~/utils/workflow";
@@ -38,6 +38,13 @@ const record = (over: Partial<{ id: number; status: S; createdById: number | nul
 
 beforeEach(() => {
   setCurrentUser(user);
+  // happy-dom ships no window.confirm, and vi.spyOn needs an existing
+  // function to replace. Define a neutral one; each test spies over it.
+  Object.defineProperty(window, "confirm", {
+    value: () => true,
+    configurable: true,
+    writable: true,
+  });
 });
 afterEach(() => {
   vi.restoreAllMocks();

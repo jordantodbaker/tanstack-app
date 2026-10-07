@@ -1,12 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import * as React from "react";
 import { useSelectedProject } from "~/lib/selected-project";
-import { projectCbsDictionaryQueryOptions } from "~/utils/cbs";
+import { projectCostCodesQueryOptions } from "~/utils/cbs";
 import {
   CbsDictionaryBrowser,
   CbsDictionaryStatus,
   cbsFlagBadgesFor,
-} from "~/components/CbsDictionary/CbsDictionarySections";
+} from "~/components/Cbs/CbsDictionaryBrowser";
 
 /**
  * Project Cost Code List — the cost codes available on the selected project.
@@ -25,11 +24,8 @@ const SOURCE_NOTE =
   "Source: the Master CBS Dictionary (prisma/data/MasterCBS.xlsx), limited to the items selected for this project on the Setup page. Colours mirror the workbook's outline levels.";
 
 function ProjectCostCodes({ projectId }: { projectId: number }) {
-  const query = useQuery(projectCbsDictionaryQueryOptions(projectId));
-  const originals = React.useMemo(
-    () => (query.data ?? []).filter((i) => i.rowType === "ORIGINAL"),
-    [query.data],
-  );
+  // Already filtered to original rows server-side.
+  const query = useQuery(projectCostCodesQueryOptions(projectId));
 
   if (query.isPending || query.isError) {
     return (
@@ -43,7 +39,7 @@ function ProjectCostCodes({ projectId }: { projectId: number }) {
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white pt-4 shadow-sm">
       <CbsDictionaryBrowser
-        items={originals}
+        items={query.data}
         badgesFor={cbsFlagBadgesFor}
         sourceNote={SOURCE_NOTE}
         emptyMessage="No cost codes selected for this project."

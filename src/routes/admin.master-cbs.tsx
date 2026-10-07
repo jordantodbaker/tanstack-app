@@ -1,11 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen } from "lucide-react";
-import { masterCbsDictionaryQueryOptions } from "~/utils/cbs";
-import {
-  CbsDictionarySections,
-  CbsDictionaryStatus,
-} from "~/components/CbsDictionary/CbsDictionarySections";
+import { cbsCatalogQueryOptions } from "~/utils/cbs";
+import { CbsDictionaryStatus } from "~/components/Cbs/CbsDictionaryBrowser";
+import { CbsDictionarySections } from "~/components/Cbs/CbsDictionarySections";
 
 /**
  * Admin → Master CBS. The same browser as the Project Cost Code List, over
@@ -21,7 +19,7 @@ export const Route = createFileRoute("/admin/master-cbs")({
 });
 
 function AdminMasterCbsPage() {
-  const query = useQuery(masterCbsDictionaryQueryOptions());
+  const query = useQuery(cbsCatalogQueryOptions());
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 md:px-8">

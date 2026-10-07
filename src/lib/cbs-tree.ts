@@ -32,7 +32,6 @@ export type CbsTreeItem = {
   displayCode: string;
   name: string;
   accountDescription: string;
-  l2Description: string | null;
   uom: string;
   rowType: CbsRowType;
   /** The workbook's "Sub Code" flag. Optional so fixtures and callers that
@@ -64,11 +63,36 @@ export type CbsTreeNode<T extends CbsTreeItem = CbsTreeItem> = {
 const LEVEL_DEFAULT = "00";
 const BACKBONE_TYPE = "0";
 
+/**
+ * L1 blocks whose division sits at the TENS rather than the hundreds.
+ *
+ * Most divisions are `X00` (100 Civil, 600 Pipe Shop), and the 0-series
+ * subdivides at the tens (010, 020, 050, 090). A few hundreds blocks carry
+ * more than one division, each with its own summary row at XX0, and grouping
+ * those at the hundreds rolled them into the wrong parent:
+ *
+ *   29X  Grout                      — beside Concrete (200), not inside it
+ *   95X  Startup & Commissioning    ┐
+ *   96X  Operations & Maintenance   ├ beside Coatings & Insulation (900)
+ *   97X  Contingency                ┘
+ *
+ * Blocks that really are part of their hundreds parent stay out of this set:
+ * 23X–26X are Concrete's own accounts, and 990 is "Coatings & Insulation
+ * Subcontracts".
+ *
+ * Shop/field pairs are also deliberately absent — 330 Steel Erection, 530
+ * Equipment Installation and 630 Install Piping each share a division (and a
+ * discipline) with their shop half at 300 / 500 / 600.
+ */
+const TENS_DIVISIONS = new Set([29, 95, 96, 97]);
+
+/** The division root an L1 account belongs to — the top of its tree branch. */
 export function getGroupL1(l1: string): string {
   if (l1.length < 3) return l1;
   const firstTwo = Number.parseInt(l1.substring(0, 2), 10);
   if (Number.isNaN(firstTwo)) return l1;
   if (firstTwo < 10) return `0${l1[1]}0`;
+  if (TENS_DIVISIONS.has(firstTwo)) return `${firstTwo}0`;
   return `${l1[0]}00`;
 }
 
@@ -306,21 +330,37 @@ export function selectionStateFromCounts(
  * Returns the original `nodes` array when the query is empty so callers can
  * fast-path on reference identity.
  */
+function searchCbsTree<T extends CbsTreeItem>(
+  nodes: CbsTreeNode<T>[],
+  lowerQuery: string,
+  /** A self-matching node keeps its WHOLE subtree, unrecursed, so the kept
+   *  node is the original object. Off: only matching descendants survive. */
+  keepMatchedSubtree: boolean,
+  onMatch?: () => void,
+): CbsTreeNode<T>[] {
+  const out: CbsTreeNode<T>[] = [];
+  for (const n of nodes) {
+    const selfMatch = n.searchHaystack.includes(lowerQuery);
+    if (selfMatch && keepMatchedSubtree) {
+      onMatch?.();
+      out.push(n);
+      continue;
+    }
+    const kids = searchCbsTree(n.children, lowerQuery, keepMatchedSubtree, onMatch);
+    if (selfMatch || kids.length > 0) {
+      if (selfMatch) onMatch?.();
+      out.push({ ...n, children: kids });
+    }
+  }
+  return out;
+}
+
 export function filterCbsTree<T extends CbsTreeItem>(
   nodes: CbsTreeNode<T>[],
   lowerQuery: string,
 ): CbsTreeNode<T>[] {
   if (!lowerQuery) return nodes;
-  const out: CbsTreeNode<T>[] = [];
-  for (const n of nodes) {
-    if (n.searchHaystack.includes(lowerQuery)) {
-      out.push(n);
-      continue;
-    }
-    const kids = filterCbsTree(n.children, lowerQuery);
-    if (kids.length > 0) out.push({ ...n, children: kids });
-  }
-  return out;
+  return searchCbsTree(nodes, lowerQuery, true);
 }
 
 /**
@@ -334,23 +374,15 @@ export function pruneCbsTree<T extends CbsTreeItem>(
 ): { nodes: CbsTreeNode<T>[]; matches: number } {
   if (!lowerQuery) return { nodes, matches: 0 };
   let matches = 0;
-  const rec = (list: CbsTreeNode<T>[]): CbsTreeNode<T>[] => {
-    const out: CbsTreeNode<T>[] = [];
-    for (const n of list) {
-      const selfMatch = n.searchHaystack.includes(lowerQuery);
-      const kids = rec(n.children);
-      if (selfMatch || kids.length > 0) {
-        if (selfMatch) matches++;
-        out.push({ ...n, children: kids });
-      }
-    }
-    return out;
+  return {
+    nodes: searchCbsTree(nodes, lowerQuery, false, () => matches++),
+    matches,
   };
-  return { nodes: rec(nodes), matches };
 }
 
-/** The "S" / "M" marker shown beside generated rows; null for originals. */
-export function rowTypeBadge(
+/** The "S" / "M" marker shown beside generated rows; null for originals.
+ *  Reached through `cbsRowTypeBadges`, which is what callers render. */
+function rowTypeBadge(
   rowType: CbsRowType,
 ): { label: string; title: string } | null {
   if (rowType === "SUB") return { label: "S", title: "Generated sub-code row" };

@@ -591,8 +591,7 @@ export function resolveCellWrite(
       if (isPipingSheet(ctx)) return null;
       // Elsewhere the Name column IS the CBS-item picker; its stored identity
       // is the CBS code in `id`. Clearing removes the whole item; a resolvable
-      // code/name stamps id + name + unit (matching CbsSelectCell /
-      // CbsSearchSelectCell).
+      // code/name stamps id + name + unit (matching CbsSearchSelectCell).
       if (raw.trim() === "") return { id: "", name: "", unit: "" };
       const match = resolveCbs(raw, idx);
       return match

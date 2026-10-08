@@ -3,14 +3,14 @@ import { parseCbsDisplayCode } from "./cbs-tree";
 import {
   expandCbsDictionary,
   withCostType,
-  type MasterCbsItem,
+  type CbsDictionaryRow,
 } from "./cbs-dictionary";
 
 function original(
   displayCode: string,
   name: string,
   flags: { sub?: boolean; material?: boolean } = {},
-): MasterCbsItem {
+): CbsDictionaryRow {
   return {
     ...parseCbsDisplayCode(displayCode),
     name,

@@ -39,6 +39,12 @@ export type CbsTreeItem = {
   subReporting?: boolean | null;
   /** The workbook's "Material Code" flag. */
   materialCode?: boolean | null;
+  /**
+   * True for a row included only so the hierarchy reads correctly — an
+   * ancestor of something the project HAS been granted, which it has not been
+   * granted itself. Rendered muted and badge-less, and left out of row counts.
+   */
+  context?: boolean;
 };
 
 export type CbsTreeNode<T extends CbsTreeItem = CbsTreeItem> = {
@@ -126,6 +132,33 @@ function lineage(item: CbsTreeItem): {
 }
 
 /**
+ * The backbone summary codes above `displayCode`, nearest first: each level's
+ * code with the deeper segments zeroed and the cost type set to "0", then the
+ * division root. `052-10-0500-00-L` yields 052-10-0000-00-0, then
+ * 052-00-0000-00-0, then 050-00-0000-00-0.
+ *
+ * Used to pull the ancestors of a filtered set of rows so a subset still
+ * renders as a hierarchy rather than a row of orphans. Mirrors `lineage`'s
+ * rules, so what comes back is what `buildCbsTree` would parent to.
+ */
+export function cbsAncestorCodes(displayCode: string): string[] {
+  const item = parseCbsDisplayCode(displayCode);
+  const segs = [item.l2, item.l3, item.l4, item.l5];
+  let depth = 0;
+  while (depth < segs.length && segs[depth] !== LEVEL_DEFAULT) depth++;
+  const out: string[] = [];
+  for (let d = depth - 1; d >= 0; d--) {
+    const z = segs.map((seg, i) => (i < d ? seg : LEVEL_DEFAULT));
+    out.push(`${item.l1}-${z[0]}-${z[1]}${z[2]}-${z[3]}-${BACKBONE_TYPE}`);
+  }
+  // Always the division root, which is always type "0" — a cost-type twin of
+  // the root (Civil Materials under Civil) hangs off it too. The filter below
+  // drops it for the root row itself, which is the only row that names itself.
+  out.push(`${getGroupL1(item.l1)}-00-0000-00-${BACKBONE_TYPE}`);
+  return [...new Set(out)].filter((c) => c !== displayCode);
+}
+
+/**
  * Code level of an item: 0 for a group root (600-00-0000-00-0), 1 for an L1
  * account (601-00-…), then +1 per leading non-"00" segment; a group root's
  * S/M twin counts as 1.
@@ -186,7 +219,8 @@ export function compareCbsDisplayCodes(a: string, b: string): number {
 /** Pre-order sort: parents before children, cost-type twins adjacent. */
 function sortCbsItems<T extends CbsTreeItem>(items: readonly T[]): T[] {
   return [...items].sort(
-    (a, b) => compareCbsDisplayCodes(a.displayCode, b.displayCode) || a.id - b.id,
+    (a, b) =>
+      compareCbsDisplayCodes(a.displayCode, b.displayCode) || a.id - b.id,
   );
 }
 
@@ -346,7 +380,12 @@ function searchCbsTree<T extends CbsTreeItem>(
       out.push(n);
       continue;
     }
-    const kids = searchCbsTree(n.children, lowerQuery, keepMatchedSubtree, onMatch);
+    const kids = searchCbsTree(
+      n.children,
+      lowerQuery,
+      keepMatchedSubtree,
+      onMatch,
+    );
     if (selfMatch || kids.length > 0) {
       if (selfMatch) onMatch?.();
       out.push({ ...n, children: kids });

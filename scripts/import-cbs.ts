@@ -1,8 +1,8 @@
-// Re-imports the CBS Dictionary from `prisma/data/MasterCBS.xlsx` into the
+// Re-imports the CBS Dictionary from `prisma/data/CBS.xlsx` into the
 // `CbsItem` table WITHOUT touching anything else (projects, FEF rows, change
 // logs, etc.). This is the regular "the CBS changed" process:
 //
-//   1. Drop the new workbook in at prisma/data/MasterCBS.xlsx
+//   1. Drop the new workbook in at prisma/data/CBS.xlsx
 //   2. npm run cbs:import -- --dry-run     (review the plan + workbook report)
 //   3. npm run cbs:import
 //
@@ -19,14 +19,14 @@
 // routine re-import after a small workbook edit is a handful of round trips
 // rather than one per row.
 //
-// Run:  npx tsx scripts/import-master-cbs.ts [--dry-run]
+// Run:  npx tsx scripts/import-cbs.ts [--dry-run]
 import "dotenv/config";
 import { prisma } from "../src/server/db";
 import {
-  formatMasterCbsReport,
-  loadMasterCbs,
-  type MasterCbsItem,
-} from "../prisma/master-cbs";
+  formatCbsWorkbookReport,
+  loadCbsWorkbook,
+  type CbsDictionaryRow,
+} from "../prisma/cbs-workbook";
 import {
   CBS_IMPORT_FIELDS,
   changedCbsFields,
@@ -39,8 +39,8 @@ const dryRun = process.argv.includes("--dry-run");
 const CHUNK = 10;
 
 async function main() {
-  const { items, report } = await loadMasterCbs();
-  console.log(formatMasterCbsReport(report));
+  const { items, report } = await loadCbsWorkbook();
+  console.log(formatCbsWorkbookReport(report));
 
   // Guard: costCode is the upsert key and is @unique — refuse to run on data
   // that would violate it rather than fail halfway through.
@@ -62,7 +62,7 @@ async function main() {
     .filter((e) => !byCost.has(e.costCode))
     .map((e) => e.costCode);
   const toCreate = items.filter((i) => !existingByCost.has(i.costCode));
-  const toUpdate: { costCode: string; data: Partial<MasterCbsItem> }[] = [];
+  const toUpdate: { costCode: string; data: Partial<CbsDictionaryRow> }[] = [];
   let unchanged = 0;
   for (const it of items) {
     const prior = existingByCost.get(it.costCode);

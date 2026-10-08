@@ -1,5 +1,5 @@
 /**
- * Loads the Master CBS workbook (`prisma/data/MasterCBS.xlsx`) and expands it
+ * Loads the CBS workbook (`prisma/data/CBS.xlsx`) and expands it
  * into the CBS Dictionary the app stores in `CbsItem`:
  *
  *   - every workbook row ("ORIGINAL"), plus
@@ -19,7 +19,7 @@
  * occurrence and are reported.
  *
  * Shared by the seed (`prisma/seed.ts`) and the live-DB re-import
- * (`scripts/import-master-cbs.ts`).
+ * (`scripts/import-cbs.ts`).
  */
 import ExcelJS from "exceljs";
 import { readFileSync } from "node:fs";
@@ -32,15 +32,15 @@ import {
 } from "../src/lib/cbs-tree";
 import {
   expandCbsDictionary,
-  type MasterCbsItem,
+  type CbsDictionaryRow,
 } from "../src/lib/cbs-dictionary";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-export const MASTER_CBS_PATH = join(__dirname, "data", "MasterCBS.xlsx");
+export const CBS_WORKBOOK_PATH = join(__dirname, "data", "CBS.xlsx");
 
-export type { CbsRowType, MasterCbsItem } from "../src/lib/cbs-dictionary";
+export type { CbsRowType, CbsDictionaryRow } from "../src/lib/cbs-dictionary";
 
-export type MasterCbsReport = {
+export type CbsWorkbookReport = {
   source: string;
   sheet: string;
   /** Non-empty workbook rows read (before de-duplication). */
@@ -52,9 +52,28 @@ export type MasterCbsReport = {
   skippedExistingMaterial: number;
   /** Rows whose "Cost Code" cell disagreed with the Display Code (derived wins). */
   costCodeMismatches: number;
+  /**
+   * Rows whose L1–L7 helper columns disagree with the Display Code, grouped by
+   * the move they imply. The Display Code is the account's identity — the app
+   * stores it on every estimate row — so renumbering only the helper columns
+   * does nothing, and usually leaves the row colliding with whatever still owns
+   * the old code. Surfaced per import because that mistake is invisible
+   * otherwise.
+   */
+  segmentMismatches: {
+    /** The division (L1) the helper columns claim. */
+    columnsL1: string;
+    /** The division the Display Code actually puts the row in. */
+    codeL1: string;
+    rows: number;
+    sample: { row: number; name: string };
+  }[];
   duplicates: { row: number; displayCode: string; name: string; kept: boolean }[];
   invalid: { row: number; displayCode: string; name: string; reason: string }[];
 };
+
+/** Sheet names to look for, in order, before falling back to the first. */
+const SHEET_NAMES = ["CBS", "Master CBS"] as const;
 
 const DISPLAY_CODE_RE = /^[0-9A-Z]{3}-[0-9A-Z]{2}-[0-9A-Z]{4}-[0-9A-Z]{2}-[0-9A-Z]$/;
 
@@ -101,15 +120,20 @@ function toBool(v: string): boolean | null {
   return null;
 }
 
-export async function loadMasterCbs(
-  path: string = MASTER_CBS_PATH,
-): Promise<{ items: MasterCbsItem[]; report: MasterCbsReport }> {
+export async function loadCbsWorkbook(
+  path: string = CBS_WORKBOOK_PATH,
+): Promise<{ items: CbsDictionaryRow[]; report: CbsWorkbookReport }> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(Buffer.from(stripTables(readFileSync(path))) as never);
-  const ws = wb.getWorksheet("Master CBS") ?? wb.worksheets[0];
+  // Prefer a sheet named for the CBS, but fall back to the first one so a
+  // renamed tab does not break the import — the header scan below is what
+  // actually validates that we are reading the right thing.
+  const ws =
+    SHEET_NAMES.map((n) => wb.getWorksheet(n)).find(Boolean) ??
+    wb.worksheets[0];
   if (!ws) throw new Error(`${path}: workbook has no sheets`);
 
-  // The header row is wherever "Display Code" appears (row 1 in the master,
+  // The header row is wherever "Display Code" appears (row 1 in the CBS sheet,
   // row 4 in the dictionary-style sheets that carry a title block).
   let headerRow = 0;
   const headers: string[] = [];
@@ -138,7 +162,7 @@ export async function loadMasterCbs(
     }
   }
 
-  const report: MasterCbsReport = {
+  const report: CbsWorkbookReport = {
     source: path,
     sheet: ws.name,
     sheetRows: 0,
@@ -148,11 +172,17 @@ export async function loadMasterCbs(
     skippedExistingSub: 0,
     skippedExistingMaterial: 0,
     costCodeMismatches: 0,
+    segmentMismatches: [],
     duplicates: [],
     invalid: [],
   };
 
-  const byCode = new Map<string, MasterCbsItem>();
+  // Keyed "columns→code" so a whole renumbered block collapses to one line.
+  const segmentMismatches = new Map<
+    string,
+    CbsWorkbookReport["segmentMismatches"][number]
+  >();
+  const byCode = new Map<string, CbsDictionaryRow>();
   for (let r = headerRow + 1; r <= ws.rowCount; r++) {
     const row = ws.getRow(r);
     const text = (label: string): string => {
@@ -182,7 +212,31 @@ export async function loadMasterCbs(
     const sheetCostCode = text("Cost Code");
     if (sheetCostCode && sheetCostCode !== costCode) report.costCodeMismatches++;
 
-    const item: MasterCbsItem = {
+    // The sheet splits the code across L1–L7 (L1 holds the first two digits of
+    // the division, L2 the third). Compare the whole thing against the code we
+    // actually use, so a partial renumber is reported rather than ignored.
+    const segments = ["L1", "L2", "L3", "L4", "L5", "L6", "L7"].map(text);
+    if (segments.every((seg) => seg !== "")) {
+      const fromColumns = segments.join("").toUpperCase();
+      if (fromColumns !== costCode) {
+        // Group by the DIVISION move, so a renumbered block of forty rows
+        // reads as one line instead of forty.
+        const columnsL1 = (segments[0] + segments[1]).toUpperCase();
+        const codeL1 = displayCode.slice(0, 3);
+        const key = `${columnsL1}>${codeL1}`;
+        const hit = segmentMismatches.get(key);
+        if (hit) hit.rows++;
+        else
+          segmentMismatches.set(key, {
+            columnsL1,
+            codeL1,
+            rows: 1,
+            sample: { row: r, name },
+          });
+      }
+    }
+
+    const item: CbsDictionaryRow = {
       ...parseCbsDisplayCode(displayCode),
       name,
       displayCode,
@@ -220,6 +274,8 @@ export async function loadMasterCbs(
     byCode.set(displayCode, item);
   }
 
+  report.segmentMismatches = [...segmentMismatches.values()];
+
   const originals = [...byCode.values()].sort((a, b) =>
     compareCbsDisplayCodes(a.displayCode, b.displayCode),
   );
@@ -239,7 +295,7 @@ export async function loadMasterCbs(
   return { items, report };
 }
 
-export function formatMasterCbsReport(report: MasterCbsReport): string {
+export function formatCbsWorkbookReport(report: CbsWorkbookReport): string {
   const lines = [
     `Master CBS: ${report.source} [${report.sheet}]`,
     `  workbook rows ${report.sheetRows} → originals ${report.originals}` +
@@ -251,6 +307,21 @@ export function formatMasterCbsReport(report: MasterCbsReport): string {
     lines.push(
       `  ${report.costCodeMismatches} row(s) had a Cost Code cell that disagreed with the Display Code (derived from Display Code).`,
     );
+  }
+  if (report.segmentMismatches.length) {
+    const rows = report.segmentMismatches.reduce((n, m) => n + m.rows, 0);
+    lines.push(
+      `  ${rows} row(s) whose L1–L7 columns disagree with their Display Code.`,
+      "  The Display Code is the account's identity — renumbering only the L1–L7",
+      "  columns has NO effect, and usually collides with whatever still owns the",
+      "  old code. Edit the Display Code (and Cost Code) to complete the move:",
+    );
+    for (const m of report.segmentMismatches) {
+      lines.push(
+        `    L1 columns say ${m.columnsL1}, Display Codes say ${m.codeL1}` +
+          ` — ${m.rows} row(s), e.g. row ${m.sample.row} "${m.sample.name}"`,
+      );
+    }
   }
   if (report.duplicates.length) {
     lines.push(`  ${report.duplicates.length} duplicate display code(s) in the workbook:`);

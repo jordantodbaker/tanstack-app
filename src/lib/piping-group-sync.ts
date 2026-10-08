@@ -4,7 +4,7 @@
  * (`scripts/sync-piping-group-codes.ts`) supplies the file text and the rows.
  *
  * These two columns are what the Piping take-off composes CBS cost codes from,
- * and they are NOT derived from the Master CBS workbook. A renumbered piping
+ * and they are NOT derived from the CBS workbook. A renumbered piping
  * series therefore leaves them pointing at accounts that no longer exist, and
  * piping rows silently stop auto-populating their CBS id and name.
  */

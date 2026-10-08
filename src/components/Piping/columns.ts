@@ -1,4 +1,5 @@
 import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
+import { CbsSearchSelectCell } from "~/lib/fef-cells";
 import type { FefRow } from "~/lib/types";
 import { EditableCell, DisplayEditCell, SizeCell, ReadOnlyCell, TakeOffIdReadOnlyCell, CbsNameCell, CbsUomCell, DeleteRowCell, AreaSelectCell, LABOR_COST_GROUP, type ColumnGroup } from "~/lib/table-utils";
 import {
@@ -17,7 +18,6 @@ import {
   PipingSizeCell,
   SubCheckboxCell,
   CrewMixSelectCell,
-  CbsSearchSelectCell,
   PipeCategoryCell,
 } from "~/components/Piping/cells";
 

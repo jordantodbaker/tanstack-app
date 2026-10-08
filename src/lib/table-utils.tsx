@@ -628,17 +628,6 @@ export function FefTableContent({
   // Map each dropdown's source options to `{ value, label }` ONCE for the whole
   // grid (memoized on the source array), then share via table meta — so a page
   // of ~25 dropdown cells doesn't each re-map the (large) CBS catalog on mount.
-  const cbsSelectOptions = React.useMemo(
-    () =>
-      (meta?.cbsOptions ?? []).map((o) => ({
-        value: o.displayCode,
-        // Picking needs the code; reading the sheet does not — the ID column
-        // carries it, frozen alongside Name.
-        label: o.displayDescription ?? `${o.displayCode}: ${o.name}`,
-        shortLabel: o.name || o.displayCode,
-      })),
-    [meta?.cbsOptions],
-  );
   const roleSelectOptions = React.useMemo(
     () => (meta?.roleOptions ?? []).map((o) => ({ value: o, label: o })),
     [meta?.roleOptions],
@@ -673,6 +662,9 @@ export function FefTableContent({
       (meta?.cbsOptions ?? []).map((o) => ({
         value: o.displayCode,
         label: o.displayDescription ?? `${o.displayCode}: ${o.name}`,
+        // Resting text is the item name; the code lives in the ID column,
+        // frozen alongside Name.
+        shortLabel: o.name || o.displayCode,
         searchText: `${o.displayCode} ${o.name}`.toLowerCase(),
       })),
     [meta?.cbsOptions],
@@ -732,7 +724,6 @@ export function FefTableContent({
       ...meta,
       // Option lists pre-mapped to `{ value, label }` once per grid (computed
       // just above) so a page of dropdown cells doesn't each re-map the source.
-      cbsSelectOptions,
       roleSelectOptions,
       scheduleSelectOptions,
       crewMixSelectOptions,

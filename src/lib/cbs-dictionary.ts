@@ -1,7 +1,7 @@
 /**
  * The CBS Dictionary expansion rule, kept free of any workbook or database
  * I/O so it can be unit-tested directly. The workbook loader
- * (`prisma/master-cbs.ts`) parses rows into `MasterCbsItem`s and hands them
+ * (`prisma/cbs-workbook.ts`) parses rows into `CbsDictionaryRow`s and hands them
  * here; the seed and the live-DB re-import store the result in `CbsItem`.
  *
  * For each original row with Sub Code = YES a "SUB" twin is generated whose
@@ -16,7 +16,7 @@ import { parseCbsDisplayCode, type CbsRowType } from "./cbs-tree";
 export type { CbsRowType };
 
 /** One dictionary row as stored in `CbsItem` (minus the generated id). */
-export type MasterCbsItem = {
+export type CbsDictionaryRow = {
   l1: string;
   l2: string;
   l3: string;
@@ -65,9 +65,9 @@ export function withCostType(displayCode: string, type: string): string {
 }
 
 function generateTwin(
-  original: MasterCbsItem,
+  original: CbsDictionaryRow,
   type: "S" | "M",
-): MasterCbsItem {
+): CbsDictionaryRow {
   const displayCode = withCostType(original.displayCode, type);
   const name = suffixName(
     original.name,
@@ -87,7 +87,7 @@ function generateTwin(
 }
 
 type CbsDictionaryExpansion = {
-  items: MasterCbsItem[];
+  items: CbsDictionaryRow[];
   generatedSub: number;
   generatedMaterial: number;
   skippedExistingSub: number;
@@ -99,10 +99,10 @@ type CbsDictionaryExpansion = {
  * generated S and M twins (skipped when that code already exists).
  */
 export function expandCbsDictionary(
-  originals: MasterCbsItem[],
+  originals: CbsDictionaryRow[],
 ): CbsDictionaryExpansion {
   const existing = new Set(originals.map((o) => o.displayCode));
-  const items: MasterCbsItem[] = [];
+  const items: CbsDictionaryRow[] = [];
   const stats = {
     generatedSub: 0,
     generatedMaterial: 0,

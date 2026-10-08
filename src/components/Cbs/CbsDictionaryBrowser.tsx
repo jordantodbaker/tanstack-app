@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Loader2 } from "lucide-react";
-import type { CbsTreeRow } from "~/utils/cbs";
+import type { CbsBrowserRow } from "~/utils/cbs";
 import {
   buildCbsTree,
   cbsFlagBadges,
@@ -42,9 +42,13 @@ type Counts = {
   materialRows: number;
 };
 
-function countRows(items: readonly CbsTreeRow[]): Counts {
-  const c: Counts = { total: items.length, original: 0, subRows: 0, materialRows: 0 };
+function countRows(items: readonly CbsBrowserRow[]): Counts {
+  const c: Counts = { total: 0, original: 0, subRows: 0, materialRows: 0 };
   for (const i of items) {
+    // Context rows are ancestors pulled in for shape only — not codes this
+    // view is listing, so they don't belong in "N rows".
+    if (i.context) continue;
+    c.total++;
     if (i.rowType === "SUB") c.subRows++;
     else if (i.rowType === "MATERIAL") c.materialRows++;
     else c.original++;
@@ -67,7 +71,7 @@ function CountsLegend({
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2">
       <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-        {counts.total.toLocaleString()} rows
+        {counts.total.toLocaleString()} row{counts.total === 1 ? "" : "s"}
       </span>
       {showRowTypes && (
         <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
@@ -96,14 +100,15 @@ export function CbsDictionaryBrowser({
   emptyMessage,
   showRowTypeCounts = true,
 }: {
-  items: CbsTreeRow[];
+  items: CbsBrowserRow[];
   badgesFor?: (node: Node) => readonly CbsBadge[];
   sourceNote: string;
   emptyMessage: string;
   showRowTypeCounts?: boolean;
 }) {
   const nodes = React.useMemo(() => buildCbsTree(items), [items]);
-  const { expanded, toggle, expandAll, collapseAll } = useCbsTreeExpansion(nodes);
+  const { expanded, toggle, expandAll, collapseAll } =
+    useCbsTreeExpansion(nodes);
   const [selected, setSelected] = React.useState<Node | null>(null);
   const [query, setQuery] = React.useState("");
 
@@ -155,7 +160,6 @@ export function CbsDictionaryBrowser({
     </div>
   );
 }
-
 
 /** Shared pending / error chrome for whichever query feeds the sections. */
 export function CbsDictionaryStatus({

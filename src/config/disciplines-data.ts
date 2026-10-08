@@ -23,7 +23,7 @@ export type DisciplineData = {
 };
 
 /**
- * Master CBS L1 convention (prisma/data/MasterCBS.xlsx): each discipline owns
+ * CBS L1 convention (prisma/data/CBS.xlsx): each discipline owns
  * a block XY0–XY9 of overhead accounts — XY0 summary, XY1 materials, XY2 field
  * staff, XY3 support services, XY4 equipment, XY5 facilities, XY6 mob/demob,
  * XY7 training, XY9 testing — followed by its direct-labor accounts (X10 and

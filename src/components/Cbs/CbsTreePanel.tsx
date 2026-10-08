@@ -78,6 +78,10 @@ const CbsRow = React.memo(function CbsRow({
 }) {
   const { item } = node;
   const label = item.name || item.accountDescription || item.displayCode;
+  // A context row is not part of this project's scope — it is here so its
+  // granted descendants have something to hang from. Mute it and drop its
+  // badges so it cannot be mistaken for an available code.
+  const isContext = item.context === true;
 
   return (
     <div
@@ -91,9 +95,16 @@ const CbsRow = React.memo(function CbsRow({
         color: color.text,
         paddingLeft: 8 + node.depth * 18,
       }}
+      title={
+        isContext
+          ? "Not selected for this project — shown so its selected codes nest correctly."
+          : undefined
+      }
       className={`flex items-center gap-2 border-b border-black/5 py-1 pr-3 text-sm transition-[filter] hover:brightness-95 ${
         onSelect ? "cursor-pointer" : ""
-      } ${isSelected ? "ring-2 ring-inset ring-sky-900/60" : ""}`}
+      } ${isContext ? "opacity-55 italic" : ""} ${
+        isSelected ? "ring-2 ring-inset ring-sky-900/60" : ""
+      }`}
     >
       {hasChildren ? (
         <button
@@ -118,7 +129,7 @@ const CbsRow = React.memo(function CbsRow({
         {item.displayCode}
       </span>
       <span className="truncate font-medium">{label}</span>
-      {badges.map((b) => (
+      {(isContext ? [] : badges).map((b) => (
         <span
           key={b.label}
           title={b.title}
@@ -221,7 +232,10 @@ export function CbsTreePanel({
           className="max-h-[70vh] overflow-auto"
         >
           <div
-            style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}
+            style={{
+              height: rowVirtualizer.getTotalSize(),
+              position: "relative",
+            }}
           >
             {rowVirtualizer.getVirtualItems().map((vi) => {
               const node = flat[vi.index];

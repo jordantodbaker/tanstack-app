@@ -8,7 +8,7 @@ import {
   MaterialTypeSelectCell,
   EditableCell,
   DisplayEditCell,
-  CbsSelectCell,
+  CbsSearchSelectCell,
   CbsNameCell,
   CbsUomCell,
   ReadOnlyCell,
@@ -98,7 +98,7 @@ const fieldEstimateColumns: ColumnDef<FefRow, string>[] = [
 
 const takeOffColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("id", { header: "ID", cell: TakeOffIdReadOnlyCell, size: 150 }),
-  columnHelper.accessor("name", { header: "Name", cell: CbsSelectCell, size: 300 }),
+  columnHelper.accessor("name", { header: "Name", cell: CbsSearchSelectCell, size: 300 }),
   columnHelper.accessor("description", { header: "Description", cell: EditableCell, size: 250 }),
   columnHelper.accessor("area", { header: "Area", cell: AreaSelectCell, size: 200 }),
   // ── Reference (universal) ──

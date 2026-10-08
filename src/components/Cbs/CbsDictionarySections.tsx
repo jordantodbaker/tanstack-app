@@ -71,7 +71,7 @@ function CbsSection({
 }
 
 const MASTER_SOURCE_NOTE =
-  "Source: the Master CBS Dictionary (prisma/data/MasterCBS.xlsx), in full — no project allow-list applied. Colours mirror the workbook's outline levels.";
+  "Source: the CBS Dictionary, in full — no project allow-list applied. Colours mirror the source workbook's outline levels.";
 const MASTER_EMPTY = "No CBS items in the catalog.";
 
 /**
@@ -89,7 +89,7 @@ export function CbsDictionarySections({ items }: { items: CbsTreeRow[] }) {
     <div className="flex flex-col gap-4">
       <CbsSection
         title="CBS Code Book"
-        description="Every Master CBS row — original rows only. S / M mark a row's own Sub Code / Material Code."
+        description="Every CBS row — original rows only. S / M mark a row's own Sub Code / Material Code."
         items={originals}
         badgesFor={cbsFlagBadgesFor}
         sourceNote={MASTER_SOURCE_NOTE}
@@ -97,7 +97,7 @@ export function CbsDictionarySections({ items }: { items: CbsTreeRow[] }) {
         defaultOpen
       />
       <CbsSection
-        title="Master CBS Dictionary"
+        title="CBS Dictionary"
         description="The complete dictionary — every original row plus the generated S/M rows."
         items={items}
         sourceNote={MASTER_SOURCE_NOTE}

@@ -1,7 +1,7 @@
 // Renames individual CBS accounts in the `CbsItem` table.
 //
 // An account's name comes from the "Name" column of
-// `prisma/data/MasterCBS.xlsx`, so this script is only half of a rename: it
+// `prisma/data/CBS.xlsx`, so this script is only half of a rename: it
 // makes the app show the new name NOW, but the next `npm run cbs:import` will
 // read the workbook again and put the old name back. Change the workbook cell
 // too (the table below records which one) or the rename will not stick.
@@ -22,7 +22,7 @@ const dryRun = process.argv.includes("--dry-run");
 
 /**
  * The renames to apply. `workbookCell` is where the same edit belongs in
- * MasterCBS.xlsx (sheet "Master CBS", column H = "Name"), so a future import
+ * CBS.xlsx (sheet "Master CBS", column H = "Name"), so a future import
  * carries the new name rather than reverting it.
  */
 const RENAMES: CbsRename[] = [
@@ -32,7 +32,7 @@ const RENAMES: CbsRename[] = [
     displayCode: "300-00-0000-00-0",
     from: "Structural Steel Shop Fabrication",
     to: "Structural Steel",
-    workbookCell: "H2001",
+    workbookCell: "H1999",
   },
   {
     // Likewise 600 covers the pipe shop (601–629) and field install
@@ -40,7 +40,7 @@ const RENAMES: CbsRename[] = [
     displayCode: "600-00-0000-00-0",
     from: "Pipe Shop",
     to: "Piping",
-    workbookCell: "H3230",
+    workbookCell: "H3228",
   },
 ];
 
@@ -95,7 +95,7 @@ async function main() {
   console.log(`\nRenamed ${todo.length} account(s).`);
   console.log("Remember the workbook, or the next CBS import reverts this:");
   for (const r of RENAMES) {
-    console.log(`  MasterCBS.xlsx "Master CBS" ${r.workbookCell} → ${r.to}`);
+    console.log(`  CBS.xlsx "Master CBS" ${r.workbookCell} → ${r.to}`);
   }
 }
 

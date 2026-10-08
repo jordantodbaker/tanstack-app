@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { parseCbsDisplayCode } from "./cbs-tree";
-import type { MasterCbsItem } from "./cbs-dictionary";
+import type { CbsDictionaryRow } from "./cbs-dictionary";
 import {
   CBS_IMPORT_FIELDS,
   changedCbsFields,
   type StoredCbsRow,
 } from "./cbs-import-diff";
 
-function row(over: Partial<MasterCbsItem> = {}): MasterCbsItem {
+function row(over: Partial<CbsDictionaryRow> = {}): CbsDictionaryRow {
   const displayCode = "601-05-0000-00-0";
   return {
     ...parseCbsDisplayCode(displayCode),
@@ -39,12 +39,12 @@ function row(over: Partial<MasterCbsItem> = {}): MasterCbsItem {
 }
 
 /** A stored copy of `r` as the import reads it back. */
-function stored(r: MasterCbsItem, over: Partial<StoredCbsRow> = {}): StoredCbsRow {
+function stored(r: CbsDictionaryRow, over: Partial<StoredCbsRow> = {}): StoredCbsRow {
   return { ...r, ...over };
 }
 
 describe("CBS_IMPORT_FIELDS", () => {
-  it("covers every MasterCbsItem column except the costCode key", () => {
+  it("covers every CbsDictionaryRow column except the costCode key", () => {
     const keys = Object.keys(row()).filter((k) => k !== "costCode").sort();
     expect([...CBS_IMPORT_FIELDS].sort()).toEqual(keys);
   });

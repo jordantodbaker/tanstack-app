@@ -3,7 +3,7 @@
  * the rows currently stored. Pure, so the safety rule below is testable without
  * a database: see `scripts/rename-cbs-accounts.ts` for the caller.
  *
- * Account names come from the "Name" column of `prisma/data/MasterCBS.xlsx`, so
+ * Account names come from the "Name" column of `prisma/data/CBS.xlsx`, so
  * a rename applied only to the database is reverted by the next CBS import. The
  * script therefore re-runs after every import, which makes it important that it
  * NEVER writes blind: an entry whose stored name is neither the old name nor

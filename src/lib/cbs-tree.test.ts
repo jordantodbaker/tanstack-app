@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCbsTree,
+  cbsAncestorCodes,
   cbsFlagBadges,
   cbsRowTypeBadges,
   compareCbsDisplayCodes,
@@ -44,7 +45,10 @@ function find(nodes: CbsTreeNode[], code: string): CbsTreeNode | undefined {
 }
 
 function parentOf(nodes: CbsTreeNode[], code: string): string | null {
-  const walk = (list: CbsTreeNode[], parent: string | null): string | null | undefined => {
+  const walk = (
+    list: CbsTreeNode[],
+    parent: string | null,
+  ): string | null | undefined => {
     for (const n of list) {
       if (n.item.displayCode === code) return parent;
       const r = walk(n.children, n.item.displayCode);
@@ -112,6 +116,86 @@ describe("getGroupL1", () => {
     expect(getGroupL1("330")).toBe("300");
     expect(getGroupL1("530")).toBe("500");
     expect(getGroupL1("630")).toBe("600");
+  });
+});
+
+/**
+ * `cbsAncestorCodes` exists so a project-scoped subset can pull in the summary
+ * rows above the codes it was granted. Its contract is that every code it
+ * returns is one `buildCbsTree` would actually parent to, so the round-trip
+ * test at the end of this block matters more than the literal expectations.
+ */
+describe("cbsAncestorCodes", () => {
+  it("walks up the segments, then the division root", () => {
+    expect(cbsAncestorCodes("052-10-0500-00-L")).toEqual([
+      "052-10-0000-00-0",
+      "052-00-0000-00-0",
+      "050-00-0000-00-0",
+    ]);
+  });
+
+  it("gives an L1 account just its division root", () => {
+    expect(cbsAncestorCodes("601-00-0000-00-0")).toEqual(["600-00-0000-00-0"]);
+  });
+
+  it("returns nothing for a division root itself", () => {
+    expect(cbsAncestorCodes("600-00-0000-00-0")).toEqual([]);
+    // 290 and 950 are their own divisions, not children of 200 / 900.
+    expect(cbsAncestorCodes("290-00-0000-00-0")).toEqual([]);
+    expect(cbsAncestorCodes("950-00-0000-00-0")).toEqual([]);
+  });
+
+  it("hangs a division root's cost-type twin off the root", () => {
+    expect(cbsAncestorCodes("600-00-0000-00-M")).toEqual(["600-00-0000-00-0"]);
+  });
+
+  it("ignores trailing markers, which are not levels", () => {
+    // The Pipe Shop's -ST / -LB suffixes sit in L5 with L3/L4 still "00", so
+    // they add no level and no ancestor.
+    expect(cbsAncestorCodes("601-05-0000-ST-L")).toEqual([
+      "601-00-0000-00-0",
+      "600-00-0000-00-0",
+    ]);
+  });
+
+  it("names every code buildCbsTree would parent to, so a subset still nests", () => {
+    // A granted subset with none of its parents — what Setup produces when a
+    // user ticks leaves only.
+    const granted = [
+      "052-10-0500-00-L",
+      "601-05-1000-00-L",
+      "290-05-0000-00-0",
+    ];
+    const needed = [
+      ...new Set(granted.flatMap((c) => cbsAncestorCodes(c))),
+    ].filter((c) => !granted.includes(c));
+
+    const tree = buildCbsTree([...granted, ...needed].map((c) => item(c)));
+
+    // Every granted row hangs under its own division root, not at the top.
+    expect(tree.map((n) => n.item.displayCode)).toEqual([
+      "050-00-0000-00-0",
+      "290-00-0000-00-0",
+      "600-00-0000-00-0",
+    ]);
+    for (const code of granted) {
+      expect(parentOf(tree, code)).not.toBeNull();
+    }
+    expect(parentOf(tree, "052-10-0500-00-L")).toBe("052-10-0000-00-0");
+    expect(parentOf(tree, "601-05-1000-00-L")).toBe("601-05-0000-00-0");
+    expect(parentOf(tree, "290-05-0000-00-0")).toBe("290-00-0000-00-0");
+  });
+
+  it("leaves nothing to add once the parents are already granted", () => {
+    const granted = [
+      "600-00-0000-00-0",
+      "601-00-0000-00-0",
+      "601-05-0000-00-0",
+    ];
+    const needed = granted
+      .flatMap((c) => cbsAncestorCodes(c))
+      .filter((c) => !granted.includes(c));
+    expect(needed).toEqual([]);
   });
 });
 
@@ -224,7 +308,10 @@ describe("buildCbsTree", () => {
   });
 
   it("keeps a 0x0 group root that is its own L1 as a single node", () => {
-    const tree = buildCbsTree([item("010-00-0000-00-0"), item("012-00-0000-00-0")]);
+    const tree = buildCbsTree([
+      item("010-00-0000-00-0"),
+      item("012-00-0000-00-0"),
+    ]);
     expect(tree).toHaveLength(1);
     expect(tree[0].item.displayCode).toBe("010-00-0000-00-0");
     expect(tree[0].children.map((c) => c.item.displayCode)).toEqual([
@@ -302,7 +389,9 @@ describe("buildCbsTree", () => {
     const c = item("601-02-0000-00-0");
     const d = item("601-02-0100-00-0");
     const tree = buildCbsTree([a, b, c, d]);
-    expect(tree[0].descendantItemIds.sort()).toEqual([a.id, b.id, c.id, d.id].sort());
+    expect(tree[0].descendantItemIds.sort()).toEqual(
+      [a.id, b.id, c.id, d.id].sort(),
+    );
     expect(find(tree, "601-02-0000-00-0")?.descendantItemIds.sort()).toEqual(
       [c.id, d.id].sort(),
     );
@@ -315,7 +404,9 @@ describe("buildCbsTree", () => {
         accountDescription: "Carbon Steel",
       }),
     ]);
-    expect(tree[0].searchHaystack).toBe("601-00-0000-00-0 piping spool carbon steel");
+    expect(tree[0].searchHaystack).toBe(
+      "601-00-0000-00-0 piping spool carbon steel",
+    );
   });
 
   it("finds a node via descendant text without storing it on the ancestor", () => {
@@ -347,7 +438,10 @@ describe("cbsFlagBadges", () => {
   });
 
   it("shows both when a row carries both flags", () => {
-    expect(labels({ subReporting: true, materialCode: true })).toEqual(["S", "M"]);
+    expect(labels({ subReporting: true, materialCode: true })).toEqual([
+      "S",
+      "M",
+    ]);
   });
 
   it("shows nothing for NO, blank or absent flags", () => {
@@ -366,9 +460,9 @@ describe("cbsFlagBadges", () => {
 
 describe("cbsRowTypeBadges", () => {
   it("badges a generated row by what it is", () => {
-    expect(cbsRowTypeBadges(item("601-05-0000-00-S", { rowType: "SUB" }))).toEqual([
-      { label: "S", title: "Generated sub-code row" },
-    ]);
+    expect(
+      cbsRowTypeBadges(item("601-05-0000-00-S", { rowType: "SUB" })),
+    ).toEqual([{ label: "S", title: "Generated sub-code row" }]);
     expect(
       cbsRowTypeBadges(item("601-05-0000-00-M", { rowType: "MATERIAL" })),
     ).toEqual([{ label: "M", title: "Generated material row" }]);

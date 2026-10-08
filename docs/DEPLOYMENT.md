@@ -434,16 +434,16 @@ follow-up feature (a scheduled job marking and removing eligible projects).
 
 ## 11a. Updating the CBS
 
-The CBS lives in `prisma/data/MasterCBS.xlsx` (sheet "Master CBS"). The app
+The CBS lives in `prisma/data/CBS.xlsx` (sheet "Master CBS"). The app
 stores the *expanded* CBS Dictionary in `CbsItem`: every workbook row plus a
 generated `S` (sub-code) twin for rows with Sub Code = YES and an `M`
 (material) twin for rows with Material Code = YES, skipped when the workbook
 already carries that code. Level segments are derived from the Display Code,
-not from the workbook's L1–L7 helper columns. See `prisma/master-cbs.ts`.
+not from the workbook's L1–L7 helper columns. See `prisma/cbs-workbook.ts`.
 
 When a new master arrives:
 
-1. Replace `prisma/data/MasterCBS.xlsx` (same sheet/column layout).
+1. Replace `prisma/data/CBS.xlsx` (same sheet/column layout).
 2. `npm run cbs:import -- --dry-run` — prints the workbook report (duplicate
    codes, invalid rows, generated-twin counts) and the create/update/delete
    plan without writing anything. Fix the workbook if the report flags

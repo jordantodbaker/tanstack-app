@@ -2,6 +2,10 @@ import React from "react";
 import { useReactTable } from "@tanstack/react-table";
 import { Trash2, ChevronDown } from "lucide-react";
 import type { CbsOption, FefRow } from "~/lib/types";
+import {
+  SearchableSelect,
+  type SearchableSelectOption,
+} from "~/components/SearchableSelect";
 import { cn, computeBoreSize } from "./utils";
 import {
   Select,
@@ -429,34 +433,53 @@ export function SizeCell({ getValue, row, table }: CellProps) {
   );
 }
 
-export function CbsSelectCell({ row, table }: CellProps) {
-  const cbsOptions = table.options.meta?.cbsOptions ?? [];
-  const currentDisplayCode = row.original.id;
-
-  const options = table.options.meta?.cbsSelectOptions ?? [];
-
+/**
+ * Searchable CBS-item picker for a Name column. Client-filters the discipline's
+ * `cbsOptions` (no server round-trip) and, on select, stamps the row's id (CBS
+ * displayCode), name, and unit. Selecting the placeholder clears those three. The
+ * picker is keyed on the row's CBS code (`id`); a blank-template sentinel id
+ * shows as the placeholder rather than raw text.
+ */
+export function CbsSearchSelectCell({ row, table }: CellProps) {
+  // Shared, pre-mapped once per grid (see the meta builder in table-utils),
+  // so a page of ~25 of these doesn't each rebuild the catalog list on mount.
+  const base = table.options.meta?.cbsSearchOptions ?? [];
+  const rawId = row.original.id;
+  const value = rawId.startsWith("__fe-blank-") ? "" : rawId;
+  const name = row.original.name;
+  const options: SearchableSelectOption[] = React.useMemo(() => {
+    // Existing rows may reference a code that isn't in this discipline's option
+    // set. Surface it with its stored name so the control shows "code: name"
+    // instead of the bare code — prepended to (not mutated into) the shared
+    // list, whose reference must stay stable across cells.
+    if (value && !base.some((o) => o.value === value)) {
+      return [
+        {
+          value,
+          label: name ? `${value}: ${name}` : value,
+          searchText: `${value} ${name}`.toLowerCase(),
+        },
+        ...base,
+      ];
+    }
+    return base;
+  }, [base, value, name]);
   return (
-    <CellSelect
-      value={currentDisplayCode}
+    <SearchableSelect
+      value={value}
       options={options}
-      ariaLabel="CBS item"
-      onValueChange={(v) => {
-        if (v === "") {
-          table.options.meta?.updateRow?.(row.index, {
-            id: "",
-            name: "",
-            unit: "",
-          });
-          return;
-        }
-        const selected = cbsOptions.find((o) => o.displayCode === v);
-        if (selected) {
-          table.options.meta?.updateRow?.(row.index, {
-            id: selected.displayCode,
-            name: selected.name,
-            unit: selected.uom,
-          });
-        }
+      onSelect={(code) => {
+        const selected = table.options.meta?.cbsByCode?.get(code);
+        table.options.meta?.updateRow?.(
+          row.index,
+          selected
+            ? {
+                id: selected.displayCode,
+                name: selected.name,
+                unit: selected.uom,
+              }
+            : { id: "", name: "", unit: "" },
+        );
       }}
     />
   );

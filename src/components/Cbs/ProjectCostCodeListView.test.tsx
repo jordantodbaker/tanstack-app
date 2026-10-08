@@ -37,7 +37,11 @@ vi.mock("~/lib/selected-project", () => ({
 }));
 
 import { ProjectCostCodeListView } from "./ProjectCostCodeListView";
-import { projectCostCodesQueryOptions, type CbsTreeRow } from "~/utils/cbs";
+import {
+  projectCostCodesQueryOptions,
+  type CbsBrowserRow,
+  type CbsTreeRow,
+} from "~/utils/cbs";
 import { parseCbsDisplayCode } from "~/lib/cbs-tree";
 
 afterEach(cleanup);
@@ -72,9 +76,27 @@ const FIXTURE: CbsTreeRow[] = [
   item("101-05-0500-00-0", "Topsoil", { uom: "CY" }),
 ];
 
-function renderView() {
+// A project granted one leaf and none of its parents. The query pulls the
+// ancestors in flagged `context` so the hierarchy still reads; they are not
+// codes the project may use.
+const CONTEXT_FIXTURE: CbsBrowserRow[] = [
+  item("101-05-0500-00-0", "Topsoil", { uom: "CY" }),
+  // Flagged rows carry their real workbook flags — the badges have to be
+  // suppressed by the context flag, not by the row happening to have none.
+  {
+    ...item("100-00-0000-00-0", "Civil", {
+      subReporting: true,
+      materialCode: true,
+    }),
+    context: true,
+  },
+  { ...item("101-00-0000-00-0", "Civil Shop Materials"), context: true },
+  { ...item("101-05-0000-00-0", "Earthwork & Trenching"), context: true },
+];
+
+function renderView(fixture: CbsBrowserRow[] = FIXTURE) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  qc.setQueryData(projectCostCodesQueryOptions(1).queryKey, FIXTURE);
+  qc.setQueryData(projectCostCodesQueryOptions(1).queryKey, fixture);
   return render(
     <QueryClientProvider client={qc}>
       <ProjectCostCodeListView />
@@ -94,9 +116,7 @@ describe("ProjectCostCodeListView", () => {
     renderView();
     expect(screen.getAllByRole("tree")).toHaveLength(1);
     expect(screen.queryByRole("button", { name: /CBS Code Book/ })).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: /Master CBS Dictionary/ }),
-    ).toBeNull();
+    expect(screen.queryByRole("button", { name: /CBS Dictionary/ })).toBeNull();
   });
 
   it("renders every row the server returns, re-filtering nothing", () => {
@@ -132,7 +152,9 @@ describe("ProjectCostCodeListView", () => {
       .getByText("Civil")
       .closest('[role="treeitem"]')! as HTMLElement;
     expect(within(civil).getByTitle("Sub Code: YES")).toHaveTextContent("S");
-    expect(within(civil).getByTitle("Material Code: YES")).toHaveTextContent("M");
+    expect(within(civil).getByTitle("Material Code: YES")).toHaveTextContent(
+      "M",
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
     const earthwork = within(tree)
@@ -145,6 +167,52 @@ describe("ProjectCostCodeListView", () => {
     renderView();
     const row = screen.getByText("Civil").closest('[role="treeitem"]');
     expect(row).toHaveStyle({ backgroundColor: "#C0504D" });
+  });
+
+  /**
+   * Setup lets a user tick a leaf without its parent. Before the query pulled
+   * ancestors in, such a leaf rendered at the top level — "Field Staff" beside
+   * the disciplines rather than under "Field Indirects".
+   */
+  describe("context ancestors", () => {
+    const rowFor = (name: string) =>
+      within(screen.getByRole("tree"))
+        .getByText(name)
+        .closest('[role="treeitem"]')! as HTMLElement;
+
+    it("nests a granted leaf under its ungranted parents", () => {
+      renderView(CONTEXT_FIXTURE);
+      fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+      const tree = screen.getByRole("tree");
+      for (const name of [
+        "Civil",
+        "Civil Shop Materials",
+        "Earthwork & Trenching",
+        "Topsoil",
+      ]) {
+        expect(within(tree).getByText(name)).toBeInTheDocument();
+      }
+      // Four rows, one branch: the leaf is deepest, not a sibling of Civil.
+      expect(rowFor("Topsoil")).toHaveAttribute("aria-level", "4");
+    });
+
+    it("counts only the codes the project may actually use", () => {
+      renderView(CONTEXT_FIXTURE);
+      expect(screen.getByText("1 row")).toBeInTheDocument();
+    });
+
+    it("mutes a context row and drops its badges", () => {
+      renderView(CONTEXT_FIXTURE);
+      fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+
+      const civil = rowFor("Civil");
+      expect(civil.className).toContain("opacity-55");
+      // Its workbook flags are set, but it is not an available code.
+      expect(within(civil).queryByTitle(/Code: YES/)).toBeNull();
+
+      const topsoil = rowFor("Topsoil");
+      expect(topsoil.className).not.toContain("opacity-55");
+    });
   });
 
   it("filters by search query", async () => {

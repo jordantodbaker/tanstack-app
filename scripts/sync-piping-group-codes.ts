@@ -3,7 +3,7 @@
 //
 // These two columns are the metallurgy codes the Piping take-off composes CBS
 // cost codes from (see `pipingCostCodes` in src/lib/piping-derive.ts). The
-// Master CBS renumbered the piping series — shop fabrication 603–613 → 610–620,
+// The CBS renumbered the piping series — shop fabrication 603–613 → 610–620,
 // field install 633–643 → 640–650 — so a database seeded before that update
 // still holds codes that no longer resolve to anything, and piping rows stop
 // auto-populating their CBS id/name.

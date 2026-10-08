@@ -18,7 +18,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "seed-test": "tsx prisma/seed-test.ts",
     "backfill-numbers": "tsx prisma/backfill-number-sequences.ts",
-    "cbs:import": "tsx scripts/import-master-cbs.ts",
+    "cbs:import": "tsx scripts/import-cbs.ts",
     "piping:sync-codes": "tsx scripts/sync-piping-group-codes.ts",
     "cbs:rename": "tsx scripts/rename-cbs-accounts.ts",
     "check:client-leak": "tsx scripts/check-client-leak.ts",

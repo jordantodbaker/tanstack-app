@@ -78,11 +78,11 @@ function renderPage() {
   );
 }
 
-describe("Admin → Master CBS", () => {
+describe("Admin → CBS", () => {
   it("renders the whole catalog with no project selected", () => {
     renderPage();
     expect(
-      screen.getByRole("heading", { name: "Master CBS" }),
+      screen.getByRole("heading", { name: "CBS" }),
     ).toBeInTheDocument();
     // Both disciplines are listed even though no project is selected.
     expect(screen.getAllByText("Civil").length).toBeGreaterThan(0);
@@ -95,7 +95,7 @@ describe("Admin → Master CBS", () => {
       screen.getByRole("button", { name: /CBS Code Book/ }),
     ).toHaveTextContent("2 rows");
     expect(
-      screen.getByRole("button", { name: /Master CBS Dictionary/ }),
+      screen.getByRole("button", { name: /CBS Dictionary/ }),
     ).toHaveTextContent("3 rows");
 
     // The generated twin hangs under its root, so open both sections fully.

@@ -227,7 +227,10 @@ export const HELP_SECTIONS: HelpSection[] = [
                 keys: ["←", "→"],
                 what: "Move the caret; jumps to the next column at the edge",
               },
-              { keys: ["Esc"], what: "Revert the cell to its last saved value" },
+              {
+                keys: ["Esc"],
+                what: "Revert the cell to its last saved value",
+              },
               { keys: ["Ctrl", "Z"], what: "Undo the last row edit" },
               {
                 keys: ["Ctrl", "Shift", "Z"],
@@ -397,8 +400,9 @@ export const HELP_SECTIONS: HelpSection[] = [
           {
             kind: "ul",
             items: [
-              "Only the original Master CBS rows are listed. S means a code's own Sub Code is YES and M means its Material Code is YES; a code with both shows both.",
-              "The generated subcontract and material rows are not listed here — the badges already tell you which codes have them. Administrators can see both views over the whole catalog under Admin → Master CBS.",
+              "Only the original CBS rows are listed. S means a code's own Sub Code is YES and M means its Material Code is YES; a code with both shows both.",
+              "The generated subcontract and material rows are not listed here — the badges already tell you which codes have them. Administrators can see both views over the whole catalog under Admin → CBS.",
+              "Greyed-out italic rows are parent summaries the project was not granted. They appear only so the codes beneath them nest correctly — they carry no badges, are left out of the row count, and cannot be used on an estimate. Tick one in Setup to make it usable.",
               "Select any row to see its full detail: unit, cost code, account, cost classification, discipline, description and more.",
             ],
           },
@@ -714,12 +718,12 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         id: "admin-master-cbs",
-        title: "Master CBS",
+        title: "CBS",
         minRole: "ADMINISTRATOR",
         blocks: [
           {
             kind: "p",
-            text: "Master CBS is the complete CBS Dictionary in the same browser as the Project Cost Code List, but with no project allow-list applied and both the Code Book and full-dictionary views — it lists every account, including ones no project has been granted. It ignores the selected project entirely.",
+            text: "Admin → CBS is the complete CBS in the same browser as the Project Cost Code List, but with no project allow-list applied and both the Code Book and full-dictionary views — it lists every account, including ones no project has been granted. It ignores the selected project entirely.",
           },
           {
             kind: "p",

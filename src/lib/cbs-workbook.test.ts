@@ -3,7 +3,10 @@ import ExcelJS from "exceljs";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadMasterCbs } from "../../prisma/master-cbs";
+import {
+  formatCbsWorkbookReport,
+  loadCbsWorkbook,
+} from "../../prisma/cbs-workbook";
 
 /**
  * Exercises the workbook loader on small workbooks generated here, so the
@@ -77,7 +80,7 @@ afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-describe("loadMasterCbs", () => {
+describe("loadCbsWorkbook", () => {
   it("parses the Master CBS sheet, validates codes, de-duplicates and expands twins", async () => {
     const path = join(dir, "master.xlsx");
     await writeWorkbook(path, [
@@ -109,7 +112,7 @@ describe("loadMasterCbs", () => {
       },
     ]);
 
-    const { items, report } = await loadMasterCbs(path);
+    const { items, report } = await loadCbsWorkbook(path);
 
     expect(report.sheet).toBe("Master CBS");
     expect(report.sheetRows).toBe(11);
@@ -184,7 +187,7 @@ describe("loadMasterCbs", () => {
         ],
       },
     ]);
-    const { items, report } = await loadMasterCbs(path);
+    const { items, report } = await loadCbsWorkbook(path);
     expect(report.sheet).toBe("CBS S-M Generated");
     expect(items.map((i) => i.displayCode)).toEqual(["100-00-0000-00-0"]);
   });
@@ -194,6 +197,87 @@ describe("loadMasterCbs", () => {
     await writeWorkbook(path, [
       { name: "Master CBS", rows: [["Name", "Code"], ["Civil", "100"]] },
     ]);
-    await expect(loadMasterCbs(path)).rejects.toThrow(/no header row/);
+    await expect(loadCbsWorkbook(path)).rejects.toThrow(/no header row/);
+  });
+
+  /**
+   * The sheet carries L1–L7 helper columns beside the Display Code. The loader
+   * derives every level segment from the CODE, because the two disagreed in
+   * ~1,100 rows of the first master and the code is what the app stores on
+   * estimate rows. That makes a half-finished renumber — helper columns moved,
+   * Display Code left behind — silent, so the report calls it out.
+   */
+  it("reports rows whose L1–L7 columns disagree with the Display Code", async () => {
+    const FULL = [
+      "L1", "L2", "L3", "L4", "L5", "L6", "L7",
+      "Name", "Display Code", "Cost Code",
+    ];
+    /** A row with explicit segment columns, which may or may not match the code. */
+    const seg = (
+      segments: string,
+      code: string,
+      name: string,
+    ): string[] => [
+      segments.slice(0, 2), segments.slice(2, 3),
+      segments.slice(3, 5), segments.slice(5, 7), segments.slice(7, 9),
+      segments.slice(9, 11), segments.slice(11, 12),
+      name, code, code.replace(/-/g, ""),
+    ];
+
+    const path = join(dir, "segments.xlsx");
+    await writeWorkbook(path, [
+      {
+        name: "CBS",
+        rows: [
+          FULL,
+          // Agrees — not reported.
+          seg("100000000000", "100-00-0000-00-0", "Civil"),
+          // A renumbered block: columns say 680, the codes still say 700.
+          seg("680000000000", "700-00-0000-00-0", "Steam Tracing & Tubing"),
+          seg("68010000000L", "700-10-0000-00-L", "Install Supports"),
+          seg("68020000000L", "700-20-0000-00-L", "Install Steam Tracing"),
+          // A different move, so a second group.
+          seg("01410000000E", "054-10-0000-00-E", "Owned Equipment"),
+        ],
+      },
+    ]);
+
+    const { items, report } = await loadCbsWorkbook(path);
+
+    // One line per division move, not per row — a real block runs to dozens.
+    expect(report.segmentMismatches).toEqual([
+      {
+        columnsL1: "680",
+        codeL1: "700",
+        rows: 3,
+        sample: { row: 3, name: "Steam Tracing & Tubing" },
+      },
+      {
+        columnsL1: "014",
+        codeL1: "054",
+        rows: 1,
+        sample: { row: 6, name: "Owned Equipment" },
+      },
+    ]);
+
+    // The code still wins: the rows import under 700, which is the point.
+    expect(
+      items.find((i) => i.name === "Steam Tracing & Tubing")?.l1,
+    ).toBe("700");
+
+    const text = formatCbsWorkbookReport(report);
+    expect(text).toContain("4 row(s) whose L1–L7 columns disagree");
+    expect(text).toContain("L1 columns say 680, Display Codes say 700");
+  });
+
+  it("reports nothing when the sheet has no L1–L7 columns to compare", async () => {
+    // The dictionary-style exports carry only a subset; absence is not a
+    // disagreement.
+    const path = join(dir, "no-segments.xlsx");
+    await writeWorkbook(path, [
+      { name: "CBS", rows: [HEADERS, toRow(r("100-00-0000-00-0", "Civil"))] },
+    ]);
+    const { report } = await loadCbsWorkbook(path);
+    expect(report.segmentMismatches).toEqual([]);
   });
 });

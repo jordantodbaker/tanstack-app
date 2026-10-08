@@ -5,10 +5,8 @@ import { Prisma } from "../generated/prisma/client";
 import { prisma } from "../server/db";
 import { z } from "zod";
 import { Id, parseProjectIdInput } from "~/lib/validators";
-import {
-  adminHandlerNoInput,
-  projectIdScopedHandler,
-} from "./users.server";
+import { adminHandlerNoInput, projectIdScopedHandler } from "./users.server";
+import { cbsAncestorCodes } from "~/lib/cbs-tree";
 
 const StringArr = z.array(z.string());
 const StringArrParser = (input: unknown) => StringArr.parse(input);
@@ -229,6 +227,12 @@ export type CbsTreeRow = Prisma.CbsItemGetPayload<{
 }>;
 
 /**
+ * A tree row as the shared browser receives it. The whole-catalog views pass
+ * plain `CbsTreeRow`s; the project-scoped view flags pulled-in ancestors.
+ */
+export type CbsBrowserRow = CbsTreeRow & { context?: boolean };
+
+/**
  * The cost codes a project may use: the ORIGINAL Master CBS rows it has been
  * granted on the Setup page — the Project Cost Code List.
  *
@@ -236,20 +240,45 @@ export type CbsTreeRow = Prisma.CbsItemGetPayload<{
  * The page has never shown them (an original's own S / M badge says whether it
  * carries them), and they were ~19% of the rows shipped.
  *
+ * Ancestors of granted codes are included even when the project was not
+ * granted them, flagged `context: true`. Without them a child whose parent is
+ * ungranted has nothing to hang from and renders as a top-level orphan — so
+ * "Field Staff" would sit at the root rather than under "Field Indirects".
+ * Context rows are shown muted and are not counted as available codes.
+ *
  * Project-scoped, so any member of the project can view it.
  */
 export const fetchProjectCostCodes = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
   .handler(
-    projectIdScopedHandler(({ data: projectId }) =>
-      prisma.cbsItem.findMany({
-        where: {
-          rowType: "ORIGINAL",
-          allowedInProjects: { some: { id: projectId } },
-        },
-        orderBy: { id: "asc" },
-        select: cbsTreeRowSelect,
-      }),
+    projectIdScopedHandler(
+      async ({ data: projectId }): Promise<CbsBrowserRow[]> => {
+        const granted = await prisma.cbsItem.findMany({
+          where: {
+            rowType: "ORIGINAL",
+            allowedInProjects: { some: { id: projectId } },
+          },
+          orderBy: { id: "asc" },
+          select: cbsTreeRowSelect,
+        });
+
+        // Which ancestor summaries are missing from the granted set.
+        const have = new Set(granted.map((g) => g.displayCode));
+        const wanted = new Set<string>();
+        for (const g of granted) {
+          for (const code of cbsAncestorCodes(g.displayCode)) {
+            if (!have.has(code)) wanted.add(code);
+          }
+        }
+        if (wanted.size === 0) return granted;
+
+        const ancestors = await prisma.cbsItem.findMany({
+          where: { rowType: "ORIGINAL", displayCode: { in: [...wanted] } },
+          orderBy: { id: "asc" },
+          select: cbsTreeRowSelect,
+        });
+        return [...granted, ...ancestors.map((a) => ({ ...a, context: true }))];
+      },
     ),
   );
 

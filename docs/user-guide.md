@@ -182,11 +182,17 @@ what an admin allowed in Setup — as a colour-coded, collapsible hierarchy you
 can search. Select a row to see its full detail: unit, cost code, account, cost
 classification, discipline, description and more.
 
-Only the **original** Master CBS rows are listed. **S** means a code's own
+Only the **original** CBS rows are listed. **S** means a code's own
 **Sub Code** is YES, **M** means its **Material Code** is YES, and a code
 carrying both shows both. The generated subcontract and material rows are not
 listed here, since those badges already tell you which codes have them; admins
-can see both views over the whole catalog under **Admin → Master CBS**.
+can see both views over the whole catalog under **Admin → CBS**.
+
+Greyed-out, italic rows are **parent summaries the project wasn't granted**,
+shown only so the codes beneath them sit in the right place in the hierarchy.
+They carry no S/M badges and aren't included in the row count, and they don't
+appear in the Field Estimate Form's code pickers — they are not codes you can
+use. To make one usable, tick it in **Setup**.
 
 Click any row to see its full detail in the panel on the right — unit, cost
 code, account, cost classification, discipline, description and more. Clicking
@@ -326,7 +332,7 @@ Admins configure the shared data the rest of the app draws on:
   Support Labor rates).
 - **Crew Mixes** — named crews of members with wages; the average drives a row's
   labor rate when "Use Crew Mix" is on.
-- **Master CBS** — the complete CBS Dictionary, in the same browser as
+- **CBS** — the complete CBS, in the same browser as
   the **Project Cost Code List** but with no project allow-list applied and both views, so it shows every
   account including ones no project has been granted. Read-only; the catalog
   changes only through a CBS import. Use it to look an account up before

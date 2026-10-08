@@ -5,7 +5,7 @@
 import "dotenv/config";
 
 import { prisma } from "../src/server/db";
-import { formatMasterCbsReport, loadMasterCbs } from "./master-cbs";
+import { formatCbsWorkbookReport, loadCbsWorkbook } from "./cbs-workbook";
 import { Project } from "~/lib/types";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
@@ -257,8 +257,8 @@ function loadCompositeRates() {
   return roles;
 }
 
-// The CBS Dictionary is loaded from prisma/data/MasterCBS.xlsx — see
-// prisma/master-cbs.ts (also used by scripts/import-master-cbs.ts for live-DB
+// The CBS Dictionary is loaded from prisma/data/CBS.xlsx — see
+// prisma/cbs-workbook.ts (also used by scripts/import-cbs.ts for live-DB
 // re-imports that keep project allow-lists).
 
 /**
@@ -286,8 +286,8 @@ export async function seedBaseData() {
 
   await prisma.project.createMany({ data: seedProjects });
 
-  const { items: cbsItems, report } = await loadMasterCbs();
-  console.log(formatMasterCbsReport(report));
+  const { items: cbsItems, report } = await loadCbsWorkbook();
+  console.log(formatCbsWorkbookReport(report));
   const batchSize = 500;
   for (let i = 0; i < cbsItems.length; i += batchSize) {
     await prisma.cbsItem.createMany({ data: cbsItems.slice(i, i + batchSize) });

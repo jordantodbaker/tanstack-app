@@ -20,10 +20,7 @@ import {
   resolveCbsStamp,
 } from "~/lib/piping-derive";
 import { crewMixAverageRate } from "~/lib/crew-mix-rate";
-import {
-  SearchableSelect,
-  type SearchableSelectOption,
-} from "~/components/SearchableSelect";
+import { SearchableSelect } from "~/components/SearchableSelect";
 
 export { ReadOnlyCell, TakeOffIdCell } from "~/lib/table-utils";
 // Re-exported so existing importers (and cells.test.ts) keep their import path
@@ -33,58 +30,6 @@ export { deriveLaborHours } from "~/lib/piping-derive";
 /** Resolves a composed piping cost code against a cell's CBS option list. */
 const finder = (cbsOptions: CbsOption[]) => (costCode: string) =>
   cbsOptions.find((o) => o.costCode === costCode);
-
-/**
- * Searchable CBS-item picker for a Name column. Client-filters the discipline's
- * `cbsOptions` (no server round-trip) and, on select, stamps the row's id (CBS
- * displayCode), name, and unit — the search-as-you-type analog of the plain
- * `CbsSelectCell` dropdown. Selecting the placeholder clears those three. The
- * picker is keyed on the row's CBS code (`id`); a blank-template sentinel id
- * shows as the placeholder rather than raw text.
- */
-export function CbsSearchSelectCell({ row, table }: CellProps) {
-  // Shared, pre-mapped once per grid (see FefTableContent).
-  const base = table.options.meta?.cbsSearchOptions ?? [];
-  const rawId = row.original.id;
-  const value = rawId.startsWith("__fe-blank-") ? "" : rawId;
-  const name = row.original.name;
-  const options: SearchableSelectOption[] = React.useMemo(() => {
-    // Existing rows may reference a code that isn't in this discipline's option
-    // set. Surface it with its stored name so the control shows "code: name"
-    // instead of the bare code — prepended to (not mutated into) the shared
-    // list, whose reference must stay stable across cells.
-    if (value && !base.some((o) => o.value === value)) {
-      return [
-        {
-          value,
-          label: name ? `${value}: ${name}` : value,
-          searchText: `${value} ${name}`.toLowerCase(),
-        },
-        ...base,
-      ];
-    }
-    return base;
-  }, [base, value, name]);
-  return (
-    <SearchableSelect
-      value={value}
-      options={options}
-      onSelect={(code) => {
-        const selected = table.options.meta?.cbsByCode?.get(code);
-        table.options.meta?.updateRow?.(
-          row.index,
-          selected
-            ? {
-                id: selected.displayCode,
-                name: selected.name,
-                unit: selected.uom,
-              }
-            : { id: "", name: "", unit: "" },
-        );
-      }}
-    />
-  );
-}
 
 export function ShopFieldSelectCell({ getValue, row, table }: CellProps) {
   const value = getValue() as string;

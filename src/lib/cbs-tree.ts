@@ -132,29 +132,49 @@ function lineage(item: CbsTreeItem): {
 }
 
 /**
- * The backbone summary codes above `displayCode`, nearest first: each level's
- * code with the deeper segments zeroed and the cost type set to "0", then the
- * division root. `052-10-0500-00-L` yields 052-10-0000-00-0, then
- * 052-00-0000-00-0, then 050-00-0000-00-0.
+ * Every summary code that could sit above `displayCode`, nearest first: each
+ * level's code with the deeper segments zeroed, in the row's own cost type and
+ * then the "0" backbone, finishing with the division root.
+ *
+ * Both cost types at every level, because that is the order `buildCbsTree`
+ * looks in — and only one of the pair usually exists. "Superintendents - Civil"
+ * (052-15-1000-00-L) belongs under "Superintendents", which the workbook
+ * carries as 052-15-0000-00-L; there is no 052-15-0000-00-0 to fall back to.
  *
  * Used to pull the ancestors of a filtered set of rows so a subset still
- * renders as a hierarchy rather than a row of orphans. Mirrors `lineage`'s
- * rules, so what comes back is what `buildCbsTree` would parent to.
+ * renders as a hierarchy rather than a row of orphans. Codes that don't exist
+ * cost nothing — the caller looks them up and keeps what it finds, which is
+ * the same collapsing-to-the-nearest-ancestor `buildCbsTree` already does.
  */
 export function cbsAncestorCodes(displayCode: string): string[] {
   const item = parseCbsDisplayCode(displayCode);
   const segs = [item.l2, item.l3, item.l4, item.l5];
   let depth = 0;
   while (depth < segs.length && segs[depth] !== LEVEL_DEFAULT) depth++;
+
+  const types =
+    item.l6 === BACKBONE_TYPE ? [BACKBONE_TYPE] : [item.l6, BACKBONE_TYPE];
   const out: string[] = [];
+  const push = (l1: string, z: readonly string[]) => {
+    for (const t of types) {
+      out.push(`${l1}-${z[0]}-${z[1]}${z[2]}-${z[3]}-${t}`);
+    }
+  };
+
   for (let d = depth - 1; d >= 0; d--) {
-    const z = segs.map((seg, i) => (i < d ? seg : LEVEL_DEFAULT));
-    out.push(`${item.l1}-${z[0]}-${z[1]}${z[2]}-${z[3]}-${BACKBONE_TYPE}`);
+    push(
+      item.l1,
+      segs.map((seg, i) => (i < d ? seg : LEVEL_DEFAULT)),
+    );
   }
-  // Always the division root, which is always type "0" — a cost-type twin of
-  // the root (Civil Materials under Civil) hangs off it too. The filter below
-  // drops it for the root row itself, which is the only row that names itself.
-  out.push(`${getGroupL1(item.l1)}-00-0000-00-${BACKBONE_TYPE}`);
+  // The division root, which closes every chain. A row that IS the root names
+  // itself here; the filter below drops that.
+  push(getGroupL1(item.l1), [
+    LEVEL_DEFAULT,
+    LEVEL_DEFAULT,
+    LEVEL_DEFAULT,
+    LEVEL_DEFAULT,
+  ]);
   return [...new Set(out)].filter((c) => c !== displayCode);
 }
 

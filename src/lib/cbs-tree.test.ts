@@ -128,10 +128,20 @@ describe("getGroupL1", () => {
 describe("cbsAncestorCodes", () => {
   it("walks up the segments, then the division root", () => {
     expect(cbsAncestorCodes("052-10-0500-00-L")).toEqual([
+      "052-10-0000-00-L",
       "052-10-0000-00-0",
+      "052-00-0000-00-L",
       "052-00-0000-00-0",
+      "050-00-0000-00-L",
       "050-00-0000-00-0",
     ]);
+  });
+
+  it("names the parent in the row's own cost type, not just the backbone", () => {
+    // The workbook carries "Superintendents" as 052-15-0000-00-L and has no
+    // 052-15-0000-00-0 at all, so asking only for the backbone found nothing
+    // and the ticked children rendered beside their parent instead of under it.
+    expect(cbsAncestorCodes("052-15-1000-00-L")).toContain("052-15-0000-00-L");
   });
 
   it("gives an L1 account just its division root", () => {
@@ -151,9 +161,11 @@ describe("cbsAncestorCodes", () => {
 
   it("ignores trailing markers, which are not levels", () => {
     // The Pipe Shop's -ST / -LB suffixes sit in L5 with L3/L4 still "00", so
-    // they add no level and no ancestor.
+    // they add no level and no ancestor of their own.
     expect(cbsAncestorCodes("601-05-0000-ST-L")).toEqual([
+      "601-00-0000-00-L",
       "601-00-0000-00-0",
+      "600-00-0000-00-L",
       "600-00-0000-00-0",
     ]);
   });
@@ -162,13 +174,24 @@ describe("cbsAncestorCodes", () => {
     // A granted subset with none of its parents — what Setup produces when a
     // user ticks leaves only.
     const granted = [
-      "052-10-0500-00-L",
+      "052-15-1000-00-L",
       "601-05-1000-00-L",
       "290-05-0000-00-0",
     ];
-    const needed = [
-      ...new Set(granted.flatMap((c) => cbsAncestorCodes(c))),
-    ].filter((c) => !granted.includes(c));
+    // Only the codes that exist get fetched, so the fixture mirrors a workbook
+    // that carries "Superintendents" in cost type L and no "-0" twin for it.
+    const CATALOG = new Set([
+      "050-00-0000-00-0",
+      "052-00-0000-00-0",
+      "052-15-0000-00-L",
+      "600-00-0000-00-0",
+      "601-00-0000-00-0",
+      "601-05-0000-00-L",
+      "290-00-0000-00-0",
+    ]);
+    const needed = [...new Set(granted.flatMap((c) => cbsAncestorCodes(c)))]
+      .filter((c) => !granted.includes(c))
+      .filter((c) => CATALOG.has(c));
 
     const tree = buildCbsTree([...granted, ...needed].map((c) => item(c)));
 
@@ -181,8 +204,8 @@ describe("cbsAncestorCodes", () => {
     for (const code of granted) {
       expect(parentOf(tree, code)).not.toBeNull();
     }
-    expect(parentOf(tree, "052-10-0500-00-L")).toBe("052-10-0000-00-0");
-    expect(parentOf(tree, "601-05-1000-00-L")).toBe("601-05-0000-00-0");
+    expect(parentOf(tree, "052-15-1000-00-L")).toBe("052-15-0000-00-L");
+    expect(parentOf(tree, "601-05-1000-00-L")).toBe("601-05-0000-00-L");
     expect(parentOf(tree, "290-05-0000-00-0")).toBe("290-00-0000-00-0");
   });
 

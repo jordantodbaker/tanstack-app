@@ -166,7 +166,11 @@ Project configuration — which **CBS items** a project may use. This controls
 which disciplines appear in the sidebar and which items the pickers offer.
 
 The tree is the full CBS Dictionary, coloured by level the way the source
-workbook colours it. Ticking a parent allows everything beneath it; a
+workbook colours it. The **L0–L5 swatches** under "Level colours" are buttons:
+click one to open the whole tree to that level and no deeper — L0 collapses to
+the discipline roots, L5 is the same as **Expand all**. The swatch in force is
+outlined, and the outline clears once you open or close a row yourself.
+Ticking a parent allows everything beneath it; a
 half-filled box means only some of its children are allowed. Rows badged **S**
 or **M** are the generated subcontract and material versions of the row above
 them — allow those too if the project will book cost against them.
@@ -179,7 +183,8 @@ them — allow those too if the project will book cost against them.
 
 A read-only list of the cost codes available on the selected project — exactly
 what an admin allowed in Setup — as a colour-coded, collapsible hierarchy you
-can search. Select a row to see its full detail: unit, cost code, account, cost
+can search. The **L0–L5 swatches** under "Level colours" open the tree to one
+level at a time, the same as on the Setup page. Select a row to see its full detail: unit, cost code, account, cost
 classification, discipline, description and more.
 
 Only the **original** CBS rows are listed. **S** means a code's own

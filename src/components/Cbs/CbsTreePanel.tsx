@@ -147,25 +147,69 @@ const CbsRow = React.memo(function CbsRow({
   );
 });
 
-/** The per-level colour legend shown above a tree. */
-export function CbsLevelLegend({ className = "" }: { className?: string }) {
+/**
+ * The per-level colour legend shown above a tree. Given `onExpandToLevel` the
+ * swatches become buttons that open the tree down to that level — so the key
+ * to the colours is also how you get to them. `levelShown` marks the one in
+ * force, and is null once the expansion no longer stands at a single level.
+ */
+export function CbsLevelLegend({
+  className = "",
+  onExpandToLevel,
+  levelShown = null,
+}: {
+  className?: string;
+  onExpandToLevel?: (level: number) => void;
+  levelShown?: number | null;
+}) {
   return (
-    <span className={`flex flex-wrap items-center gap-1 ${className}`}>
+    <span
+      className={`flex flex-wrap items-center gap-1 ${className}`}
+      role={onExpandToLevel ? "group" : undefined}
+      aria-label={onExpandToLevel ? "Expand to level" : undefined}
+    >
       {CBS_LEGEND_LEVELS.map((lvl) => {
         const c = cbsColorForLevel(lvl);
+        const active = levelShown === lvl;
+        const style = {
+          backgroundColor: c.fill,
+          color: c.text,
+          // The active outline has to read against every fill in the scheme,
+          // white and navy included, so it thickens rather than recolours.
+          outline: active
+            ? "2px solid rgba(15,23,42,0.85)"
+            : "1px solid rgba(0,0,0,0.1)",
+        };
+        const label = `L${lvl}`;
+
+        if (!onExpandToLevel) {
+          return (
+            <span
+              key={lvl}
+              title={`Level ${lvl}`}
+              className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
+              style={style}
+            >
+              {label}
+            </span>
+          );
+        }
         return (
-          <span
+          <button
             key={lvl}
-            title={`Level ${lvl}`}
-            className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
-            style={{
-              backgroundColor: c.fill,
-              color: c.text,
-              outline: "1px solid rgba(0,0,0,0.1)",
-            }}
+            type="button"
+            onClick={() => onExpandToLevel(lvl)}
+            aria-pressed={active}
+            title={
+              lvl === 0
+                ? "Level 0 — collapse to the discipline roots"
+                : `Level ${lvl} — expand the tree to this level`
+            }
+            className="cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-semibold transition-[filter] hover:brightness-90 focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:outline-none"
+            style={style}
           >
-            L{lvl}
-          </span>
+            {label}
+          </button>
         );
       })}
     </span>

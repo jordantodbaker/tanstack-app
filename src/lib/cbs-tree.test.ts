@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildCbsTree,
   cbsAncestorCodes,
+  collectExpandableKeys,
+  collectKeysToLevel,
   cbsFlagBadges,
   cbsRowTypeBadges,
   compareCbsDisplayCodes,
@@ -548,6 +550,79 @@ describe("pruneCbsTree", () => {
 
   it("counts every self-match", () => {
     expect(pruneCbsTree(tree, "601").matches).toBe(3);
+  });
+});
+
+describe("collectKeysToLevel", () => {
+  // 050 root → 052 account → 052-15 → two leaves, i.e. code levels 0..3.
+  const tree = () =>
+    buildCbsTree([
+      item("050-00-0000-00-0", { name: "Field Indirects" }),
+      item("052-00-0000-00-0", { name: "Field Staff" }),
+      item("052-15-0000-00-L", { name: "Superintendents" }),
+      item("052-15-1000-00-L", { name: "Superintendents - Civil" }),
+      item("052-15-3000-00-L", { name: "Superintendents - Ironworker" }),
+    ]);
+
+  /** The rows a user would see with exactly `keys` open. */
+  function visible(nodes: CbsTreeNode[], keys: string[]): string[] {
+    const open = new Set(keys);
+    const out: string[] = [];
+    const walk = (list: CbsTreeNode[]) => {
+      for (const n of list) {
+        out.push(n.item.displayCode);
+        if (open.has(n.pathKey)) walk(n.children);
+      }
+    };
+    walk(nodes);
+    return out;
+  }
+
+  it("opens nothing at level 0, which is collapse-all", () => {
+    const t = tree();
+    expect(collectKeysToLevel(t, 0)).toEqual([]);
+    expect(visible(t, [])).toEqual(["050-00-0000-00-0"]);
+  });
+
+  it("reveals one more code level per step", () => {
+    const t = tree();
+    expect(visible(t, collectKeysToLevel(t, 1))).toEqual([
+      "050-00-0000-00-0",
+      "052-00-0000-00-0",
+    ]);
+    expect(visible(t, collectKeysToLevel(t, 2))).toEqual([
+      "050-00-0000-00-0",
+      "052-00-0000-00-0",
+      "052-15-0000-00-L",
+    ]);
+    expect(visible(t, collectKeysToLevel(t, 3))).toEqual([
+      "050-00-0000-00-0",
+      "052-00-0000-00-0",
+      "052-15-0000-00-L",
+      "052-15-1000-00-L",
+      "052-15-3000-00-L",
+    ]);
+  });
+
+  it("matches Expand all once the level passes the deepest code", () => {
+    // The legend's last swatch has to actually mean "everything", or a level
+    // of the hierarchy would be unreachable from it.
+    const t = tree();
+    expect(collectKeysToLevel(t, 5).sort()).toEqual(
+      collectExpandableKeys(t).sort(),
+    );
+  });
+
+  it("keeps a row whose own level jumped past the target", () => {
+    // 601-05-1000 is level 3 but its parent is level 1, because the workbook
+    // has no 601-05 summary. Opening to level 2 still shows it — there is no
+    // intermediate row to stop at, and hiding it would hide the branch.
+    const t = buildCbsTree([
+      item("600-00-0000-00-0"),
+      item("601-00-0000-00-0"),
+      item("601-05-1000-00-L"),
+    ]);
+    expect(visible(t, collectKeysToLevel(t, 2))).toContain("601-05-1000-00-L");
   });
 });
 

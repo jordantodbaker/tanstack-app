@@ -68,8 +68,8 @@ function SetupPage() {
 
       {projectId === null ? (
         <p className="text-sm text-slate-500">
-          Choose a project to configure which CBS items are allowed in the
-          Field Estimate Form.
+          Choose a project to configure which CBS items are allowed in the Field
+          Estimate Form.
         </p>
       ) : (
         <CbsTreeEditorLoader
@@ -95,9 +95,7 @@ function CbsTreeEditorLoader({
   }
   if (allowedQuery.isError) {
     return (
-      <div className="text-sm text-red-600">
-        Failed to load allowed items.
-      </div>
+      <div className="text-sm text-red-600">Failed to load allowed items.</div>
     );
   }
   return (
@@ -121,7 +119,14 @@ function CbsTreeEditor({
   const [selectedIds, setSelectedIds] = React.useState<Set<number>>(
     () => new Set(initialAllowedIds),
   );
-  const { expanded, toggle, expandAll, collapseAll } = useCbsTreeExpansion(tree);
+  const {
+    expanded,
+    toggle,
+    expandAll,
+    collapseAll,
+    expandToLevel,
+    levelShown,
+  } = useCbsTreeExpansion(tree);
   const [selected, setSelected] = React.useState<CbsTreeNode | null>(null);
   const [search, setSearch] = React.useState("");
   const deferredSearch = React.useDeferredValue(search);
@@ -135,7 +140,9 @@ function CbsTreeEditor({
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.cbs.itemsByL1PagedAll() });
-      queryClient.invalidateQueries({ queryKey: qk.cbs.itemsByL1FilteredAll() });
+      queryClient.invalidateQueries({
+        queryKey: qk.cbs.itemsByL1FilteredAll(),
+      });
       queryClient.invalidateQueries({
         queryKey: qk.setup.allowedFefCbsItemIds(projectId),
       });
@@ -245,8 +252,13 @@ function CbsTreeEditor({
       </CbsTreeToolbar>
 
       <div className="flex flex-wrap items-center gap-1 text-xs text-slate-500">
-        <span className="mr-1">Level colours:</span>
-        <CbsLevelLegend />
+        <span className="mr-1">
+          Level colours (click to expand to a level):
+        </span>
+        <CbsLevelLegend
+          onExpandToLevel={expandToLevel}
+          levelShown={levelShown}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_22rem]">

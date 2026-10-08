@@ -215,6 +215,68 @@ describe("ProjectCostCodeListView", () => {
     });
   });
 
+  /**
+   * The colour legend doubles as the depth control: the key to the colours is
+   * how you get to them. Levels here are CODE levels, matching the swatches.
+   */
+  describe("level swatches", () => {
+    const names = () =>
+      within(screen.getByRole("tree"))
+        .getAllByRole("treeitem")
+        .map((r) => r.textContent ?? "");
+    const swatch = (level: number) =>
+      within(screen.getByRole("group", { name: "Expand to level" })).getByRole(
+        "button",
+        { name: `L${level}` },
+      );
+
+    it("opens the tree to the level clicked", () => {
+      renderView();
+      // FIXTURE is 100 (L0) → 101 (L1) → 101-05 (L2) → 101-05-05 (L3).
+      fireEvent.click(swatch(1));
+      expect(names().join("|")).toContain("Civil Shop Materials");
+      expect(names().join("|")).not.toContain("Earthwork");
+
+      fireEvent.click(swatch(2));
+      expect(names().join("|")).toContain("Earthwork");
+      expect(names().join("|")).not.toContain("Topsoil");
+
+      fireEvent.click(swatch(3));
+      expect(names().join("|")).toContain("Topsoil");
+    });
+
+    it("collapses to the roots on L0", () => {
+      renderView();
+      fireEvent.click(swatch(3));
+      expect(names()).toHaveLength(4);
+      fireEvent.click(swatch(0));
+      expect(names()).toHaveLength(1);
+    });
+
+    it("marks the level in force, and clears it once a row is toggled", () => {
+      renderView();
+      fireEvent.click(swatch(2));
+      expect(swatch(2)).toHaveAttribute("aria-pressed", "true");
+      expect(swatch(3)).toHaveAttribute("aria-pressed", "false");
+
+      // Closing one row by hand means the tree is no longer at a single level.
+      fireEvent.click(
+        within(screen.getByRole("tree")).getAllByRole("button", {
+          name: /Collapse|Expand/,
+        })[0],
+      );
+      expect(swatch(2)).toHaveAttribute("aria-pressed", "false");
+    });
+
+    it("agrees with Expand all at the deepest swatch", () => {
+      renderView();
+      fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+      const all = names();
+      fireEvent.click(swatch(5));
+      expect(names()).toEqual(all);
+    });
+  });
+
   it("filters by search query", async () => {
     renderView();
     fireEvent.change(screen.getByRole("searchbox"), {

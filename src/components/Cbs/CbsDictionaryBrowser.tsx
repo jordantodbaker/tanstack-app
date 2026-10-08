@@ -64,9 +64,13 @@ function countRows(items: readonly CbsBrowserRow[]): Counts {
 function CountsLegend({
   counts,
   showRowTypes,
+  onExpandToLevel,
+  levelShown,
 }: {
   counts: Counts;
   showRowTypes: boolean;
+  onExpandToLevel: (level: number) => void;
+  levelShown: number | null;
 }) {
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -80,7 +84,13 @@ function CountsLegend({
           {counts.materialRows.toLocaleString()} material
         </span>
       )}
-      <CbsLevelLegend className="ml-1" />
+      <span className="ml-1 text-xs text-slate-500">
+        Level colours (click to expand to a level):
+      </span>
+      <CbsLevelLegend
+        onExpandToLevel={onExpandToLevel}
+        levelShown={levelShown}
+      />
     </div>
   );
 }
@@ -107,8 +117,14 @@ export function CbsDictionaryBrowser({
   showRowTypeCounts?: boolean;
 }) {
   const nodes = React.useMemo(() => buildCbsTree(items), [items]);
-  const { expanded, toggle, expandAll, collapseAll } =
-    useCbsTreeExpansion(nodes);
+  const {
+    expanded,
+    toggle,
+    expandAll,
+    collapseAll,
+    expandToLevel,
+    levelShown,
+  } = useCbsTreeExpansion(nodes);
   const [selected, setSelected] = React.useState<Node | null>(null);
   const [query, setQuery] = React.useState("");
 
@@ -127,7 +143,12 @@ export function CbsDictionaryBrowser({
 
   return (
     <div className="px-4 pb-4 md:px-5">
-      <CountsLegend counts={counts} showRowTypes={showRowTypeCounts} />
+      <CountsLegend
+        counts={counts}
+        showRowTypes={showRowTypeCounts}
+        onExpandToLevel={expandToLevel}
+        levelShown={levelShown}
+      />
       <CbsTreeToolbar
         query={query}
         onQueryChange={setQuery}

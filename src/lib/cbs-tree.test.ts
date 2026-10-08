@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCbsTree,
+  CBS_FILTER_NONE,
   cbsAncestorCodes,
+  cbsFilterIsEmpty,
+  cbsIsMaterial,
+  cbsIsSubcontract,
   collectExpandableKeys,
   collectKeysToLevel,
   cbsFlagBadges,
@@ -18,6 +22,9 @@ import {
   type CbsTreeItem,
   type CbsTreeNode,
 } from "./cbs-tree";
+
+/** A text-only filter — what every search test used before the type toggles. */
+const text = (query: string) => ({ query, sub: false, material: false });
 
 let nextId = 1;
 /** Build an item from its display code; segments are derived from the code. */
@@ -440,7 +447,7 @@ describe("buildCbsTree", () => {
       item("601-01-0000-00-0", { name: "Bolt-up" }),
     ]);
     expect(tree[0].searchHaystack).not.toContain("bolt-up");
-    expect(filterCbsTree(tree, "bolt-up")).toHaveLength(1);
+    expect(filterCbsTree(tree, text("bolt-up"))).toHaveLength(1);
   });
 
   it("keeps both rows when display codes collide, with distinct path keys", () => {
@@ -507,25 +514,25 @@ describe("filterCbsTree", () => {
   ]);
 
   it("returns the original nodes array by reference when the query is empty", () => {
-    expect(filterCbsTree(tree, "")).toBe(tree);
+    expect(filterCbsTree(tree, text(""))).toBe(tree);
   });
 
   it("prunes top-level subtrees that don't contain the query", () => {
-    const filtered = filterCbsTree(tree, "wire");
+    const filtered = filterCbsTree(tree, text("wire"));
     expect(filtered.map((n) => n.item.name)).toEqual(["Wire"]);
   });
 
   it("preserves identity of a subtree whose own haystack matches", () => {
     // "spool" matches 601's own haystack, so 601 is kept verbatim (with its
     // non-matching child) while its parent 600 is a new object.
-    const filtered = filterCbsTree(tree, "spool");
+    const filtered = filterCbsTree(tree, text("spool"));
     expect(filtered[0]).not.toBe(tree[0]);
     expect(filtered[0].children[0]).toBe(tree[0].children[0]);
     expect(filtered[0].children[0].children).toHaveLength(1);
   });
 
   it("recurses into descendant-only matches and only keeps matching children", () => {
-    const filtered = filterCbsTree(tree, "bolt");
+    const filtered = filterCbsTree(tree, text("bolt"));
     expect(filtered[0].children[0].children.map((c) => c.item.name)).toEqual([
       "Bolt",
     ]);
@@ -541,7 +548,7 @@ describe("pruneCbsTree", () => {
   ]);
 
   it("keeps matches plus their ancestors and drops non-matching children of a match", () => {
-    const { nodes, matches } = pruneCbsTree(tree, "spool");
+    const { nodes, matches } = pruneCbsTree(tree, text("spool"));
     expect(matches).toBe(1);
     expect(nodes[0].item.name).toBe("Pipe");
     expect(nodes[0].children[0].item.name).toBe("Spool");
@@ -549,7 +556,153 @@ describe("pruneCbsTree", () => {
   });
 
   it("counts every self-match", () => {
-    expect(pruneCbsTree(tree, "601").matches).toBe(3);
+    expect(pruneCbsTree(tree, text("601")).matches).toBe(3);
+  });
+});
+
+describe("cbsIsSubcontract / cbsIsMaterial", () => {
+  it("matches a row by its own cost type", () => {
+    // The workbook ships some S/M rows itself; the dictionary generates the
+    // rest. Both land in l6, so neither needs special-casing.
+    expect(cbsIsSubcontract(item("052-00-0000-00-S"))).toBe(true);
+    expect(cbsIsMaterial(item("101-00-0000-00-M"))).toBe(true);
+    expect(cbsIsSubcontract(item("101-00-0000-00-M"))).toBe(false);
+    expect(cbsIsMaterial(item("052-00-0000-00-S"))).toBe(false);
+  });
+
+  it("matches a row by its Sub Code / Material Code flag", () => {
+    const flagged = item("101-00-0000-00-0", {
+      subReporting: true,
+      materialCode: true,
+    });
+    expect(cbsIsSubcontract(flagged)).toBe(true);
+    expect(cbsIsMaterial(flagged)).toBe(true);
+  });
+
+  it("is false for a plain row, blank flags included", () => {
+    const plain = item("101-00-0000-00-L", {
+      subReporting: null,
+      materialCode: false,
+    });
+    expect(cbsIsSubcontract(plain)).toBe(false);
+    expect(cbsIsMaterial(plain)).toBe(false);
+  });
+});
+
+/**
+ * The toolbar's Subcontracts / Materials toggles. They narrow the text query
+ * and widen each other, and they always prune strictly — even on Setup, where
+ * a text match would otherwise keep its whole subtree.
+ */
+describe("row-type filters", () => {
+  const tree = () =>
+    buildCbsTree([
+      item("600-00-0000-00-0", { name: "Piping" }),
+      item("601-00-0000-00-0", {
+        name: "Pipe Spool",
+        subReporting: true,
+        materialCode: false,
+      }),
+      item("601-00-0000-00-S", { name: "Pipe Spool Subcontracts" }),
+      item("601-05-0000-00-0", {
+        name: "Bolt-up",
+        subReporting: false,
+        materialCode: true,
+      }),
+      item("601-10-0000-00-0", { name: "Hydrotest" }),
+    ]);
+
+  const names = (nodes: CbsTreeNode[]): string[] => {
+    const out: string[] = [];
+    const walk = (list: CbsTreeNode[]) => {
+      for (const n of list) {
+        out.push(n.item.name);
+        walk(n.children);
+      }
+    };
+    walk(nodes);
+    return out;
+  };
+
+  it("keeps subcontract rows and their ancestors, and nothing else", () => {
+    const { nodes, matches } = pruneCbsTree(tree(), {
+      query: "",
+      sub: true,
+      material: false,
+    });
+    // Piping is an ancestor, not a match; Hydrotest and Bolt-up are gone.
+    expect(names(nodes)).toEqual([
+      "Piping",
+      "Pipe Spool",
+      "Pipe Spool Subcontracts",
+    ]);
+    expect(matches).toBe(2);
+  });
+
+  it("keeps material rows the same way", () => {
+    const { nodes, matches } = pruneCbsTree(tree(), {
+      query: "",
+      sub: false,
+      material: true,
+    });
+    // Pipe Spool survives as Bolt-up's parent, not as a match of its own.
+    expect(names(nodes)).toEqual(["Piping", "Pipe Spool", "Bolt-up"]);
+    expect(matches).toBe(1);
+  });
+
+  it("asking for both means either", () => {
+    const { nodes } = pruneCbsTree(tree(), {
+      query: "",
+      sub: true,
+      material: true,
+    });
+    // The S twin is a sibling of Pipe Spool under Piping, so it comes after
+    // Pipe Spool's own children in pre-order.
+    expect(names(nodes)).toEqual([
+      "Piping",
+      "Pipe Spool",
+      "Bolt-up",
+      "Pipe Spool Subcontracts",
+    ]);
+  });
+
+  it("narrows the text query rather than widening it", () => {
+    const { nodes } = pruneCbsTree(tree(), {
+      query: "bolt",
+      sub: true,
+      material: false,
+    });
+    // "Bolt-up" matches the text but is a material row, not a subcontract one.
+    expect(names(nodes)).toEqual([]);
+  });
+
+  it("prunes strictly in filterCbsTree too, despite the matched-subtree rule", () => {
+    // "Pipe Spool" carries Sub Code YES and has children. A text match would
+    // keep that whole subtree; the type filter must not, or Setup would show
+    // the catalog back again.
+    const subOnly = filterCbsTree(tree(), {
+      query: "",
+      sub: true,
+      material: false,
+    });
+    expect(names(subOnly)).toEqual([
+      "Piping",
+      "Pipe Spool",
+      "Pipe Spool Subcontracts",
+    ]);
+
+    const textOnly = filterCbsTree(tree(), text("pipe spool"));
+    expect(names(textOnly)).toContain("Bolt-up");
+  });
+
+  it("returns the original nodes array when nothing is filtering", () => {
+    const t = tree();
+    expect(filterCbsTree(t, CBS_FILTER_NONE)).toBe(t);
+    expect(pruneCbsTree(t, CBS_FILTER_NONE).nodes).toBe(t);
+    expect(cbsFilterIsEmpty(CBS_FILTER_NONE)).toBe(true);
+    expect(cbsFilterIsEmpty({ query: "", sub: true, material: false })).toBe(
+      false,
+    );
   });
 });
 

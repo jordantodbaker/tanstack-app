@@ -277,6 +277,59 @@ describe("ProjectCostCodeListView", () => {
     });
   });
 
+  /**
+   * The Subcontracts / Materials toggles. On this page only ORIGINAL rows are
+   * listed, so what they key off is each row's own Sub Code / Material Code —
+   * the same flags the S and M badges show.
+   */
+  describe("row-type filters", () => {
+    const names = () =>
+      within(screen.getByRole("tree"))
+        .getAllByRole("treeitem")
+        .map((r) => r.textContent ?? "")
+        .join("|");
+
+    it("keeps subcontract codes and their ancestors", () => {
+      renderView();
+      fireEvent.click(screen.getByRole("button", { name: "Subcontracts" }));
+      // Civil is the only row in FIXTURE with Sub Code YES.
+      expect(names()).toContain("Civil");
+      expect(names()).not.toContain("Earthwork");
+      expect(screen.getByText("1 match")).toBeInTheDocument();
+    });
+
+    it("keeps material codes", () => {
+      renderView();
+      fireEvent.click(screen.getByRole("button", { name: "Materials" }));
+      // Civil and Civil Shop Materials both carry Material Code YES.
+      expect(names()).toContain("Civil Shop Materials");
+      expect(names()).not.toContain("Topsoil");
+      expect(screen.getByText("2 matches")).toBeInTheDocument();
+    });
+
+    it("shows its pressed state and toggles back off", () => {
+      renderView();
+      const subs = screen.getByRole("button", { name: "Subcontracts" });
+      expect(subs).toHaveAttribute("aria-pressed", "false");
+      fireEvent.click(subs);
+      expect(subs).toHaveAttribute("aria-pressed", "true");
+      fireEvent.click(subs);
+      expect(subs).toHaveAttribute("aria-pressed", "false");
+      fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+      expect(names()).toContain("Topsoil");
+    });
+
+    it("narrows the search box rather than widening it", () => {
+      renderView();
+      fireEvent.change(screen.getByRole("searchbox"), {
+        target: { value: "Topsoil" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Subcontracts" }));
+      // Topsoil matches the text but carries no sub code.
+      expect(screen.getByText(/No rows match this filter/)).toBeInTheDocument();
+    });
+  });
+
   it("filters by search query", async () => {
     renderView();
     fireEvent.change(screen.getByRole("searchbox"), {

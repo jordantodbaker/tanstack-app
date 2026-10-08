@@ -3,9 +3,10 @@ import { SearchBox } from "~/components/SearchBox";
 import { Button } from "~/components/ui/button";
 
 /**
- * Search box + Expand all / Collapse all for a CBS tree, with a trailing slot
- * for page-specific status (match count, selected count, saving…). Shared by
- * the Setup editor and the CBS dictionary viewers.
+ * Search box + Expand all / Collapse all + the Subcontracts / Materials row
+ * filters for a CBS tree, with a trailing slot for page-specific status (match
+ * count, selected count, saving…). Shared by the Setup editor and the CBS
+ * dictionary viewers.
  */
 export function CbsTreeToolbar({
   query,
@@ -13,6 +14,10 @@ export function CbsTreeToolbar({
   placeholder = "Search code or name…",
   onExpandAll,
   onCollapseAll,
+  subActive = false,
+  materialActive = false,
+  onToggleSub,
+  onToggleMaterial,
   children,
 }: {
   query: string;
@@ -20,6 +25,11 @@ export function CbsTreeToolbar({
   placeholder?: string;
   onExpandAll: () => void;
   onCollapseAll: () => void;
+  /** Omit both handlers to leave the row-type filters out entirely. */
+  subActive?: boolean;
+  materialActive?: boolean;
+  onToggleSub?: () => void;
+  onToggleMaterial?: () => void;
   children?: React.ReactNode;
 }) {
   return (
@@ -37,6 +47,28 @@ export function CbsTreeToolbar({
       <Button variant="outline" size="sm" onClick={onCollapseAll}>
         Collapse all
       </Button>
+      {onToggleSub && (
+        <Button
+          variant={subActive ? "default" : "outline"}
+          size="sm"
+          onClick={onToggleSub}
+          aria-pressed={subActive}
+          title="Show only subcontract codes — cost type S, or Sub Code YES"
+        >
+          Subcontracts
+        </Button>
+      )}
+      {onToggleMaterial && (
+        <Button
+          variant={materialActive ? "default" : "outline"}
+          size="sm"
+          onClick={onToggleMaterial}
+          aria-pressed={materialActive}
+          title="Show only material codes — cost type M, or Material Code YES"
+        >
+          Materials
+        </Button>
+      )}
       {children}
     </div>
   );

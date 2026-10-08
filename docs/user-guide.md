@@ -171,7 +171,16 @@ click one to open the whole tree to that level and no deeper — L0 collapses to
 the discipline roots, L5 is the same as **Expand all**. The swatch in force is
 outlined, and the outline clears once you open or close a row yourself.
 Ticking a parent allows everything beneath it; a
-half-filled box means only some of its children are allowed. Rows badged **S**
+half-filled box means only some of its children are allowed.
+**Subcontracts** and **Materials** narrow the tree to one kind of code.
+A row counts as a subcontract if its cost type (the workbook's L7) is **S** or
+its **Sub Code** is YES; as a material if its cost type is **M** or its
+**Material Code** is YES. Only matching rows and the parents needed to reach
+them stay on screen. The two buttons widen each other — turning both on shows
+either kind — and both narrow the search box rather than widening it, so
+"pumps" with **Subcontracts** on means subcontract rows mentioning pumps. While
+either is on the surviving rows are opened for you, so the level swatches take
+effect again once you turn them off. Rows badged **S**
 or **M** are the generated subcontract and material versions of the row above
 them — allow those too if the project will book cost against them.
 
@@ -184,7 +193,17 @@ them — allow those too if the project will book cost against them.
 A read-only list of the cost codes available on the selected project — exactly
 what an admin allowed in Setup — as a colour-coded, collapsible hierarchy you
 can search. The **L0–L5 swatches** under "Level colours" open the tree to one
-level at a time, the same as on the Setup page. Select a row to see its full detail: unit, cost code, account, cost
+level at a time, the same as on the Setup page.
+
+**Subcontracts** and **Materials** narrow the tree to one kind of code.
+A row counts as a subcontract if its cost type (the workbook's L7) is **S** or
+its **Sub Code** is YES; as a material if its cost type is **M** or its
+**Material Code** is YES. Only matching rows and the parents needed to reach
+them stay on screen. The two buttons widen each other — turning both on shows
+either kind — and both narrow the search box rather than widening it, so
+"pumps" with **Subcontracts** on means subcontract rows mentioning pumps. While
+either is on the surviving rows are opened for you, so the level swatches take
+effect again once you turn them off. Select a row to see its full detail: unit, cost code, account, cost
 classification, discipline, description and more.
 
 Only the **original** CBS rows are listed. **S** means a code's own

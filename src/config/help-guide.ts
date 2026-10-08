@@ -377,7 +377,7 @@ export const HELP_SECTIONS: HelpSection[] = [
           },
           {
             kind: "p",
-            text: 'The tree is the full CBS Dictionary, coloured by level the way the source workbook colours it. The L0–L5 swatches under "Level colours" are buttons — click one to open the whole tree to that level and no deeper, with L0 collapsing to the discipline roots and L5 matching Expand all. Ticking a parent allows everything beneath it; a half-filled box means only some of its children are allowed. Rows marked S or M are the generated subcontract and material versions of the row above them, so allow those too if the project will book cost against them.',
+            text: 'The tree is the full CBS Dictionary, coloured by level the way the source workbook colours it. The L0–L5 swatches under "Level colours" are buttons — click one to open the whole tree to that level and no deeper, with L0 collapsing to the discipline roots and L5 matching Expand all. Ticking a parent allows everything beneath it; a half-filled box means only some of its children are allowed. The Subcontracts and Materials buttons narrow the tree to codes whose cost type (L7) is S or M, or whose Sub Code / Material Code is YES — handy for granting a project just its subcontract or material accounts. Rows marked S or M are the generated subcontract and material versions of the row above them, so allow those too if the project will book cost against them.',
           },
           {
             kind: "p",
@@ -402,6 +402,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             items: [
               "Only the original CBS rows are listed. S means a code's own Sub Code is YES and M means its Material Code is YES; a code with both shows both.",
               "The generated subcontract and material rows are not listed here — the badges already tell you which codes have them. Administrators can see both views over the whole catalog under Admin → CBS.",
+              "Subcontracts and Materials narrow the tree to one kind of code: a row counts as a subcontract if its cost type (L7) is S or its Sub Code is YES, and as a material if its cost type is M or its Material Code is YES. Only matching rows and the parents needed to reach them stay on screen. Turning both on shows either kind; both narrow the search box rather than widening it.",
               'The L0–L5 swatches under "Level colours" open the tree to one code level at a time — L0 is just the discipline roots, L5 is everything. The one in force is outlined until you open or close a row yourself.',
               "Greyed-out italic rows are parent summaries the project was not granted. They appear only so the codes beneath them nest correctly — they carry no badges, are left out of the row count, and cannot be used on an estimate. Tick one in Setup to make it usable.",
               "Select any row to see its full detail: unit, cost code, account, cost classification, discipline, description and more.",

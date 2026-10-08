@@ -12,10 +12,12 @@ import { cbsCatalogQueryOptions } from "~/utils/cbs";
 import { currentUserQueryOptions, hasAtLeastRole } from "~/utils/users";
 import {
   buildCbsTree,
+  cbsFilterIsEmpty,
   computeCbsSelectionCounts,
   filterCbsTree,
   getNodeSelectionState,
   selectionStateFromCounts,
+  type CbsRowFilter,
   type CbsTreeNode,
 } from "~/lib/cbs-tree";
 import {
@@ -129,6 +131,8 @@ function CbsTreeEditor({
   } = useCbsTreeExpansion(tree);
   const [selected, setSelected] = React.useState<CbsTreeNode | null>(null);
   const [search, setSearch] = React.useState("");
+  const [sub, setSub] = React.useState(false);
+  const [material, setMaterial] = React.useState(false);
   const deferredSearch = React.useDeferredValue(search);
   const isFiltering = search !== deferredSearch;
 
@@ -158,17 +162,20 @@ function CbsTreeEditor({
     },
   });
 
-  const needle = deferredSearch.trim().toLowerCase();
-  const isSearching = needle.length > 0;
+  const filter: CbsRowFilter = React.useMemo(
+    () => ({ query: deferredSearch.trim().toLowerCase(), sub, material }),
+    [deferredSearch, sub, material],
+  );
+  const isFiltered = !cbsFilterIsEmpty(filter);
   const filteredTree = React.useMemo(
-    () => filterCbsTree(tree, needle),
-    [tree, needle],
+    () => filterCbsTree(tree, filter),
+    [tree, filter],
   );
   // Only the visible rows are flattened; the panel virtualizes those, so
   // "Expand all" over the whole catalog stays cheap.
   const flat = React.useMemo(
-    () => flattenVisibleCbsNodes(filteredTree, expanded, isSearching),
-    [filteredTree, expanded, isSearching],
+    () => flattenVisibleCbsNodes(filteredTree, expanded, isFiltered),
+    [filteredTree, expanded, isFiltered],
   );
 
   const totalSelected = selectedIds.size;
@@ -239,6 +246,10 @@ function CbsTreeEditor({
         placeholder="Search by code, name, or description…"
         onExpandAll={expandAll}
         onCollapseAll={collapseAll}
+        subActive={sub}
+        materialActive={material}
+        onToggleSub={() => setSub((v) => !v)}
+        onToggleMaterial={() => setMaterial((v) => !v)}
       >
         <span className="ml-auto text-sm text-slate-600">
           {totalSelected.toLocaleString()} selected
@@ -265,7 +276,7 @@ function CbsTreeEditor({
         <CbsTreePanel
           flat={flat}
           expanded={expanded}
-          forceOpen={isSearching}
+          forceOpen={isFiltered}
           selectedKey={selected?.pathKey ?? null}
           onToggle={toggle}
           onSelect={setSelected}

@@ -3,9 +3,11 @@ import { Loader2 } from "lucide-react";
 import type { CbsBrowserRow } from "~/utils/cbs";
 import {
   buildCbsTree,
+  cbsFilterIsEmpty,
   cbsFlagBadges,
   pruneCbsTree,
   type CbsBadge,
+  type CbsRowFilter,
   type CbsTreeNode,
 } from "~/lib/cbs-tree";
 import {
@@ -127,18 +129,26 @@ export function CbsDictionaryBrowser({
   } = useCbsTreeExpansion(nodes);
   const [selected, setSelected] = React.useState<Node | null>(null);
   const [query, setQuery] = React.useState("");
+  const [sub, setSub] = React.useState(false);
+  const [material, setMaterial] = React.useState(false);
 
-  const needle = query.trim().toLowerCase();
+  const filter: CbsRowFilter = React.useMemo(
+    () => ({ query: query.trim().toLowerCase(), sub, material }),
+    [query, sub, material],
+  );
+  const filtering = !cbsFilterIsEmpty(filter);
   const { nodes: visibleNodes, matches } = React.useMemo(
-    () => pruneCbsTree(nodes, needle),
-    [needle, nodes],
+    () => pruneCbsTree(nodes, filter),
+    [filter, nodes],
   );
 
   const counts = React.useMemo(() => countRows(items), [items]);
 
+  // While filtering, open everything that survived — the matches are the point,
+  // and leaving them behind collapsed parents hides the result.
   const flat = React.useMemo(
-    () => flattenVisibleCbsNodes(visibleNodes, expanded, needle.length > 0),
-    [visibleNodes, expanded, needle],
+    () => flattenVisibleCbsNodes(visibleNodes, expanded, filtering),
+    [visibleNodes, expanded, filtering],
   );
 
   return (
@@ -154,8 +164,12 @@ export function CbsDictionaryBrowser({
         onQueryChange={setQuery}
         onExpandAll={expandAll}
         onCollapseAll={collapseAll}
+        subActive={sub}
+        materialActive={material}
+        onToggleSub={() => setSub((v) => !v)}
+        onToggleMaterial={() => setMaterial((v) => !v)}
       >
-        {needle && (
+        {filtering && (
           <span className="text-xs text-slate-500">
             {matches.toLocaleString()} match{matches === 1 ? "" : "es"}
           </span>
@@ -167,11 +181,11 @@ export function CbsDictionaryBrowser({
           badgesFor={badgesFor}
           flat={flat}
           expanded={expanded}
-          forceOpen={needle.length > 0}
+          forceOpen={filtering}
           selectedKey={selected?.pathKey ?? null}
           onToggle={toggle}
           onSelect={setSelected}
-          emptyMessage={query ? `No rows match “${query}”.` : emptyMessage}
+          emptyMessage={filtering ? "No rows match this filter." : emptyMessage}
         />
 
         <CbsDetailPanel selected={selected} onClose={() => setSelected(null)} />

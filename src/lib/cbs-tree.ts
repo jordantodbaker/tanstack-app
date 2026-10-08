@@ -68,6 +68,9 @@ export type CbsTreeNode<T extends CbsTreeItem = CbsTreeItem> = {
 
 const LEVEL_DEFAULT = "00";
 const BACKBONE_TYPE = "0";
+/** Cost types (the workbook's L7) for the generated subcontract / material rows. */
+const SUB_TYPE = "S";
+const MATERIAL_TYPE = "M";
 
 /**
  * L1 blocks whose division sits at the TENS rather than the hundreds.
@@ -378,15 +381,67 @@ export function selectionStateFromCounts(
 }
 
 /**
- * Single-pass filter that prunes nodes whose subtrees don't contain
- * `lowerQuery`. A self-match keeps its whole subtree intact (same object);
- * a descendant-only match yields a copy with just the matching children.
- * Returns the original `nodes` array when the query is empty so callers can
- * fast-path on reference identity.
+ * Does this row carry subcontract cost? Either it IS a subcontract code — its
+ * own cost type (the workbook's L7) is "S", which covers both the rows the
+ * workbook ships that way and the twins the dictionary generates — or it is a
+ * code whose Sub Code column says YES, meaning a subcontract twin exists for
+ * it. The toolbar's "Subcontracts" filter is exactly this question.
+ */
+export function cbsIsSubcontract(item: CbsTreeItem): boolean {
+  return item.l6 === SUB_TYPE || item.subReporting === true;
+}
+
+/** The material counterpart of `cbsIsSubcontract` — L7 "M", or Material Code YES. */
+export function cbsIsMaterial(item: CbsTreeItem): boolean {
+  return item.l6 === MATERIAL_TYPE || item.materialCode === true;
+}
+
+/**
+ * What a CBS tree view is currently showing: free text plus the row-type
+ * toggles. `query` must already be lower-cased and trimmed.
+ */
+export type CbsRowFilter = {
+  query: string;
+  sub: boolean;
+  material: boolean;
+};
+
+export const CBS_FILTER_NONE: CbsRowFilter = {
+  query: "",
+  sub: false,
+  material: false,
+};
+
+/** Is this filter showing everything (so callers can skip the walk)? */
+export function cbsFilterIsEmpty(filter: CbsRowFilter): boolean {
+  return !filter.query && !filter.sub && !filter.material;
+}
+
+/**
+ * The text and the type toggles narrow each other: "pumps" with Subcontracts
+ * on means subcontract rows mentioning pumps. The two toggles widen each
+ * other, since asking for both is asking for either.
+ */
+function rowMatches<T extends CbsTreeItem>(
+  node: CbsTreeNode<T>,
+  filter: CbsRowFilter,
+): boolean {
+  if (filter.query && !node.searchHaystack.includes(filter.query)) return false;
+  if (!filter.sub && !filter.material) return true;
+  return (
+    (filter.sub && cbsIsSubcontract(node.item)) ||
+    (filter.material && cbsIsMaterial(node.item))
+  );
+}
+
+/**
+ * Single-pass filter that prunes nodes whose subtrees hold nothing matching
+ * `filter`. A self-match may keep its whole subtree intact (same object);
+ * otherwise a surviving node is a copy with just the matching children.
  */
 function searchCbsTree<T extends CbsTreeItem>(
   nodes: CbsTreeNode<T>[],
-  lowerQuery: string,
+  filter: CbsRowFilter,
   /** A self-matching node keeps its WHOLE subtree, unrecursed, so the kept
    *  node is the original object. Off: only matching descendants survive. */
   keepMatchedSubtree: boolean,
@@ -394,18 +449,13 @@ function searchCbsTree<T extends CbsTreeItem>(
 ): CbsTreeNode<T>[] {
   const out: CbsTreeNode<T>[] = [];
   for (const n of nodes) {
-    const selfMatch = n.searchHaystack.includes(lowerQuery);
+    const selfMatch = rowMatches(n, filter);
     if (selfMatch && keepMatchedSubtree) {
       onMatch?.();
       out.push(n);
       continue;
     }
-    const kids = searchCbsTree(
-      n.children,
-      lowerQuery,
-      keepMatchedSubtree,
-      onMatch,
-    );
+    const kids = searchCbsTree(n.children, filter, keepMatchedSubtree, onMatch);
     if (selfMatch || kids.length > 0) {
       if (selfMatch) onMatch?.();
       out.push({ ...n, children: kids });
@@ -414,27 +464,37 @@ function searchCbsTree<T extends CbsTreeItem>(
   return out;
 }
 
+/**
+ * Filter for the Setup editor: a text match keeps the matched row's whole
+ * subtree, so ticking it still grants what you can see. The type toggles are
+ * strict even here — keeping whole subtrees under, say, a Sub Code parent
+ * would put the entire catalog back on screen and defeat the filter.
+ *
+ * Returns the original `nodes` array for an empty filter so callers can
+ * fast-path on reference identity.
+ */
 export function filterCbsTree<T extends CbsTreeItem>(
   nodes: CbsTreeNode<T>[],
-  lowerQuery: string,
+  filter: CbsRowFilter,
 ): CbsTreeNode<T>[] {
-  if (!lowerQuery) return nodes;
-  return searchCbsTree(nodes, lowerQuery, true);
+  if (cbsFilterIsEmpty(filter)) return nodes;
+  const typeFiltered = filter.sub || filter.material;
+  return searchCbsTree(nodes, filter, !typeFiltered);
 }
 
 /**
- * Strict filter for the viewer: keeps only nodes that match `lowerQuery`
+ * Strict filter for the viewers: keeps only nodes that match `filter`
  * themselves plus their ancestors (a matching parent does NOT keep its
  * non-matching children), and counts the matches.
  */
 export function pruneCbsTree<T extends CbsTreeItem>(
   nodes: CbsTreeNode<T>[],
-  lowerQuery: string,
+  filter: CbsRowFilter,
 ): { nodes: CbsTreeNode<T>[]; matches: number } {
-  if (!lowerQuery) return { nodes, matches: 0 };
+  if (cbsFilterIsEmpty(filter)) return { nodes, matches: 0 };
   let matches = 0;
   return {
-    nodes: searchCbsTree(nodes, lowerQuery, false, () => matches++),
+    nodes: searchCbsTree(nodes, filter, false, () => matches++),
     matches,
   };
 }

@@ -5,7 +5,11 @@ import {
   pruneCbsTree,
   type CbsTreeItem,
 } from "./cbs-tree";
-import { CBS_EXPORT_COLUMNS, flattenCbsForExport } from "./cbs-export";
+import {
+  CBS_EXPORT_COLUMNS,
+  cbsProjectTitle,
+  flattenCbsForExport,
+} from "./cbs-export";
 
 /**
  * The export's job is to carry what the page shows. These tests feed it the
@@ -152,6 +156,44 @@ describe("flattenCbsForExport", () => {
   });
 });
 
+describe("cbsProjectTitle", () => {
+  it("drops a leading copy of the project's own number", () => {
+    // The names in use already start with the number, so printing both
+    // verbatim read "1901 — 1901 - FIME Engineering".
+    expect(cbsProjectTitle("1901", "1901 - FIME Engineering")).toBe(
+      "FIME Engineering",
+    );
+    expect(cbsProjectTitle("1902", "1902 — FIME Mechanical")).toBe(
+      "FIME Mechanical",
+    );
+    expect(cbsProjectTitle("1903", "1903: FIME Product Handling")).toBe(
+      "FIME Product Handling",
+    );
+  });
+
+  it("leaves a title that does not start with the number alone", () => {
+    expect(cbsProjectTitle("1901", "FIME Engineering")).toBe(
+      "FIME Engineering",
+    );
+    // A different number is not this project's prefix.
+    expect(cbsProjectTitle("1901", "2001 - Other Job")).toBe(
+      "2001 - Other Job",
+    );
+    // The number must be followed by a separator, not just happen to prefix it.
+    expect(cbsProjectTitle("190", "1901 - FIME")).toBe("1901 - FIME");
+  });
+
+  it("keeps the name when stripping would leave nothing", () => {
+    expect(cbsProjectTitle("1901", "1901")).toBe("1901");
+    expect(cbsProjectTitle("1901", "1901 - ")).toBe("1901 -");
+  });
+
+  it("handles a blank or regex-special number without throwing", () => {
+    expect(cbsProjectTitle("", "FIME Engineering")).toBe("FIME Engineering");
+    expect(cbsProjectTitle("A.1(x)", "A.1(x) - Job")).toBe("Job");
+  });
+});
+
 describe("CBS_EXPORT_COLUMNS", () => {
   const row = flattenCbsForExport(TREE());
 
@@ -161,6 +203,20 @@ describe("CBS_EXPORT_COLUMNS", () => {
     const nameCol = CBS_EXPORT_COLUMNS.find((c) => c.header === "Name")!;
     expect(nameCol.get(row[0])).toBe("Field Indirects");
     expect(nameCol.get(row[2])).toBe("    Superintendents");
+  });
+
+  it("does not expose how a row got into the dictionary", () => {
+    // ORIGINAL / SUB / MATERIAL is internal vocabulary; the people this file
+    // goes to only need to know what a code is, not how it was produced.
+    // A generated row is still identifiable by its display code's cost type.
+    const headers = CBS_EXPORT_COLUMNS.map((c) => c.header);
+    expect(headers).not.toContain("Row Type");
+    expect(headers.join(" ").toLowerCase()).not.toContain("row type");
+
+    const cells = CBS_EXPORT_COLUMNS.map((c) => String(c.get(row[0])));
+    for (const internal of ["ORIGINAL", "SUB", "MATERIAL"]) {
+      expect(cells).not.toContain(internal);
+    }
   });
 
   it("gives every column a header and a usable width", () => {

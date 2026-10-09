@@ -11,7 +11,8 @@ import {
  * Project Cost Code List — the cost codes available on the selected project.
  *
  * One list, of the ORIGINAL Master CBS rows the project has been granted (what
- * was the "CBS Code Book" section). The generated S/M rows are deliberately
+ * was the "CBS Code Book" section, now "Original Codes"). The generated S/M
+ * rows are deliberately
  * not listed: an original row's own S / M badge already says whether it carries
  * a sub code or a material code. Admin → Master CBS still shows both views
  * over the whole catalog.
@@ -45,7 +46,6 @@ function ProjectCostCodes({ projectId }: { projectId: number }) {
         emptyMessage="No cost codes selected for this project."
         showRowTypeCounts={false}
         exportView="projectCostCodes"
-        exportProjectId={projectId}
       />
     </div>
   );

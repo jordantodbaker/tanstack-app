@@ -15,6 +15,8 @@ Procurement, Construction) firm. It manages:
 - Change Variation Requests (CVR) and the approval workflow
 - Field Change Orders (FCO), Requests for Information (RFI), Trends, and
   Prime/Owner Change Orders (PCO)
+- The Cost Breakdown Structure — each project's cost code list and the
+  whole CBS Code Book, with Excel export of either
 - Project administration (projects, areas, subcontractors, users, roles,
   crew mixes, CVR/FCO templates)
 - Earned-Value-Management (EVM) reporting against estimate snapshots
@@ -22,9 +24,21 @@ Procurement, Construction) firm. It manages:
 - File attachments (photos, drawings, PDFs)
 - Per-record audit history, comments, and notifications
 
+**Navigation is split into five apps**, registered in
+[apps.ts](../src/config/apps.ts): Field Estimate Form, Change Log, Cost
+Breakdown Structure, Reporting and Administration. `appForPath` resolves the
+current route to its app and the shell renders only that app's navigation; the
+home page is a launcher with one card per app. An app is a grouping of
+existing routes rather than a URL prefix, so the emailed deep links in
+[entity-routes.ts](../src/lib/entity-routes.ts) are unaffected by the
+grouping.
+
 **Stack:** TanStack Start (React 19, Server Functions), Prisma 7 + PostgreSQL,
 Clerk authentication, Vercel Blob for object storage, Resend for outbound
-email, Sentry for error tracking, Vercel Cron for the daily reminder pass.
+email, Sentry for error tracking, Vercel Cron for the daily reminder pass,
+exceljs for the CBS workbook import and the Excel export (a runtime
+dependency — it is used by server functions, not just by the import script,
+and is deliberately kept out of the client bundle).
 Deployed today as a serverless Node bundle on Vercel; portable to any
 Node-capable serverless platform with minor changes to
 [api/handler.js](../api/handler.js).
@@ -223,7 +237,7 @@ should be committed to the repo. The `.env` file is gitignored.
 |---|---|---|
 | `DATABASE_URL` | Postgres provider | Pooled connection string |
 | `CLERK_SECRET_KEY` | Clerk dashboard | Server-side auth |
-| `CLERK_PUBLISHABLE_KEY` | Clerk dashboard | Client-side auth |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Clerk dashboard | Client-side auth. Read at **build** time and baked into the client bundle, so it must be set on the build environment, not just the runtime one |
 | `BLOB_READ_WRITE_TOKEN` | Blob provider | File attachment R/W |
 | `NODE_ENV` | Platform | Must be `production` |
 
@@ -359,9 +373,15 @@ non-200 responses to avoid paging on a single transient DB blip.
 - All server functions validate inputs at the boundary with Zod schemas
   ([validators.ts](../src/lib/validators.ts)) — no untrusted JSON reaches
   Prisma.
-- All mutations require either project access (`requireProjectAccess`) or
-  admin role (`adminHandler`).
-- Role hierarchy: USER → APPROVER → ADMINISTRATOR.
+- Every server function is wrapped in one of the guards in
+  [users.server.ts](../src/utils/users.server.ts): `projectScopedHandler` /
+  `projectIdScopedHandler` (project access), `versionScopedHandler` (resolves
+  an estimate version to its project, then the same check — this is what gates
+  the take-off sheets), `requireRecordAccess` (reads the owning project off
+  the row before authorizing), or `adminHandler` / `adminHandlerNoInput`.
+- Role hierarchy: USER → APPROVER → ADMINISTRATOR. Roles are global to the
+  user; *project* access is the per-project allow-list on `User.projects`,
+  which administrators bypass.
 
 ### Data classification
 The application stores:
@@ -434,7 +454,9 @@ follow-up feature (a scheduled job marking and removing eligible projects).
 
 ## 11a. Updating the CBS
 
-The CBS lives in `prisma/data/CBS.xlsx` (sheet "Master CBS"). The app
+The CBS lives in `prisma/data/CBS.xlsx`. The loader takes the sheet named
+"CBS", falling back to "Master CBS" and then to the first sheet
+(`SHEET_NAMES` in [cbs-workbook.ts](../prisma/cbs-workbook.ts)). The app
 stores the *expanded* CBS Dictionary in `CbsItem`: every workbook row plus a
 generated `S` (sub-code) twin for rows with Sub Code = YES and an `M`
 (material) twin for rows with Material Code = YES, skipped when the workbook
@@ -495,8 +517,6 @@ master. All of them broke on the October 2026 update.
 
 The following are not blockers for v1 production but should be tracked:
 
-- **Error tracking integration** (Sentry or equivalent)
-- **Healthcheck endpoint** for uptime monitoring
 - **Slack / Teams notification delivery** — email is now wired (§7); chat-app
   delivery is still future. Emailing *external* RFI responders (the free-text
   `assignedTo`, not app users) is also not yet wired
@@ -510,4 +530,4 @@ The following are not blockers for v1 production but should be tracked:
 
 ---
 
-*Document last updated: 2026-06-05.*
+*Document last updated: 2026-10-09.*

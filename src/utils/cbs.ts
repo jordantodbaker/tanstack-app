@@ -6,7 +6,8 @@ import { prisma } from "../server/db";
 import { z } from "zod";
 import { Id, parseProjectIdInput } from "~/lib/validators";
 import { adminHandlerNoInput, projectIdScopedHandler } from "./users.server";
-import { cbsAncestorCodes, withCbsLevels } from "~/lib/cbs-tree";
+import { withCbsLevels } from "~/lib/cbs-tree";
+import { cbsCatalogRows, projectCostCodeRows } from "./cbs-rows.server";
 
 const StringArr = z.array(z.string());
 const StringArrParser = (input: unknown) => StringArr.parse(input);
@@ -232,9 +233,6 @@ export type CbsTreeRow = ReturnType<typeof withCbsLevels<CbsWireRow>>;
  */
 export type CbsBrowserRow = CbsTreeRow & { context?: boolean };
 
-/** What `fetchProjectCostCodes` returns, before the levels are restored. */
-type ProjectCostCodeWireRow = CbsWireRow & { context?: boolean };
-
 /**
  * The cost codes a project may use: the ORIGINAL Master CBS rows it has been
  * granted on the Setup page — the Project Cost Code List.
@@ -254,34 +252,8 @@ type ProjectCostCodeWireRow = CbsWireRow & { context?: boolean };
 export const fetchProjectCostCodes = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
   .handler(
-    projectIdScopedHandler(
-      async ({ data: projectId }): Promise<ProjectCostCodeWireRow[]> => {
-        const granted = await prisma.cbsItem.findMany({
-          where: {
-            rowType: "ORIGINAL",
-            allowedInProjects: { some: { id: projectId } },
-          },
-          orderBy: { id: "asc" },
-          select: cbsTreeRowSelect,
-        });
-
-        // Which ancestor summaries are missing from the granted set.
-        const have = new Set(granted.map((g) => g.displayCode));
-        const wanted = new Set<string>();
-        for (const g of granted) {
-          for (const code of cbsAncestorCodes(g.displayCode)) {
-            if (!have.has(code)) wanted.add(code);
-          }
-        }
-        if (wanted.size === 0) return granted;
-
-        const ancestors = await prisma.cbsItem.findMany({
-          where: { rowType: "ORIGINAL", displayCode: { in: [...wanted] } },
-          orderBy: { id: "asc" },
-          select: cbsTreeRowSelect,
-        });
-        return [...granted, ...ancestors.map((a) => ({ ...a, context: true }))];
-      },
+    projectIdScopedHandler(({ data: projectId }) =>
+      projectCostCodeRows(projectId),
     ),
   );
 
@@ -294,12 +266,7 @@ export const fetchProjectCostCodes = createServerFn({ method: "GET" })
  * granted, and both callers are admin-only routes anyway.
  */
 export const fetchCbsCatalog = createServerFn({ method: "GET" }).handler(
-  adminHandlerNoInput(() =>
-    prisma.cbsItem.findMany({
-      orderBy: { id: "asc" },
-      select: cbsTreeRowSelect,
-    }),
-  ),
+  adminHandlerNoInput(() => cbsCatalogRows(false)),
 );
 
 export const cbsCatalogQueryOptions = () =>

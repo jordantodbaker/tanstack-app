@@ -168,7 +168,7 @@ describe("Sidebar", () => {
     expect(
       within(aside).getByText("Project Cost Code List"),
     ).toBeInTheDocument();
-    expect(within(aside).queryByText("CBS Catalog")).toBeNull();
+    expect(within(aside).queryByText("CBS Code Book")).toBeNull();
   });
 
   it("hides Setup from a non-admin in the estimate", () => {

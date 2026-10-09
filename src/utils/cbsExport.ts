@@ -13,10 +13,15 @@ import {
 import {
   CBS_EXPORT_LABELS,
   CBS_EXPORT_VIEWS,
+  cbsProjectTitle,
   flattenCbsForExport,
   type CbsExportView,
 } from "~/lib/cbs-export";
-import { cbsTreeRowSelect, type CbsWireRow } from "./cbs";
+import {
+  cbsCatalogRows,
+  projectCostCodeRows,
+  type ProjectCostCodeRow,
+} from "./cbs-rows.server";
 import { buildCbsWorkbook } from "./cbs-xlsx.server";
 
 /**
@@ -57,34 +62,6 @@ export type CbsExportResult = {
   rowCount: number;
 };
 
-/** The granted rows for a project, plus the ancestors that make them nest. */
-async function projectCostCodeRows(
-  projectId: number,
-): Promise<(CbsWireRow & { context?: boolean })[]> {
-  const granted = await prisma.cbsItem.findMany({
-    where: {
-      rowType: "ORIGINAL",
-      allowedInProjects: { some: { id: projectId } },
-    },
-    orderBy: { id: "asc" },
-    select: cbsTreeRowSelect,
-  });
-  const have = new Set(granted.map((g) => g.displayCode));
-  const wanted = new Set<string>();
-  for (const g of granted) {
-    for (const code of cbsAncestorCodes(g.displayCode)) {
-      if (!have.has(code)) wanted.add(code);
-    }
-  }
-  if (wanted.size === 0) return granted;
-  const ancestors = await prisma.cbsItem.findMany({
-    where: { rowType: "ORIGINAL", displayCode: { in: [...wanted] } },
-    orderBy: { id: "asc" },
-    select: cbsTreeRowSelect,
-  });
-  return [...granted, ...ancestors.map((a) => ({ ...a, context: true }))];
-}
-
 /** A one-line description of the filters, for the sheet's subtitle. */
 export function describeCbsFilter(filter: CbsRowFilter): string {
   if (cbsFilterIsEmpty(filter)) return "";
@@ -111,27 +88,31 @@ async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
     material: input.filter.material,
   };
 
-  let rows: (CbsWireRow & { context?: boolean })[];
+  let rows: ProjectCostCodeRow[];
   let scope: string;
 
   if (input.view === "projectCostCodes") {
     if (input.projectId === null) {
       throw new Error("A project must be selected to export its cost codes");
     }
-    const project = await prisma.project.findUnique({
-      where: { id: input.projectId },
-      select: { name: true, displayId: true },
-    });
     rows = await projectCostCodeRows(input.projectId);
-    scope = project ? `${project.displayId} — ${project.name}` : "Project";
+    scope = "Codes granted to this project on the Setup page";
   } else {
-    rows = await prisma.cbsItem.findMany({
-      where: input.view === "codeBook" ? { rowType: "ORIGINAL" } : {},
-      orderBy: { id: "asc" },
-      select: cbsTreeRowSelect,
-    });
+    rows = await cbsCatalogRows(input.view === "codeBook");
+    // The catalog views ignore the allow-list, so the project below is there
+    // for traceability — whose desk the file came from — not as a filter.
     scope = "Whole catalog — no project allow-list applied";
   }
+
+  // Looked up rather than taken from the client: it ends up printed on a
+  // document people forward, so it should be what the database says.
+  const project =
+    input.projectId === null
+      ? null
+      : await prisma.project.findUnique({
+          where: { id: input.projectId },
+          select: { displayId: true, name: true },
+        });
 
   const tree = buildCbsTree(rows.map(withCbsLevels));
   const visible = pruneCbsTree(tree, filter).nodes;
@@ -139,14 +120,21 @@ async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
 
   const buffer = await buildCbsWorkbook(exportRows, {
     view: input.view,
+    projectNumber: project?.displayId ?? "",
+    projectTitle: project
+      ? cbsProjectTitle(project.displayId, project.name)
+      : "",
     scope,
     filterNote: describeCbsFilter(filter),
     availableRows: exportRows.filter((r) => !r.context).length,
   });
 
   const stamp = new Date().toISOString().slice(0, 10);
+  // The project number goes in the filename too — these get forwarded, and
+  // three files called "cbs-dictionary-2026-10-09.xlsx" are indistinguishable.
+  const scopeStem = project ? `-${project.displayId}` : "";
   return {
-    filename: `${CBS_EXPORT_LABELS[input.view].filename}-${stamp}.xlsx`,
+    filename: `${CBS_EXPORT_LABELS[input.view].filename}${scopeStem}-${stamp}.xlsx`,
     base64: buffer.toString("base64"),
     rowCount: exportRows.length,
   };

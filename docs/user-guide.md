@@ -229,16 +229,22 @@ Only the **original** CBS rows are listed. **S** means a code's own
 **Sub Code** is YES, **M** means its **Material Code** is YES, and a code
 carrying both shows both. The generated subcontract and material rows are not
 listed here, since those badges already tell you which codes have them; admins
-can see both views over the whole catalog under **Cost Breakdown Structure →
-CBS Catalog**.
+can see both views over the whole CBS under **Cost Breakdown Structure → CBS
+Code Book**.
 
 **Export Excel** downloads what you are looking at — the rows left by the
 search box and the **Subcontracts** / **Materials** buttons, and nothing else.
+The sheet opens with a labelled block giving the **project number** and
+**project title**, what the rows cover, the filter applied, the code count and
+the export date; the project number is in the filename too, so forwarded files
+can be told apart. In the CBS Code Book the project is recorded for
+traceability only — those two lists ignore the allow-list, as the Scope line
+says.
 The file keeps the level colours and turns the hierarchy into Excel's own row
 grouping, so the ± controls in the margin collapse it the way the page does.
 Collapsing branches on screen doesn't change the file: Excel's grouping is
-what collapses it there. The same button is on the **CBS Code Book** and
-**CBS Dictionary** sections under Cost Breakdown Structure.
+what collapses it there. The same button is on the **Original Codes** and
+**CBS Dictionary** sections of the **CBS Code Book**.
 
 Greyed-out, italic rows are **parent summaries the project wasn't granted**,
 shown only so the codes beneath them sit in the right place in the hierarchy.

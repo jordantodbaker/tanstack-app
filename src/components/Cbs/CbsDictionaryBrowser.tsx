@@ -114,7 +114,6 @@ export function CbsDictionaryBrowser({
   emptyMessage,
   showRowTypeCounts = true,
   exportView,
-  exportProjectId,
 }: {
   items: CbsBrowserRow[];
   badgesFor?: (node: Node) => readonly CbsBadge[];
@@ -123,8 +122,6 @@ export function CbsDictionaryBrowser({
   showRowTypeCounts?: boolean;
   /** Which view to export as Excel. Omit to leave the button out. */
   exportView?: CbsExportView;
-  /** Needed only by the project-scoped export. */
-  exportProjectId?: number | null;
 }) {
   const nodes = React.useMemo(() => buildCbsTree(items), [items]);
   const {
@@ -180,7 +177,6 @@ export function CbsDictionaryBrowser({
         {exportView && (
           <ExportCbsXlsxButton
             view={exportView}
-            projectId={exportProjectId}
             filter={filter}
             disabled={items.length === 0}
           />

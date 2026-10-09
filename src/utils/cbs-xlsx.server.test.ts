@@ -7,7 +7,11 @@ import {
 } from "~/lib/cbs-tree";
 import { CBS_EXPORT_COLUMNS, flattenCbsForExport } from "~/lib/cbs-export";
 import { cbsColorForLevel, CBS_HEADER_COLOR } from "~/config/cbs-level-colors";
-import { buildCbsWorkbook, type CbsWorkbookMeta } from "./cbs-xlsx.server";
+import {
+  buildCbsWorkbook,
+  CBS_SHEET_LAYOUT,
+  type CbsWorkbookMeta,
+} from "./cbs-xlsx.server";
 
 /**
  * Round-trips the workbook: build it, read the bytes back with exceljs, and
@@ -42,7 +46,9 @@ const ROWS = flattenCbsForExport(
 
 const META: CbsWorkbookMeta = {
   view: "projectCostCodes",
-  scope: "1901 — FIME Engineering",
+  projectNumber: "1901",
+  projectTitle: "FIME Engineering",
+  scope: "Codes granted to this project on the Setup page",
   filterNote: "Filtered: subcontract codes",
   availableRows: 4,
 };
@@ -62,8 +68,13 @@ const argb = (hex: string) => `FF${hex.replace("#", "").toUpperCase()}`;
 const fillOf = (cell: ExcelJS.Cell) =>
   (cell.fill as ExcelJS.FillPattern | undefined)?.fgColor?.argb;
 
-/** Data rows start after the title, subtitle and header rows. */
-const FIRST_DATA_ROW = 4;
+/** Data rows start after the title block, spacer and header. */
+const FIRST_DATA_ROW = CBS_SHEET_LAYOUT.firstDataRow;
+/** Label/value pair from a metadata row. */
+const metaRow = (ws: ExcelJS.Worksheet, row: number) => [
+  ws.getRow(row).getCell(1).value,
+  ws.getRow(row).getCell(2).value,
+];
 
 describe("buildCbsWorkbook", () => {
   it("produces a loadable xlsx with the view's sheet name", async () => {
@@ -75,18 +86,60 @@ describe("buildCbsWorkbook", () => {
     expect(ws.name).toBe("Project Cost Codes");
   });
 
-  it("writes the title block and the filter note", async () => {
+  it("labels the project number and title in their own addressable cells", async () => {
     const { ws } = await roundTrip();
-    expect(ws.getRow(1).getCell(1).value).toBe("Project Cost Codes");
-    const subtitle = String(ws.getRow(2).getCell(1).value);
-    expect(subtitle).toContain("1901 — FIME Engineering");
-    expect(subtitle).toContain("4 codes");
-    expect(subtitle).toContain("Filtered: subcontract codes");
+    expect(ws.getRow(CBS_SHEET_LAYOUT.title).getCell(1).value).toBe(
+      "Project Cost Codes",
+    );
+    expect(metaRow(ws, CBS_SHEET_LAYOUT.projectNumber)).toEqual([
+      "Project number",
+      "1901",
+    ]);
+    expect(metaRow(ws, CBS_SHEET_LAYOUT.projectTitle)).toEqual([
+      "Project title",
+      "FIME Engineering",
+    ]);
+  });
+
+  it("keeps the project number as text so a leading zero survives", async () => {
+    const { ws } = await roundTrip(ROWS, { ...META, projectNumber: "0190" });
+    const cell = ws.getRow(CBS_SHEET_LAYOUT.projectNumber).getCell(2);
+    expect(cell.value).toBe("0190");
+    expect(cell.numFmt).toBe("@");
+  });
+
+  it("writes the scope, filter, count and export date", async () => {
+    const { ws } = await roundTrip();
+    expect(metaRow(ws, CBS_SHEET_LAYOUT.scope)[1]).toBe(
+      "Codes granted to this project on the Setup page",
+    );
+    expect(metaRow(ws, CBS_SHEET_LAYOUT.filter)[1]).toBe(
+      "Filtered: subcontract codes",
+    );
+    expect(metaRow(ws, CBS_SHEET_LAYOUT.codes)[1]).toBe(4);
+    expect(metaRow(ws, CBS_SHEET_LAYOUT.exported)[1]).toMatch(
+      /^\d{4}-\d{2}-\d{2}$/,
+    );
+  });
+
+  it("says so plainly when there is no project or no filter", async () => {
+    const { ws } = await roundTrip(ROWS, {
+      ...META,
+      view: "dictionary",
+      projectNumber: "",
+      projectTitle: "",
+      filterNote: "",
+    });
+    expect(metaRow(ws, CBS_SHEET_LAYOUT.projectNumber)[1]).toBe("—");
+    expect(metaRow(ws, CBS_SHEET_LAYOUT.projectTitle)[1]).toBe("—");
+    expect(metaRow(ws, CBS_SHEET_LAYOUT.filter)[1]).toBe(
+      "None — all rows shown",
+    );
   });
 
   it("writes the header row in the scheme's header colour", async () => {
     const { ws } = await roundTrip();
-    const header = ws.getRow(3);
+    const header = ws.getRow(CBS_SHEET_LAYOUT.header);
     expect(header.getCell(1).value).toBe("Display Code");
     expect(
       CBS_EXPORT_COLUMNS.map((_, i) => header.getCell(i + 1).value),
@@ -140,10 +193,16 @@ describe("buildCbsWorkbook", () => {
 
   it("freezes the header and sets an autofilter over it", async () => {
     const { ws } = await roundTrip();
-    expect(ws.views[0]).toMatchObject({ state: "frozen", ySplit: 3 });
+    // Frozen through the header so the metadata block stays on screen while
+    // scrolling 7,000 rows.
+    expect(ws.views[0]).toMatchObject({
+      state: "frozen",
+      ySplit: CBS_SHEET_LAYOUT.header,
+    });
     // exceljs normalises the range to A1 notation on the way back out.
     const lastCol = String.fromCharCode(64 + CBS_EXPORT_COLUMNS.length);
-    expect(ws.autoFilter).toBe(`A3:${lastCol}3`);
+    const r = CBS_SHEET_LAYOUT.header;
+    expect(ws.autoFilter).toBe(`A${r}:${lastCol}${r}`);
   });
 
   it("sets a width on every column", async () => {
@@ -155,7 +214,7 @@ describe("buildCbsWorkbook", () => {
 
   it("names the sheet for whichever view was exported", async () => {
     for (const [view, sheet] of [
-      ["codeBook", "CBS Code Book"],
+      ["codeBook", "Original Codes"],
       ["dictionary", "CBS Dictionary"],
     ] as const) {
       const { ws } = await roundTrip(ROWS, { ...META, view });
@@ -171,8 +230,11 @@ describe("buildCbsWorkbook", () => {
       availableRows: 0,
       filterNote: "Filtered: matching “nothing”",
     });
-    expect(ws.getRow(3).getCell(1).value).toBe("Display Code");
-    expect(ws.actualRowCount).toBe(3);
+    expect(ws.getRow(CBS_SHEET_LAYOUT.header).getCell(1).value).toBe(
+      "Display Code",
+    );
+    // Nothing below the header: a narrow filter yields a header-only sheet.
+    expect(ws.getRow(CBS_SHEET_LAYOUT.firstDataRow).actualCellCount).toBe(0);
   });
 
   it("clamps grouping at Excel's maximum outline depth", async () => {

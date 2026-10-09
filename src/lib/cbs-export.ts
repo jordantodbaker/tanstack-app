@@ -25,7 +25,6 @@ export type CbsExportRow = {
   name: string;
   uom: string;
   accountDescription: string;
-  rowType: string;
   /** "YES" when the row carries a subcontract code, else "". */
   subCode: string;
   /** "YES" when the row carries a material code, else "". */
@@ -51,6 +50,12 @@ export type CbsExportColumn = {
  * Name is indented by outline level as well as grouped: Excel's grouping
  * controls hide rows but don't indent them, and a flat column of names loses
  * the shape the tree conveys. Two spaces per level matches how the page reads.
+ *
+ * Deliberately no row-type column. ORIGINAL / SUB / MATERIAL is our own
+ * vocabulary for how a row got into the dictionary, which is no business of
+ * whoever opens the file — and nothing is lost by dropping it: a generated
+ * row's cost type is the last segment of its display code, and the Sub Code
+ * and Material Code columns say what a row carries.
  */
 export const CBS_EXPORT_COLUMNS: readonly CbsExportColumn[] = [
   { header: "Display Code", width: 20, get: (r) => r.displayCode },
@@ -63,7 +68,6 @@ export const CBS_EXPORT_COLUMNS: readonly CbsExportColumn[] = [
   { header: "Level", width: 7, get: (r) => r.level },
   { header: "Sub Code", width: 10, get: (r) => r.subCode },
   { header: "Material Code", width: 14, get: (r) => r.materialCode },
-  { header: "Row Type", width: 11, get: (r) => r.rowType },
   {
     header: "Account Description",
     width: 46,
@@ -106,7 +110,6 @@ export function flattenCbsForExport<T extends CbsTreeItem>(
         name: labelFor(item),
         uom: item.uom,
         accountDescription: item.accountDescription,
-        rowType: item.rowType,
         // A context row is not an available code, so its flags are suppressed
         // here exactly as the badges are on the page.
         subCode: !item.context && cbsIsSubcontract(item) ? "YES" : "",
@@ -119,6 +122,32 @@ export function flattenCbsForExport<T extends CbsTreeItem>(
   walk(nodes);
   return out;
 }
+
+/**
+ * The project title with a redundant leading project number removed.
+ *
+ * `Project.displayId` is the number ("1901") and `Project.name` the title, but
+ * the names in use already start with the number ("1901 - FIME Engineering"),
+ * so printing both verbatim reads "1901 — 1901 - FIME Engineering". Only a
+ * leading copy of this project's own number plus one separator is stripped;
+ * anything else is left exactly as stored.
+ */
+export function cbsProjectTitle(displayId: string, name: string): string {
+  const id = displayId.trim();
+  if (id === "") return name.trim();
+  const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const stripped = name
+    .trim()
+    .replace(new RegExp(`^${escaped}\\s*[-–—:·]\\s*`), "");
+  // A name that is *only* the number has nothing left to show; keep it.
+  return stripped === "" ? name.trim() : stripped;
+}
+
+/**
+ * The metadata block above the header, as label/value pairs. Fixed length and
+ * order so the sheet's layout is stable for anyone reading it with a formula.
+ */
+export type CbsExportMetaRow = { label: string; value: string | number };
 
 /** The three CBS views that can be exported. */
 export const CBS_EXPORT_VIEWS = [
@@ -138,6 +167,6 @@ export const CBS_EXPORT_LABELS: Record<
     sheet: "Project Cost Codes",
     filename: "project-cost-code-list",
   },
-  codeBook: { sheet: "CBS Code Book", filename: "cbs-code-book" },
+  codeBook: { sheet: "Original Codes", filename: "cbs-original-codes" },
   dictionary: { sheet: "CBS Dictionary", filename: "cbs-dictionary" },
 };

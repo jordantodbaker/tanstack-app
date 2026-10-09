@@ -238,7 +238,7 @@ export function CbsTreePanel({
   onSelect?: (node: CbsTreeNode) => void;
   renderLeading?: (node: CbsTreeNode) => React.ReactNode;
   /** Which markers a row shows. Defaults to the row-type badge (what a
-   *  generated row IS); the CBS Code Book passes `cbsFlagBadges` instead,
+   *  generated row IS); the Original Codes view passes `cbsFlagBadges` instead,
    *  because that section lists no generated rows. */
   badgesFor?: (node: CbsTreeNode) => readonly CbsBadge[];
   emptyMessage: string;

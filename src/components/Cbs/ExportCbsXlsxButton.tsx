@@ -2,6 +2,7 @@ import * as React from "react";
 import { FileSpreadsheet } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { downloadBase64, XLSX_MIME } from "~/lib/csv-export";
+import { useSelectedProject } from "~/lib/selected-project";
 import { cbsExporterFor } from "~/utils/cbsExport";
 import type { CbsExportView } from "~/lib/cbs-export";
 import type { CbsRowFilter } from "~/lib/cbs-tree";
@@ -17,21 +18,21 @@ import { logger } from "~/lib/logger";
  */
 export function ExportCbsXlsxButton({
   view,
-  projectId,
   filter,
   disabled,
 }: {
   view: CbsExportView;
-  /** Required by the project-scoped view; ignored by the catalog views. */
-  projectId?: number | null;
   filter: CbsRowFilter;
   disabled?: boolean;
 }) {
   const [busy, setBusy] = React.useState(false);
   const [failed, setFailed] = React.useState(false);
+  // The selected project scopes the project view's rows, and labels the
+  // catalog views so a forwarded file says which desk it came from.
+  const { projectId } = useSelectedProject();
 
   const blocked =
-    disabled || (view === "projectCostCodes" && (projectId ?? null) === null);
+    disabled || (view === "projectCostCodes" && projectId === null);
 
   return (
     <Button
@@ -43,7 +44,7 @@ export function ExportCbsXlsxButton({
         setFailed(false);
         try {
           const result = await cbsExporterFor(view)({
-            data: { view, projectId: projectId ?? null, filter },
+            data: { view, projectId, filter },
           });
           downloadBase64(result.filename, result.base64, XLSX_MIME);
         } catch (err) {

@@ -26,12 +26,12 @@ function AdminMasterCbsPage() {
       <header className="mb-4">
         <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-800">
           <BookOpen className="size-6" />
-          CBS
+          CBS Code Book
         </h1>
         <p className="mt-1 max-w-3xl text-sm text-slate-500">
           The complete CBS, independent of any project. Use it to look up an
           account before granting it to a project on the Setup page. Read-only —
-          the catalog itself changes only through a CBS import.
+          the code book itself changes only through a CBS import.
         </p>
       </header>
 
@@ -39,7 +39,7 @@ function AdminMasterCbsPage() {
         <CbsDictionaryStatus
           isPending={query.isPending}
           isError={query.isError}
-          errorMessage="Failed to load the CBS catalog."
+          errorMessage="Failed to load the CBS Code Book."
         />
       ) : (
         <CbsDictionarySections items={query.data} />

@@ -542,7 +542,7 @@ export function cbsRowTypeBadges(item: CbsTreeItem): CbsBadge[] {
 
 /**
  * Badges by the workbook's own flags — what a row HAS. Used where only
- * original rows are listed (the CBS Code Book), so the row itself shows
+ * original rows are listed (the Original Codes view), so the row itself shows
  * whether it carries a sub code, a material code, or both.
  */
 export function cbsFlagBadges(item: CbsTreeItem): CbsBadge[] {

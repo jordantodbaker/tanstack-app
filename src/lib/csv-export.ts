@@ -53,20 +53,10 @@ export function rowsToCsv<T>(rows: T[], columns: CsvColumn<T>[]): string {
  * labels) correctly instead of as `â`.
  */
 export function downloadCsv(filename: string, csv: string): void {
-  const blob = new Blob(["﻿" + csv], {
-    type: "text/csv;charset=utf-8;",
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  // Release the blob URL after the click handler has had a chance to run.
-  // setTimeout 0 is enough — the click is synchronous in practice but the
-  // browser still needs the URL valid through the download dispatch.
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  downloadBlob(
+    filename,
+    new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" }),
+  );
 }
 
 /** Today's date in YYYY-MM-DD, suitable for filename stems. */
@@ -99,6 +89,9 @@ export function downloadBlob(filename: string, blob: Blob): void {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  // Release the blob URL after the click handler has had a chance to run.
+  // setTimeout 0 is enough — the click is synchronous in practice but the
+  // browser still needs the URL valid through the download dispatch.
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 

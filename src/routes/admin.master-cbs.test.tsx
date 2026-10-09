@@ -78,11 +78,11 @@ function renderPage() {
   );
 }
 
-describe("CBS Catalog", () => {
+describe("CBS Code Book", () => {
   it("renders the whole catalog with no project selected", () => {
     renderPage();
     expect(
-      screen.getByRole("heading", { name: "CBS" }),
+      screen.getByRole("heading", { name: "CBS Code Book" }),
     ).toBeInTheDocument();
     // Both disciplines are listed even though no project is selected.
     expect(screen.getAllByText("Civil").length).toBeGreaterThan(0);
@@ -92,7 +92,7 @@ describe("CBS Catalog", () => {
   it("splits originals from the full dictionary, as the Code Book split does", () => {
     renderPage();
     expect(
-      screen.getByRole("button", { name: /CBS Code Book/ }),
+      screen.getByRole("button", { name: /Original Codes/ }),
     ).toHaveTextContent("2 rows");
     expect(
       screen.getByRole("button", { name: /CBS Dictionary/ }),

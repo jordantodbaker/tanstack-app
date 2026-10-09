@@ -126,7 +126,7 @@ export const APPS: readonly AppDef[] = [
     home: "/project-cost-codes",
     links: [
       { to: "/project-cost-codes", label: "Project Cost Code List" },
-      { to: "/admin/master-cbs", label: "CBS Catalog", adminOnly: true },
+      { to: "/admin/master-cbs", label: "CBS Code Book", adminOnly: true },
     ],
   },
   {

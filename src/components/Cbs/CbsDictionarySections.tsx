@@ -92,7 +92,7 @@ export function CbsDictionarySections({ items }: { items: CbsTreeRow[] }) {
   return (
     <div className="flex flex-col gap-4">
       <CbsSection
-        title="CBS Code Book"
+        title="Original Codes"
         description="Every CBS row — original rows only. S / M mark a row's own Sub Code / Material Code."
         items={originals}
         badgesFor={cbsFlagBadgesFor}

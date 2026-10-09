@@ -142,7 +142,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             kind: "ul",
             minRole: "ADMINISTRATOR",
             items: [
-              "Setup inside the Field Estimate Form, the CBS Catalog, CVR Templates and the whole Administration app are visible to you as an administrator; other users do not see them.",
+              "Setup inside the Field Estimate Form, the CBS Code Book, CVR Templates and the whole Administration app are visible to you as an administrator; other users do not see them.",
             ],
           },
         ],
@@ -404,8 +404,8 @@ export const HELP_SECTIONS: HelpSection[] = [
             kind: "ul",
             items: [
               "Only the original CBS rows are listed. S means a code's own Sub Code is YES and M means its Material Code is YES; a code with both shows both.",
-              "The generated subcontract and material rows are not listed here — the badges already tell you which codes have them. Administrators can see both views over the whole catalog under Cost Breakdown Structure → CBS Catalog.",
-              'Export Excel downloads the rows currently shown — whatever the search box and the Subcontracts / Materials buttons left. The file keeps the level colours and turns the hierarchy into Excel row grouping, so it collapses in Excel the way it does on the page. Context rows come through italic and marked "Context only".',
+              "The generated subcontract and material rows are not listed here — the badges already tell you which codes have them. Administrators can see both views over the whole catalog under Cost Breakdown Structure → CBS Code Book.",
+              'Export Excel downloads the rows currently shown — whatever the search box and the Subcontracts / Materials buttons left. The sheet starts with a labelled block giving the project number and title, the scope, the filter applied, the code count and the export date, and the project number is in the filename too. The file keeps the level colours and turns the hierarchy into Excel row grouping, so it collapses in Excel the way it does on the page. Context rows come through italic and marked "Context only".',
               "Subcontracts and Materials narrow the tree to one kind of code: a row counts as a subcontract if its cost type (L7) is S or its Sub Code is YES, and as a material if its cost type is M or its Material Code is YES. Only matching rows and the parents needed to reach them stay on screen. Turning both on shows either kind; both narrow the search box rather than widening it.",
               'The L0–L5 swatches under "Level colours" open the tree to one code level at a time — L0 is just the discipline roots, L5 is everything. The one in force is outlined until you open or close a row yourself.',
               "Greyed-out italic rows are parent summaries the project was not granted. They appear only so the codes beneath them nest correctly — they carry no badges, are left out of the row count, and cannot be used on an estimate. Tick one in Setup to make it usable.",
@@ -729,7 +729,7 @@ export const HELP_SECTIONS: HelpSection[] = [
         blocks: [
           {
             kind: "p",
-            text: "The CBS Catalog (in the Cost Breakdown Structure app, administrators only) is the complete CBS in the same browser as the Project Cost Code List, but with no project allow-list applied and both the Code Book and full-dictionary views — it lists every account, including ones no project has been granted. It ignores the selected project entirely.",
+            text: "The CBS Code Book (in the Cost Breakdown Structure app, administrators only) is the complete CBS in the same browser as the Project Cost Code List, but with no project allow-list applied. It has two sections — Original Codes, and the CBS Dictionary with the generated S/M rows — and lists every account, including ones no project has been granted. It ignores the selected project entirely.",
           },
           {
             kind: "p",

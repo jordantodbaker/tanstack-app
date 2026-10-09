@@ -115,7 +115,7 @@ describe("ProjectCostCodeListView", () => {
   it("shows a single list, with no collapsible sections", () => {
     renderView();
     expect(screen.getAllByRole("tree")).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: /CBS Code Book/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Original Codes/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /CBS Dictionary/ })).toBeNull();
   });
 

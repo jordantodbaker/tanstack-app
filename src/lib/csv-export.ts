@@ -20,7 +20,9 @@ export type CsvColumn<T> = {
  * a comma, double-quote, CR, or LF, and escape embedded double-quotes by
  * doubling them. Numbers / booleans are stringified verbatim.
  */
-function escapeCell(value: string | number | boolean | null | undefined): string {
+function escapeCell(
+  value: string | number | boolean | null | undefined,
+): string {
   if (value === null || value === undefined) return "";
   const s = typeof value === "string" ? value : String(value);
   if (s === "") return "";
@@ -71,6 +73,37 @@ export function downloadCsv(filename: string, csv: string): void {
 export function todayStamp(): string {
   return new Date().toISOString().slice(0, 10);
 }
+
+/**
+ * Triggers a download of base64-encoded bytes — the shape a server fn can
+ * return, since its response is JSON. Used by the CBS Excel export, which is
+ * built server-side so the browser needn't carry exceljs.
+ */
+export function downloadBase64(
+  filename: string,
+  base64: string,
+  mimeType: string,
+): void {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  downloadBlob(filename, new Blob([bytes], { type: mimeType }));
+}
+
+/** Shared tail of every download: object URL, click, revoke. */
+export function downloadBlob(filename: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+export const XLSX_MIME =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 /**
  * Cell-value formatters shared by every per-entity CSV column module

@@ -17,7 +17,10 @@ vi.mock("~/lib/selected-version", () => ({
 }));
 
 vi.mock("~/utils/fefRows", () => ({
-  fefRowsQueryOptions: () => ({ queryKey: ["fefRows"], queryFn: async () => [] }),
+  fefRowsQueryOptions: () => ({
+    queryKey: ["fefRows"],
+    queryFn: async () => [],
+  }),
   saveFefRows: vi.fn(async () => []),
 }));
 
@@ -68,7 +71,9 @@ describe("useFefRowPersistence — version switch", () => {
 
     // No carryover: the grid is back to blank rows, not version 1's "Pipe".
     expect(names(result.current)).toEqual([]);
-    expect(result.current.every((r) => r.id.startsWith("__fe-blank-"))).toBe(true);
+    expect(result.current.every((r) => r.id.startsWith("__fe-blank-"))).toBe(
+      true,
+    );
   });
 
   it("hydrates the newly-selected version's rows on switch", () => {
@@ -153,12 +158,14 @@ function useGridHarness(versionId: number | null) {
 
 /** The rows each saveFefRows call would actually have persisted. */
 function persistedRowCounts() {
-  return vi.mocked(saveFefRows).mock.calls.map(
-    (c) =>
-      (c[0] as { data: { rows: FefRow[] } }).data.rows.filter(
-        (r) => !r.id.startsWith("__fe-blank-") || fefRowHasUserData(r),
-      ).length,
-  );
+  return vi
+    .mocked(saveFefRows)
+    .mock.calls.map(
+      (c) =>
+        (c[0] as { data: { rows: FefRow[] } }).data.rows.filter(
+          (r) => !r.id.startsWith("__fe-blank-") || fefRowHasUserData(r),
+        ).length,
+    );
 }
 
 describe("useFefRowPersistence — key leaves and returns", () => {
@@ -196,6 +203,193 @@ describe("useFefRowPersistence — key leaves and returns", () => {
       // ...and no save ever carried an empty sheet, which would have deleted
       // all five rows on the server.
       expect(persistedRowCounts()).not.toContain(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+/**
+ * The save itself, and the `allowClear` flag it carries.
+ *
+ * Every other test in this file asserts a save does NOT happen, which left the
+ * save body — and `allowClear` in particular — unexercised. That flag is what
+ * stands between an emptied grid and a deleted sheet: three sheets of work were
+ * lost this way (steel 144 rows, piping 444), each save reporting success. It
+ * is only true when the client has seen what the server holds AND the user
+ * actually removed rows.
+ */
+function useEditHarness(versionId: number | null) {
+  const [data, setData] = React.useState<FefRow[]>([blank(0)]);
+  const state = { data, setData } as unknown as FefTableState;
+  const api = useFefRowPersistence({
+    versionId,
+    discipline: "piping",
+    section: "TAKE_OFF",
+    state,
+    emptyRows: [blank(0)],
+  });
+  return { data, setData, notifyRowsRemoved: api.notifyRowsRemoved };
+}
+
+/** The `data` payload of the Nth saveFefRows call. */
+function saveCall(n: number) {
+  const call = vi.mocked(saveFefRows).mock.calls[n];
+  return (
+    call[0] as {
+      data: {
+        versionId: number;
+        discipline: string;
+        section: string;
+        rows: FefRow[];
+        allowClear: boolean;
+      };
+    }
+  ).data;
+}
+
+describe("useFefRowPersistence — the save itself", () => {
+  /**
+   * Fires the debounce, then lets the in-flight save settle. The second half
+   * matters: `rowsRemovedRef` is consumed in the save's `.then()`, so without
+   * flushing the microtask queue the flag outlives the save it belonged to.
+   */
+  async function settle() {
+    act(() => vi.advanceTimersByTime(1000));
+    await act(async () => {});
+  }
+
+  /** Mounts on a synced sheet of `loaded`, past hydration, with no saves yet. */
+  async function mountSynced(loaded: FefRow[]) {
+    h.loadedRows = loaded;
+    const r = renderHook(({ v }) => useEditHarness(v), {
+      initialProps: { v: 1 as number | null },
+    });
+    await settle();
+    expect(saveFefRows).not.toHaveBeenCalled();
+    return r;
+  }
+
+  it("persists a real edit, and does not authorise a clear", async () => {
+    vi.mocked(saveFefRows).mockClear();
+    vi.useFakeTimers();
+    try {
+      const { result } = await mountSynced([filled("A", "Alpha")]);
+
+      act(() =>
+        result.current.setData([filled("A", "Alpha"), filled("B", "Beta")]),
+      );
+      await settle();
+
+      expect(saveFefRows).toHaveBeenCalledTimes(1);
+      const sent = saveCall(0);
+      expect(names(sent.rows)).toEqual(["Alpha", "Beta"]);
+      expect(sent).toMatchObject({
+        versionId: 1,
+        discipline: "piping",
+        section: "TAKE_OFF",
+      });
+      // Nothing was deleted, so this save may not be read as a deletion.
+      expect(sent.allowClear).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("debounces a burst of edits into one save of the final state", async () => {
+    vi.mocked(saveFefRows).mockClear();
+    vi.useFakeTimers();
+    try {
+      const { result } = await mountSynced([filled("A", "Alpha")]);
+
+      act(() => result.current.setData([filled("A", "One")]));
+      act(() => vi.advanceTimersByTime(50));
+      act(() => result.current.setData([filled("A", "Two")]));
+      act(() => vi.advanceTimersByTime(50));
+      act(() => result.current.setData([filled("A", "Three")]));
+      await settle();
+
+      expect(saveFefRows).toHaveBeenCalledTimes(1);
+      expect(names(saveCall(0).rows)).toEqual(["Three"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("authorises a clear only once the user actually removed rows", async () => {
+    vi.mocked(saveFefRows).mockClear();
+    vi.useFakeTimers();
+    try {
+      const { result } = await mountSynced([
+        filled("A", "Alpha"),
+        filled("B", "Beta"),
+      ]);
+
+      // The grid's delete-rows path tells the hook the emptying was deliberate.
+      act(() => result.current.notifyRowsRemoved());
+      act(() => result.current.setData([blank(0)]));
+      await settle();
+
+      expect(saveFefRows).toHaveBeenCalledTimes(1);
+      expect(saveCall(0).allowClear).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("consumes the authorisation — a later save must justify its own clear", async () => {
+    vi.mocked(saveFefRows).mockClear();
+    vi.useFakeTimers();
+    try {
+      const { result } = await mountSynced([
+        filled("A", "Alpha"),
+        filled("B", "Beta"),
+      ]);
+
+      act(() => result.current.notifyRowsRemoved());
+      act(() => result.current.setData([filled("A", "Alpha")]));
+      await settle();
+      expect(saveCall(0).allowClear).toBe(true);
+
+      // A second edit with no further deletion must not inherit the flag,
+      // or any later client fault that empties the grid reads as a deletion.
+      act(() =>
+        result.current.setData([filled("A", "Alpha"), filled("C", "Gamma")]),
+      );
+      await settle();
+
+      expect(saveFefRows).toHaveBeenCalledTimes(2);
+      expect(saveCall(1).allowClear).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not carry removal intent across a version switch", async () => {
+    vi.mocked(saveFefRows).mockClear();
+    vi.useFakeTimers();
+    try {
+      h.loadedRows = [filled("A", "Alpha")];
+      const { result, rerender } = renderHook(({ v }) => useEditHarness(v), {
+        initialProps: { v: 1 as number | null },
+      });
+      await settle();
+
+      // Rows deleted on version 1 — then the user switches sheets instead of
+      // letting the save land. The intent belongs to the sheet it was
+      // expressed on, so an edit on version 2 must not clear version 2.
+      act(() => result.current.notifyRowsRemoved());
+      h.loadedRows = [filled("B", "Beta")];
+      act(() => rerender({ v: 2 }));
+      await settle();
+
+      act(() =>
+        result.current.setData([filled("B", "Beta"), filled("C", "Gamma")]),
+      );
+      await settle();
+
+      expect(saveFefRows).toHaveBeenCalledTimes(1);
+      expect(saveCall(0)).toMatchObject({ versionId: 2, allowClear: false });
     } finally {
       vi.useRealTimers();
     }

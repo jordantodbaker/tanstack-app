@@ -17,6 +17,8 @@ import {
 } from "~/components/Cbs/CbsTreePanel";
 import { CbsDetailPanel } from "~/components/Cbs/CbsDetailPanel";
 import { CbsTreeToolbar } from "~/components/Cbs/CbsTreeToolbar";
+import { ExportCbsXlsxButton } from "~/components/Cbs/ExportCbsXlsxButton";
+import type { CbsExportView } from "~/lib/cbs-export";
 import { useCbsTreeExpansion } from "~/components/Cbs/useCbsTreeExpansion";
 
 /**
@@ -111,12 +113,18 @@ export function CbsDictionaryBrowser({
   sourceNote,
   emptyMessage,
   showRowTypeCounts = true,
+  exportView,
+  exportProjectId,
 }: {
   items: CbsBrowserRow[];
   badgesFor?: (node: Node) => readonly CbsBadge[];
   sourceNote: string;
   emptyMessage: string;
   showRowTypeCounts?: boolean;
+  /** Which view to export as Excel. Omit to leave the button out. */
+  exportView?: CbsExportView;
+  /** Needed only by the project-scoped export. */
+  exportProjectId?: number | null;
 }) {
   const nodes = React.useMemo(() => buildCbsTree(items), [items]);
   const {
@@ -169,6 +177,14 @@ export function CbsDictionaryBrowser({
         onToggleSub={() => setSub((v) => !v)}
         onToggleMaterial={() => setMaterial((v) => !v)}
       >
+        {exportView && (
+          <ExportCbsXlsxButton
+            view={exportView}
+            projectId={exportProjectId}
+            filter={filter}
+            disabled={items.length === 0}
+          />
+        )}
         {filtering && (
           <span className="text-xs text-slate-500">
             {matches.toLocaleString()} match{matches === 1 ? "" : "es"}

@@ -44,6 +44,8 @@ function ProjectCostCodes({ projectId }: { projectId: number }) {
         sourceNote={SOURCE_NOTE}
         emptyMessage="No cost codes selected for this project."
         showRowTypeCounts={false}
+        exportView="projectCostCodes"
+        exportProjectId={projectId}
       />
     </div>
   );

@@ -2,6 +2,7 @@ import * as React from "react";
 import { ChevronRight } from "lucide-react";
 import type { CbsTreeRow } from "~/utils/cbs";
 import type { CbsBadge, CbsTreeNode } from "~/lib/cbs-tree";
+import type { CbsExportView } from "~/lib/cbs-export";
 import {
   CbsDictionaryBrowser,
   cbsFlagBadgesFor,
@@ -24,6 +25,7 @@ function CbsSection({
   sourceNote,
   emptyMessage,
   defaultOpen = false,
+  exportView,
 }: {
   title: string;
   description: string;
@@ -32,6 +34,7 @@ function CbsSection({
   sourceNote: string;
   emptyMessage: string;
   defaultOpen?: boolean;
+  exportView: CbsExportView;
 }) {
   const [open, setOpen] = React.useState(defaultOpen);
 
@@ -63,6 +66,7 @@ function CbsSection({
             badgesFor={badgesFor}
             sourceNote={sourceNote}
             emptyMessage={emptyMessage}
+            exportView={exportView}
           />
         </div>
       )}
@@ -95,6 +99,7 @@ export function CbsDictionarySections({ items }: { items: CbsTreeRow[] }) {
         sourceNote={MASTER_SOURCE_NOTE}
         emptyMessage={MASTER_EMPTY}
         defaultOpen
+        exportView="codeBook"
       />
       <CbsSection
         title="CBS Dictionary"
@@ -103,6 +108,7 @@ export function CbsDictionarySections({ items }: { items: CbsTreeRow[] }) {
         sourceNote={MASTER_SOURCE_NOTE}
         emptyMessage={MASTER_EMPTY}
         defaultOpen
+        exportView="dictionary"
       />
     </div>
   );

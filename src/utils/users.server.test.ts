@@ -27,11 +27,18 @@ vi.mock("@clerk/tanstack-react-start/server", () => ({
 }));
 
 import {
+  adminHandler,
+  adminHandlerNoInput,
+  assertCreatorOrAdmin,
   assertProjectAccess,
   projectIdScopedHandler,
   projectScopedHandler,
+  requireAdmin,
   requireProjectAccess,
+  requireRecordAccess,
+  requireRole,
   requireVersionAccess,
+  versionScopedHandler,
 } from "./users.server";
 
 const admin: CurrentUser = {
@@ -46,6 +53,18 @@ const user: CurrentUser = {
   email: "user@example.com",
   role: "USER",
 };
+const approver: CurrentUser = {
+  id: 3,
+  clerkId: "clerk-approver",
+  email: "approver@example.com",
+  role: "APPROVER",
+};
+
+/** Puts `who` behind the Clerk + user-lookup mocks, or nobody when null. */
+function signedInAs(who: CurrentUser | null) {
+  authFn.mockResolvedValue({ userId: who?.clerkId ?? null });
+  userFindUnique.mockResolvedValue(who);
+}
 
 describe("assertProjectAccess", () => {
   beforeEach(() => userFindFirst.mockReset());
@@ -227,7 +246,9 @@ describe("projectScopedHandler / projectIdScopedHandler", () => {
     signIn(user, true);
     const body = vi.fn().mockResolvedValue("ok");
 
-    await expect(projectIdScopedHandler(body)({ data: 12 })).resolves.toBe("ok");
+    await expect(projectIdScopedHandler(body)({ data: 12 })).resolves.toBe(
+      "ok",
+    );
     expect(userFindFirst).toHaveBeenCalledWith({
       where: { id: user.id, projects: { some: { id: 12 } } },
       select: { id: true },
@@ -254,5 +275,276 @@ describe("projectScopedHandler / projectIdScopedHandler", () => {
       projectIdScopedHandler(async () => "ok")({ data: 999 }),
     ).resolves.toBe("ok");
     expect(userFindFirst).not.toHaveBeenCalled();
+  });
+});
+
+describe("requireRole / requireAdmin", () => {
+  beforeEach(() => {
+    authFn.mockReset();
+    userFindUnique.mockReset();
+  });
+
+  it("throws when nobody is signed in", async () => {
+    signedInAs(null);
+    await expect(requireRole("USER")).rejects.toThrow(
+      "Unauthorized: not signed in",
+    );
+    await expect(requireAdmin()).rejects.toThrow("Unauthorized: not signed in");
+  });
+
+  it("admits a role at or above the minimum and names the shortfall otherwise", async () => {
+    signedInAs(approver);
+    await expect(requireRole("USER")).resolves.toEqual(approver);
+    await expect(requireRole("APPROVER")).resolves.toEqual(approver);
+    // The rung above is refused, and the message says which rung was needed.
+    await expect(requireRole("ADMINISTRATOR")).rejects.toThrow(
+      "Forbidden: requires ADMINISTRATOR privilege",
+    );
+  });
+
+  it("refuses a plain USER admin privilege", async () => {
+    signedInAs(user);
+    await expect(requireAdmin()).rejects.toThrow(
+      "Forbidden: requires ADMINISTRATOR privilege",
+    );
+  });
+
+  it("returns the actor to an administrator", async () => {
+    signedInAs(admin);
+    await expect(requireAdmin()).resolves.toEqual(admin);
+  });
+});
+
+/**
+ * 47 server functions are gated by nothing but these two wrappers, so the
+ * property that matters is the same one the project-scoped pair is pinned on:
+ * a failed check means the body never runs at all.
+ *
+ * This is the shape of a hole that reached production once already —
+ * `fetchSetupCbsItems` returned the whole CBS catalog with no role gate while
+ * its admin-only twin returned identical rows.
+ */
+describe("adminHandler / adminHandlerNoInput", () => {
+  beforeEach(() => {
+    authFn.mockReset();
+    userFindUnique.mockReset();
+  });
+
+  it("runs the body for an administrator, passing the args through", async () => {
+    signedInAs(admin);
+    const body = vi.fn().mockResolvedValue("ok");
+
+    await expect(adminHandler(body)({ data: { x: 1 } })).resolves.toBe("ok");
+    expect(body).toHaveBeenCalledWith({ data: { x: 1 } });
+  });
+
+  it("never invokes the body for a non-admin", async () => {
+    signedInAs(user);
+    const body = vi.fn();
+
+    await expect(adminHandler(body)({ data: 1 })).rejects.toThrow(
+      "Forbidden: requires ADMINISTRATOR privilege",
+    );
+    expect(body).not.toHaveBeenCalled();
+  });
+
+  it("never invokes the body for an APPROVER either", async () => {
+    // APPROVER sits between USER and ADMINISTRATOR; admin endpoints are not
+    // "anyone above USER".
+    signedInAs(approver);
+    const body = vi.fn();
+
+    await expect(adminHandler(body)({ data: 1 })).rejects.toThrow(
+      "Forbidden: requires ADMINISTRATOR privilege",
+    );
+    expect(body).not.toHaveBeenCalled();
+  });
+
+  it("never invokes the body when nobody is signed in", async () => {
+    signedInAs(null);
+    const body = vi.fn();
+
+    await expect(adminHandler(body)({ data: 1 })).rejects.toThrow(
+      "Unauthorized: not signed in",
+    );
+    expect(body).not.toHaveBeenCalled();
+  });
+
+  it("checks before running, not after", async () => {
+    signedInAs(user);
+    const order: string[] = [];
+    userFindUnique.mockImplementation(async () => {
+      order.push("check");
+      return user;
+    });
+
+    await expect(
+      adminHandler(async () => {
+        order.push("body");
+      })({ data: 1 }),
+    ).rejects.toThrow();
+    expect(order).toEqual(["check"]);
+  });
+
+  it("gates the no-input variant the same way", async () => {
+    signedInAs(user);
+    const body = vi.fn();
+    await expect(adminHandlerNoInput(body)()).rejects.toThrow(
+      "Forbidden: requires ADMINISTRATOR privilege",
+    );
+    expect(body).not.toHaveBeenCalled();
+
+    signedInAs(admin);
+    const ok = vi.fn().mockResolvedValue(7);
+    await expect(adminHandlerNoInput(ok)()).resolves.toBe(7);
+    expect(ok).toHaveBeenCalledWith();
+  });
+});
+
+/**
+ * The take-off data is version-scoped, so this wrapper is what stands between
+ * one project's estimate rows and another project's users.
+ */
+describe("versionScopedHandler", () => {
+  beforeEach(() => {
+    authFn.mockReset();
+    userFindUnique.mockReset();
+    userFindFirst.mockReset();
+    estimateVersionFindUnique.mockReset();
+  });
+
+  it("runs the body once the version's project checks out", async () => {
+    signedInAs(user);
+    estimateVersionFindUnique.mockResolvedValue({ projectId: 12 });
+    userFindFirst.mockResolvedValue({ id: user.id });
+    const body = vi.fn().mockResolvedValue("rows");
+
+    await expect(
+      versionScopedHandler(body)({ data: { versionId: 5 } }),
+    ).resolves.toBe("rows");
+    expect(body).toHaveBeenCalledWith({ data: { versionId: 5 } });
+  });
+
+  it("never invokes the body when the caller can't reach the version's project", async () => {
+    signedInAs(user);
+    estimateVersionFindUnique.mockResolvedValue({ projectId: 9 });
+    userFindFirst.mockResolvedValue(null);
+    const body = vi.fn();
+
+    await expect(
+      versionScopedHandler(body)({ data: { versionId: 5 } }),
+    ).rejects.toThrow("Forbidden: no access to project 9");
+    expect(body).not.toHaveBeenCalled();
+  });
+
+  it("never invokes the body for a version that doesn't exist", async () => {
+    signedInAs(user);
+    estimateVersionFindUnique.mockResolvedValue(null);
+    const body = vi.fn();
+
+    await expect(
+      versionScopedHandler(body)({ data: { versionId: 404 } }),
+    ).rejects.toThrow("Estimate version 404 not found");
+    expect(body).not.toHaveBeenCalled();
+  });
+
+  it("gates on the versionId in `data`, not one the body chooses", async () => {
+    signedInAs(admin);
+    estimateVersionFindUnique.mockResolvedValue({ projectId: 1 });
+
+    await versionScopedHandler(async () => null)({ data: { versionId: 77 } });
+    expect(estimateVersionFindUnique).toHaveBeenCalledWith({
+      where: { id: 77 },
+      select: { projectId: true },
+    });
+  });
+});
+
+/**
+ * Edit/delete endpoints whose input is a record id: the owning project has to
+ * be read off the row BEFORE authorizing, or the caller picks their own scope.
+ */
+describe("requireRecordAccess", () => {
+  beforeEach(() => {
+    authFn.mockReset();
+    userFindUnique.mockReset();
+    userFindFirst.mockReset();
+  });
+
+  const delegateFor = (row: unknown) => ({
+    findUniqueOrThrow: vi.fn().mockResolvedValue(row),
+  });
+
+  it("loads the row, authorizes its project, and hands both back", async () => {
+    signedInAs(user);
+    userFindFirst.mockResolvedValue({ id: user.id });
+    const delegate = delegateFor({ projectId: 4, label: "Sep 2026" });
+
+    await expect(
+      requireRecordAccess(delegate, 31, { projectId: true, label: true }),
+    ).resolves.toEqual({
+      actor: user,
+      projectId: 4,
+      row: { projectId: 4, label: "Sep 2026" },
+    });
+    // Read with the caller's own select, by the id given.
+    expect(delegate.findUniqueOrThrow).toHaveBeenCalledWith({
+      where: { id: 31 },
+      select: { projectId: true, label: true },
+    });
+  });
+
+  it("rejects when the row's project is out of reach", async () => {
+    signedInAs(user);
+    userFindFirst.mockResolvedValue(null);
+
+    await expect(
+      requireRecordAccess(delegateFor({ projectId: 8 }), 31, {
+        projectId: true,
+      }),
+    ).rejects.toThrow("Forbidden: no access to project 8");
+  });
+
+  it("never reads the row when nobody is signed in", async () => {
+    signedInAs(null);
+    const delegate = delegateFor({ projectId: 1 });
+
+    await expect(
+      requireRecordAccess(delegate, 31, { projectId: true }),
+    ).rejects.toThrow("Unauthorized: not signed in");
+    expect(delegate.findUniqueOrThrow).not.toHaveBeenCalled();
+  });
+});
+
+describe("assertCreatorOrAdmin", () => {
+  const msg = "Only the author or an administrator may do that";
+
+  it("admits the row's creator", () => {
+    expect(() =>
+      assertCreatorOrAdmin(user, { createdById: user.id }, msg),
+    ).not.toThrow();
+  });
+
+  it("admits an administrator who did not create it", () => {
+    expect(() =>
+      assertCreatorOrAdmin(admin, { createdById: 999 }, msg),
+    ).not.toThrow();
+  });
+
+  it("rejects a non-admin who did not create it", () => {
+    expect(() => assertCreatorOrAdmin(user, { createdById: 999 }, msg)).toThrow(
+      msg,
+    );
+  });
+
+  it("rejects a non-admin on an unowned row", () => {
+    // createdById null must not read as "matches nobody, so allow" — a row
+    // predating the column would otherwise be editable by anyone.
+    expect(() =>
+      assertCreatorOrAdmin(user, { createdById: null }, msg),
+    ).toThrow(msg);
+    expect(() =>
+      assertCreatorOrAdmin(admin, { createdById: null }, msg),
+    ).not.toThrow();
   });
 });

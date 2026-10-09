@@ -87,7 +87,10 @@ export function Sidebar({
           <X size={18} />
         </button>
 
-        <nav className="flex-1 overflow-y-auto py-3">
+        {/* `min-h-0` so this flex child may shrink below its content height —
+            without it `overflow-y-auto` never engages and a long discipline
+            list pushes the column taller than the viewport. */}
+        <nav className="min-h-0 flex-1 overflow-y-auto py-3">
           {/* Mobile/tablet block — the header hides the project pickers below
               `lg` to avoid overflow, so they live here instead. The app
               switcher stays in the header at every width. */}
@@ -117,11 +120,16 @@ export function Sidebar({
               isAdmin={isAdmin}
             />
           )}
-        </nav>
 
-        {app.showRecents && (
-          <RecentsSection collapsed={collapsed} onItemClick={onMobileClose} />
-        )}
+          {/* Inside the scroll area, directly under the links. It used to be a
+              sibling below the `flex-1` nav — the slot the Admin block once
+              occupied, where being pinned to the bottom was the point. With
+              the Change Log's five links above it that left a screen-height
+              gap, so it now simply follows them. */}
+          {app.showRecents && (
+            <RecentsSection collapsed={collapsed} onItemClick={onMobileClose} />
+          )}
+        </nav>
       </aside>
     </>
   );
@@ -353,9 +361,9 @@ function DisciplineNav({
 }
 
 /**
- * Compact "Recently viewed" list pinned to the bottom of the Change Log's
- * sidebar — the five entity types it tracks (changes, FCOs, RFIs, trends,
- * PCOs) all live in that one app, so it shows nowhere else.
+ * Compact "Recently viewed" list, shown under the Change Log's nav links — the
+ * five entity types it tracks (changes, FCOs, RFIs, trends, PCOs) all live in
+ * that one app, so it appears nowhere else.
  *
  * Scoped to the currently-selected project: switching projects resets the list
  * to that project's recents (the full per-user log is kept in
@@ -396,7 +404,7 @@ function RecentsSection({
   if (recents.length === 0) return null;
 
   return (
-    <div className="border-t border-slate-200 py-1 shrink-0">
+    <div className="mt-2 border-t border-slate-200 pt-1">
       <button
         onClick={() => setIsOpen((o) => !o)}
         className="w-full flex items-center gap-3 py-2 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"

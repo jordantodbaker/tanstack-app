@@ -208,6 +208,25 @@ export function parseCbsDisplayCode(
   };
 }
 
+/**
+ * Restores the l1-l6 segments that the CBS wire payload omits.
+ *
+ * They are pure slices of the display code — the import derives them from the
+ * code in the first place rather than trusting the workbook's own L1-L7
+ * columns (see `prisma/cbs-workbook.ts`), and a check across all 7,169 rows
+ * found none where the stored columns differ from the parse. So the two were
+ * the same data twice: leaving them out cut the catalog payload from 134 KB to
+ * 104 KB gzipped, at the cost of one slice per segment per row.
+ *
+ * Applied in the query functions (see `~/utils/cbs`), so it runs once per
+ * fetch rather than once per component that reads the cache.
+ */
+export function withCbsLevels<T extends { displayCode: string }>(
+  row: T,
+): T & Pick<CbsTreeItem, "l1" | "l2" | "l3" | "l4" | "l5" | "l6"> {
+  return { ...row, ...parseCbsDisplayCode(row.displayCode) };
+}
+
 /** Everything but the trailing cost-type segment. */
 function codePrefix(code: string): string {
   const dash = code.lastIndexOf("-");

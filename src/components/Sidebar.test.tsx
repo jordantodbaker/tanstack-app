@@ -62,9 +62,29 @@ vi.mock("~/utils/projectTotals", () => ({
 vi.mock("~/utils/userPreferences", () => ({
   userRecentsQueryOptions: () => ({
     queryKey: ["recents"],
-    queryFn: async () => [],
+    queryFn: async () => RECENTS,
   }),
 }));
+
+/** Two recents on the selected project, so the section actually renders. */
+const RECENTS = [
+  {
+    entityType: "FieldChangeOrder",
+    entityId: 11,
+    projectId: 1,
+    number: "098",
+    title: "Relocate pipe rack",
+    viewedAt: "2026-10-09T00:00:00.000Z",
+  },
+  {
+    entityType: "Rfi",
+    entityId: 12,
+    projectId: 1,
+    number: "044",
+    title: "Weld spec clarification",
+    viewedAt: "2026-10-08T00:00:00.000Z",
+  },
+];
 
 import { Sidebar } from "./Sidebar";
 import { appById } from "~/config/apps";
@@ -81,7 +101,7 @@ function renderSidebar(app: Parameters<typeof Sidebar>[0]["app"]) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   qc.setQueryData(["allowed-l1"], ALLOWED_L1);
   qc.setQueryData(["invalid-by-discipline"], { civil: 3 });
-  qc.setQueryData(["recents"], []);
+  qc.setQueryData(["recents"], RECENTS);
   return render(
     <QueryClientProvider client={qc}>
       <Sidebar app={app} />
@@ -171,10 +191,30 @@ describe("Sidebar", () => {
 
   it("shows Recently viewed only in the app whose records it tracks", () => {
     renderSidebar(appById.changes);
-    // Seeded empty, so the section self-hides; what matters is that the other
-    // apps don't even mount it.
-    expect(appById.changes.showRecents).toBe(true);
-    expect(appById.estimate.showRecents).toBeUndefined();
-    expect(appById.reports.showRecents).toBeUndefined();
+    expect(screen.getByText("Recently viewed")).toBeInTheDocument();
+    expect(screen.getByText("Relocate pipe rack")).toBeInTheDocument();
+
+    cleanup();
+    renderSidebar(appById.estimate);
+    expect(screen.queryByText("Recently viewed")).toBeNull();
+    cleanup();
+    renderSidebar(appById.reports);
+    expect(screen.queryByText("Recently viewed")).toBeNull();
+  });
+
+  it("keeps Recently viewed inside the scrolling nav, under the links", () => {
+    // It used to be a sibling of the `flex-1` nav, which stretched to the full
+    // column height and left a screen-height gap above it. Being INSIDE the
+    // nav is what keeps it beneath the links instead of on the viewport floor.
+    renderSidebar(appById.changes);
+    const navEl = within(nav("Change Log")).getByRole("navigation");
+    const recents = within(navEl).getByText("Recently viewed");
+    expect(navEl).toContainElement(recents);
+
+    // And it follows the links rather than preceding them.
+    const all = [...navEl.querySelectorAll("*")];
+    expect(all.indexOf(recents)).toBeGreaterThan(
+      all.indexOf(within(navEl).getByText("Trends")),
+    );
   });
 });

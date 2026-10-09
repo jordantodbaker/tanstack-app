@@ -50,5 +50,12 @@ export const RECENT_ENTITY_ROUTES: Record<
  *  display cap so project-filtering doesn't run out of items immediately. */
 export const RECENTS_MAX_STORED = 20;
 
-/** Most we ever render in the sidebar. */
-export const RECENTS_MAX_DISPLAYED = 5;
+/**
+ * Most we ever render in the sidebar.
+ *
+ * Ten rather than five because the list now follows the Change Log's five nav
+ * links instead of being pinned to the bottom of the column: there is real
+ * room under it, and 20 are stored, so a shorter list was leaving both the
+ * space and the data unused. The nav scrolls when it doesn't fit.
+ */
+export const RECENTS_MAX_DISPLAYED = 10;

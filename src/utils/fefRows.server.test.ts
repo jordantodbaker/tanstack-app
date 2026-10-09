@@ -78,7 +78,11 @@ vi.mock("~/lib/logger", () => ({
 
 import { saveFefRows } from "./fefRows";
 
-const BASE = { versionId: 1, discipline: "piping", section: "TAKE_OFF" } as const;
+const BASE = {
+  versionId: 1,
+  discipline: "piping",
+  section: "TAKE_OFF",
+} as const;
 
 /** A blank template row the grid pads the sheet with — no user data. */
 const blank = (i: number): FefRow => makeFefRow({ id: `__fe-blank-${i}` });
@@ -95,7 +99,9 @@ const dbRow = (id: number, cbsCode: string, position: number) => ({
 });
 
 const save = (rows: FefRow[], allowClear?: boolean) =>
-  saveFefRows({ data: { ...BASE, rows, ...(allowClear ? { allowClear } : {}) } });
+  saveFefRows({
+    data: { ...BASE, rows, ...(allowClear ? { allowClear } : {}) },
+  });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -178,7 +184,10 @@ describe("which rows get persisted", () => {
   it("keeps a blank-id row once the user has typed into it", async () => {
     txFindMany.mockResolvedValue([]);
 
-    await save([blank(0), makeFefRow({ id: "__fe-blank-1", description: "x" })]);
+    await save([
+      blank(0),
+      makeFefRow({ id: "__fe-blank-1", description: "x" }),
+    ]);
 
     expect(persistedCount()).toBe(1);
   });
@@ -272,10 +281,36 @@ describe("the write transaction", () => {
 
     await save([filled("611-A", "pump")]);
 
-    expect(txFindMany).toHaveBeenCalledWith({
-      where: { versionId: 1, discipline: "piping", section: "TAKE_OFF" },
-      orderBy: { position: "asc" },
-    });
+    expect(txFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { versionId: 1, discipline: "piping", section: "TAKE_OFF" },
+        orderBy: { position: "asc" },
+      }),
+    );
+  });
+
+  it("re-reads only the columns the client consumes", async () => {
+    // FefRow has ~70 columns and `toFefRow` forwards whatever it is handed, so
+    // without an explicit select the save response carried projectId,
+    // versionId, discipline, section and the timestamps to every client — on
+    // the sheet estimators keep open all day.
+    txFindMany.mockResolvedValue([]);
+
+    await save([filled("611-A", "pump")]);
+
+    const { select } = txFindMany.mock.calls[0][0];
+    expect(select).toBeDefined();
+    expect(select).toMatchObject({ id: true, position: true, cbsCode: true });
+    for (const serverOnly of [
+      "projectId",
+      "versionId",
+      "discipline",
+      "section",
+      "createdAt",
+      "updatedAt",
+    ]) {
+      expect(select).not.toHaveProperty(serverOnly);
+    }
   });
 });
 

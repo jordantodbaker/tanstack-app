@@ -21,6 +21,7 @@ import {
   selectionStateFromCounts,
   type CbsTreeItem,
   type CbsTreeNode,
+  withCbsLevels,
 } from "./cbs-tree";
 
 /** A text-only filter — what every search test used before the type toggles. */
@@ -557,6 +558,51 @@ describe("pruneCbsTree", () => {
 
   it("counts every self-match", () => {
     expect(pruneCbsTree(tree, text("601")).matches).toBe(3);
+  });
+});
+
+/**
+ * `withCbsLevels` restores the l1-l6 segments the wire omits. It is the one
+ * place that reconstruction happens, so a slice being off by one would put
+ * every row in the wrong branch of every tree.
+ */
+describe("withCbsLevels", () => {
+  it("rebuilds the segments the server no longer sends", () => {
+    expect(
+      withCbsLevels({ displayCode: "052-15-0500-00-L", name: "Supers" }),
+    ).toEqual({
+      displayCode: "052-15-0500-00-L",
+      name: "Supers",
+      l1: "052",
+      l2: "15",
+      l3: "05",
+      l4: "00",
+      l5: "00",
+      l6: "L",
+    });
+  });
+
+  it("agrees with the parse the tree itself uses", () => {
+    for (const code of [
+      "100-00-0000-00-0",
+      "052-15-0500-00-L",
+      "601-05-0000-ST-L",
+      "600-00-0000-00-M",
+      "970-00-0000-00-0",
+    ]) {
+      const { displayCode, ...levels } = withCbsLevels({ displayCode: code });
+      expect(levels).toEqual(parseCbsDisplayCode(code));
+    }
+  });
+
+  it("keeps the row's other fields, flags included", () => {
+    const row = withCbsLevels({
+      displayCode: "100-00-0000-00-0",
+      id: 7,
+      subReporting: true,
+      context: true,
+    });
+    expect(row).toMatchObject({ id: 7, subReporting: true, context: true });
   });
 });
 

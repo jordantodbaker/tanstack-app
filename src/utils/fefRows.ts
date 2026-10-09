@@ -131,6 +131,25 @@ type FefRowDb = {
   position: number;
 } & Record<FefDataColumn, string>;
 
+/**
+ * Exactly the columns `toFefRow` consumes, from the same list `FefRowDb` is
+ * built from.
+ *
+ * Without it `findMany` read all ~70 FefRow columns and `toFefRow` forwarded
+ * the leftovers — projectId, versionId, discipline, section, createdAt,
+ * updatedAt — to the client inside its `...fields` spread, despite the type
+ * above claiming the narrow shape. About 1 KB per row on the wire, on the
+ * sheet estimators keep open all day.
+ */
+const fefRowSelect = {
+  id: true,
+  position: true,
+  ...(Object.fromEntries(FEF_DATA_COLUMNS.map((c) => [c, true])) as Record<
+    FefDataColumn,
+    true
+  >),
+} satisfies Prisma.FefRowSelect;
+
 const toFefRow = (r: FefRowDb): FefRow => {
   const { id, cbsCode, position: _position, ...fields } = r;
   return {
@@ -150,6 +169,7 @@ export const fetchFefRows = createServerFn({ method: "GET" })
           section: data.section,
         },
         orderBy: { position: "asc" },
+        select: fefRowSelect,
       });
       return rows.map(toFefRow);
     }),
@@ -161,7 +181,11 @@ export const fefRowsQueryOptions = (input: {
   section: FefSectionKey;
 }) =>
   queryOptions({
-    queryKey: qk.fefRows.sheet(input.versionId, input.discipline, input.section),
+    queryKey: qk.fefRows.sheet(
+      input.versionId,
+      input.discipline,
+      input.section,
+    ),
     queryFn: () =>
       input.versionId === null
         ? Promise.resolve([] as FefRow[])
@@ -216,6 +240,7 @@ export const saveFefRows = createServerFn({ method: "POST" })
           const existing = await prisma.fefRow.findMany({
             where: { versionId, discipline, section },
             orderBy: { position: "asc" },
+            select: fefRowSelect,
           });
           // Deleting a populated sheet is only ever right when the client
           // knew what was there AND the user actually removed the rows. The
@@ -274,6 +299,7 @@ export const saveFefRows = createServerFn({ method: "POST" })
           return tx.fefRow.findMany({
             where: { versionId, discipline, section },
             orderBy: { position: "asc" },
+            select: fefRowSelect,
           });
         });
 

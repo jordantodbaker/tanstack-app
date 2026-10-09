@@ -6,7 +6,7 @@ import { prisma } from "../server/db";
 import { z } from "zod";
 import { Id, parseProjectIdInput } from "~/lib/validators";
 import { adminHandlerNoInput, projectIdScopedHandler } from "./users.server";
-import { cbsAncestorCodes } from "~/lib/cbs-tree";
+import { cbsAncestorCodes, withCbsLevels } from "~/lib/cbs-tree";
 
 const StringArr = z.array(z.string());
 const StringArrParser = (input: unknown) => StringArr.parse(input);
@@ -204,12 +204,9 @@ export const fetchCbsItemsByL1EndsWith = createServerFn({ method: "GET" })
  */
 export const cbsTreeRowSelect = {
   id: true,
-  l1: true,
-  l2: true,
-  l3: true,
-  l4: true,
-  l5: true,
-  l6: true,
+  // l1-l6 are deliberately absent: every one of them is a slice of the display
+  // code, so sending both duplicated ~420 KB of the catalog's 1.9 MB. The
+  // query functions restore them with `withCbsLevels` (in ~/lib/cbs-tree).
   displayCode: true,
   name: true,
   uom: true,
@@ -221,16 +218,22 @@ export const cbsTreeRowSelect = {
   materialCode: true,
 } satisfies Prisma.CbsItemSelect;
 
-/** One row as the CBS tree views receive it. */
-export type CbsTreeRow = Prisma.CbsItemGetPayload<{
+/** A CBS row exactly as it crosses the wire — no level segments. */
+export type CbsWireRow = Prisma.CbsItemGetPayload<{
   select: typeof cbsTreeRowSelect;
 }>;
+
+/** One row as the CBS tree views receive it: the wire row plus its levels. */
+export type CbsTreeRow = ReturnType<typeof withCbsLevels<CbsWireRow>>;
 
 /**
  * A tree row as the shared browser receives it. The whole-catalog views pass
  * plain `CbsTreeRow`s; the project-scoped view flags pulled-in ancestors.
  */
 export type CbsBrowserRow = CbsTreeRow & { context?: boolean };
+
+/** What `fetchProjectCostCodes` returns, before the levels are restored. */
+type ProjectCostCodeWireRow = CbsWireRow & { context?: boolean };
 
 /**
  * The cost codes a project may use: the ORIGINAL Master CBS rows it has been
@@ -252,7 +255,7 @@ export const fetchProjectCostCodes = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
   .handler(
     projectIdScopedHandler(
-      async ({ data: projectId }): Promise<CbsBrowserRow[]> => {
+      async ({ data: projectId }): Promise<ProjectCostCodeWireRow[]> => {
         const granted = await prisma.cbsItem.findMany({
           where: {
             rowType: "ORIGINAL",
@@ -302,7 +305,7 @@ export const fetchCbsCatalog = createServerFn({ method: "GET" }).handler(
 export const cbsCatalogQueryOptions = () =>
   queryOptions({
     queryKey: qk.cbs.catalog(),
-    queryFn: () => fetchCbsCatalog(),
+    queryFn: async () => (await fetchCbsCatalog()).map(withCbsLevels),
     // The catalog changes only on a CBS re-import.
     staleTime: Infinity,
   });
@@ -310,7 +313,8 @@ export const cbsCatalogQueryOptions = () =>
 export const projectCostCodesQueryOptions = (projectId: number) =>
   queryOptions({
     queryKey: qk.cbs.projectCostCodes(projectId),
-    queryFn: () => fetchProjectCostCodes({ data: projectId }),
+    queryFn: async () =>
+      (await fetchProjectCostCodes({ data: projectId })).map(withCbsLevels),
     // Changes only when Setup saves (which invalidates this key) or the CBS
     // is re-imported; don't re-ship ~thousands of rows on every page mount.
     staleTime: Infinity,

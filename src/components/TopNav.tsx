@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Link } from "@tanstack/react-router";
 import { ChevronDown } from "lucide-react";
-import { TOP_NAV_LINKS, type TopNavLink } from "~/config/top-nav-links";
+import { visibleAppLinks, type AppDef, type AppNavLink } from "~/config/apps";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,7 +10,12 @@ import {
 } from "~/components/ui/dropdown-menu";
 
 /**
- * Header navigation that collapses what doesn't fit into a "More" menu.
+ * The current app's pages, collapsing whatever doesn't fit into a "More" menu.
+ *
+ * It lists one app, not the whole product — the "More" menu exists because the
+ * previous global nav had nine links across four unrelated domains and
+ * overflowed on anything short of a wide screen. Moving between apps is the
+ * `AppSwitcher`'s job.
  *
  * It used to be a plain flex row with `flex-1 min-w-0`, which let the NAV box
  * shrink but not the links inside it: they kept their natural width and simply
@@ -59,10 +64,17 @@ export function computeVisibleCount(
   return fit;
 }
 
-export function TopNav({ isAdmin }: { isAdmin: boolean }) {
+export function TopNav({
+  app,
+  isAdmin,
+}: {
+  /** The app whose pages to list; null on the launcher and /help. */
+  app: AppDef | null;
+  isAdmin: boolean;
+}) {
   const links = React.useMemo(
-    () => TOP_NAV_LINKS.filter((l) => !l.adminOnly || isAdmin),
-    [isAdmin],
+    () => (app ? visibleAppLinks(app, isAdmin) : []),
+    [app, isAdmin],
   );
 
   const navRef = React.useRef<HTMLElement | null>(null);
@@ -75,7 +87,9 @@ export function TopNav({ isAdmin }: { isAdmin: boolean }) {
     if (!nav || !probe || typeof window === "undefined") return;
 
     const measure = () => {
-      const items = [...probe.querySelectorAll<HTMLElement>("[data-nav-probe]")];
+      const items = [
+        ...probe.querySelectorAll<HTMLElement>("[data-nav-probe]"),
+      ];
       const more = probe.querySelector<HTMLElement>("[data-nav-more-probe]");
       if (items.length !== links.length || !more) return;
       setVisibleCount(
@@ -105,7 +119,7 @@ export function TopNav({ isAdmin }: { isAdmin: boolean }) {
   const shown = links.slice(0, visibleCount);
   const hidden = links.slice(visibleCount);
 
-  const renderLink = (l: TopNavLink) => (
+  const renderLink = (l: AppNavLink) => (
     <Link
       key={l.to}
       to={l.to}
@@ -117,6 +131,8 @@ export function TopNav({ isAdmin }: { isAdmin: boolean }) {
       {l.label}
     </Link>
   );
+
+  if (links.length === 0) return <div className="flex-1" />;
 
   return (
     <nav
@@ -144,7 +160,11 @@ export function TopNav({ isAdmin }: { isAdmin: boolean }) {
       {hidden.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button type="button" aria-label="More navigation" className={MORE_CLASS}>
+            <button
+              type="button"
+              aria-label="More navigation"
+              className={MORE_CLASS}
+            >
               More
               <ChevronDown className="size-3.5" />
             </button>
@@ -152,7 +172,11 @@ export function TopNav({ isAdmin }: { isAdmin: boolean }) {
           <DropdownMenuContent align="end">
             {hidden.map((l) => (
               <DropdownMenuItem key={l.to} asChild>
-                <Link to={l.to} activeProps={ACTIVE} activeOptions={{ exact: true }}>
+                <Link
+                  to={l.to}
+                  activeProps={ACTIVE}
+                  activeOptions={{ exact: true }}
+                >
                   {l.label}
                 </Link>
               </DropdownMenuItem>

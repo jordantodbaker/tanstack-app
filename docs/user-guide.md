@@ -19,7 +19,7 @@ that stay reconciled with each other:
 2. **The Change Log and related registers** — track everything that moves the
    number after award: CVRs, field change orders, RFIs, trends, and owner PCOs.
 
-The **Summary** page ties them together into a *living budget*: as-bid estimate
+The **Summary** page ties them together into a _living budget_: as-bid estimate
 → approved changes → current budget → forecast.
 
 ---
@@ -30,7 +30,7 @@ The **Summary** page ties them together into a *living budget*: as-bid estimate
 - **Pick a project** from the selector in the header (or the sidebar on smaller
   screens). Almost everything in the app is scoped to the selected project — the
   estimate, the logs, the budget. Switching projects re-scopes the whole UI.
-- **Roles.** *Administrators* additionally see the **Admin** section and the
+- **Roles.** _Administrators_ additionally see the **Admin** section and the
   **Field Estimate Form / Setup**. Workflow actions (approving a CVR, etc.) are
   gated by role.
 
@@ -39,19 +39,38 @@ The **Summary** page ties them together into a *living budget*: as-bid estimate
 - **Global search:** press **⌘K / Ctrl-K** anywhere (or **/** when you're not
   typing in a field). Searches across CVRs, FCOs, RFIs, PCOs, and Trends in the
   current project; arrow keys to move, **Enter** to open.
-- **Recently viewed:** the sidebar keeps a per-project list of records you
-  opened recently — one click jumps back to them.
+- **Recently viewed:** the Change Log's sidebar keeps a per-project list of
+  records you opened recently — one click jumps back to them.
 
 ### Navigation
 
-- **Top nav:** Dashboard · Change Log · FCO Log · RFIs · Trends · PCOs ·
-  Reporting · Project Cost Code List · Field Estimate Form *(admins)*.
-  Anything that doesn't fit the window collapses into a **More** menu.
-- **Sidebar:** Setup, the **Summary** group (Summary · Basis · Validation), the
+The platform is split into **apps**, each with its own navigation:
+
+| App                           | What it's for                                                                    |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| **Field Estimate Form**       | Build the estimate — take-offs by discipline, then Summary, Basis and Validation |
+| **Change Log**                | Trends, PCOs, RFIs and field change orders                                       |
+| **Cost Breakdown Structure**  | The cost code library — this project's list, and the full catalog                |
+| **Reporting**                 | Dashboard, cost periods, earned value and CVRs                                   |
+| **Administration** _(admins)_ | Projects, rates, templates, users, system                                        |
+
+- **Launcher:** the home page shows one card per app with a live figure for the
+  selected project — take-off rows needing attention, items awaiting approval,
+  the latest reporting period. The logo returns you to it.
+- **App switcher:** the button in the header naming the current app moves
+  between them, and has **All apps** at the bottom for the launcher.
+- **Top nav:** the current app's pages only. Anything that doesn't fit the
+  window collapses into a **More** menu.
+- **Sidebar:** the current app's navigation. In the Field Estimate Form that's
+  Setup, the **Summary** group (Summary · Basis · Validation) and the
   **disciplines** (Civil, Concrete, Steel, Piping, Electrical, … plus
-  Engineering, Procurement, Administration, etc.), Materials, Recently viewed,
-  and the **Admin** group (admins only). A ⚠️ next to a discipline means its
-  Take Off has rows that can't compute a cost yet.
+  Engineering, Procurement, Administration, etc.); a ⚠️ next to a discipline
+  means its Take Off has rows that can't compute a cost yet. Every other app
+  lists its own pages instead.
+- **Version picker:** only in the Field Estimate Form — versions are an
+  estimate concept and don't filter the other apps.
+- **Recently viewed:** at the foot of the Change Log's sidebar, since the five
+  record types it tracks all live there.
 
 ---
 
@@ -67,7 +86,7 @@ The main quantity/cost entry grid. Per row:
 - **Name** — pick the **CBS item** from the picker; this stamps the row's **ID**
   (CBS code) and **Unit** automatically.
 - **Area** — assign the row to a project area (optional; used for area roll-ups).
-- **Role + Schedule** *or* **Crew Mix** — toggle **Use Role / Use Crew Mix** in
+- **Role + Schedule** _or_ **Crew Mix** — toggle **Use Role / Use Crew Mix** in
   the toolbar. Role+Schedule resolves a **Labor Rate** from the rate table; a
   Crew Mix uses the crew's average wage.
 - **Quantity × Labor Factor = Labor Hours** — the factor defaults to 1.0 (hours =
@@ -210,7 +229,8 @@ Only the **original** CBS rows are listed. **S** means a code's own
 **Sub Code** is YES, **M** means its **Material Code** is YES, and a code
 carrying both shows both. The generated subcontract and material rows are not
 listed here, since those badges already tell you which codes have them; admins
-can see both views over the whole catalog under **Admin → CBS**.
+can see both views over the whole catalog under **Cost Breakdown Structure →
+CBS Catalog**.
 
 Greyed-out, italic rows are **parent summaries the project wasn't granted**,
 shown only so the codes beneath them sit in the right place in the hierarchy.

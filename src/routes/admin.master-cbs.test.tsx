@@ -78,7 +78,7 @@ function renderPage() {
   );
 }
 
-describe("Admin → CBS", () => {
+describe("CBS Catalog", () => {
   it("renders the whole catalog with no project selected", () => {
     renderPage();
     expect(

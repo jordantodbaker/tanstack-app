@@ -14,7 +14,7 @@ export const Route = createFileRoute("/admin")({
       currentUserQueryOptions(),
     );
     if (!user || !hasAtLeastRole(user.role, "ADMINISTRATOR")) {
-      throw redirect({ to: "/changelog" });
+      throw redirect({ to: "/" });
     }
     // `/admin` itself isn't a page — point it at the first sub-section.
     if (location.pathname === "/admin") {

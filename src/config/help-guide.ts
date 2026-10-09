@@ -130,16 +130,19 @@ export const HELP_SECTIONS: HelpSection[] = [
           {
             kind: "ul",
             items: [
-              "Top nav — Dashboard, Change Log, FCO Log, RFIs, Trends, PCOs, Reporting, Project Cost Code List. Anything that does not fit your window collapses into a “More” menu.",
-              "Sidebar — the Summary group (Summary, Basis, Validation), the disciplines (Civil, Concrete, Steel, Piping, Electrical and the rest), Materials, and Recently viewed.",
+              "The platform is split into apps: the Field Estimate Form, the Change Log, the Cost Breakdown Structure, Reporting, and Administration. Each has its own navigation, so you only ever see the pages for the area you are working in.",
+              "The home page is the launcher — one card per app, each with a live figure for the selected project. The logo takes you back to it, and the button in the header naming the current app switches between them.",
+              "Top nav — the current app's pages, with anything that does not fit your window collapsed into a “More” menu.",
+              "Sidebar — the current app's navigation. In the Field Estimate Form that is Setup, the Summary group (Summary, Basis, Validation) and the disciplines (Civil, Concrete, Steel, Piping, Electrical and the rest). Every other app lists its own pages.",
               "A warning triangle next to a discipline means its Take Off has rows that cannot compute a cost yet. The Validation page lists them.",
+              "The version picker appears only in the Field Estimate Form, and Recently viewed only in the Change Log, where the records it tracks live.",
             ],
           },
           {
             kind: "ul",
             minRole: "ADMINISTRATOR",
             items: [
-              "Field Estimate Form (Setup) and the Admin group in the sidebar are visible to you as an administrator; other users do not see them.",
+              "Setup inside the Field Estimate Form, the CBS Catalog, CVR Templates and the whole Administration app are visible to you as an administrator; other users do not see them.",
             ],
           },
         ],
@@ -401,7 +404,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             kind: "ul",
             items: [
               "Only the original CBS rows are listed. S means a code's own Sub Code is YES and M means its Material Code is YES; a code with both shows both.",
-              "The generated subcontract and material rows are not listed here — the badges already tell you which codes have them. Administrators can see both views over the whole catalog under Admin → CBS.",
+              "The generated subcontract and material rows are not listed here — the badges already tell you which codes have them. Administrators can see both views over the whole catalog under Cost Breakdown Structure → CBS Catalog.",
               "Subcontracts and Materials narrow the tree to one kind of code: a row counts as a subcontract if its cost type (L7) is S or its Sub Code is YES, and as a material if its cost type is M or its Material Code is YES. Only matching rows and the parents needed to reach them stay on screen. Turning both on shows either kind; both narrow the search box rather than widening it.",
               'The L0–L5 swatches under "Level colours" open the tree to one code level at a time — L0 is just the discipline roots, L5 is everything. The one in force is outlined until you open or close a row yourself.',
               "Greyed-out italic rows are parent summaries the project was not granted. They appear only so the codes beneath them nest correctly — they carry no badges, are left out of the row count, and cannot be used on an estimate. Tick one in Setup to make it usable.",
@@ -725,7 +728,7 @@ export const HELP_SECTIONS: HelpSection[] = [
         blocks: [
           {
             kind: "p",
-            text: "Admin → CBS is the complete CBS in the same browser as the Project Cost Code List, but with no project allow-list applied and both the Code Book and full-dictionary views — it lists every account, including ones no project has been granted. It ignores the selected project entirely.",
+            text: "The CBS Catalog (in the Cost Breakdown Structure app, administrators only) is the complete CBS in the same browser as the Project Cost Code List, but with no project allow-list applied and both the Code Book and full-dictionary views — it lists every account, including ones no project has been granted. It ignores the selected project entirely.",
           },
           {
             kind: "p",

@@ -189,8 +189,11 @@ export const disciplinesData: DisciplineData[] = [
   {
     id: "subcontracts",
     label: "Subcontracts",
+    // Not built yet. All three are `to`-less so the sidebar renders them as
+    // greyed-out placeholders; "Civil Subcontracts" used to point at "/",
+    // which bounced the user out of the estimate.
     items: [
-      { label: "Civil Subcontracts", to: "/" },
+      { label: "Civil Subcontracts" },
       { label: "Concrete Subcontracts" },
       { label: "Steel Subcontracts" },
     ],

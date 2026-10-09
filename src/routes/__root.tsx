@@ -45,6 +45,8 @@ import { Button } from "~/components/ui/button";
 import { NotificationBell } from "~/components/NotificationBell";
 import { GlobalSearch } from "~/components/GlobalSearch";
 import { TopNav } from "~/components/TopNav";
+import { AppSwitcher } from "~/components/AppSwitcher";
+import { appForPath } from "~/config/apps";
 import { HelpButton } from "~/components/Help/HelpButton";
 
 export const Route = createRootRouteWithContext<{
@@ -132,7 +134,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
                   Project Controls Platform
                 </p>
               </div>
-              <SignIn forceRedirectUrl="/setup" />
+              <SignIn forceRedirectUrl="/" />
             </div>
           </Show>
           <Show when="signed-in">
@@ -162,7 +164,7 @@ function SignOutControl() {
       variant="outline"
       size="sm"
       onClick={() => {
-        void clerk.signOut({ redirectUrl: "/changelog" });
+        void clerk.signOut({ redirectUrl: "/" });
       }}
     >
       Sign out
@@ -178,6 +180,10 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
   // so their role is available app-wide via the React Query cache.
   useCurrentUser();
   const isAdmin = useIsAdmin();
+
+  // Which app the current route belongs to. Drives the sidebar, the header nav
+  // and whether the version picker is offered — see ~/config/apps.
+  const app = appForPath(pathname);
 
   React.useEffect(() => {
     setMobileSidebarOpen(false);
@@ -217,15 +223,19 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
                 placeholder="Select project…"
                 className="h-9 min-w-50"
               />
-              <VersionSelect className="h-9 min-w-28" />
+              {/* Versions are an estimate concept; showing the picker in the
+                  Change Log or Reporting implied it filtered them. */}
+              {app?.versionScoped && <VersionSelect className="h-9 min-w-28" />}
             </div>
+            <AppSwitcher current={app} isAdmin={isAdmin} />
             <div className="shrink-0">
               <GlobalSearch />
             </div>
-            {/* Top nav — desktop only. Mobile + tablet (< lg) see these same
-                links inside the sidebar drawer (lg:hidden block in Sidebar).
-                Collapses whatever does not fit into a "More" menu — see TopNav. */}
-            <TopNav isAdmin={isAdmin} />
+            {/* Top nav — desktop only, and only the current app's pages.
+                Mobile + tablet (< lg) navigate from the sidebar drawer
+                instead. Collapses whatever does not fit into a "More"
+                menu — see TopNav. */}
+            <TopNav app={app} isAdmin={isAdmin} />
             <div className="shrink-0 flex items-center gap-1 md:gap-2 ml-auto lg:ml-0">
               <HelpButton />
               <NotificationBell />
@@ -237,7 +247,11 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
         <div className="flex flex-1 overflow-hidden relative">
-          <Sidebar mobileOpen={mobileSidebarOpen} onMobileClose={closeSidebar} />
+          <Sidebar
+            app={app}
+            mobileOpen={mobileSidebarOpen}
+            onMobileClose={closeSidebar}
+          />
           <main className="flex-1 overflow-auto bg-slate-50">
             {/* Admin routes don't require a selected project; the printable
                 CVR routes also skip the guard since they fetch the CVR by
@@ -247,7 +261,8 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
                 user who can't get past the guard is exactly the one who
                 needs the guide. Everything else flows through the guard for
                 the not-assigned / not-selected screens. */}
-            {pathname.startsWith("/admin") ||
+            {pathname === "/" ||
+            pathname.startsWith("/admin") ||
             pathname.startsWith("/help") ||
             pathname.startsWith("/cvr-print/") ||
             pathname.startsWith("/fco-print/") ||

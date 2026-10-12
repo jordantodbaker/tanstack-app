@@ -81,19 +81,27 @@ const MATERIAL_TYPE = "M";
  * those at the hundreds rolled them into the wrong parent:
  *
  *   29X  Grout                      — beside Concrete (200), not inside it
- *   95X  Startup & Commissioning    ┐
- *   96X  Operations & Maintenance   ├ beside Coatings & Insulation (900)
- *   97X  Contingency                ┘
+ *   95X  Specialty Services         ┐
+ *   96X  Startup & Commissioning    ├ beside Coatings & Insulation (900)
+ *   97X  Operations & Maintenance   │
+ *   98X  Contingency                ┘
+ *
+ * The 9-series shifted by one block when Specialty Services was inserted at
+ * 950: what was 95X/96X/97X is now 96X/97X/98X. Membership is by position, so
+ * adding 98 is all the renumber needs from this file — but see DEPLOYMENT §11a
+ * for the code tables a renumber DOES invalidate.
  *
  * Blocks that really are part of their hundreds parent stay out of this set:
  * 23X–26X are Concrete's own accounts, and 990 is "Coatings & Insulation
- * Subcontracts".
+ * Subcontracts". 93X (Paint & Coatings, Insulation, FireProofing, Refractory)
+ * is also absent on purpose — it reads as part of Coatings & Insulation (900);
+ * add it here if it should root beside it instead.
  *
  * Shop/field pairs are also deliberately absent — 330 Steel Erection, 530
  * Equipment Installation and 630 Install Piping each share a division (and a
  * discipline) with their shop half at 300 / 500 / 600.
  */
-const TENS_DIVISIONS = new Set([29, 95, 96, 97]);
+const TENS_DIVISIONS = new Set([29, 95, 96, 97, 98]);
 
 /** The division root an L1 account belongs to — the top of its tree branch. */
 export function getGroupL1(l1: string): string {

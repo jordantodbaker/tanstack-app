@@ -313,6 +313,48 @@ describe("buildCbsTree", () => {
     expect(parentOf(tree, "295-00-0000-00-0")).toBe("290-00-0000-00-0");
   });
 
+  it("roots the whole 9-series beside 900 after the Specialty Services shift", () => {
+    // Inserting 950 Specialty Services pushed Startup & Commissioning to 960,
+    // Operations & Maintenance to 970 and Contingency to 980. Each is its own
+    // division, not an account inside Coatings & Insulation.
+    const tree = buildCbsTree([
+      item("900-00-0000-00-0", { name: "Coatings & Insulation" }),
+      item("901-00-0000-00-0", { name: "Coatings Materials" }),
+      item("950-00-0000-00-0", { name: "Specialty Services" }),
+      item("951-00-0000-00-0", { name: "Mechanical Services" }),
+      item("960-00-0000-00-0", { name: "Startup & Commissioning" }),
+      item("962-00-0000-00-0", { name: "Startup Field Staff" }),
+      item("970-00-0000-00-0", { name: "Operations & Maintenance" }),
+      item("972-00-0000-00-0", { name: "Operations Field Staff" }),
+      item("980-00-0000-00-0", { name: "Contingency" }),
+    ]);
+    expect(tree.map((n) => n.item.name)).toEqual([
+      "Coatings & Insulation",
+      "Specialty Services",
+      "Startup & Commissioning",
+      "Operations & Maintenance",
+      "Contingency",
+    ]);
+    // Each keeps its own accounts; none of them leaks into 900.
+    expect(tree[0].children.map((c) => c.item.displayCode)).toEqual([
+      "901-00-0000-00-0",
+    ]);
+    expect(parentOf(tree, "951-00-0000-00-0")).toBe("950-00-0000-00-0");
+    expect(parentOf(tree, "962-00-0000-00-0")).toBe("960-00-0000-00-0");
+    expect(parentOf(tree, "972-00-0000-00-0")).toBe("970-00-0000-00-0");
+  });
+
+  it("keeps 93X inside Coatings & Insulation", () => {
+    // Deliberately NOT a tens division: Paint & Coatings reads as part of
+    // Coatings & Insulation. Pinned so the 9-series shift doesn't sweep it up.
+    const tree = buildCbsTree([
+      item("900-00-0000-00-0", { name: "Coatings & Insulation" }),
+      item("930-00-0000-00-0", { name: "Paint & Coatings" }),
+    ]);
+    expect(tree.map((n) => n.item.name)).toEqual(["Coatings & Insulation"]);
+    expect(parentOf(tree, "930-00-0000-00-0")).toBe("900-00-0000-00-0");
+  });
+
   it("roots 950 / 960 / 970 beside 900 rather than inside it", () => {
     const tree = buildCbsTree([
       item("900-00-0000-00-0", { name: "Coatings & Insulation" }),

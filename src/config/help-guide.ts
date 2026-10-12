@@ -139,6 +139,20 @@ export const HELP_SECTIONS: HelpSection[] = [
             ],
           },
           {
+            kind: "image",
+            src: "/help/launcher.png",
+            alt: "The home launcher: a card for each app — Field Estimate Form, Change Log, Cost Breakdown Structure and Reporting — above a prompt to choose a project.",
+            caption:
+              "The home page. Pick a project in the header and each card also shows where that project stands.",
+          },
+          {
+            kind: "image",
+            src: "/help/app-switcher.png",
+            alt: "The app switcher open over the Change Log, listing Field Estimate Form, Change Log, Cost Breakdown Structure and Reporting, with All apps at the foot.",
+            caption:
+              "The button naming the current app switches between them. Administrators also see Administration here.",
+          },
+          {
             kind: "ul",
             minRole: "ADMINISTRATOR",
             items: [
@@ -489,6 +503,13 @@ export const HELP_SECTIONS: HelpSection[] = [
               "Greyed-out italic rows are parent summaries the project was not granted. They appear only so the codes beneath them nest correctly — they carry no badges, are left out of the row count, and cannot be used on an estimate. Tick one in Setup to make it usable.",
               "Select any row to see its full detail: unit, cost code, account, cost classification, discipline, description and more.",
             ],
+          },
+          {
+            kind: "image",
+            src: "/help/project-cost-codes.png",
+            alt: "The Project Cost Code List: a row count, the L0 to L5 level-colour swatches, a search box with Expand all, Collapse all, Subcontracts, Materials and Export Excel buttons, and the colour-coded discipline roots of the hierarchy.",
+            caption:
+              "The row count, the level swatches and the filter buttons sit above the tree; the detail panel fills in on the right when you select a row.",
           },
         ],
       },

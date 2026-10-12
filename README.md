@@ -76,7 +76,10 @@ point it anywhere real.
 |---|---|
 | `npm run dev` | Dev server on :3000 |
 | `npm run build` | Production build, then `tsc --noEmit` |
+| `npm run preview` / `npm start` | Serve the built bundle locally |
 | `npm test` | Unit + component suite (no database) |
+| `npm run test:watch` | The same suite, watching |
+| `npm run test:coverage` | Coverage report — useful for finding which logic is untested |
 | `npm run test:integration` | DB-backed suite — see [docs/integration-testing.md](docs/integration-testing.md) |
 | `npm run check:client-leak` | Fails if a client-reachable module pulls in Prisma. Run it in CI. |
 | `npm run cbs:import` | Re-import `prisma/data/CBS.xlsx` into `CbsItem` |
@@ -87,7 +90,8 @@ point it anywhere real.
 The CBS scripts run **in a specific order** after a new workbook lands; that
 sequence, and the hard-coded tables a CBS renumbering invalidates, are in
 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) §11a and
-[scripts/README.md](scripts/README.md).
+[scripts/README.md](scripts/README.md). The one-off data migrations and
+`npm run backfill-numbers` are catalogued there too.
 
 ## Layout
 

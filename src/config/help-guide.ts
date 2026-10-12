@@ -392,28 +392,6 @@ export const HELP_SECTIONS: HelpSection[] = [
           },
         ],
       },
-      {
-        id: "project-cost-codes",
-        title: "Project Cost Code List",
-        blocks: [
-          {
-            kind: "p",
-            text: "The Project Cost Code List shows the cost codes available on the selected project — exactly the ones an administrator allowed in Setup — as a colour-coded, collapsible hierarchy you can search. It is a reference view: nothing here changes the estimate.",
-          },
-          {
-            kind: "ul",
-            items: [
-              "Only the original CBS rows are listed. S means a code's own Sub Code is YES and M means its Material Code is YES; a code with both shows both.",
-              "The generated subcontract and material rows are not listed here — the badges already tell you which codes have them. Administrators can see both views over the whole catalog under Cost Breakdown Structure → CBS Code Book.",
-              'Export Excel downloads the rows currently shown — whatever the search box and the Subcontracts / Materials buttons left. The sheet starts with a labelled block giving the project number and title, the scope, the filter applied, the code count and the export date, and the project number is in the filename too. The file keeps the level colours and turns the hierarchy into Excel row grouping, so it collapses in Excel the way it does on the page. Context rows come through italic and marked "Context only".',
-              "Subcontracts and Materials narrow the tree to one kind of code: a row counts as a subcontract if its cost type (L7) is S or its Sub Code is YES, and as a material if its cost type is M or its Material Code is YES. Only matching rows and the parents needed to reach them stay on screen. Turning both on shows either kind; both narrow the search box rather than widening it.",
-              'The L0–L5 swatches under "Level colours" open the tree to one code level at a time — L0 is just the discipline roots, L5 is everything. The one in force is outlined until you open or close a row yourself.',
-              "Greyed-out italic rows are parent summaries the project was not granted. They appear only so the codes beneath them nest correctly — they carry no badges, are left out of the row count, and cannot be used on an estimate. Tick one in Setup to make it usable.",
-              "Select any row to see its full detail: unit, cost code, account, cost classification, discipline, description and more.",
-            ],
-          },
-        ],
-      },
     ],
   },
 
@@ -476,6 +454,56 @@ export const HELP_SECTIONS: HelpSection[] = [
           {
             kind: "p",
             text: "A snapshot freezes the estimate as a baseline. The Summary budget is measured against a snapshot, and taking snapshots over time lets you compare where the estimate has moved and why.",
+          },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: "cbs",
+    title: "Cost Breakdown Structure",
+    blocks: [
+      {
+        kind: "p",
+        text: "The CBS is the cost code library the whole estimate hangs off. It has its own app, with the codes this project may use and — for administrators — the complete code book behind them.",
+      },
+    ],
+    subsections: [
+      {
+        id: "project-cost-codes",
+        title: "Project Cost Code List",
+        blocks: [
+          {
+            kind: "p",
+            text: "The Project Cost Code List shows the cost codes available on the selected project — exactly the ones an administrator allowed in Setup — as a colour-coded, collapsible hierarchy you can search. It is a reference view: nothing here changes the estimate.",
+          },
+          {
+            kind: "ul",
+            items: [
+              "Only the original CBS rows are listed. S means a code's own Sub Code is YES and M means its Material Code is YES; a code with both shows both.",
+              "The generated subcontract and material rows are not listed here — the badges already tell you which codes have them. Administrators can see both views over the whole catalog under Cost Breakdown Structure → CBS Code Book.",
+              'Export Excel downloads the rows currently shown — whatever the search box and the Subcontracts / Materials buttons left. The sheet starts with a labelled block giving the project number and title, the scope, the filter applied, the code count and the export date, and the project number is in the filename too. The file keeps the level colours and turns the hierarchy into Excel row grouping, so it collapses in Excel the way it does on the page. Context rows come through italic and marked "Context only".',
+              "Subcontracts and Materials narrow the tree to one kind of code: a row counts as a subcontract if its cost type (L7) is S or its Sub Code is YES, and as a material if its cost type is M or its Material Code is YES. Only matching rows and the parents needed to reach them stay on screen. Turning both on shows either kind; both narrow the search box rather than widening it.",
+              'The L0–L5 swatches under "Level colours" open the tree to one code level at a time — L0 is just the discipline roots, L5 is everything. The one in force is outlined until you open or close a row yourself.',
+              "Greyed-out italic rows are parent summaries the project was not granted. They appear only so the codes beneath them nest correctly — they carry no badges, are left out of the row count, and cannot be used on an estimate. Tick one in Setup to make it usable.",
+              "Select any row to see its full detail: unit, cost code, account, cost classification, discipline, description and more.",
+            ],
+          },
+        ],
+      },
+      {
+        id: "admin-master-cbs",
+        title: "CBS Code Book (administrators)",
+        minRole: "ADMINISTRATOR",
+        blocks: [
+          {
+            kind: "p",
+            text: "The CBS Code Book (in the Cost Breakdown Structure app, administrators only) is the complete CBS in the same browser as the Project Cost Code List, but with no project allow-list applied. It has two sections — Original Codes, and the CBS Dictionary with the generated S/M rows — and lists every account, including ones no project has been granted. It ignores the selected project entirely.",
+          },
+          {
+            kind: "p",
+            text: "Use it to look an account up before granting it to a project on the Setup page. It is read-only: the catalog itself changes only through a CBS import.",
           },
         ],
       },
@@ -719,21 +747,6 @@ export const HELP_SECTIONS: HelpSection[] = [
               "Subcontractors — the sub directory used across the estimate and the logs.",
               "CVR and FCO Templates — reusable field sets that pre-fill a new record. Worth building for the changes your projects raise over and over.",
             ],
-          },
-        ],
-      },
-      {
-        id: "admin-master-cbs",
-        title: "CBS",
-        minRole: "ADMINISTRATOR",
-        blocks: [
-          {
-            kind: "p",
-            text: "The CBS Code Book (in the Cost Breakdown Structure app, administrators only) is the complete CBS in the same browser as the Project Cost Code List, but with no project allow-list applied. It has two sections — Original Codes, and the CBS Dictionary with the generated S/M rows — and lists every account, including ones no project has been granted. It ignores the selected project entirely.",
-          },
-          {
-            kind: "p",
-            text: "Use it to look an account up before granting it to a project on the Setup page. It is read-only: the catalog itself changes only through a CBS import.",
           },
         ],
       },

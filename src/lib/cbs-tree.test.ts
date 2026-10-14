@@ -7,6 +7,7 @@ import {
   cbsFilterIsEmpty,
   CBS_COST_TYPES,
   cbsHasCostType,
+  cbsIsActive,
   cbsIsBackbone,
   cbsIsBackboneCode,
   collectExpandableKeys,
@@ -673,6 +674,31 @@ describe("cbsIsBackbone", () => {
   });
 });
 
+describe("cbsIsActive", () => {
+  it("accepts Active in whatever case or padding the workbook used", () => {
+    for (const s of ["Active", "active", "ACTIVE", " Active "]) {
+      expect(cbsIsActive(s)).toBe(true);
+    }
+  });
+
+  it("treats a blank Status as active", () => {
+    // ~190 ordinary accounts have an empty Status cell, section summaries
+    // among them. Reading blank as retired would hide live codes and strand
+    // their children, so an empty cell is a gap, not a decision.
+    for (const s of [null, undefined, "", "   "]) {
+      expect(cbsIsActive(s)).toBe(true);
+    }
+  });
+
+  it("rejects Inactive and anything else that is not Active", () => {
+    // "Retired" is not a status the workbook uses today; it must hide itself
+    // if someone adds it, rather than quietly showing up as live.
+    for (const s of ["Inactive", "inactive", "Retired", "Superseded"]) {
+      expect(cbsIsActive(s)).toBe(false);
+    }
+  });
+});
+
 describe("cbsHasCostType", () => {
   const type = (key: string) => CBS_COST_TYPES.find((t) => t.key === key)!;
 
@@ -787,32 +813,47 @@ describe("row-type filters", () => {
     return out;
   };
 
-  it("keeps subcontract rows and their ancestors, and nothing else", () => {
+  it("keeps subcontract rows ONLY, dropping ancestors that aren't", () => {
     const { nodes, matches } = pruneCbsTree(tree(), {
       ...CBS_FILTER_NONE,
       query: "",
       sub: true,
       material: false,
     });
-    // Piping is an ancestor, not a match; Hydrotest and Bolt-up are gone.
-    expect(names(nodes)).toEqual([
-      "Piping",
-      "Pipe Spool",
-      "Pipe Spool Subcontracts",
-    ]);
+    // "Piping" has no Sub Code, so it goes even though it is the parent of a
+    // match: a row kept for structure carries no S badge and so reads as a
+    // code that is not a subcontract code. Its matching children are lifted
+    // into its place rather than disappearing with it.
+    expect(names(nodes)).toEqual(["Pipe Spool", "Pipe Spool Subcontracts"]);
     expect(matches).toBe(2);
   });
 
-  it("keeps material rows the same way", () => {
+  it("promotes a match whose parent was dropped", () => {
     const { nodes, matches } = pruneCbsTree(tree(), {
       ...CBS_FILTER_NONE,
       query: "",
       sub: false,
       material: true,
     });
-    // Pipe Spool survives as Bolt-up's parent, not as a match of its own.
-    expect(names(nodes)).toEqual(["Piping", "Pipe Spool", "Bolt-up"]);
+    // Bolt-up is the only material row. BOTH rows above it — Piping and Pipe
+    // Spool — lack a Material Code, so it ends up at the top level on its own.
+    expect(names(nodes)).toEqual(["Bolt-up"]);
     expect(matches).toBe(1);
+  });
+
+  it("re-depths promoted rows so they don't indent under a dropped parent", () => {
+    // `depth` drives indentation. Bolt-up sits at depth 2 unfiltered; with its
+    // two ancestors dropped it must render flush left, not indented into the
+    // gap they left.
+    const { nodes } = pruneCbsTree(tree(), {
+      ...CBS_FILTER_NONE,
+      query: "",
+      material: true,
+    });
+    expect(nodes.map((n) => [n.item.name, n.depth])).toEqual([["Bolt-up", 0]]);
+    // `level` is the CODE's level and still drives the colour, so it does NOT
+    // move — a filter must not repaint the row.
+    expect(nodes[0].level).toBe(2);
   });
 
   it("asking for both means either", () => {
@@ -822,10 +863,10 @@ describe("row-type filters", () => {
       sub: true,
       material: true,
     });
-    // The S twin is a sibling of Pipe Spool under Piping, so it comes after
-    // Pipe Spool's own children in pre-order.
+    // Piping still has neither code. Bolt-up keeps its place under Pipe Spool
+    // because that parent is itself a match now, and the S twin is a sibling,
+    // so it follows Pipe Spool's children in pre-order.
     expect(names(nodes)).toEqual([
-      "Piping",
       "Pipe Spool",
       "Bolt-up",
       "Pipe Spool Subcontracts",

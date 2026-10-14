@@ -5,6 +5,7 @@ import { adminHandler, requireProjectAccess } from "./users.server";
 import {
   buildCbsTree,
   CBS_COST_TYPES,
+  cbsIsActive,
   cbsIsBackboneCode,
   cbsAncestorCodes,
   cbsFilterIsEmpty,
@@ -118,13 +119,16 @@ async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
     rows = await projectCostCodeRows(input.projectId);
     scope = "Codes granted to this project on the Setup page";
   } else {
-    // The Cost Accounts view lists one row per account — the "-0" backbone —
-    // so the export has to apply the same filter the page does, or the file
-    // stops matching the screen.
+    // The Cost Accounts view lists one row per account — the "-0" backbone,
+    // and only while it is active — so the export has to apply the same two
+    // filters the page does, or the file stops matching the screen. The
+    // Dictionary deliberately keeps everything, retired rows included.
     const catalog = await cbsCatalogRows(false);
     rows =
       input.view === "codeBook"
-        ? catalog.filter((r) => cbsIsBackboneCode(r.displayCode))
+        ? catalog.filter(
+            (r) => cbsIsBackboneCode(r.displayCode) && cbsIsActive(r.status),
+          )
         : catalog;
     // The catalog views ignore the allow-list, so the project below is there
     // for traceability — whose desk the file came from — not as a filter.

@@ -102,10 +102,12 @@ describe("flattenCbsForExport", () => {
       item("601-05-0000-00-0", { name: "Bolt-up", materialCode: true }),
     ]);
     const { nodes } = pruneCbsTree(tree, { ...NO_FILTER, sub: true });
-    expect(flattenCbsForExport(nodes).map((r) => r.name)).toEqual([
-      "Piping",
-      "Spool",
-    ]);
+    // Only "Spool" carries a Sub Code. "Piping" is dropped despite being its
+    // parent, so the file matches the screen — see `strictCbsRows`.
+    const rows = flattenCbsForExport(nodes);
+    expect(rows.map((r) => r.name)).toEqual(["Spool"]);
+    // Promoted to the top, so Excel groups it at the outermost level.
+    expect(rows[0].outlineLevel).toBe(0);
   });
 
   it("writes a YES per cost type the row carries", () => {

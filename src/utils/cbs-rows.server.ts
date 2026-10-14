@@ -1,5 +1,5 @@
 import { prisma } from "../server/db";
-import { cbsAncestorCodes } from "~/lib/cbs-tree";
+import { cbsAncestorCodes, cbsIsActive } from "~/lib/cbs-tree";
 import { cbsTreeRowSelect, type CbsWireRow } from "./cbs";
 
 /**
@@ -29,7 +29,7 @@ export type ProjectCostCodeRow = CbsWireRow & { context?: boolean };
 export async function projectCostCodeRows(
   projectId: number,
 ): Promise<ProjectCostCodeRow[]> {
-  const granted = await prisma.cbsItem.findMany({
+  const all = await prisma.cbsItem.findMany({
     where: {
       rowType: "ORIGINAL",
       allowedInProjects: { some: { id: projectId } },
@@ -37,6 +37,11 @@ export async function projectCostCodeRows(
     orderBy: { id: "asc" },
     select: cbsTreeRowSelect,
   });
+  // Retired accounts are not offered, even where a project was granted one
+  // before it was retired. Filtered here in JS rather than in the `where` so
+  // the rule — blank Status counts as active — stays in one place and reads
+  // the same for every caller; see `cbsIsActive`.
+  const granted = all.filter((row) => cbsIsActive(row.status));
 
   // Which ancestor summaries are missing from the granted set.
   const have = new Set(granted.map((g) => g.displayCode));
@@ -53,6 +58,9 @@ export async function projectCostCodeRows(
     orderBy: { id: "asc" },
     select: cbsTreeRowSelect,
   });
+  // A retired ancestor is still pulled in. It is structure, not a code anyone
+  // can pick — `context: true` rows are muted, uncounted and unselectable —
+  // and dropping it would strand its active children at the top level.
   return [...granted, ...ancestors.map((a) => ({ ...a, context: true }))];
 }
 

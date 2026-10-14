@@ -1,7 +1,12 @@
 import * as React from "react";
 import { ChevronRight } from "lucide-react";
 import type { CbsTreeRow } from "~/utils/cbs";
-import { cbsIsBackbone, type CbsBadge, type CbsTreeNode } from "~/lib/cbs-tree";
+import {
+  cbsIsActive,
+  cbsIsBackbone,
+  type CbsBadge,
+  type CbsTreeNode,
+} from "~/lib/cbs-tree";
 import type { CbsExportView } from "~/lib/cbs-export";
 import {
   CbsDictionaryBrowser,
@@ -92,13 +97,20 @@ export function CbsDictionarySections({ items }: { items: CbsTreeRow[] }) {
   // variants are the same account priced a different way, and the badges
   // already say which of them exist, so listing them again doubles the tree
   // for no new information.
-  const accounts = React.useMemo(() => items.filter(cbsIsBackbone), [items]);
+  //
+  // Retired accounts are dropped too. This is the list people pick codes from,
+  // and the Dictionary below is the one place that still shows everything, so
+  // nothing becomes unfindable by being hidden here.
+  const accounts = React.useMemo(
+    () => items.filter((r) => cbsIsBackbone(r) && cbsIsActive(r.status)),
+    [items],
+  );
 
   return (
     <div className="flex flex-col gap-4">
       <CbsSection
         title="Cost Accounts"
-        description="One row per account — the codes ending in 0. L / S / M / E / O mark which cost types that account carries."
+        description="One row per active account — the codes ending in 0. L / S / M / E / O mark which cost types that account carries. Retired codes are listed in the CBS Dictionary below."
         items={accounts}
         badgesFor={cbsFlagBadgesFor}
         sourceNote={MASTER_SOURCE_NOTE}
@@ -109,7 +121,7 @@ export function CbsDictionarySections({ items }: { items: CbsTreeRow[] }) {
       />
       <CbsSection
         title="CBS Dictionary"
-        description="Every row in the CBS, each cost type on its own line — the accounts above plus their L / S / M / E / O variants."
+        description="Every row in the CBS, each cost type on its own line — the accounts above plus their L / S / M / E / O variants, and retired codes too."
         items={items}
         sourceNote={MASTER_SOURCE_NOTE}
         emptyMessage={MASTER_EMPTY}

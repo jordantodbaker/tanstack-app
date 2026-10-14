@@ -65,6 +65,9 @@ function item(
     laborCode: null,
     equipmentCode: null,
     otherCode: null,
+    // Active unless a case overrides it — the Code Book and the project list
+    // hide anything that is not.
+    status: "Active",
     ...over,
   };
 }

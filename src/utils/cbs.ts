@@ -221,6 +221,11 @@ export const cbsTreeRowSelect = {
   laborCode: true,
   equipmentCode: true,
   otherCode: true,
+  // The workbook's Status column. On the wire because the Code Book and the
+  // Dictionary are built from ONE query and disagree about it: the Code Book
+  // hides everything that is not Active, the Dictionary lists the lot. It is
+  // one of three repeated short strings, so it costs almost nothing gzipped.
+  status: true,
 } satisfies Prisma.CbsItemSelect;
 
 /** A CBS row exactly as it crosses the wire — no level segments. */

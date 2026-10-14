@@ -512,6 +512,23 @@ export function cbsIsBackboneCode(displayCode: string): boolean {
   return displayCode.endsWith(`-${BACKBONE_TYPE}`);
 }
 
+/**
+ * Whether a row is live enough to show on the Code Book and the Project Cost
+ * Code List. The CBS Dictionary ignores this and lists everything.
+ *
+ * The workbook's Status column holds "Active", "Inactive" or nothing at all.
+ * A BLANK counts as active: the 23 Inactive rows are all "(Reserved)"
+ * placeholders somebody deliberately parked, while the ~190 blanks are
+ * ordinary accounts whose cell was never filled in — including section
+ * summaries, so hiding them would take their children's parents with them.
+ * Anything else non-blank is treated as not active, so a status added to the
+ * workbook later ("Retired", say) hides itself without needing code.
+ */
+export function cbsIsActive(status: string | null | undefined): boolean {
+  const value = status?.trim();
+  return !value || value.toLowerCase() === "active";
+}
+
 /** An all-off cost-type selection — the state both tree views start in. */
 export function cbsNoCostTypes(): Record<CbsCostTypeKey, boolean> {
   return Object.fromEntries(
@@ -520,8 +537,13 @@ export function cbsNoCostTypes(): Record<CbsCostTypeKey, boolean> {
 }
 
 /** Is this filter showing everything (so callers can skip the walk)? */
+/** Whether any cost-type button is pressed, text search aside. */
+export function cbsHasCostTypeFilter(filter: CbsRowFilter): boolean {
+  return CBS_COST_TYPES.some((t) => filter[t.key]);
+}
+
 export function cbsFilterIsEmpty(filter: CbsRowFilter): boolean {
-  return !filter.query && !CBS_COST_TYPES.some((t) => filter[t.key]);
+  return !filter.query && !cbsHasCostTypeFilter(filter);
 }
 
 /**
@@ -592,16 +614,58 @@ export function filterCbsTree<T extends CbsTreeItem>(
  * themselves plus their ancestors (a matching parent does NOT keep its
  * non-matching children), and counts the matches.
  */
+/**
+ * Keeps only rows that match, lifting the survivors into the place of any
+ * ancestor that didn't.
+ *
+ * `searchCbsTree` keeps a non-matching parent whenever a descendant matches, so
+ * the hierarchy still reads top-down. Under a cost-type filter that misleads:
+ * the kept parent carries no badge for the cost type being filtered on, so the
+ * list answers "which codes are Labor codes?" with rows that are not. Here a
+ * row earns its place on its own flags and nothing else, and a match orphaned
+ * by a dropped ancestor is promoted rather than lost.
+ *
+ * `depth` is re-assigned on the way down, since it drives indentation and the
+ * promoted rows would otherwise indent as though their parent were still
+ * above them. `level` is left alone — it is the CODE's level and drives the
+ * colour, which should not change because a filter is on.
+ */
+function strictCbsRows<T extends CbsTreeItem>(
+  nodes: CbsTreeNode<T>[],
+  filter: CbsRowFilter,
+  depth: number,
+  onMatch: () => void,
+): CbsTreeNode<T>[] {
+  const out: CbsTreeNode<T>[] = [];
+  for (const n of nodes) {
+    if (rowMatches(n, filter)) {
+      onMatch();
+      out.push({
+        ...n,
+        depth,
+        children: strictCbsRows(n.children, filter, depth + 1, onMatch),
+      });
+    } else {
+      out.push(...strictCbsRows(n.children, filter, depth, onMatch));
+    }
+  }
+  return out;
+}
+
 export function pruneCbsTree<T extends CbsTreeItem>(
   nodes: CbsTreeNode<T>[],
   filter: CbsRowFilter,
 ): { nodes: CbsTreeNode<T>[]; matches: number } {
   if (cbsFilterIsEmpty(filter)) return { nodes, matches: 0 };
   let matches = 0;
-  return {
-    nodes: searchCbsTree(nodes, filter, false, () => matches++),
-    matches,
-  };
+  const onMatch = () => matches++;
+  // A cost-type filter is read as a report — "show me the Labor codes" — so
+  // only rows carrying that cost type survive. A bare text search still keeps
+  // ancestors: there, knowing WHERE a hit sits is most of the answer.
+  const kept = cbsHasCostTypeFilter(filter)
+    ? strictCbsRows(nodes, filter, 0, onMatch)
+    : searchCbsTree(nodes, filter, false, onMatch);
+  return { nodes: kept, matches };
 }
 
 /** The "S" / "M" marker shown beside generated rows; null for originals.

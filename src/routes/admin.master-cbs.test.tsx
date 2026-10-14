@@ -60,6 +60,9 @@ function item(
     laborCode: null,
     equipmentCode: null,
     otherCode: null,
+    // Active unless a case overrides it — the Code Book and the project list
+    // hide anything that is not.
+    status: "Active",
     ...over,
   };
 }
@@ -68,6 +71,8 @@ const CATALOG: CbsTreeRow[] = [
   item("100-00-0000-00-0", "Civil", { subReporting: true }),
   item("100-00-0000-00-S", "Civil Subcontracts", { rowType: "SUB" }),
   item("600-00-0000-00-0", "Pipe Shop"),
+  item("600-10-0000-00-0", "Hot Tap (reserved)", { status: "Inactive" }),
+  item("600-20-0000-00-0", "Blank Status Account", { status: null }),
 ];
 
 function renderPage() {
@@ -115,12 +120,14 @@ describe("CBS Code Book", () => {
 
   it("splits originals from the full dictionary, as the Code Book split does", () => {
     renderPage();
+    // Cost Accounts: Civil, Pipe Shop and the blank-Status account — the "-S"
+    // twin and the Inactive row are both out. The Dictionary has all five.
     expect(
-      screen.getByRole("button", { name: /Cost Accounts/ }),
-    ).toHaveTextContent("2 rows");
-    expect(
-      screen.getByRole("button", { name: /CBS Dictionary/ }),
+      screen.getByRole("button", { name: /^Cost Accounts/ }),
     ).toHaveTextContent("3 rows");
+    expect(
+      screen.getByRole("button", { name: /^CBS Dictionary/ }),
+    ).toHaveTextContent("5 rows");
 
     // The generated twin hangs under its root, so open both sections fully.
     for (const btn of screen.getAllByRole("button", { name: "Expand all" })) {
@@ -140,6 +147,34 @@ describe("CBS Code Book", () => {
       .getByText("Civil")
       .closest('[role="treeitem"]')! as HTMLElement;
     expect(within(civil).getByTitle("Sub Code: YES")).toHaveTextContent("S");
+  });
+
+  it("keeps retired accounts out of the Cost Accounts list", () => {
+    renderPage();
+    // Both rows hang under "Pipe Shop", so open the branch before looking.
+    const expandAll = screen.getAllByRole("button", { name: "Expand all" });
+    fireEvent.click(expandAll[0]);
+    const [accounts] = screen.getAllByRole("tree");
+    expect(within(accounts).queryByText("Hot Tap (reserved)")).toBeNull();
+    // A blank Status is a gap in the workbook, not a retirement.
+    expect(
+      within(accounts).getByText("Blank Status Account"),
+    ).toBeInTheDocument();
+  });
+
+  it("still lists retired accounts in the dictionary section", () => {
+    // The Dictionary is the one view that shows everything, so a retired code
+    // stays findable — someone reading an old estimate has to be able to look
+    // it up.
+    renderPage();
+    for (const btn of screen.getAllByRole("button", { name: "Expand all" })) {
+      fireEvent.click(btn);
+    }
+    const trees = screen.getAllByRole("tree");
+    const dictionary = trees[trees.length - 1];
+    expect(
+      within(dictionary).getByText("Hot Tap (reserved)"),
+    ).toBeInTheDocument();
   });
 
   it("says the catalog is unfiltered, not project-scoped", () => {

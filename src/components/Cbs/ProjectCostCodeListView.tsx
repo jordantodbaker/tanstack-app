@@ -67,7 +67,8 @@ export function ProjectCostCodeListView() {
           <strong>E</strong> and <strong>O</strong> mark a code's own Labor,
           Sub, Material, Equipment and Other Code. Greyed-out rows are parent
           summaries the project wasn't given, shown so the codes under them nest
-          correctly. Colours and grouping mirror the source workbook.
+          correctly. Retired codes are not listed — see the CBS Dictionary for
+          those. Colours and grouping mirror the source workbook.
         </p>
       </header>
 

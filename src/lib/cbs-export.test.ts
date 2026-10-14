@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCbsTree,
+  CBS_FILTER_NONE,
   parseCbsDisplayCode,
   pruneCbsTree,
   type CbsTreeItem,
@@ -44,7 +45,7 @@ const TREE = () =>
     item("052-15-1000-00-L", { name: "Supers - Civil" }),
   ]);
 
-const NO_FILTER = { query: "", sub: false, material: false };
+const NO_FILTER = CBS_FILTER_NONE;
 
 describe("flattenCbsForExport", () => {
   it("emits pre-order rows with tree depth as the outline level", () => {
@@ -107,19 +108,26 @@ describe("flattenCbsForExport", () => {
     ]);
   });
 
-  it("writes the workbook's YES flags from the row's own codes", () => {
+  it("writes a YES per cost type the row carries", () => {
     const rows = flattenCbsForExport(
       buildCbsTree([
         item("100-00-0000-00-0", {
           name: "Civil",
           subReporting: true,
           materialCode: true,
+          laborCode: true,
         }),
         item("101-00-0000-00-0", { name: "Plain" }),
       ]),
     );
-    expect(rows[0]).toMatchObject({ subCode: "YES", materialCode: "YES" });
-    expect(rows[1]).toMatchObject({ subCode: "", materialCode: "" });
+    expect(rows[0].costTypes).toEqual({
+      labor: "YES",
+      sub: "YES",
+      material: "YES",
+      equipment: "",
+      other: "",
+    });
+    expect(Object.values(rows[1].costTypes).join("")).toBe("");
   });
 
   it("marks a context row and suppresses its flags", () => {
@@ -135,11 +143,9 @@ describe("flattenCbsForExport", () => {
         }),
       ]),
     );
-    expect(rows[0]).toMatchObject({
-      context: true,
-      subCode: "",
-      materialCode: "",
-    });
+    expect(rows[0].context).toBe(true);
+    // Every type suppressed, not just the one the row happens to carry.
+    expect(Object.values(rows[0].costTypes).join("")).toBe("");
   });
 
   it("falls back to the account description, then the code, for a nameless row", () => {

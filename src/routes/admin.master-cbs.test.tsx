@@ -57,6 +57,9 @@ function item(
     rowType: "ORIGINAL",
     subReporting: null,
     materialCode: null,
+    laborCode: null,
+    equipmentCode: null,
+    otherCode: null,
     ...over,
   };
 }
@@ -79,6 +82,27 @@ function renderPage() {
 }
 
 describe("CBS Code Book", () => {
+  it("lists one row per account, not its cost-type variants", () => {
+    // The L / S / M / E / O rows are the same account priced differently; the
+    // badges say which exist, so repeating them would double the tree.
+    renderPage();
+    const [accounts] = screen.getAllByRole("tree");
+    expect(within(accounts).getByText("Civil")).toBeInTheDocument();
+    expect(within(accounts).queryByText("Civil Subcontracts")).toBeNull();
+  });
+
+  it("still lists every cost type in the dictionary section", () => {
+    renderPage();
+    // The S row hangs under its account, so open the branch before looking.
+    const expandAll = screen.getAllByRole("button", { name: "Expand all" });
+    fireEvent.click(expandAll[expandAll.length - 1]);
+    const trees = screen.getAllByRole("tree");
+    const dictionary = trees[trees.length - 1];
+    expect(
+      within(dictionary).getByText("Civil Subcontracts"),
+    ).toBeInTheDocument();
+  });
+
   it("renders the whole catalog with no project selected", () => {
     renderPage();
     expect(
@@ -92,7 +116,7 @@ describe("CBS Code Book", () => {
   it("splits originals from the full dictionary, as the Code Book split does", () => {
     renderPage();
     expect(
-      screen.getByRole("button", { name: /Original Codes/ }),
+      screen.getByRole("button", { name: /Cost Accounts/ }),
     ).toHaveTextContent("2 rows");
     expect(
       screen.getByRole("button", { name: /CBS Dictionary/ }),

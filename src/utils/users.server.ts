@@ -51,10 +51,24 @@ function primaryEmail(clerkUser: {
   return (primary ?? clerkUser.emailAddresses[0])?.emailAddress ?? "";
 }
 
+/** Whether this email is on the bootstrap list, case-insensitively. */
+function isBootstrapAdmin(email: string): boolean {
+  return BOOTSTRAP_ADMIN_EMAILS.includes(email.toLowerCase());
+}
+
 /**
  * Resolves the signed-in Clerk user to a local `User` row, creating it on
  * first sight (lazy sync). Bootstrap admin emails are promoted on every call.
  * Returns null when nobody is signed in.
+ *
+ * Matches on `clerkId` first and on email second. The second lookup is not a
+ * convenience: a Clerk id is not permanent. Delete and re-create an account —
+ * or move between Clerk instances — and Clerk mints a new id while the old one
+ * stops resolving forever. The row keyed to the dead id still holds the user's
+ * role and project grants, and because `email` is `@unique`, creating a fresh
+ * row for the new id fails with P2002. That left the user signed in but unable
+ * to resolve at all: no role, no projects, every guard throwing. Re-linking the
+ * existing row to the new id repairs it on the next sign-in instead.
  */
 export async function resolveCurrentUser(): Promise<CurrentUser | null> {
   const { userId } = await auth();
@@ -63,8 +77,7 @@ export async function resolveCurrentUser(): Promise<CurrentUser | null> {
   const existing = await prisma.user.findUnique({ where: { clerkId: userId } });
   if (existing) {
     const shouldPromote =
-      existing.role !== "ADMINISTRATOR" &&
-      BOOTSTRAP_ADMIN_EMAILS.includes(existing.email.toLowerCase());
+      existing.role !== "ADMINISTRATOR" && isBootstrapAdmin(existing.email);
     if (shouldPromote) {
       const promoted = await prisma.user.update({
         where: { clerkId: userId },
@@ -77,9 +90,37 @@ export async function resolveCurrentUser(): Promise<CurrentUser | null> {
 
   const clerkUser = await clerkClient().users.getUser(userId);
   const email = primaryEmail(clerkUser);
-  const role: UserRole = BOOTSTRAP_ADMIN_EMAILS.includes(email.toLowerCase())
-    ? "ADMINISTRATOR"
-    : "USER";
+  const role: UserRole = isBootstrapAdmin(email) ? "ADMINISTRATOR" : "USER";
+
+  // Case-insensitive: Clerk keeps the address as the user typed it, so a row
+  // stored lower-case would not match an exact comparison.
+  const orphaned = email
+    ? await prisma.user.findFirst({
+        where: { email: { equals: email, mode: "insensitive" } },
+      })
+    : null;
+
+  if (orphaned) {
+    // Logged because it is worth seeing in the deployment logs: it means a
+    // Clerk account was replaced, and it is the one moment the row moves.
+    console.warn(
+      `resolveCurrentUser: re-linking user ${orphaned.id} (${orphaned.email}) from stale Clerk id ${orphaned.clerkId} to ${userId}`,
+    );
+    const relinked = await prisma.user.update({
+      where: { id: orphaned.id },
+      data: {
+        clerkId: userId,
+        // Promote on re-link for the same reason sign-in does: a bootstrap
+        // admin must not be lockable out. Never demote — the role on the row
+        // is the one an administrator assigned.
+        ...(orphaned.role !== "ADMINISTRATOR" && isBootstrapAdmin(email)
+          ? { role: "ADMINISTRATOR" as const }
+          : {}),
+      },
+    });
+    return toCurrentUser(relinked);
+  }
+
   const created = await prisma.user.create({
     data: { clerkId: userId, email, role },
   });
@@ -119,9 +160,7 @@ export function adminHandler<I, O>(
 }
 
 /** Same as `adminHandler` but for handlers that take no input. */
-export function adminHandlerNoInput<O>(
-  fn: () => Promise<O>,
-): () => Promise<O> {
+export function adminHandlerNoInput<O>(fn: () => Promise<O>): () => Promise<O> {
   return async () => {
     await requireAdmin();
     return fn();
@@ -136,9 +175,7 @@ export function adminHandlerNoInput<O>(
  * Throws on signed-out callers — every project-scoped server fn is behind
  * authentication anyway.
  */
-export async function getAccessibleProjectIds(): Promise<
-  Set<number> | "all"
-> {
+export async function getAccessibleProjectIds(): Promise<Set<number> | "all"> {
   const user = await resolveCurrentUser();
   if (!user) throw new Error("Unauthorized: not signed in");
   if (hasAtLeastRole(user.role, "ADMINISTRATOR")) return "all";
@@ -212,7 +249,10 @@ export async function requireRecordAccess<Row extends { projectId: number }>(
 ): Promise<{ actor: CurrentUser; projectId: number; row: Row }> {
   const actor = await resolveCurrentUser();
   if (!actor) throw new Error("Unauthorized: not signed in");
-  const row = (await delegate.findUniqueOrThrow({ where: { id }, select })) as Row;
+  const row = (await delegate.findUniqueOrThrow({
+    where: { id },
+    select,
+  })) as Row;
   await assertProjectAccess(actor, row.projectId);
   return { actor, projectId: row.projectId, row };
 }
@@ -237,10 +277,9 @@ export async function requireProjectAccess(
  * `await requireProjectAccess(data.projectId)` at the top of the body, but
  * structural — impossible to forget on a per-handler basis.
  */
-export function projectScopedHandler<
-  I extends { projectId: number },
-  O,
->(fn: (args: { data: I }) => Promise<O>): (args: { data: I }) => Promise<O> {
+export function projectScopedHandler<I extends { projectId: number }, O>(
+  fn: (args: { data: I }) => Promise<O>,
+): (args: { data: I }) => Promise<O> {
   return async (args) => {
     await requireProjectAccess(args.data.projectId);
     return fn(args);
@@ -288,10 +327,9 @@ export async function requireVersionAccess(
  * access to the version's owning project. Mirrors `projectScopedHandler` for
  * version-scoped endpoints (FefRow reads/writes, per-version totals/basis).
  */
-export function versionScopedHandler<
-  I extends { versionId: number },
-  O,
->(fn: (args: { data: I }) => Promise<O>): (args: { data: I }) => Promise<O> {
+export function versionScopedHandler<I extends { versionId: number }, O>(
+  fn: (args: { data: I }) => Promise<O>,
+): (args: { data: I }) => Promise<O> {
   return async (args) => {
     await requireVersionAccess(args.data.versionId);
     return fn(args);

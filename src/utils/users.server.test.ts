@@ -6,24 +6,39 @@ import type { CurrentUser } from "./users";
 // so these tests run in the plain unit suite — no database, no Clerk env. The
 // mock handles must be created through `vi.hoisted` because `vi.mock` is hoisted
 // above the imports.
-const { userFindFirst, userFindUnique, estimateVersionFindUnique, authFn } =
-  vi.hoisted(() => ({
-    userFindFirst: vi.fn(),
-    userFindUnique: vi.fn(),
-    estimateVersionFindUnique: vi.fn(),
-    authFn: vi.fn(),
-  }));
+const {
+  userFindFirst,
+  userFindUnique,
+  userUpdate,
+  userCreate,
+  estimateVersionFindUnique,
+  authFn,
+  getUserFn,
+} = vi.hoisted(() => ({
+  userFindFirst: vi.fn(),
+  userFindUnique: vi.fn(),
+  userUpdate: vi.fn(),
+  userCreate: vi.fn(),
+  estimateVersionFindUnique: vi.fn(),
+  authFn: vi.fn(),
+  getUserFn: vi.fn(),
+}));
 
 vi.mock("../server/db", () => ({
   prisma: {
-    user: { findFirst: userFindFirst, findUnique: userFindUnique },
+    user: {
+      findFirst: userFindFirst,
+      findUnique: userFindUnique,
+      update: userUpdate,
+      create: userCreate,
+    },
     estimateVersion: { findUnique: estimateVersionFindUnique },
   },
 }));
 
 vi.mock("@clerk/tanstack-react-start/server", () => ({
   auth: authFn,
-  clerkClient: vi.fn(),
+  clerkClient: () => ({ users: { getUser: getUserFn } }),
 }));
 
 import {
@@ -37,6 +52,7 @@ import {
   requireProjectAccess,
   requireRecordAccess,
   requireRole,
+  resolveCurrentUser,
   requireVersionAccess,
   versionScopedHandler,
 } from "./users.server";
@@ -546,5 +562,174 @@ describe("assertCreatorOrAdmin", () => {
     expect(() =>
       assertCreatorOrAdmin(admin, { createdById: null }, msg),
     ).not.toThrow();
+  });
+});
+
+describe("resolveCurrentUser", () => {
+  /** A Clerk user whose primary address is `email`. */
+  const clerkUserWith = (email: string) => ({
+    primaryEmailAddressId: "idn_1",
+    emailAddresses: [{ id: "idn_1", emailAddress: email }],
+  });
+
+  beforeEach(() => {
+    for (const m of [
+      authFn,
+      userFindUnique,
+      userFindFirst,
+      userUpdate,
+      userCreate,
+      getUserFn,
+    ]) {
+      m.mockReset();
+    }
+    // The re-link path logs; keep the suite output clean.
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  it("returns the row matched on clerkId without consulting Clerk", async () => {
+    authFn.mockResolvedValue({ userId: user.clerkId });
+    userFindUnique.mockResolvedValue(user);
+    await expect(resolveCurrentUser()).resolves.toEqual(user);
+    expect(getUserFn).not.toHaveBeenCalled();
+    expect(userFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("re-links the existing row when the stored Clerk id is dead", async () => {
+    // The production failure this guards: an admin's Clerk account was deleted
+    // and re-created, so their row held an id Clerk no longer resolves. The
+    // row still carries the role and the project grants, so it must be adopted
+    // by the new id — not left behind while a bare USER row is created.
+    const orphan = {
+      id: 10,
+      clerkId: "clerk-dead",
+      email: "kz@example.com",
+      role: "ADMINISTRATOR",
+    };
+    authFn.mockResolvedValue({ userId: "clerk-new" });
+    userFindUnique.mockResolvedValue(null);
+    getUserFn.mockResolvedValue(clerkUserWith("kz@example.com"));
+    userFindFirst.mockResolvedValue(orphan);
+    userUpdate.mockImplementation(({ data }) => ({ ...orphan, ...data }));
+
+    await expect(resolveCurrentUser()).resolves.toEqual({
+      id: 10,
+      clerkId: "clerk-new",
+      email: "kz@example.com",
+      role: "ADMINISTRATOR",
+    });
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: 10 },
+      data: { clerkId: "clerk-new" },
+    });
+    // Crucially, no second row: that would violate the unique email and throw.
+    expect(userCreate).not.toHaveBeenCalled();
+  });
+
+  it("matches the email case-insensitively", async () => {
+    // Clerk stores the address as the user typed it; the row may be lower-case.
+    authFn.mockResolvedValue({ userId: "clerk-new" });
+    userFindUnique.mockResolvedValue(null);
+    getUserFn.mockResolvedValue(clerkUserWith("KZender@Example.com"));
+    userFindFirst.mockResolvedValue(null);
+    userCreate.mockResolvedValue({
+      id: 11,
+      clerkId: "clerk-new",
+      email: "KZender@Example.com",
+      role: "USER",
+    });
+
+    await resolveCurrentUser();
+    expect(userFindFirst).toHaveBeenCalledWith({
+      where: { email: { equals: "KZender@Example.com", mode: "insensitive" } },
+    });
+  });
+
+  it("creates a row when no existing row holds that email", async () => {
+    const fresh = {
+      id: 12,
+      clerkId: "clerk-new",
+      email: "new@example.com",
+      role: "USER",
+    };
+    authFn.mockResolvedValue({ userId: "clerk-new" });
+    userFindUnique.mockResolvedValue(null);
+    getUserFn.mockResolvedValue(clerkUserWith("new@example.com"));
+    userFindFirst.mockResolvedValue(null);
+    userCreate.mockResolvedValue(fresh);
+
+    await expect(resolveCurrentUser()).resolves.toEqual(fresh);
+    expect(userCreate).toHaveBeenCalledWith({
+      data: { clerkId: "clerk-new", email: "new@example.com", role: "USER" },
+    });
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+
+  it("never demotes on re-link, whatever the bootstrap list says", async () => {
+    // An APPROVER re-linking keeps APPROVER: the role on the row is the one an
+    // administrator assigned, and re-linking is not a place to reassign it.
+    const orphan = {
+      id: 13,
+      clerkId: "clerk-dead",
+      email: "appr@example.com",
+      role: "APPROVER",
+    };
+    authFn.mockResolvedValue({ userId: "clerk-new" });
+    userFindUnique.mockResolvedValue(null);
+    getUserFn.mockResolvedValue(clerkUserWith("appr@example.com"));
+    userFindFirst.mockResolvedValue(orphan);
+    userUpdate.mockImplementation(({ data }) => ({ ...orphan, ...data }));
+
+    const resolved = await resolveCurrentUser();
+    expect(resolved?.role).toBe("APPROVER");
+    expect(userUpdate.mock.calls[0][0].data).not.toHaveProperty("role");
+  });
+
+  it("promotes a bootstrap admin on re-link so they can't be locked out", async () => {
+    const orphan = {
+      id: 1,
+      clerkId: "clerk-dead",
+      // The bootstrap list is matched case-insensitively.
+      email: "JordanTodBaker@gmail.com",
+      role: "USER",
+    };
+    authFn.mockResolvedValue({ userId: "clerk-new" });
+    userFindUnique.mockResolvedValue(null);
+    getUserFn.mockResolvedValue(clerkUserWith("JordanTodBaker@gmail.com"));
+    userFindFirst.mockResolvedValue(orphan);
+    userUpdate.mockImplementation(({ data }) => ({ ...orphan, ...data }));
+
+    const resolved = await resolveCurrentUser();
+    expect(resolved?.role).toBe("ADMINISTRATOR");
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { clerkId: "clerk-new", role: "ADMINISTRATOR" },
+    });
+  });
+
+  it("does not search by email when Clerk has no address for the user", async () => {
+    // Searching for "" would match any row with a blank email and hand the
+    // caller somebody else's account.
+    authFn.mockResolvedValue({ userId: "clerk-new" });
+    userFindUnique.mockResolvedValue(null);
+    getUserFn.mockResolvedValue({
+      primaryEmailAddressId: null,
+      emailAddresses: [],
+    });
+    userCreate.mockResolvedValue({
+      id: 14,
+      clerkId: "clerk-new",
+      email: "",
+      role: "USER",
+    });
+
+    await resolveCurrentUser();
+    expect(userFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("returns null when nobody is signed in", async () => {
+    authFn.mockResolvedValue({ userId: null });
+    await expect(resolveCurrentUser()).resolves.toBeNull();
+    expect(userFindUnique).not.toHaveBeenCalled();
   });
 });

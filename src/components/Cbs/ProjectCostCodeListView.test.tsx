@@ -62,6 +62,9 @@ function item(
     rowType: "ORIGINAL",
     subReporting: null,
     materialCode: null,
+    laborCode: null,
+    equipmentCode: null,
+    otherCode: null,
     ...over,
   };
 }
@@ -70,7 +73,11 @@ function item(
 // filters out the generated S/M rows in SQL, so the page never sees them and
 // does no filtering of its own — the fixture mirrors that contract.
 const FIXTURE: CbsTreeRow[] = [
-  item("100-00-0000-00-0", "Civil", { subReporting: true, materialCode: true }),
+  item("100-00-0000-00-0", "Civil", {
+    subReporting: true,
+    materialCode: true,
+    laborCode: true,
+  }),
   item("101-00-0000-00-0", "Civil Shop Materials", { materialCode: true }),
   item("101-05-0000-00-0", "Earthwork & Trenching"),
   item("101-05-0500-00-0", "Topsoil", { uom: "CY" }),
@@ -115,7 +122,7 @@ describe("ProjectCostCodeListView", () => {
   it("shows a single list, with no collapsible sections", () => {
     renderView();
     expect(screen.getAllByRole("tree")).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: /Original Codes/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Cost Accounts/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /CBS Dictionary/ })).toBeNull();
   });
 
@@ -317,6 +324,47 @@ describe("ProjectCostCodeListView", () => {
       expect(subs).toHaveAttribute("aria-pressed", "false");
       fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
       expect(names()).toContain("Topsoil");
+    });
+
+    it("offers a button for every cost type, in the workbook's order", () => {
+      renderView();
+      const labels = [
+        "Labor",
+        "Subcontracts",
+        "Materials",
+        "Equipment",
+        "Other",
+      ];
+      for (const l of labels) {
+        expect(screen.getByRole("button", { name: l })).toBeInTheDocument();
+      }
+    });
+
+    it("filters by the three new cost types too", () => {
+      renderView();
+      // FIXTURE's Civil row carries Labor; nothing carries Equipment.
+      fireEvent.click(screen.getByRole("button", { name: "Labor" }));
+      expect(names()).toContain("Civil");
+      expect(screen.getByText("1 match")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Labor" }));
+      fireEvent.click(screen.getByRole("button", { name: "Equipment" }));
+      expect(screen.getByText(/No rows match this filter/)).toBeInTheDocument();
+    });
+
+    it("badges a row for each cost type it carries", () => {
+      renderView();
+      const tree = screen.getByRole("tree");
+      const civil = within(tree)
+        .getByText("Civil")
+        .closest('[role="treeitem"]')! as HTMLElement;
+      expect(within(civil).getByTitle("Labor Code: YES")).toHaveTextContent(
+        "L",
+      );
+      expect(within(civil).getByTitle("Sub Code: YES")).toHaveTextContent("S");
+      expect(within(civil).getByTitle("Material Code: YES")).toHaveTextContent(
+        "M",
+      );
     });
 
     it("narrows the search box rather than widening it", () => {

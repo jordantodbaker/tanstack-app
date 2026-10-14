@@ -63,10 +63,11 @@ export function ProjectCostCodeListView() {
         <p className="mt-1 max-w-3xl text-sm text-slate-500">
           The cost codes available on this project — the CBS rows selected on
           the Setup page — as a colour-coded, collapsible hierarchy.{" "}
-          <strong>S</strong> and <strong>M</strong> mark a code's own Sub Code
-          and Material Code. Greyed-out rows are parent summaries the project
-          wasn't given, shown so the codes under them nest correctly. Colours
-          and grouping mirror the source workbook.
+          <strong>L</strong>, <strong>S</strong>, <strong>M</strong>,{" "}
+          <strong>E</strong> and <strong>O</strong> mark a code's own Labor,
+          Sub, Material, Equipment and Other Code. Greyed-out rows are parent
+          summaries the project wasn't given, shown so the codes under them nest
+          correctly. Colours and grouping mirror the source workbook.
         </p>
       </header>
 

@@ -5,8 +5,10 @@ import {
   buildCbsTree,
   cbsFilterIsEmpty,
   cbsFlagBadges,
+  cbsNoCostTypes,
   pruneCbsTree,
   type CbsBadge,
+  type CbsCostTypeKey,
   type CbsRowFilter,
   type CbsTreeNode,
 } from "~/lib/cbs-tree";
@@ -134,12 +136,16 @@ export function CbsDictionaryBrowser({
   } = useCbsTreeExpansion(nodes);
   const [selected, setSelected] = React.useState<Node | null>(null);
   const [query, setQuery] = React.useState("");
-  const [sub, setSub] = React.useState(false);
-  const [material, setMaterial] = React.useState(false);
+  const [costTypes, setCostTypes] = React.useState(cbsNoCostTypes);
+  const toggleCostType = React.useCallback(
+    (key: CbsCostTypeKey) =>
+      setCostTypes((prev) => ({ ...prev, [key]: !prev[key] })),
+    [],
+  );
 
   const filter: CbsRowFilter = React.useMemo(
-    () => ({ query: query.trim().toLowerCase(), sub, material }),
-    [query, sub, material],
+    () => ({ query: query.trim().toLowerCase(), ...costTypes }),
+    [query, costTypes],
   );
   const filtering = !cbsFilterIsEmpty(filter);
   const { nodes: visibleNodes, matches } = React.useMemo(
@@ -169,10 +175,8 @@ export function CbsDictionaryBrowser({
         onQueryChange={setQuery}
         onExpandAll={expandAll}
         onCollapseAll={collapseAll}
-        subActive={sub}
-        materialActive={material}
-        onToggleSub={() => setSub((v) => !v)}
-        onToggleMaterial={() => setMaterial((v) => !v)}
+        costTypes={costTypes}
+        onToggleCostType={toggleCostType}
       >
         {exportView && (
           <ExportCbsXlsxButton

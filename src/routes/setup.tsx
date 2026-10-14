@@ -13,10 +13,12 @@ import { currentUserQueryOptions, hasAtLeastRole } from "~/utils/users";
 import {
   buildCbsTree,
   cbsFilterIsEmpty,
+  cbsNoCostTypes,
   computeCbsSelectionCounts,
   filterCbsTree,
   getNodeSelectionState,
   selectionStateFromCounts,
+  type CbsCostTypeKey,
   type CbsRowFilter,
   type CbsTreeNode,
 } from "~/lib/cbs-tree";
@@ -131,8 +133,12 @@ function CbsTreeEditor({
   } = useCbsTreeExpansion(tree);
   const [selected, setSelected] = React.useState<CbsTreeNode | null>(null);
   const [search, setSearch] = React.useState("");
-  const [sub, setSub] = React.useState(false);
-  const [material, setMaterial] = React.useState(false);
+  const [costTypes, setCostTypes] = React.useState(cbsNoCostTypes);
+  const toggleCostType = React.useCallback(
+    (key: CbsCostTypeKey) =>
+      setCostTypes((prev) => ({ ...prev, [key]: !prev[key] })),
+    [],
+  );
   const deferredSearch = React.useDeferredValue(search);
   const isFiltering = search !== deferredSearch;
 
@@ -163,8 +169,8 @@ function CbsTreeEditor({
   });
 
   const filter: CbsRowFilter = React.useMemo(
-    () => ({ query: deferredSearch.trim().toLowerCase(), sub, material }),
-    [deferredSearch, sub, material],
+    () => ({ query: deferredSearch.trim().toLowerCase(), ...costTypes }),
+    [deferredSearch, costTypes],
   );
   const isFiltered = !cbsFilterIsEmpty(filter);
   const filteredTree = React.useMemo(
@@ -246,10 +252,8 @@ function CbsTreeEditor({
         placeholder="Search by code, name, or description…"
         onExpandAll={expandAll}
         onCollapseAll={collapseAll}
-        subActive={sub}
-        materialActive={material}
-        onToggleSub={() => setSub((v) => !v)}
-        onToggleMaterial={() => setMaterial((v) => !v)}
+        costTypes={costTypes}
+        onToggleCostType={toggleCostType}
       >
         <span className="ml-auto text-sm text-slate-600">
           {totalSelected.toLocaleString()} selected

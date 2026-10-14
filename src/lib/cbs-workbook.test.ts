@@ -88,8 +88,17 @@ describe("loadCbsWorkbook", () => {
         name: "Master CBS",
         rows: [
           HEADERS,
-          toRow(r("100-00-0000-00-0", "Civil", { "Sub Code": "YES", "Material Code": "YES" })),
-          toRow(r("101-00-0000-00-0", "Civil Shop Materials", { "Material Code": "YES" })),
+          toRow(
+            r("100-00-0000-00-0", "Civil", {
+              "Sub Code": "YES",
+              "Material Code": "YES",
+            }),
+          ),
+          toRow(
+            r("101-00-0000-00-0", "Civil Shop Materials", {
+              "Material Code": "YES",
+            }),
+          ),
           // Already present in the workbook → its generated twin is skipped.
           toRow(r("101-00-0000-00-M", "Civil Shop Materials")),
           // Cost Code cell disagrees with the Display Code → derived wins, counted.
@@ -105,7 +114,12 @@ describe("loadCbsWorkbook", () => {
           // Blank row → ignored entirely.
           toRow({}),
           // Blank flags → null.
-          toRow(r("101-15-0000-00-0", "Underground", { "Sub Code": "", "Material Code": "" })),
+          toRow(
+            r("101-15-0000-00-0", "Underground", {
+              "Sub Code": "",
+              "Material Code": "",
+            }),
+          ),
           // Lower-case code → normalised to upper case.
           toRow(r("101-20-0000-00-l", "Lowercase")),
         ],
@@ -123,11 +137,26 @@ describe("loadCbsWorkbook", () => {
     expect(report.skippedExistingMaterial).toBe(1);
     expect(report.costCodeMismatches).toBe(1);
     expect(report.invalid).toEqual([
-      { row: 10, displayCode: "BAD-CODE", name: "Oops", reason: "display code is not XXX-XX-XXXX-XX-X" },
+      {
+        row: 10,
+        displayCode: "BAD-CODE",
+        name: "Oops",
+        reason: "display code is not XXX-XX-XXXX-XX-X",
+      },
     ]);
     expect(report.duplicates).toEqual([
-      { row: 7, displayCode: "101-10-0000-00-0", name: "Piling (dup)", kept: false },
-      { row: 9, displayCode: "700-00-0000-00-0", name: "Electrical", kept: true },
+      {
+        row: 7,
+        displayCode: "101-10-0000-00-0",
+        name: "Piling (dup)",
+        kept: false,
+      },
+      {
+        row: 9,
+        displayCode: "700-00-0000-00-0",
+        name: "Electrical",
+        kept: true,
+      },
     ]);
 
     // Dictionary order: parents first, each original followed by its twins.
@@ -192,10 +221,121 @@ describe("loadCbsWorkbook", () => {
     expect(items.map((i) => i.displayCode)).toEqual(["100-00-0000-00-0"]);
   });
 
+  /**
+   * The 2026-10 workbook changed shape: the sheet is "CBS Expanded", summary
+   * rows are written without a cost-type segment and marked "(*)", every name
+   * carries its cost type in parentheses, and three more flag columns arrived.
+   * Everything downstream is built on the five-segment code where "0" is the
+   * summary type, so the loader absorbs that difference rather than teaching
+   * the whole app a second shape.
+   */
+  it("normalises a summary code and strips the cost-type suffix from the name", async () => {
+    const path = join(dir, "expanded.xlsx");
+    await writeWorkbook(path, [
+      {
+        name: "CBS Expanded",
+        rows: [
+          [...HEADERS, "Labor Code", "Equipment Code", "Other Code"],
+          // A four-segment summary row, as the new sheet writes it.
+          toRow({ ...r("012-05-0000-00", "Overhead (*)"), "Sub Code": "NO" }),
+          // Its costed child, already expanded in the sheet.
+          toRow({
+            ...r("012-05-1000-00-L", "Executive (L)"),
+            "Sub Code": "NO",
+          }),
+        ],
+      },
+    ]);
+    const { items, report } = await loadCbsWorkbook(path);
+
+    expect(report.sheet).toBe("CBS Expanded");
+    expect(report.invalid).toEqual([]);
+    // The summary gains the backbone segment; the costed row is untouched.
+    expect(items.map((i) => i.displayCode)).toEqual([
+      "012-05-0000-00-0",
+      "012-05-1000-00-L",
+    ]);
+    // Parentheses that ARE the cost type go; the name is otherwise verbatim.
+    expect(items.map((i) => i.name)).toEqual(["Overhead", "Executive"]);
+    // The normalised code drives the levels, so "0" is the summary's L6.
+    expect(items[0]).toMatchObject({ l1: "012", l2: "05", l6: "0" });
+  });
+
+  it("reads the three cost-type flag columns alongside Sub and Material", async () => {
+    const path = join(dir, "flags.xlsx");
+    await writeWorkbook(path, [
+      {
+        name: "CBS Expanded",
+        rows: [
+          [...HEADERS, "Labor Code", "Equipment Code", "Other Code"],
+          [
+            ...toRow(
+              r("500-00-0000-00-0", "Equipment (*)", {
+                "Sub Code": "YES",
+                "Material Code": "NO",
+              }),
+            ),
+            "YES",
+            "YES",
+            "",
+          ],
+        ],
+      },
+    ]);
+    const { items } = await loadCbsWorkbook(path);
+    expect(items[0]).toMatchObject({
+      subReporting: true,
+      materialCode: false,
+      laborCode: true,
+      equipmentCode: true,
+      // A blank column is unknown, not "NO".
+      otherCode: null,
+    });
+  });
+
+  it("still rejects a code with a doubled cost type", async () => {
+    // "022-00-0000-00-0-S" — the expansion appended the type instead of
+    // replacing the backbone "0". Six segments is not a shape we normalise;
+    // rejecting it is what surfaced twelve of these in the real workbook.
+    const path = join(dir, "doubled.xlsx");
+    await writeWorkbook(path, [
+      {
+        name: "CBS Expanded",
+        rows: [HEADERS, toRow(r("022-00-0000-00-0-S", "Combined Phase (S)"))],
+      },
+    ]);
+    const { items, report } = await loadCbsWorkbook(path);
+    expect(items).toEqual([]);
+    expect(report.invalid).toHaveLength(1);
+    expect(report.invalid[0].displayCode).toBe("022-00-0000-00-0-S");
+  });
+
+  it("leaves a name whose own text ends in parentheses alone", async () => {
+    // Only a single-character marker is a cost type. "(Class 4-3)" is content.
+    const path = join(dir, "parens.xlsx");
+    await writeWorkbook(path, [
+      {
+        name: "CBS Expanded",
+        rows: [
+          HEADERS,
+          toRow(r("025-00-0000-00-0", "Preliminary Design – FEED (Class 4-3)")),
+        ],
+      },
+    ]);
+    const { items } = await loadCbsWorkbook(path);
+    expect(items[0].name).toBe("Preliminary Design – FEED (Class 4-3)");
+  });
+
   it("rejects a workbook without a Display Code header", async () => {
     const path = join(dir, "no-header.xlsx");
     await writeWorkbook(path, [
-      { name: "Master CBS", rows: [["Name", "Code"], ["Civil", "100"]] },
+      {
+        name: "Master CBS",
+        rows: [
+          ["Name", "Code"],
+          ["Civil", "100"],
+        ],
+      },
     ]);
     await expect(loadCbsWorkbook(path)).rejects.toThrow(/no header row/);
   });
@@ -209,19 +349,29 @@ describe("loadCbsWorkbook", () => {
    */
   it("reports rows whose L1–L7 columns disagree with the Display Code", async () => {
     const FULL = [
-      "L1", "L2", "L3", "L4", "L5", "L6", "L7",
-      "Name", "Display Code", "Cost Code",
+      "L1",
+      "L2",
+      "L3",
+      "L4",
+      "L5",
+      "L6",
+      "L7",
+      "Name",
+      "Display Code",
+      "Cost Code",
     ];
     /** A row with explicit segment columns, which may or may not match the code. */
-    const seg = (
-      segments: string,
-      code: string,
-      name: string,
-    ): string[] => [
-      segments.slice(0, 2), segments.slice(2, 3),
-      segments.slice(3, 5), segments.slice(5, 7), segments.slice(7, 9),
-      segments.slice(9, 11), segments.slice(11, 12),
-      name, code, code.replace(/-/g, ""),
+    const seg = (segments: string, code: string, name: string): string[] => [
+      segments.slice(0, 2),
+      segments.slice(2, 3),
+      segments.slice(3, 5),
+      segments.slice(5, 7),
+      segments.slice(7, 9),
+      segments.slice(9, 11),
+      segments.slice(11, 12),
+      name,
+      code,
+      code.replace(/-/g, ""),
     ];
 
     const path = join(dir, "segments.xlsx");
@@ -261,9 +411,9 @@ describe("loadCbsWorkbook", () => {
     ]);
 
     // The code still wins: the rows import under 700, which is the point.
-    expect(
-      items.find((i) => i.name === "Steam Tracing & Tubing")?.l1,
-    ).toBe("700");
+    expect(items.find((i) => i.name === "Steam Tracing & Tubing")?.l1).toBe(
+      "700",
+    );
 
     const text = formatCbsWorkbookReport(report);
     expect(text).toContain("4 row(s) whose L1–L7 columns disagree");

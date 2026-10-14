@@ -214,7 +214,7 @@ describe("buildCbsWorkbook", () => {
 
   it("names the sheet for whichever view was exported", async () => {
     for (const [view, sheet] of [
-      ["codeBook", "Original Codes"],
+      ["codeBook", "Cost Accounts"],
       ["dictionary", "CBS Dictionary"],
     ] as const) {
       const { ws } = await roundTrip(ROWS, { ...META, view });

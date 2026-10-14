@@ -10,9 +10,16 @@
 // it upserts by the unique `costCode`, so existing items keep their row id (and
 // therefore their `ProjectAllowedFefCbsItems` join rows). Items whose costCode no
 // longer appears in the dictionary are deleted (their allow-list entries cascade
-// away — the code is gone). Brand-new items (including newly generated S/M
-// twins) are created but NOT auto-added to any allow-list; the run reports how
-// many, so you can grant them in Setup if needed.
+// away — the code is gone). Brand-new items are created but NOT auto-added to
+// any allow-list; the run reports how many, so you can grant them in Setup.
+//
+// The 2026-10 workbook ships pre-expanded — every row flagged Labor / Sub /
+// Material / Equipment / Other Code already has its typed companion in the
+// sheet — so the loader's own S/M generation is now a safety net rather than
+// the main event, and the report's "generated" counts are near zero. What the
+// loader still does to every row is normalise the four-segment summary codes
+// to the "-0" backbone and strip the "(L)" / "(*)" suffix from the name; see
+// `prisma/cbs-workbook.ts`.
 //
 // Existing rows are compared column-by-column against the workbook and only
 // the ones that actually differ are written (in small parallel batches), so a

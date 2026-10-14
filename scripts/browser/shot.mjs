@@ -109,20 +109,37 @@ try {
   await setupClerkTestingToken({ page });
   // Clerk's helper needs to run on a page from the app's own origin.
   await page.goto(BASE, { waitUntil: "domcontentloaded" });
-  // `email_code`, not `password`: this Clerk instance offers Google or an
-  // email code, with no password field, so the password strategy silently
-  // leaves you signed out. The account uses Clerk's `+clerk_test` convention,
-  // for which the helper supplies the fixed test code itself.
-  await clerk.signIn({ page, signInParams: { strategy: "email_code", identifier: email } });
+  // Which first factors the instance offers has changed before — it was
+  // email-code only, then password-only ("email_code is not enabled"), which
+  // broke every capture. So try whichever strategies we have credentials for
+  // and report what each one said rather than failing on a hard-coded choice.
+  // The account uses Clerk's `+clerk_test` convention, so the helper supplies
+  // the fixed email code itself.
+  const strategies = [
+    ...(password ? [{ strategy: "password", identifier: email, password }] : []),
+    { strategy: "email_code", identifier: email },
+  ];
+  const refused = [];
+  for (const signInParams of strategies) {
+    try {
+      await clerk.signIn({ page, signInParams });
+      if (await page.evaluate(() => Boolean(window.Clerk?.user))) break;
+      refused.push(`${signInParams.strategy}: left the session unset`);
+    } catch (err) {
+      refused.push(`${signInParams.strategy}: ${err.message.split("\n")[0]}`);
+    }
+  }
 
-  // Assert it actually worked. `clerk.signIn` does not throw when the strategy
-  // is unavailable — it just leaves the session unset, and the run then
-  // screenshots a sign-in page while reporting success. That happened.
+  // Assert it actually worked. `clerk.signIn` does not always throw when a
+  // strategy is unavailable — it can just leave the session unset, and the run
+  // then screenshots a sign-in page while reporting success. That happened.
   const signedIn = await page.evaluate(() => Boolean(window.Clerk?.user));
   if (!signedIn) {
     throw new Error(
-      `Signed out after clerk.signIn as ${email}. Check that the sign-in ` +
-        "strategy is enabled on this Clerk instance.",
+      `Signed out after trying every strategy as ${email}:\n` +
+        refused.map((r) => `  - ${r}`).join("\n") +
+        "\nEnable one of these on the Clerk instance, or set " +
+        "BROWSER_TEST_PASSWORD in .env.",
     );
   }
 

@@ -68,7 +68,11 @@ beforeEach(() => {
 });
 
 let nextId = 1;
-function item(displayCode: string, name: string, rowType: CbsTreeItem["rowType"] = "ORIGINAL"): SetupItem {
+function item(
+  displayCode: string,
+  name: string,
+  rowType: CbsTreeItem["rowType"] = "ORIGINAL",
+): SetupItem {
   return {
     id: nextId++,
     ...parseCbsDisplayCode(displayCode),
@@ -79,6 +83,9 @@ function item(displayCode: string, name: string, rowType: CbsTreeItem["rowType"]
     rowType,
     subReporting: null,
     materialCode: null,
+    laborCode: null,
+    equipmentCode: null,
+    otherCode: null,
   };
 }
 
@@ -92,7 +99,10 @@ const piping = item("600-00-0000-00-0", "Piping");
 const CATALOG = [civil, shop, earthwork, topsoil, piping];
 
 /** The full column set the detail panel fetches for one row. */
-function detail(row: CbsTreeRow, over: Partial<CbsItemDetail> = {}): CbsItemDetail {
+function detail(
+  row: CbsTreeRow,
+  over: Partial<CbsItemDetail> = {},
+): CbsItemDetail {
   return {
     id: row.id,
     displayCode: row.displayCode,
@@ -192,7 +202,9 @@ describe("Setup page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
     expect(within(tree).getByText("Topsoil")).toBeInTheDocument();
     // Generated rows carry their S/M marker.
-    expect(within(tree).getByTitle("Generated material row")).toHaveTextContent("M");
+    expect(within(tree).getByTitle("Generated material row")).toHaveTextContent(
+      "M",
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Collapse all" }));
     expect(within(tree).queryByText("Topsoil")).toBeNull();

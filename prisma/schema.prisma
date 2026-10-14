@@ -1361,6 +1361,12 @@ model CbsItem {
   subReporting       Boolean?
   /// The workbook's "Material Code" flag (YES = a material twin is generated).
   materialCode       Boolean?
+  /// The workbook's "Labor Code" / "Equipment Code" / "Other Code" flags — the
+  /// same shape as the two above: YES means a companion row of that cost type
+  /// exists for this account. Nullable because the column may be blank.
+  laborCode          Boolean?
+  equipmentCode      Boolean?
+  otherCode          Boolean?
   materialType       String?
   costCenter         String?
   costClassification String?

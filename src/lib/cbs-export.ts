@@ -1,6 +1,7 @@
 import {
-  cbsIsMaterial,
-  cbsIsSubcontract,
+  CBS_COST_TYPES,
+  cbsHasCostType,
+  type CbsCostTypeKey,
   type CbsTreeItem,
   type CbsTreeNode,
 } from "./cbs-tree";
@@ -26,9 +27,8 @@ export type CbsExportRow = {
   uom: string;
   accountDescription: string;
   /** "YES" when the row carries a subcontract code, else "". */
-  subCode: string;
-  /** "YES" when the row carries a material code, else "". */
-  materialCode: string;
+  /** "YES" per cost type this row carries, keyed as in `CBS_COST_TYPES`. */
+  costTypes: Record<CbsCostTypeKey, string>;
   /**
    * True for an ancestor pulled in only so the hierarchy reads — not a code
    * the project may use. Rendered muted on the page; italic + grey in Excel.
@@ -54,8 +54,8 @@ export type CbsExportColumn = {
  * Deliberately no row-type column. ORIGINAL / SUB / MATERIAL is our own
  * vocabulary for how a row got into the dictionary, which is no business of
  * whoever opens the file — and nothing is lost by dropping it: a generated
- * row's cost type is the last segment of its display code, and the Sub Code
- * and Material Code columns say what a row carries.
+ * row's cost type is the last segment of its display code, and the per-type
+ * columns say what companions a row carries.
  */
 export const CBS_EXPORT_COLUMNS: readonly CbsExportColumn[] = [
   { header: "Display Code", width: 20, get: (r) => r.displayCode },
@@ -66,8 +66,12 @@ export const CBS_EXPORT_COLUMNS: readonly CbsExportColumn[] = [
   },
   { header: "UOM", width: 8, get: (r) => r.uom },
   { header: "Level", width: 7, get: (r) => r.level },
-  { header: "Sub Code", width: 10, get: (r) => r.subCode },
-  { header: "Material Code", width: 14, get: (r) => r.materialCode },
+  // One column per cost type, in the workbook's own column order.
+  ...CBS_COST_TYPES.map((t) => ({
+    header: t.column,
+    width: Math.max(10, t.column.length + 2),
+    get: (r: CbsExportRow) => r.costTypes[t.key],
+  })),
   {
     header: "Account Description",
     width: 46,
@@ -112,8 +116,12 @@ export function flattenCbsForExport<T extends CbsTreeItem>(
         accountDescription: item.accountDescription,
         // A context row is not an available code, so its flags are suppressed
         // here exactly as the badges are on the page.
-        subCode: !item.context && cbsIsSubcontract(item) ? "YES" : "",
-        materialCode: !item.context && cbsIsMaterial(item) ? "YES" : "",
+        costTypes: Object.fromEntries(
+          CBS_COST_TYPES.map((t) => [
+            t.key,
+            !item.context && cbsHasCostType(item, t) ? "YES" : "",
+          ]),
+        ) as Record<CbsCostTypeKey, string>,
         context: item.context === true,
       });
       walk(node.children);
@@ -167,6 +175,6 @@ export const CBS_EXPORT_LABELS: Record<
     sheet: "Project Cost Codes",
     filename: "project-cost-code-list",
   },
-  codeBook: { sheet: "Original Codes", filename: "cbs-original-codes" },
+  codeBook: { sheet: "Cost Accounts", filename: "cbs-cost-accounts" },
   dictionary: { sheet: "CBS Dictionary", filename: "cbs-dictionary" },
 };

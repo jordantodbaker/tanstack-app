@@ -16,6 +16,9 @@ function row(over: Partial<CbsDictionaryRow> = {}): CbsDictionaryRow {
     uom: "LS",
     subReporting: false,
     materialCode: true,
+    laborCode: true,
+    equipmentCode: false,
+    otherCode: null,
     materialType: "Bulks",
     costCenter: "2010",
     costClassification: "DIRECT",
@@ -39,13 +42,18 @@ function row(over: Partial<CbsDictionaryRow> = {}): CbsDictionaryRow {
 }
 
 /** A stored copy of `r` as the import reads it back. */
-function stored(r: CbsDictionaryRow, over: Partial<StoredCbsRow> = {}): StoredCbsRow {
+function stored(
+  r: CbsDictionaryRow,
+  over: Partial<StoredCbsRow> = {},
+): StoredCbsRow {
   return { ...r, ...over };
 }
 
 describe("CBS_IMPORT_FIELDS", () => {
   it("covers every CbsDictionaryRow column except the costCode key", () => {
-    const keys = Object.keys(row()).filter((k) => k !== "costCode").sort();
+    const keys = Object.keys(row())
+      .filter((k) => k !== "costCode")
+      .sort();
     expect([...CBS_IMPORT_FIELDS].sort()).toEqual(keys);
   });
 });
@@ -67,7 +75,9 @@ describe("changedCbsFields", () => {
 
   it("treats null and empty string as different values", () => {
     const r = row({ notes: "" });
-    expect(changedCbsFields(stored(r, { notes: null }), r)).toEqual({ notes: "" });
+    expect(changedCbsFields(stored(r, { notes: null }), r)).toEqual({
+      notes: "",
+    });
   });
 
   it("treats a null flag and false as different values", () => {
@@ -79,6 +89,8 @@ describe("changedCbsFields", () => {
 
   it("ignores the costCode key itself", () => {
     const r = row();
-    expect(changedCbsFields(stored(r, { costCode: "different" }), r)).toBeNull();
+    expect(
+      changedCbsFields(stored(r, { costCode: "different" }), r),
+    ).toBeNull();
   });
 });

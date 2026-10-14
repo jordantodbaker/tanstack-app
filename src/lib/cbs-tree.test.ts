@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   buildCbsTree,
   CBS_FILTER_NONE,
+  type CbsRowFilter,
   cbsAncestorCodes,
   cbsFilterIsEmpty,
-  cbsIsMaterial,
-  cbsIsSubcontract,
+  CBS_COST_TYPES,
+  cbsHasCostType,
+  cbsIsBackbone,
+  cbsIsBackboneCode,
   collectExpandableKeys,
   collectKeysToLevel,
   cbsFlagBadges,
@@ -25,7 +28,7 @@ import {
 } from "./cbs-tree";
 
 /** A text-only filter — what every search test used before the type toggles. */
-const text = (query: string) => ({ query, sub: false, material: false });
+const text = (query: string): CbsRowFilter => ({ ...CBS_FILTER_NONE, query });
 
 let nextId = 1;
 /** Build an item from its display code; segments are derived from the code. */
@@ -648,32 +651,104 @@ describe("withCbsLevels", () => {
   });
 });
 
-describe("cbsIsSubcontract / cbsIsMaterial", () => {
-  it("matches a row by its own cost type", () => {
-    // The workbook ships some S/M rows itself; the dictionary generates the
-    // rest. Both land in l6, so neither needs special-casing.
-    expect(cbsIsSubcontract(item("052-00-0000-00-S"))).toBe(true);
-    expect(cbsIsMaterial(item("101-00-0000-00-M"))).toBe(true);
-    expect(cbsIsSubcontract(item("101-00-0000-00-M"))).toBe(false);
-    expect(cbsIsMaterial(item("052-00-0000-00-S"))).toBe(false);
+describe("cbsIsBackbone", () => {
+  it('accepts only the account\'s own "-0" row', () => {
+    expect(cbsIsBackbone(item("012-05-1000-00-0"))).toBe(true);
+    for (const t of ["L", "S", "M", "E", "O", "D", "P", "Y"]) {
+      expect(cbsIsBackbone(item(`012-05-1000-00-${t}`))).toBe(false);
+    }
   });
 
-  it("matches a row by its Sub Code / Material Code flag", () => {
-    const flagged = item("101-00-0000-00-0", {
-      subReporting: true,
-      materialCode: true,
-    });
-    expect(cbsIsSubcontract(flagged)).toBe(true);
-    expect(cbsIsMaterial(flagged)).toBe(true);
+  it("answers the same from a bare display code", () => {
+    // Wire rows travel without the level segments, so the export filters on
+    // the code itself; the two must not drift apart.
+    for (const code of [
+      "012-05-1000-00-0",
+      "012-05-1000-00-L",
+      "601-05-0000-ST-L",
+      "000-00-0000-00-0",
+    ]) {
+      expect(cbsIsBackboneCode(code)).toBe(cbsIsBackbone(item(code)));
+    }
+  });
+});
+
+describe("cbsHasCostType", () => {
+  const type = (key: string) => CBS_COST_TYPES.find((t) => t.key === key)!;
+
+  it("covers the five workbook cost types, in column order", () => {
+    expect(CBS_COST_TYPES.map((t) => t.code)).toEqual([
+      "L",
+      "S",
+      "M",
+      "E",
+      "O",
+    ]);
+    expect(CBS_COST_TYPES.map((t) => t.flag)).toEqual([
+      "laborCode",
+      "subReporting",
+      "materialCode",
+      "equipmentCode",
+      "otherCode",
+    ]);
+  });
+
+  it("matches a row by its own cost type", () => {
+    // The workbook ships some typed rows itself; the dictionary generates the
+    // rest. Both land in l6, so neither needs special-casing.
+    for (const t of CBS_COST_TYPES) {
+      const row = item(`101-00-0000-00-${t.code}`);
+      expect(cbsHasCostType(row, t)).toBe(true);
+      // ...and no OTHER type claims it.
+      for (const other of CBS_COST_TYPES.filter((x) => x.key !== t.key)) {
+        expect(cbsHasCostType(row, other)).toBe(false);
+      }
+    }
+  });
+
+  it("matches a row by its flag column", () => {
+    for (const t of CBS_COST_TYPES) {
+      const flagged = item("101-00-0000-00-0", { [t.flag]: true });
+      expect(cbsHasCostType(flagged, t)).toBe(true);
+    }
   });
 
   it("is false for a plain row, blank flags included", () => {
-    const plain = item("101-00-0000-00-L", {
+    const plain = item("101-00-0000-00-D", {
       subReporting: null,
       materialCode: false,
+      laborCode: null,
+      equipmentCode: false,
+      otherCode: null,
     });
-    expect(cbsIsSubcontract(plain)).toBe(false);
-    expect(cbsIsMaterial(plain)).toBe(false);
+    for (const t of CBS_COST_TYPES)
+      expect(cbsHasCostType(plain, t)).toBe(false);
+  });
+
+  it("badges a row for every flag it carries", () => {
+    const all = item("101-00-0000-00-0", {
+      laborCode: true,
+      subReporting: true,
+      materialCode: true,
+      equipmentCode: true,
+      otherCode: true,
+    });
+    expect(cbsFlagBadges(all).map((b) => b.label)).toEqual([
+      "L",
+      "S",
+      "M",
+      "E",
+      "O",
+    ]);
+    expect(cbsFlagBadges(all).map((b) => b.title)).toEqual([
+      "Labor Code: YES",
+      "Sub Code: YES",
+      "Material Code: YES",
+      "Equipment Code: YES",
+      "Other Code: YES",
+    ]);
+    expect(cbsFlagBadges(item("101-00-0000-00-0"))).toEqual([]);
+    void type;
   });
 });
 
@@ -714,6 +789,7 @@ describe("row-type filters", () => {
 
   it("keeps subcontract rows and their ancestors, and nothing else", () => {
     const { nodes, matches } = pruneCbsTree(tree(), {
+      ...CBS_FILTER_NONE,
       query: "",
       sub: true,
       material: false,
@@ -729,6 +805,7 @@ describe("row-type filters", () => {
 
   it("keeps material rows the same way", () => {
     const { nodes, matches } = pruneCbsTree(tree(), {
+      ...CBS_FILTER_NONE,
       query: "",
       sub: false,
       material: true,
@@ -740,6 +817,7 @@ describe("row-type filters", () => {
 
   it("asking for both means either", () => {
     const { nodes } = pruneCbsTree(tree(), {
+      ...CBS_FILTER_NONE,
       query: "",
       sub: true,
       material: true,
@@ -756,6 +834,7 @@ describe("row-type filters", () => {
 
   it("narrows the text query rather than widening it", () => {
     const { nodes } = pruneCbsTree(tree(), {
+      ...CBS_FILTER_NONE,
       query: "bolt",
       sub: true,
       material: false,
@@ -769,6 +848,7 @@ describe("row-type filters", () => {
     // keep that whole subtree; the type filter must not, or Setup would show
     // the catalog back again.
     const subOnly = filterCbsTree(tree(), {
+      ...CBS_FILTER_NONE,
       query: "",
       sub: true,
       material: false,
@@ -788,9 +868,14 @@ describe("row-type filters", () => {
     expect(filterCbsTree(t, CBS_FILTER_NONE)).toBe(t);
     expect(pruneCbsTree(t, CBS_FILTER_NONE).nodes).toBe(t);
     expect(cbsFilterIsEmpty(CBS_FILTER_NONE)).toBe(true);
-    expect(cbsFilterIsEmpty({ query: "", sub: true, material: false })).toBe(
-      false,
-    );
+    expect(
+      cbsFilterIsEmpty({
+        ...CBS_FILTER_NONE,
+        query: "",
+        sub: true,
+        material: false,
+      }),
+    ).toBe(false);
   });
 });
 

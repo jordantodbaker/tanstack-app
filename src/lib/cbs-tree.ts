@@ -39,6 +39,12 @@ export type CbsTreeItem = {
   subReporting?: boolean | null;
   /** The workbook's "Material Code" flag. */
   materialCode?: boolean | null;
+  /** The workbook's "Labor Code" flag. */
+  laborCode?: boolean | null;
+  /** The workbook's "Equipment Code" flag. */
+  equipmentCode?: boolean | null;
+  /** The workbook's "Other Code" flag. */
+  otherCode?: boolean | null;
   /**
    * True for a row included only so the hierarchy reads correctly — an
    * ancestor of something the project HAS been granted, which it has not been
@@ -408,57 +414,129 @@ export function selectionStateFromCounts(
 }
 
 /**
- * Does this row carry subcontract cost? Either it IS a subcontract code — its
- * own cost type (the workbook's L7) is "S", which covers both the rows the
- * workbook ships that way and the twins the dictionary generates — or it is a
- * code whose Sub Code column says YES, meaning a subcontract twin exists for
- * it. The toolbar's "Subcontracts" filter is exactly this question.
+ * The cost types a row can carry a companion for.
+ *
+ * A row counts as one of these two ways: it IS a code of that cost type — its
+ * own L7, which covers both the rows the workbook ships that way and the twins
+ * the dictionary generates — or its matching workbook column says YES, meaning
+ * a companion of that type exists for it. The badges and the toolbar's filter
+ * buttons both ask exactly that question, so they read from this one table
+ * rather than repeating the rule five times.
+ *
+ * Order is the workbook's own column order, and it is the order the badges and
+ * the buttons appear in.
  */
-export function cbsIsSubcontract(item: CbsTreeItem): boolean {
-  return item.l6 === SUB_TYPE || item.subReporting === true;
-}
+export const CBS_COST_TYPES = [
+  {
+    key: "labor",
+    code: "L",
+    flag: "laborCode",
+    label: "Labor",
+    column: "Labor Code",
+  },
+  {
+    key: "sub",
+    code: "S",
+    flag: "subReporting",
+    label: "Subcontracts",
+    column: "Sub Code",
+  },
+  {
+    key: "material",
+    code: "M",
+    flag: "materialCode",
+    label: "Materials",
+    column: "Material Code",
+  },
+  {
+    key: "equipment",
+    code: "E",
+    flag: "equipmentCode",
+    label: "Equipment",
+    column: "Equipment Code",
+  },
+  {
+    key: "other",
+    code: "O",
+    flag: "otherCode",
+    label: "Other",
+    column: "Other Code",
+  },
+] as const satisfies readonly {
+  key: string;
+  code: string;
+  flag: keyof CbsTreeItem;
+  label: string;
+  column: string;
+}[];
 
-/** The material counterpart of `cbsIsSubcontract` — L7 "M", or Material Code YES. */
-export function cbsIsMaterial(item: CbsTreeItem): boolean {
-  return item.l6 === MATERIAL_TYPE || item.materialCode === true;
+export type CbsCostType = (typeof CBS_COST_TYPES)[number];
+export type CbsCostTypeKey = CbsCostType["key"];
+
+/** Does `item` carry this cost type, by its own code or by its flag column? */
+export function cbsHasCostType(item: CbsTreeItem, type: CbsCostType): boolean {
+  return item.l6 === type.code || item[type.flag] === true;
 }
 
 /**
- * What a CBS tree view is currently showing: free text plus the row-type
+ * What a CBS tree view is currently showing: free text plus the cost-type
  * toggles. `query` must already be lower-cased and trimmed.
  */
-export type CbsRowFilter = {
-  query: string;
-  sub: boolean;
-  material: boolean;
-};
+export type CbsRowFilter = { query: string } & Record<CbsCostTypeKey, boolean>;
 
 export const CBS_FILTER_NONE: CbsRowFilter = {
   query: "",
-  sub: false,
-  material: false,
+  ...(Object.fromEntries(CBS_COST_TYPES.map((t) => [t.key, false])) as Record<
+    CbsCostTypeKey,
+    boolean
+  >),
 };
+
+/**
+ * Is this the account's backbone row — the one whose cost type is "0"?
+ *
+ * Every costed variant of an account (its L / S / M / E / O row) hangs off this
+ * one, and the backbone carries the flag columns that say which variants
+ * exist. A view that lists accounts rather than individual cost lines shows
+ * only these, and lets the badges stand in for the rest.
+ */
+export function cbsIsBackbone(item: CbsTreeItem): boolean {
+  return item.l6 === BACKBONE_TYPE;
+}
+
+/**
+ * The same question asked of a bare display code, for callers holding wire
+ * rows — those travel without the level segments (see `withCbsLevels`).
+ */
+export function cbsIsBackboneCode(displayCode: string): boolean {
+  return displayCode.endsWith(`-${BACKBONE_TYPE}`);
+}
+
+/** An all-off cost-type selection — the state both tree views start in. */
+export function cbsNoCostTypes(): Record<CbsCostTypeKey, boolean> {
+  return Object.fromEntries(
+    CBS_COST_TYPES.map((t) => [t.key, false]),
+  ) as Record<CbsCostTypeKey, boolean>;
+}
 
 /** Is this filter showing everything (so callers can skip the walk)? */
 export function cbsFilterIsEmpty(filter: CbsRowFilter): boolean {
-  return !filter.query && !filter.sub && !filter.material;
+  return !filter.query && !CBS_COST_TYPES.some((t) => filter[t.key]);
 }
 
 /**
  * The text and the type toggles narrow each other: "pumps" with Subcontracts
- * on means subcontract rows mentioning pumps. The two toggles widen each
- * other, since asking for both is asking for either.
+ * on means subcontract rows mentioning pumps. The toggles widen each other,
+ * since asking for two is asking for either.
  */
 function rowMatches<T extends CbsTreeItem>(
   node: CbsTreeNode<T>,
   filter: CbsRowFilter,
 ): boolean {
   if (filter.query && !node.searchHaystack.includes(filter.query)) return false;
-  if (!filter.sub && !filter.material) return true;
-  return (
-    (filter.sub && cbsIsSubcontract(node.item)) ||
-    (filter.material && cbsIsMaterial(node.item))
-  );
+  const active = CBS_COST_TYPES.filter((t) => filter[t.key]);
+  if (active.length === 0) return true;
+  return active.some((t) => cbsHasCostType(node.item, t));
 }
 
 /**
@@ -554,14 +632,10 @@ export function cbsRowTypeBadges(item: CbsTreeItem): CbsBadge[] {
  * whether it carries a sub code, a material code, or both.
  */
 export function cbsFlagBadges(item: CbsTreeItem): CbsBadge[] {
-  const out: CbsBadge[] = [];
-  if (item.subReporting === true) {
-    out.push({ label: "S", title: "Sub Code: YES" });
-  }
-  if (item.materialCode === true) {
-    out.push({ label: "M", title: "Material Code: YES" });
-  }
-  return out;
+  return CBS_COST_TYPES.filter((t) => item[t.flag] === true).map((t) => ({
+    label: t.code,
+    title: `${t.column}: YES`,
+  }));
 }
 
 /**

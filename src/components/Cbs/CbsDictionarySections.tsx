@@ -1,7 +1,7 @@
 import * as React from "react";
 import { ChevronRight } from "lucide-react";
 import type { CbsTreeRow } from "~/utils/cbs";
-import type { CbsBadge, CbsTreeNode } from "~/lib/cbs-tree";
+import { cbsIsBackbone, type CbsBadge, type CbsTreeNode } from "~/lib/cbs-tree";
 import type { CbsExportView } from "~/lib/cbs-export";
 import {
   CbsDictionaryBrowser,
@@ -25,6 +25,7 @@ function CbsSection({
   sourceNote,
   emptyMessage,
   defaultOpen = false,
+  showRowTypeCounts,
   exportView,
 }: {
   title: string;
@@ -34,6 +35,8 @@ function CbsSection({
   sourceNote: string;
   emptyMessage: string;
   defaultOpen?: boolean;
+  /** Off for the accounts list, where the breakdown is always "0 sub · 0 material". */
+  showRowTypeCounts?: boolean;
   exportView: CbsExportView;
 }) {
   const [open, setOpen] = React.useState(defaultOpen);
@@ -66,6 +69,7 @@ function CbsSection({
             badgesFor={badgesFor}
             sourceNote={sourceNote}
             emptyMessage={emptyMessage}
+            showRowTypeCounts={showRowTypeCounts}
             exportView={exportView}
           />
         </div>
@@ -84,26 +88,28 @@ const MASTER_EMPTY = "No CBS items in the catalog.";
  * CBS page; project-scoped pages render a single `CbsDictionaryBrowser`.
  */
 export function CbsDictionarySections({ items }: { items: CbsTreeRow[] }) {
-  const originals = React.useMemo(
-    () => items.filter((i) => i.rowType === "ORIGINAL"),
-    [items],
-  );
+  // One row per account: the "-0" backbone only. Its L / S / M / E / O
+  // variants are the same account priced a different way, and the badges
+  // already say which of them exist, so listing them again doubles the tree
+  // for no new information.
+  const accounts = React.useMemo(() => items.filter(cbsIsBackbone), [items]);
 
   return (
     <div className="flex flex-col gap-4">
       <CbsSection
-        title="Original Codes"
-        description="Every CBS row — original rows only. S / M mark a row's own Sub Code / Material Code."
-        items={originals}
+        title="Cost Accounts"
+        description="One row per account — the codes ending in 0. L / S / M / E / O mark which cost types that account carries."
+        items={accounts}
         badgesFor={cbsFlagBadgesFor}
         sourceNote={MASTER_SOURCE_NOTE}
         emptyMessage={MASTER_EMPTY}
+        showRowTypeCounts={false}
         defaultOpen
         exportView="codeBook"
       />
       <CbsSection
         title="CBS Dictionary"
-        description="The complete dictionary — every original row plus the generated S/M rows."
+        description="Every row in the CBS, each cost type on its own line — the accounts above plus their L / S / M / E / O variants."
         items={items}
         sourceNote={MASTER_SOURCE_NOTE}
         emptyMessage={MASTER_EMPTY}

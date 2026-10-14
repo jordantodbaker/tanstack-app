@@ -28,6 +28,9 @@ export type CbsDictionaryRow = {
   uom: string;
   subReporting: boolean | null;
   materialCode: boolean | null;
+  laborCode: boolean | null;
+  equipmentCode: boolean | null;
+  otherCode: boolean | null;
   materialType: string | null;
   costCenter: string | null;
   costClassification: string | null;

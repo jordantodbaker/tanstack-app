@@ -9,7 +9,13 @@ import {
 function original(
   displayCode: string,
   name: string,
-  flags: { sub?: boolean; material?: boolean } = {},
+  flags: {
+    sub?: boolean;
+    material?: boolean;
+    labor?: boolean;
+    equipment?: boolean;
+    other?: boolean;
+  } = {},
 ): CbsDictionaryRow {
   return {
     ...parseCbsDisplayCode(displayCode),
@@ -18,6 +24,9 @@ function original(
     uom: "LS",
     subReporting: flags.sub ?? false,
     materialCode: flags.material ?? false,
+    laborCode: flags.labor ?? false,
+    equipmentCode: flags.equipment ?? false,
+    otherCode: flags.other ?? false,
     materialType: null,
     costCenter: null,
     costClassification: null,
@@ -108,7 +117,9 @@ describe("expandCbsDictionary", () => {
       ]);
     expect(generatedMaterial).toBe(1);
     expect(skippedExistingMaterial).toBe(1);
-    expect(items.filter((i) => i.displayCode === "601-05-0000-00-M")).toHaveLength(1);
+    expect(
+      items.filter((i) => i.displayCode === "601-05-0000-00-M"),
+    ).toHaveLength(1);
     expect(items.find((i) => i.rowType === "MATERIAL")?.generatedFrom).toBe(
       "601-05-0000-00-0",
     );
@@ -117,7 +128,11 @@ describe("expandCbsDictionary", () => {
   it("leaves rows flagged NO or blank untouched", () => {
     const { items } = expandCbsDictionary([
       original("101-15-0000-00-0", "Underground"),
-      { ...original("101-16-0000-00-0", "Unknown"), subReporting: null, materialCode: null },
+      {
+        ...original("101-16-0000-00-0", "Unknown"),
+        subReporting: null,
+        materialCode: null,
+      },
     ]);
     expect(items).toHaveLength(2);
     expect(items.every((i) => i.rowType === "ORIGINAL")).toBe(true);

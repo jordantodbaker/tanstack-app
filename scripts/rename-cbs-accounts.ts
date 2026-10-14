@@ -11,7 +11,9 @@
 //
 // Run:  npx tsx scripts/rename-cbs-accounts.ts [--dry-run]
 import "dotenv/config";
+import ExcelJS from "exceljs";
 import { prisma } from "../src/server/db";
+import { CBS_WORKBOOK_PATH, SHEET_NAMES } from "../prisma/cbs-workbook";
 import {
   cbsDisplayDescription,
   planCbsRenames,
@@ -21,9 +23,15 @@ import {
 const dryRun = process.argv.includes("--dry-run");
 
 /**
- * The renames to apply. `workbookCell` is where the same edit belongs in
- * CBS.xlsx (sheet "Master CBS", column H = "Name"), so a future import
- * carries the new name rather than reverting it.
+ * The renames to apply. `workbookCell` records where the same edit belonged in
+ * CBS.xlsx when the rename was written, so a future import carries the new name
+ * rather than reverting it.
+ *
+ * The cell is also resolved against the workbook at run time, because a hand-
+ * written reference goes stale on every revision: these two said sheet "Master
+ * CBS" column H, and the 2026-10 workbook has one sheet ("CBS Expanded") with
+ * Name in column G and Display Code in H. The reminder prints what the workbook
+ * says today and only mentions the recorded cell when the two disagree.
  */
 const RENAMES: CbsRename[] = [
   {
@@ -32,7 +40,7 @@ const RENAMES: CbsRename[] = [
     displayCode: "300-00-0000-00-0",
     from: "Structural Steel Shop Fabrication",
     to: "Structural Steel",
-    workbookCell: "H1999",
+    workbookCell: "G3020",
   },
   {
     // Likewise 600 covers the pipe shop (601–629) and field install
@@ -40,9 +48,58 @@ const RENAMES: CbsRename[] = [
     displayCode: "600-00-0000-00-0",
     from: "Pipe Shop",
     to: "Piping",
-    workbookCell: "H3228",
+    workbookCell: "G6296",
   },
 ];
+
+/** Where a display code sits in the workbook today, and what it says there. */
+type WorkbookName = {
+  sheet: string;
+  cell: string;
+  /** The Name cell verbatim — cost-type suffix and all. */
+  value: string;
+};
+
+/**
+ * Finds the Name cell for each display code in the workbook the import reads.
+ *
+ * Headers are located by label rather than by a fixed column, and the sheet by
+ * the loader's own precedence list, so this survives a re-ordered or renamed
+ * workbook the same way the import does.
+ */
+async function resolveWorkbookNames(
+  displayCodes: string[],
+): Promise<Map<string, WorkbookName>> {
+  const found = new Map<string, WorkbookName>();
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(CBS_WORKBOOK_PATH);
+  const ws =
+    SHEET_NAMES.map((n) => wb.getWorksheet(n)).find(Boolean) ??
+    wb.worksheets[0];
+  if (!ws) return found;
+
+  let codeCol = 0;
+  let nameCol = 0;
+  ws.getRow(1).eachCell((cell, n) => {
+    const header = `${cell.value ?? ""}`.trim();
+    if (header === "Display Code") codeCol = n;
+    if (header === "Name") nameCol = n;
+  });
+  if (!codeCol || !nameCol) return found;
+
+  const wanted = new Set(displayCodes);
+  ws.eachRow((row, r) => {
+    if (r === 1 || wanted.size === found.size) return;
+    const code = `${row.getCell(codeCol).value ?? ""}`.trim();
+    if (!wanted.has(code) || found.has(code)) return;
+    found.set(code, {
+      sheet: ws.name,
+      cell: `${ws.getColumn(nameCol).letter}${r}`,
+      value: `${row.getCell(nameCol).value ?? ""}`.trim(),
+    });
+  });
+  return found;
+}
 
 async function main() {
   const rows = await prisma.cbsItem.findMany({
@@ -75,27 +132,49 @@ async function main() {
   }
 
   if (todo.length === 0) {
-    console.log("\nNothing to do.");
-    return;
-  }
-  if (dryRun) {
+    console.log("\nNothing to rename in the database.");
+  } else if (dryRun) {
     console.log("\n--dry-run: no changes written.");
-    return;
+  } else {
+    for (const t of todo) {
+      await prisma.cbsItem.update({
+        where: { id: t.id },
+        data: {
+          name: t.to,
+          displayDescription: cbsDisplayDescription(t.displayCode, t.to),
+        },
+      });
+    }
+    console.log(`\nRenamed ${todo.length} account(s).`);
   }
 
-  for (const t of todo) {
-    await prisma.cbsItem.update({
-      where: { id: t.id },
-      data: {
-        name: t.to,
-        displayDescription: cbsDisplayDescription(t.displayCode, t.to),
-      },
-    });
-  }
-  console.log(`\nRenamed ${todo.length} account(s).`);
-  console.log("Remember the workbook, or the next CBS import reverts this:");
+  // Reported every run, including "nothing to rename" and --dry-run. The
+  // workbook half is independent of the database half and is the one usually
+  // left undone — and once the database is renamed the script has nothing left
+  // to say about it, which is exactly when the reminder matters most.
+  console.log("\nThe workbook half — the next CBS import reads these cells:");
+  const inWorkbook = await resolveWorkbookNames(
+    RENAMES.map((r) => r.displayCode),
+  );
   for (const r of RENAMES) {
-    console.log(`  CBS.xlsx "Master CBS" ${r.workbookCell} → ${r.to}`);
+    const at = inWorkbook.get(r.displayCode);
+    if (!at) {
+      console.log(
+        `  MISSING ${r.displayCode} → "${r.to}" — not in the workbook (recorded as ${r.workbookCell}); an import cannot carry this name`,
+      );
+      continue;
+    }
+    // The loader strips the " (*)" / " (L)" cost-type suffix, so compare on the
+    // stem rather than demanding an exact match.
+    const stem = at.value.replace(/\s*\((?:\*|[A-Z])\)\s*$/, "").trim();
+    // The recorded cell is a hand-written note; say so when it has drifted.
+    const note =
+      at.cell === r.workbookCell ? "" : ` (recorded as ${r.workbookCell})`;
+    console.log(
+      stem === r.to
+        ? `  OK   "${at.sheet}" ${at.cell} already "${at.value}"${note}`
+        : `  EDIT "${at.sheet}" ${at.cell}: "${at.value}" → "${r.to}"${note}`,
+    );
   }
 }
 

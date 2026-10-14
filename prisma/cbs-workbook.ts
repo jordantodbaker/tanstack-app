@@ -68,15 +68,49 @@ export type CbsWorkbookReport = {
     rows: number;
     sample: { row: number; name: string };
   }[];
-  duplicates: { row: number; displayCode: string; name: string; kept: boolean }[];
+  duplicates: {
+    row: number;
+    displayCode: string;
+    name: string;
+    kept: boolean;
+  }[];
   invalid: { row: number; displayCode: string; name: string; reason: string }[];
 };
 
 /** Sheet names to look for, in order, before falling back to the first. */
-const SHEET_NAMES = ["CBS", "Master CBS"] as const;
+export const SHEET_NAMES = ["CBS", "CBS Expanded", "Master CBS"] as const;
 
-const DISPLAY_CODE_RE = /^[0-9A-Z]{3}-[0-9A-Z]{2}-[0-9A-Z]{4}-[0-9A-Z]{2}-[0-9A-Z]$/;
+const DISPLAY_CODE_RE =
+  /^[0-9A-Z]{3}-[0-9A-Z]{2}-[0-9A-Z]{4}-[0-9A-Z]{2}-[0-9A-Z]$/;
 
+/** A summary code with no cost-type segment: 012-05-0000-00. */
+const SUMMARY_CODE_RE = /^[0-9A-Z]{3}-[0-9A-Z]{2}-[0-9A-Z]{4}-[0-9A-Z]{2}$/;
+
+/**
+ * The workbook writes a summary row without a cost type and marks it "(*)" in
+ * the name; everything downstream — the tree, the colour-by-level scheme, the
+ * ancestor walk — is built on the five-segment form where "0" IS the summary
+ * cost type. Normalising here keeps that single code shape, so nothing below
+ * the loader has to learn a second one.
+ */
+function normalizeDisplayCode(raw: string): string {
+  return SUMMARY_CODE_RE.test(raw) ? `${raw}-${BACKBONE_COST_TYPE}` : raw;
+}
+
+/** The cost type a summary row carries once normalised. */
+const BACKBONE_COST_TYPE = "0";
+
+/**
+ * The workbook suffixes every name with its cost type — "Executive (L)",
+ * "Overhead (*)". The code's last segment and the row's badge both already say
+ * that, so the suffix is dropped for display. Only a trailing marker in the
+ * known set is removed: a name that genuinely ends in parentheses survives.
+ */
+const NAME_COST_TYPE_SUFFIX = /\s*\((?:\*|[A-Z])\)\s*$/;
+
+function stripCostTypeSuffix(name: string): string {
+  return name.replace(NAME_COST_TYPE_SUFFIX, "").trim() || name.trim();
+}
 
 /**
  * ExcelJS throws on the `colorFilter` autofilter nodes inside Excel Tables.
@@ -191,8 +225,10 @@ export async function loadCbsWorkbook(
     };
     const or = (label: string): string | null => text(label) || null;
 
-    const displayCode = text("Display Code").toUpperCase();
-    const name = text("Name");
+    const displayCode = normalizeDisplayCode(
+      text("Display Code").toUpperCase(),
+    );
+    const name = stripCostTypeSuffix(text("Name"));
     if (!displayCode && !name) continue;
     report.sheetRows++;
 
@@ -210,7 +246,8 @@ export async function loadCbsWorkbook(
 
     const costCode = displayCode.replace(/-/g, "");
     const sheetCostCode = text("Cost Code");
-    if (sheetCostCode && sheetCostCode !== costCode) report.costCodeMismatches++;
+    if (sheetCostCode && sheetCostCode !== costCode)
+      report.costCodeMismatches++;
 
     // The sheet splits the code across L1–L7 (L1 holds the first two digits of
     // the division, L2 the third). Compare the whole thing against the code we
@@ -243,6 +280,9 @@ export async function loadCbsWorkbook(
       uom: text("UOM"),
       subReporting: toBool(text("Sub Code")),
       materialCode: toBool(text("Material Code")),
+      laborCode: toBool(text("Labor Code")),
+      equipmentCode: toBool(text("Equipment Code")),
+      otherCode: toBool(text("Other Code")),
       materialType: or("Material Type"),
       costCenter: or("Cost Center"),
       costClassification: or("Cost Classification"),
@@ -324,7 +364,9 @@ export function formatCbsWorkbookReport(report: CbsWorkbookReport): string {
     }
   }
   if (report.duplicates.length) {
-    lines.push(`  ${report.duplicates.length} duplicate display code(s) in the workbook:`);
+    lines.push(
+      `  ${report.duplicates.length} duplicate display code(s) in the workbook:`,
+    );
     for (const d of report.duplicates) {
       lines.push(
         `    row ${d.row}: ${d.displayCode} "${d.name}" ${d.kept ? "(kept — earlier row had no name)" : "(dropped)"}`,
@@ -334,7 +376,9 @@ export function formatCbsWorkbookReport(report: CbsWorkbookReport): string {
   if (report.invalid.length) {
     lines.push(`  ${report.invalid.length} row(s) skipped as invalid:`);
     for (const i of report.invalid) {
-      lines.push(`    row ${i.row}: "${i.displayCode}" "${i.name}" — ${i.reason}`);
+      lines.push(
+        `    row ${i.row}: "${i.displayCode}" "${i.name}" — ${i.reason}`,
+      );
     }
   }
   return lines.join("\n");

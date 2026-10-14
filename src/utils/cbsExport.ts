@@ -4,6 +4,8 @@ import { prisma } from "../server/db";
 import { adminHandler, requireProjectAccess } from "./users.server";
 import {
   buildCbsTree,
+  CBS_COST_TYPES,
+  cbsIsBackboneCode,
   cbsAncestorCodes,
   cbsFilterIsEmpty,
   pruneCbsTree,
@@ -46,10 +48,22 @@ const ExportInput = z.object({
   filter: z
     .object({
       query: z.string().max(200).default(""),
+      // One per CBS_COST_TYPES entry. Written out rather than generated so
+      // the inferred input type stays precise at the boundary.
+      labor: z.boolean().default(false),
       sub: z.boolean().default(false),
       material: z.boolean().default(false),
+      equipment: z.boolean().default(false),
+      other: z.boolean().default(false),
     })
-    .default({ query: "", sub: false, material: false }),
+    .default({
+      query: "",
+      labor: false,
+      sub: false,
+      material: false,
+      equipment: false,
+      other: false,
+    }),
 });
 
 export type CbsExportInput = z.infer<typeof ExportInput>;
@@ -67,10 +81,13 @@ export function describeCbsFilter(filter: CbsRowFilter): string {
   if (cbsFilterIsEmpty(filter)) return "";
   const parts: string[] = [];
   if (filter.query) parts.push(`matching “${filter.query}”`);
-  if (filter.sub && filter.material)
-    parts.push("subcontract or material codes");
-  else if (filter.sub) parts.push("subcontract codes");
-  else if (filter.material) parts.push("material codes");
+  const on = CBS_COST_TYPES.filter((t) => filter[t.key]).map((t) =>
+    t.label.toLowerCase(),
+  );
+  if (on.length === 1) parts.push(`${on[0]} codes`);
+  else if (on.length > 1) {
+    parts.push(`${on.slice(0, -1).join(", ")} or ${on.at(-1)} codes`);
+  }
   return `Filtered: ${parts.join(", ")}`;
 }
 
@@ -84,8 +101,11 @@ async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
     // The page lower-cases and trims before filtering; match it exactly or a
     // search that showed rows on screen would export none.
     query: input.filter.query.trim().toLowerCase(),
+    labor: input.filter.labor,
     sub: input.filter.sub,
     material: input.filter.material,
+    equipment: input.filter.equipment,
+    other: input.filter.other,
   };
 
   let rows: ProjectCostCodeRow[];
@@ -98,7 +118,14 @@ async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
     rows = await projectCostCodeRows(input.projectId);
     scope = "Codes granted to this project on the Setup page";
   } else {
-    rows = await cbsCatalogRows(input.view === "codeBook");
+    // The Cost Accounts view lists one row per account — the "-0" backbone —
+    // so the export has to apply the same filter the page does, or the file
+    // stops matching the screen.
+    const catalog = await cbsCatalogRows(false);
+    rows =
+      input.view === "codeBook"
+        ? catalog.filter((r) => cbsIsBackboneCode(r.displayCode))
+        : catalog;
     // The catalog views ignore the allow-list, so the project below is there
     // for traceability — whose desk the file came from — not as a filter.
     scope = "Whole catalog — no project allow-list applied";

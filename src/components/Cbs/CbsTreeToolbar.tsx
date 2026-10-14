@@ -1,6 +1,7 @@
 import * as React from "react";
 import { SearchBox } from "~/components/SearchBox";
 import { Button } from "~/components/ui/button";
+import { CBS_COST_TYPES, type CbsCostTypeKey } from "~/lib/cbs-tree";
 
 /**
  * Search box + Expand all / Collapse all + the Subcontracts / Materials row
@@ -14,10 +15,8 @@ export function CbsTreeToolbar({
   placeholder = "Search code or name…",
   onExpandAll,
   onCollapseAll,
-  subActive = false,
-  materialActive = false,
-  onToggleSub,
-  onToggleMaterial,
+  costTypes,
+  onToggleCostType,
   children,
 }: {
   query: string;
@@ -25,11 +24,9 @@ export function CbsTreeToolbar({
   placeholder?: string;
   onExpandAll: () => void;
   onCollapseAll: () => void;
-  /** Omit both handlers to leave the row-type filters out entirely. */
-  subActive?: boolean;
-  materialActive?: boolean;
-  onToggleSub?: () => void;
-  onToggleMaterial?: () => void;
+  /** Which cost-type filters are on. Omit the handler to leave them out. */
+  costTypes?: Record<CbsCostTypeKey, boolean>;
+  onToggleCostType?: (key: CbsCostTypeKey) => void;
   children?: React.ReactNode;
 }) {
   return (
@@ -47,28 +44,22 @@ export function CbsTreeToolbar({
       <Button variant="outline" size="sm" onClick={onCollapseAll}>
         Collapse all
       </Button>
-      {onToggleSub && (
-        <Button
-          variant={subActive ? "default" : "outline"}
-          size="sm"
-          onClick={onToggleSub}
-          aria-pressed={subActive}
-          title="Show only subcontract codes — cost type S, or Sub Code YES"
-        >
-          Subcontracts
-        </Button>
-      )}
-      {onToggleMaterial && (
-        <Button
-          variant={materialActive ? "default" : "outline"}
-          size="sm"
-          onClick={onToggleMaterial}
-          aria-pressed={materialActive}
-          title="Show only material codes — cost type M, or Material Code YES"
-        >
-          Materials
-        </Button>
-      )}
+      {onToggleCostType &&
+        CBS_COST_TYPES.map((t) => {
+          const on = costTypes?.[t.key] ?? false;
+          return (
+            <Button
+              key={t.key}
+              variant={on ? "default" : "outline"}
+              size="sm"
+              onClick={() => onToggleCostType(t.key)}
+              aria-pressed={on}
+              title={`Show only ${t.label.toLowerCase()} codes — cost type ${t.code}, or ${t.column} YES`}
+            >
+              {t.label}
+            </Button>
+          );
+        })}
       {children}
     </div>
   );

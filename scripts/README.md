@@ -19,7 +19,7 @@ are documented in [DEPLOYMENT.md §11a](../docs/DEPLOYMENT.md).
 
 | Script | npm | What it does |
 |---|---|---|
-| `import-cbs.ts` | `cbs:import` | Re-imports the workbook into `CbsItem`, expanding the generated S/M rows. Upserts by cost code, so row ids and every project's allow-list survive. New codes are **not** granted to any project. |
+| `import-cbs.ts` | `cbs:import` | Re-imports the workbook into `CbsItem`. Normalises summary codes to the `-0` backbone, strips the cost-type suffix from names, and generates any S/M twin the sheet is missing. Upserts by cost code, so row ids and every project's allow-list survive. New codes are **not** granted to any project. |
 | `sync-piping-group-codes.ts` | `piping:sync-codes` | Pushes the piping metallurgy codes from `piping_groups.csv` into `PipingGroup`. Not derived from the workbook, so a renumbered piping series leaves these stale and piping rows stop auto-populating. |
 | `rename-cbs-accounts.ts` | `cbs:rename` | Re-applies account renames the workbook does not carry yet. The import takes names straight from the workbook, so a name edited only in the database is reverted; each entry records the workbook cell the same edit belongs in. |
 
@@ -32,6 +32,7 @@ take-off page per discipline.
 |---|---|
 | `migrate-grout-discipline.ts` | One-off for adding the Grout discipline: appends it to every role, migrates EVM measurement buckets from CBS digit to discipline id, recomputes snapshot totals. Idempotent. |
 | `backfill-role-disciplines.ts` | Backfills `Role.disciplines` for roles created before the field existed. |
+| `relink-clerk-ids.ts` | Re-points `User.clerkId` at the live Clerk account when the stored id no longer resolves — what happens when a Clerk account is deleted and re-created, or when the app moves Clerk instances. Those rows keep the role and project grants, but `email` is unique, so the app cannot replace them either and the user resolves to nothing: no role, no projects. `resolveCurrentUser` now re-links on sign-in, so this is for repairing rows ahead of a deploy. Writes only with `--apply`; needs `DATABASE_URL` and `CLERK_SECRET_KEY` to be the pair that actually run together. |
 
 `prisma/backfill-number-sequences.ts` (`npm run backfill-numbers`) belongs to
 this group too — seed each project's auto-number sequence from the highest

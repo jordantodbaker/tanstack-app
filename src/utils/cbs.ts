@@ -213,10 +213,14 @@ export const cbsTreeRowSelect = {
   uom: true,
   accountDescription: true,
   rowType: true,
-  // The workbook's Sub Code / Material Code flags — the Code Book badges a row
-  // by what it carries, since that section lists no generated rows.
+  // The workbook's cost-type flags — the views badge a row by what companions
+  // it carries, since those sections list no generated rows. One per
+  // CBS_COST_TYPES entry.
   subReporting: true,
   materialCode: true,
+  laborCode: true,
+  equipmentCode: true,
+  otherCode: true,
 } satisfies Prisma.CbsItemSelect;
 
 /** A CBS row exactly as it crosses the wire — no level segments. */

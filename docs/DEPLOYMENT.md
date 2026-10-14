@@ -455,11 +455,16 @@ follow-up feature (a scheduled job marking and removing eligible projects).
 ## 11a. Updating the CBS
 
 The CBS lives in `prisma/data/CBS.xlsx`. The loader takes the sheet named
-"CBS", falling back to "Master CBS" and then to the first sheet
+"CBS", falling back to "CBS Expanded", "Master CBS" and then to the first sheet
 (`SHEET_NAMES` in [cbs-workbook.ts](../prisma/cbs-workbook.ts)). The app
-stores the *expanded* CBS Dictionary in `CbsItem`: every workbook row plus a
-generated `S` (sub-code) twin for rows with Sub Code = YES and an `M`
-(material) twin for rows with Material Code = YES, skipped when the workbook
+stores the *expanded* CBS Dictionary in `CbsItem`. Since the 2026-10 workbook
+the sheet arrives pre-expanded: every row flagged **Labor**, **Sub**,
+**Material**, **Equipment** or **Other Code** already carries its typed
+companion, so the loader's own `S`/`M` generation now fills gaps rather than
+doing the bulk of the work. Two things it normalises on every row: a summary
+code written with four segments (`012-05-0000-00`) gains the `-0` backbone
+segment, and the cost-type suffix is stripped from the name (`Executive (L)`
+→ `Executive`). A generated twin is skipped when the workbook
 already carries that code. Level segments are derived from the Display Code,
 not from the workbook's L1–L7 helper columns. See `prisma/cbs-workbook.ts`.
 

@@ -53,7 +53,11 @@ const DISCIPLINE_ROOT_NAME: Record<string, string> = {
   civil: "Civil",
   concrete: "Concrete",
   grout: "Grout",
-  steel: "Structural Steel Shop Fabrication",
+  // Renamed from "Structural Steel Shop Fabrication" on 2026-10-15: the 300
+  // division covers field erection (330-390) as well as the shop, so the
+  // division name should not say "Shop Fabrication". Changed in the workbook
+  // too, by `cbs:rename --workbook`, so an import no longer reverts it.
+  steel: "Structural Steel",
   buildings: "Buildings",
   equipment: "Equipment",
   piping: "Piping",

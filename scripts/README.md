@@ -21,7 +21,7 @@ are documented in [DEPLOYMENT.md §11a](../docs/DEPLOYMENT.md).
 |---|---|---|
 | `import-cbs.ts` | `cbs:import` | Re-imports the workbook into `CbsItem`. Normalises summary codes to the `-0` backbone, strips the cost-type suffix from names, and generates any S/M twin the sheet is missing. Upserts by cost code, so row ids and every project's allow-list survive. New codes are **not** granted to any project. |
 | `sync-piping-group-codes.ts` | `piping:sync-codes` | Pushes the piping metallurgy codes from `piping_groups.csv` into `PipingGroup`. Not derived from the workbook, so a renumbered piping series leaves these stale and piping rows stop auto-populating. |
-| `rename-cbs-accounts.ts` | `cbs:rename` | Re-applies account renames the workbook does not carry yet. The import takes names straight from the workbook, so a name edited only in the database is reverted; each entry records the workbook cell the same edit belongs in. |
+| `rename-cbs-accounts.ts` | `cbs:rename` | Applies account renames. A rename has two halves: the database half (`cbs:rename`) shows the new name now, and the workbook half (`cbs:rename -- --workbook`) writes the Name cell so the next import carries it instead of reverting it. The cell is resolved against the workbook at run time, so the reference cannot go stale. `--workbook` is opt-in because CBS.xlsx is the master file — close it in Excel first, or the write fails with `EBUSY`. |
 
 After all three: re-grant any new codes on the Setup page, and smoke-test one
 take-off page per discipline.

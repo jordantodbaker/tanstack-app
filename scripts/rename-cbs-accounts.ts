@@ -1,17 +1,26 @@
-// Renames individual CBS accounts in the `CbsItem` table.
+// Renames individual CBS accounts, in the database and in the workbook.
 //
-// An account's name comes from the "Name" column of
-// `prisma/data/CBS.xlsx`, so this script is only half of a rename: it
-// makes the app show the new name NOW, but the next `npm run cbs:import` will
-// read the workbook again and put the old name back. Change the workbook cell
-// too (the table below records which one) or the rename will not stick.
+// A rename has two halves. The database half makes the app show the new name
+// now; the workbook half makes it survive, because `npm run cbs:import` reads
+// the Name column of `prisma/data/CBS.xlsx` and puts the old name back
+// otherwise. Doing only the first is why "Structural Steel" kept reverting.
 //
-// Only `name` and the derived `displayDescription` change. Cost codes, ids and
-// every project's allow-list are untouched, so nothing downstream moves.
+//   npx tsx scripts/rename-cbs-accounts.ts --dry-run    see both halves
+//   npx tsx scripts/rename-cbs-accounts.ts              database half
+//   npx tsx scripts/rename-cbs-accounts.ts --workbook   both halves
 //
-// Run:  npx tsx scripts/rename-cbs-accounts.ts [--dry-run]
+// The workbook half is opt-in because CBS.xlsx is the master data file and is
+// usually someone's open Excel window. It rewrites only the Name cells of the
+// accounts listed below, leaving every other byte of the archive alone, and
+// refuses rather than guessing if a cell is not where it expects.
+//
+// Only `name` and the derived `displayDescription` change in the database.
+// Cost codes, ids and every project's allow-list are untouched, so nothing
+// downstream moves.
 import "dotenv/config";
+import { readFileSync, writeFileSync } from "node:fs";
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
 import { prisma } from "../src/server/db";
 import { CBS_WORKBOOK_PATH, SHEET_NAMES } from "../prisma/cbs-workbook";
 import {
@@ -21,6 +30,7 @@ import {
 } from "../src/lib/cbs-rename-plan";
 
 const dryRun = process.argv.includes("--dry-run");
+const writeWorkbook = process.argv.includes("--workbook");
 
 /**
  * The renames to apply. `workbookCell` records where the same edit belonged in
@@ -101,6 +111,56 @@ async function resolveWorkbookNames(
   return found;
 }
 
+/**
+ * Rewrites Name cells in CBS.xlsx, one zip entry replaced and nothing else
+ * touched.
+ *
+ * exceljs would be less code but cannot round-trip the sheet's table
+ * definition (xl/tables/table1.xml), so the cell XML is edited directly. Each
+ * rewritten cell becomes an inline string, which keeps the shared-string table
+ * out of it entirely — no re-indexing, no other cell affected.
+ *
+ * Returns the cells it changed, or throws if one was not found; a silent miss
+ * here would look like success and revert on the next import.
+ */
+async function writeWorkbookNames(
+  edits: { cell: string; value: string }[],
+): Promise<string[]> {
+  if (edits.length === 0) return [];
+  const zip = await JSZip.loadAsync(readFileSync(CBS_WORKBOOK_PATH));
+  const sheetPath = Object.keys(zip.files).find((f) =>
+    /^xl\/worksheets\/sheet\d+\.xml$/.test(f),
+  );
+  if (!sheetPath) throw new Error("CBS.xlsx: no worksheet XML found");
+  let xml = await zip.file(sheetPath)!.async("string");
+
+  const done: string[] = [];
+  for (const { cell, value } of edits) {
+    // `[^]` rather than a backslash class: this pattern is built in a template.
+    const re = new RegExp(`<c r="${cell}"([^>]*?)(/>|>[^]*?</c>)`);
+    const hit = re.exec(xml);
+    if (!hit) throw new Error(`CBS.xlsx: cell ${cell} not found`);
+    const attrs = hit[1].replace(/\s*t="[^"]*"/, "");
+    const escaped = value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    xml =
+      xml.slice(0, hit.index) +
+      `<c r="${cell}"${attrs} t="inlineStr"><is><t>${escaped}</t></is></c>` +
+      xml.slice(hit.index + hit[0].length);
+    done.push(cell);
+  }
+
+  zip.file(sheetPath, xml);
+  const buf = await zip.generateAsync({
+    type: "nodebuffer",
+    compression: "DEFLATE",
+  });
+  writeFileSync(CBS_WORKBOOK_PATH, buf);
+  return done;
+}
+
 async function main() {
   const rows = await prisma.cbsItem.findMany({
     where: { displayCode: { in: RENAMES.map((r) => r.displayCode) } },
@@ -156,6 +216,7 @@ async function main() {
   const inWorkbook = await resolveWorkbookNames(
     RENAMES.map((r) => r.displayCode),
   );
+  const pending: { cell: string; value: string }[] = [];
   for (const r of RENAMES) {
     const at = inWorkbook.get(r.displayCode);
     if (!at) {
@@ -170,11 +231,31 @@ async function main() {
     // The recorded cell is a hand-written note; say so when it has drifted.
     const note =
       at.cell === r.workbookCell ? "" : ` (recorded as ${r.workbookCell})`;
+    if (stem === r.to) {
+      console.log(`  OK   "${at.sheet}" ${at.cell} already "${at.value}"`);
+      continue;
+    }
     console.log(
-      stem === r.to
-        ? `  OK   "${at.sheet}" ${at.cell} already "${at.value}"${note}`
-        : `  EDIT "${at.sheet}" ${at.cell}: "${at.value}" → "${r.to}"${note}`,
+      `  EDIT "${at.sheet}" ${at.cell}: "${at.value}" → "${r.to}"${note}`,
     );
+    // Keep whatever cost-type suffix the cell carried — "(*)" marks the
+    // account's own row and the loader strips it on the way in, so dropping it
+    // would be a second, silent edit.
+    const suffix = /\s*\((?:\*|[A-Z])\)\s*$/.exec(at.value)?.[0] ?? "";
+    pending.push({ cell: at.cell, value: `${r.to}${suffix}` });
+  }
+
+  if (pending.length === 0) {
+    console.log("  nothing to change in the workbook.");
+  } else if (dryRun) {
+    console.log("\n  --dry-run: the workbook was not touched.");
+  } else if (!writeWorkbook) {
+    console.log(
+      `\n  Re-run with --workbook to apply ${pending.length === 1 ? "that edit" : `those ${pending.length} edits`}, or the next import reverts the rename.`,
+    );
+  } else {
+    const written = await writeWorkbookNames(pending);
+    console.log(`\n  Wrote ${written.join(", ")} to CBS.xlsx.`);
   }
 }
 

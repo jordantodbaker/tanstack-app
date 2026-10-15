@@ -28,6 +28,7 @@ import { Route as SummaryRouteImport } from './routes/summary'
 import { Route as TrendsRouteImport } from './routes/trends'
 import { Route as ValidationRouteImport } from './routes/validation'
 import { Route as AdminAreasRouteImport } from './routes/admin.areas'
+import { Route as AdminCoreCodesRouteImport } from './routes/admin.core-codes'
 import { Route as AdminCrewMixesRouteImport } from './routes/admin.crew-mixes'
 import { Route as AdminCvrTemplatesRouteImport } from './routes/admin.cvr-templates'
 import { Route as AdminFcoTemplatesRouteImport } from './routes/admin.fco-templates'
@@ -138,6 +139,11 @@ const AdminAreasRoute = AdminAreasRouteImport.update({
   path: '/areas',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminCoreCodesRoute = AdminCoreCodesRouteImport.update({
+  id: '/core-codes',
+  path: '/core-codes',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminCrewMixesRoute = AdminCrewMixesRouteImport.update({
   id: '/crew-mixes',
   path: '/crew-mixes',
@@ -229,6 +235,7 @@ export interface FileRoutesByFullPath {
   '/trends': typeof TrendsRoute
   '/validation': typeof ValidationRoute
   '/admin/areas': typeof AdminAreasRoute
+  '/admin/core-codes': typeof AdminCoreCodesRoute
   '/admin/crew-mixes': typeof AdminCrewMixesRoute
   '/admin/cvr-templates': typeof AdminCvrTemplatesRoute
   '/admin/fco-templates': typeof AdminFcoTemplatesRoute
@@ -264,6 +271,7 @@ export interface FileRoutesByTo {
   '/trends': typeof TrendsRoute
   '/validation': typeof ValidationRoute
   '/admin/areas': typeof AdminAreasRoute
+  '/admin/core-codes': typeof AdminCoreCodesRoute
   '/admin/crew-mixes': typeof AdminCrewMixesRoute
   '/admin/cvr-templates': typeof AdminCvrTemplatesRoute
   '/admin/fco-templates': typeof AdminFcoTemplatesRoute
@@ -300,6 +308,7 @@ export interface FileRoutesById {
   '/trends': typeof TrendsRoute
   '/validation': typeof ValidationRoute
   '/admin/areas': typeof AdminAreasRoute
+  '/admin/core-codes': typeof AdminCoreCodesRoute
   '/admin/crew-mixes': typeof AdminCrewMixesRoute
   '/admin/cvr-templates': typeof AdminCvrTemplatesRoute
   '/admin/fco-templates': typeof AdminFcoTemplatesRoute
@@ -337,6 +346,7 @@ export interface FileRouteTypes {
     | '/trends'
     | '/validation'
     | '/admin/areas'
+    | '/admin/core-codes'
     | '/admin/crew-mixes'
     | '/admin/cvr-templates'
     | '/admin/fco-templates'
@@ -372,6 +382,7 @@ export interface FileRouteTypes {
     | '/trends'
     | '/validation'
     | '/admin/areas'
+    | '/admin/core-codes'
     | '/admin/crew-mixes'
     | '/admin/cvr-templates'
     | '/admin/fco-templates'
@@ -407,6 +418,7 @@ export interface FileRouteTypes {
     | '/trends'
     | '/validation'
     | '/admin/areas'
+    | '/admin/core-codes'
     | '/admin/crew-mixes'
     | '/admin/cvr-templates'
     | '/admin/fco-templates'
@@ -583,6 +595,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAreasRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/core-codes': {
+      id: '/admin/core-codes'
+      path: '/core-codes'
+      fullPath: '/admin/core-codes'
+      preLoaderRoute: typeof AdminCoreCodesRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/crew-mixes': {
       id: '/admin/crew-mixes'
       path: '/crew-mixes'
@@ -686,6 +705,7 @@ declare module '@tanstack/react-router' {
 
 interface AdminRouteChildren {
   AdminAreasRoute: typeof AdminAreasRoute
+  AdminCoreCodesRoute: typeof AdminCoreCodesRoute
   AdminCrewMixesRoute: typeof AdminCrewMixesRoute
   AdminCvrTemplatesRoute: typeof AdminCvrTemplatesRoute
   AdminFcoTemplatesRoute: typeof AdminFcoTemplatesRoute
@@ -700,6 +720,7 @@ interface AdminRouteChildren {
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAreasRoute: AdminAreasRoute,
+  AdminCoreCodesRoute: AdminCoreCodesRoute,
   AdminCrewMixesRoute: AdminCrewMixesRoute,
   AdminCvrTemplatesRoute: AdminCvrTemplatesRoute,
   AdminFcoTemplatesRoute: AdminFcoTemplatesRoute,

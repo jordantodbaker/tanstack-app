@@ -33,6 +33,7 @@ describe("appForPath", () => {
     // "/admin" prefix to win, opening the CBS catalog would swap the nav out
     // from under the user.
     expect(appForPath("/admin/master-cbs")?.id).toBe("cbs");
+    expect(appForPath("/admin/core-codes")?.id).toBe("cbs");
     expect(appForPath("/admin/cvr-templates")?.id).toBe("reports");
     expect(appForPath("/admin/projects")?.id).toBe("admin");
     expect(appForPath("/admin")?.id).toBe("admin");

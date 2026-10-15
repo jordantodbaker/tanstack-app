@@ -31,7 +31,7 @@ take-off page per discipline.
 | Script | What it does |
 |---|---|
 | `migrate-grout-discipline.ts` | One-off for adding the Grout discipline: appends it to every role, migrates EVM measurement buckets from CBS digit to discipline id, recomputes snapshot totals. Idempotent. |
-| `backfill-role-disciplines.ts` | Backfills `Role.disciplines` for roles created before the field existed. |
+| `backfill-role-disciplines.ts` | Keeps `Role.disciplines` in step with `src/config/disciplines.ts`: fills roles whose list is empty, and adds any discipline **no** role references yet — what a newly added discipline looks like from the database's side, and otherwise missing from every take-off Role dropdown. A discipline some roles have and others don't is deliberate scoping and is left alone. Idempotent; supports `--dry-run`. Run it after adding a discipline. |
 | `relink-clerk-ids.ts` | Re-points `User.clerkId` at the live Clerk account when the stored id no longer resolves — what happens when a Clerk account is deleted and re-created, or when the app moves Clerk instances. Those rows keep the role and project grants, but `email` is unique, so the app cannot replace them either and the user resolves to nothing: no role, no projects. `resolveCurrentUser` now re-links on sign-in, so this is for repairing rows ahead of a deploy. Writes only with `--apply`; needs `DATABASE_URL` and `CLERK_SECRET_KEY` to be the pair that actually run together. |
 
 `prisma/backfill-number-sequences.ts` (`npm run backfill-numbers`) belongs to

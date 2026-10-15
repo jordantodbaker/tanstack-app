@@ -165,6 +165,8 @@ export const qk = {
     /** The whole catalog, ignoring project allow-lists — shared by Setup's
      *  allow-list editor and Admin → Master CBS. */
     catalog: () => ["cbsCatalog"] as const,
+    /** The Core-code roll-up: which CBS items feed each core account. */
+    coreLinks: () => ["cbsCoreLinks"] as const,
     itemsByL1FilteredAll: () => ["cbsItemsByL1Filtered"] as const,
     itemsByL1Filtered: (input: {
       l1Values: string[];

@@ -34,12 +34,7 @@ const UNCLAIMED_BY_DESIGN: Record<string, string> = {
  * quietly. The suggested owner is a first pass — correct it and move the code
  * into `disciplines-data.ts`.
  */
-const UNCLAIMED_BACKLOG: Record<string, string> = {
-  "920":
-    "Specialty Services — one summary row, arrived with the 2026-10 workbook. " +
-    "Groups under Coatings & Insulation (900) today because 92 is not a tens " +
-    "division; give it an owner, or its own division, once that is decided.",
-};
+const UNCLAIMED_BACKLOG: Record<string, string> = {};
 
 /**
  * The CBS root name each discipline's lowest block carries.
@@ -65,6 +60,7 @@ const DISCIPLINE_ROOT_NAME: Record<string, string> = {
   electric: "Electrical",
   instruments: "Instrument & Controls",
   coatings: "Coatings & Insulation",
+  "specialty-services": "Specialty Services",
   commissioning: "Startup & Commissioning",
   operations: "Operations & Maintenance",
   contingency: "Contingency",
@@ -136,10 +132,31 @@ describe("disciplines-data against the CBS workbook", () => {
     expect(vanished).toEqual([]);
   });
 
+  it("gives every discipline a distinct four-letter abbreviation", () => {
+    // The Core Code Roll-up matrix has one narrow column per discipline and
+    // heads it with the label's first four characters. Three collided
+    // Concrete with Contingency and Procurement with Project Development —
+    // two columns that would have read the same and meant different things.
+    const seen = new Map<string, string[]>();
+    for (const d of disciplinesData) {
+      const key = d.label.slice(0, 4).toUpperCase();
+      seen.set(key, [...(seen.get(key) ?? []), d.label]);
+    }
+    const collisions = [...seen]
+      .filter(([, labels]) => labels.length > 1)
+      .map(([key, labels]) => `${key}: ${labels.join(" / ")}`);
+    expect(collisions).toEqual([]);
+  });
+
   it("the backlog only shrinks", () => {
     // Pinned so a renumber that strands another block fails here rather than
     // silently lengthening the list.
-    expect(Object.keys(UNCLAIMED_BACKLOG)).toHaveLength(1);
+    //
+    // Empty since 2026-10-15: Specialty Services became a discipline of its
+    // own and took 950, 951 and 952 with it, so every CBS block now has an
+    // owner or a recorded reason. The number only goes up with a note saying
+    // why, and that note has to say when it comes back down.
+    expect(Object.keys(UNCLAIMED_BACKLOG)).toHaveLength(0);
   });
 
   it("still points each discipline at the accounts it is named for", () => {

@@ -149,6 +149,24 @@ describe("CBS Code Book", () => {
     expect(within(civil).getByTitle("Sub Code: YES")).toHaveTextContent("S");
   });
 
+  it("offers no Status filter on the Cost Accounts list", () => {
+    // That list is active-only by construction, so a status filter there is a
+    // question with one answer. The Dictionary below it has both, so it keeps
+    // the row.
+    renderPage();
+    const rows = screen.getAllByRole("group", { name: "Filter by status" });
+    expect(rows).toHaveLength(1);
+    // The one that remains belongs to the Dictionary — the second section.
+    const costTypeRows = screen.getAllByRole("group", {
+      name: "Filter by cost type",
+    });
+    expect(costTypeRows).toHaveLength(2);
+    expect(
+      costTypeRows[1].compareDocumentPosition(rows[0]) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it("keeps retired accounts out of the Cost Accounts list", () => {
     renderPage();
     // Both rows hang under "Pipe Shop", so open the branch before looking.

@@ -44,6 +44,43 @@ function CbsSection({
   showRowTypeCounts?: boolean;
   exportView: CbsExportView;
 }) {
+  return (
+    <CbsSectionShell
+      title={title}
+      description={description}
+      badge={`${items.length.toLocaleString()} rows`}
+      defaultOpen={defaultOpen}
+    >
+      <CbsDictionaryBrowser
+        items={items}
+        badgesFor={badgesFor}
+        sourceNote={sourceNote}
+        emptyMessage={emptyMessage}
+        showRowTypeCounts={showRowTypeCounts}
+        exportView={exportView}
+      />
+    </CbsSectionShell>
+  );
+}
+
+/**
+ * The collapsible chrome this page's sections share — header, chevron, count
+ * pill — with the body mounted only while open, so a closed section never
+ * builds its tree.
+ */
+function CbsSectionShell({
+  title,
+  description,
+  badge,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  description: string;
+  badge: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
   const [open, setOpen] = React.useState(defaultOpen);
 
   return (
@@ -63,22 +100,10 @@ function CbsSection({
           <p className="truncate text-xs text-slate-500">{description}</p>
         </div>
         <span className="ml-auto shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-          {items.length.toLocaleString()} rows
+          {badge}
         </span>
       </button>
-      {/* Mounted only while open, so a closed section never builds its tree. */}
-      {open && (
-        <div className="border-t border-slate-100">
-          <CbsDictionaryBrowser
-            items={items}
-            badgesFor={badgesFor}
-            sourceNote={sourceNote}
-            emptyMessage={emptyMessage}
-            showRowTypeCounts={showRowTypeCounts}
-            exportView={exportView}
-          />
-        </div>
-      )}
+      {open && <div className="border-t border-slate-100">{children}</div>}
     </section>
   );
 }

@@ -1,7 +1,12 @@
 import * as React from "react";
 import { SearchBox } from "~/components/SearchBox";
 import { Button } from "~/components/ui/button";
-import { CBS_COST_TYPES, type CbsCostTypeKey } from "~/lib/cbs-tree";
+import {
+  CBS_COST_TYPES,
+  CBS_STATUSES,
+  type CbsCostTypeKey,
+  type CbsStatusKey,
+} from "~/lib/cbs-tree";
 
 /**
  * Two rows for a CBS tree: the cost-type filters, then the search box with
@@ -21,6 +26,9 @@ export function CbsTreeToolbar({
   onCollapseAll,
   costTypes,
   onToggleCostType,
+  statuses,
+  onToggleStatus,
+  statusAvailability,
   children,
 }: {
   query: string;
@@ -31,6 +39,15 @@ export function CbsTreeToolbar({
   /** Which cost-type filters are on. Omit the handler to leave them out. */
   costTypes?: Record<CbsCostTypeKey, boolean>;
   onToggleCostType?: (key: CbsCostTypeKey) => void;
+  /** Which status filters are on. Omit the handler to leave the row out. */
+  statuses?: Record<CbsStatusKey, boolean>;
+  onToggleStatus?: (key: CbsStatusKey) => void;
+  /**
+   * Statuses present in this dataset. A status nothing carries is shown
+   * disabled rather than hidden, so the row reads the same everywhere and a
+   * press that could only ever return nothing is not offered.
+   */
+  statusAvailability?: Record<CbsStatusKey, boolean>;
   children?: React.ReactNode;
 }) {
   return (
@@ -54,6 +71,36 @@ export function CbsTreeToolbar({
                 title={`Show only ${t.label.toLowerCase()} codes — cost type ${t.code}, or ${t.column} YES`}
               >
                 {t.label}
+              </Button>
+            );
+          })}
+        </div>
+      )}
+      {onToggleStatus && (
+        <div
+          className="flex flex-wrap items-center gap-2"
+          role="group"
+          aria-label="Filter by status"
+        >
+          <span className="text-xs text-slate-500">Status:</span>
+          {CBS_STATUSES.map((s) => {
+            const on = statuses?.[s.key] ?? false;
+            const available = statusAvailability?.[s.key] ?? true;
+            return (
+              <Button
+                key={s.key}
+                variant={on ? "default" : "outline"}
+                size="sm"
+                disabled={!available}
+                onClick={() => onToggleStatus(s.key)}
+                aria-pressed={on}
+                title={
+                  available
+                    ? `Show only codes with Status ${s.label}${s.key === "active" ? " (a blank Status counts as Active)" : ""}`
+                    : `No ${s.label.toLowerCase()} codes in this view`
+                }
+              >
+                {s.label}
               </Button>
             );
           })}

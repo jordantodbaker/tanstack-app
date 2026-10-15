@@ -5,6 +5,7 @@ import { adminHandler, requireProjectAccess } from "./users.server";
 import {
   buildCbsTree,
   CBS_COST_TYPES,
+  CBS_STATUSES,
   cbsIsActive,
   cbsIsBackboneCode,
   cbsAncestorCodes,
@@ -56,6 +57,10 @@ const ExportInput = z.object({
       material: z.boolean().default(false),
       equipment: z.boolean().default(false),
       other: z.boolean().default(false),
+      // One per CBS_STATUSES entry, same reasoning as the cost types above.
+      active: z.boolean().default(false),
+      inactive: z.boolean().default(false),
+      retired: z.boolean().default(false),
     })
     .default({
       query: "",
@@ -64,6 +69,9 @@ const ExportInput = z.object({
       material: false,
       equipment: false,
       other: false,
+      active: false,
+      inactive: false,
+      retired: false,
     }),
 });
 
@@ -89,6 +97,13 @@ export function describeCbsFilter(filter: CbsRowFilter): string {
   else if (on.length > 1) {
     parts.push(`${on.slice(0, -1).join(", ")} or ${on.at(-1)} codes`);
   }
+  const status = CBS_STATUSES.filter((s) => filter[s.key]).map((s) =>
+    s.label.toLowerCase(),
+  );
+  if (status.length === 1) parts.push(`status ${status[0]}`);
+  else if (status.length > 1) {
+    parts.push(`status ${status.slice(0, -1).join(", ")} or ${status.at(-1)}`);
+  }
   return `Filtered: ${parts.join(", ")}`;
 }
 
@@ -107,6 +122,9 @@ async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
     material: input.filter.material,
     equipment: input.filter.equipment,
     other: input.filter.other,
+    active: input.filter.active,
+    inactive: input.filter.inactive,
+    retired: input.filter.retired,
   };
 
   let rows: ProjectCostCodeRow[];

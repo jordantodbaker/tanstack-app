@@ -21,6 +21,7 @@ import {
   AlertTriangle,
   HardHat,
   Settings,
+  Wrench,
 } from "lucide-react";
 import type React from "react";
 import {
@@ -56,6 +57,7 @@ const ICONS: Record<string, React.ElementType> = {
   electric: Zap,
   instruments: Gauge,
   coatings: Paintbrush,
+  "specialty-services": Wrench,
   commissioning: Rocket,
   operations: Activity,
   contingency: AlertTriangle,

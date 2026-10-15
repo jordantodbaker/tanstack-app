@@ -13,7 +13,9 @@ import { currentUserQueryOptions, hasAtLeastRole } from "~/utils/users";
 import {
   buildCbsTree,
   cbsFilterIsEmpty,
+  cbsIsActive,
   cbsNoCostTypes,
+  cbsNoStatuses,
   computeCbsSelectionCounts,
   filterCbsTree,
   getNodeSelectionState,
@@ -52,8 +54,20 @@ export const Route = createFileRoute("/setup")({
 });
 
 function SetupPage() {
-  const { data: items = [] } = useQuery(cbsCatalogQueryOptions());
+  const { data: catalog = [] } = useQuery(cbsCatalogQueryOptions());
   const { projectId } = useSelectedProject();
+  // Setup decides which codes a project may estimate against, so a retired
+  // account must not be grantable in the first place. Filtered here rather
+  // than in the query because the same catalog feeds the CBS Dictionary, which
+  // deliberately lists everything.
+  //
+  // Safe against losing an existing grant: the editor sends a delta built from
+  // the ids in the tree (`descendantItemIds`), so a row that is not rendered
+  // is never added and never removed.
+  const items = React.useMemo(
+    () => catalog.filter((row) => cbsIsActive(row.status)),
+    [catalog],
+  );
   const tree = React.useMemo(() => buildCbsTree(items), [items]);
 
   return (
@@ -169,7 +183,14 @@ function CbsTreeEditor({
   });
 
   const filter: CbsRowFilter = React.useMemo(
-    () => ({ query: deferredSearch.trim().toLowerCase(), ...costTypes }),
+    // Statuses all off: Setup grants codes rather than reporting on them, and
+    // it does not render the status row. Present so the filter shape is the
+    // one `pruneCbsTree` and the export both take.
+    () => ({
+      query: deferredSearch.trim().toLowerCase(),
+      ...costTypes,
+      ...cbsNoStatuses(),
+    }),
     [deferredSearch, costTypes],
   );
   const isFiltered = !cbsFilterIsEmpty(filter);
@@ -274,6 +295,10 @@ function CbsTreeEditor({
           onExpandToLevel={expandToLevel}
           levelShown={levelShown}
         />
+        <span className="ml-2">
+          Active codes only — retired codes can&rsquo;t be granted. See the CBS
+          Dictionary for the full list.
+        </span>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_22rem]">

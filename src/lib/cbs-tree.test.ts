@@ -699,6 +699,81 @@ describe("cbsIsActive", () => {
   });
 });
 
+describe("status filter", () => {
+  const tree = () =>
+    buildCbsTree([
+      item("600-00-0000-00-0", { name: "Piping", status: "Active" }),
+      item("601-00-0000-00-0", { name: "Spool", status: "Active" }),
+      item("601-05-0000-00-0", { name: "Hot Tap", status: "Inactive" }),
+      item("601-10-0000-00-0", { name: "Blank", status: null }),
+      item("601-15-0000-00-0", { name: "Old", status: "Retired" }),
+    ]);
+  const names = (nodes: CbsTreeNode[]): string[] => {
+    const out: string[] = [];
+    const walk = (list: CbsTreeNode[]) => {
+      for (const n of list) {
+        out.push(n.item.name);
+        walk(n.children);
+      }
+    };
+    walk(nodes);
+    return out;
+  };
+
+  it("matches a blank Status under Active", () => {
+    const { nodes } = pruneCbsTree(tree(), {
+      ...CBS_FILTER_NONE,
+      active: true,
+    });
+    expect(names(nodes).sort()).toEqual(["Blank", "Piping", "Spool"]);
+  });
+
+  it("picks out Inactive and Retired separately", () => {
+    expect(
+      names(pruneCbsTree(tree(), { ...CBS_FILTER_NONE, inactive: true }).nodes),
+    ).toEqual(["Hot Tap"]);
+    expect(
+      names(pruneCbsTree(tree(), { ...CBS_FILTER_NONE, retired: true }).nodes),
+    ).toEqual(["Old"]);
+  });
+
+  it("asking for two statuses means either", () => {
+    const { nodes } = pruneCbsTree(tree(), {
+      ...CBS_FILTER_NONE,
+      inactive: true,
+      retired: true,
+    });
+    expect(names(nodes).sort()).toEqual(["Hot Tap", "Old"]);
+  });
+
+  it("drops ancestors that do not carry the status, like the type filter", () => {
+    // "Piping" and "Spool" are Active, so under an Inactive filter they go
+    // even though Hot Tap hangs beneath them.
+    const { nodes } = pruneCbsTree(tree(), {
+      ...CBS_FILTER_NONE,
+      inactive: true,
+    });
+    expect(nodes.map((n) => [n.item.name, n.depth])).toEqual([["Hot Tap", 0]]);
+  });
+
+  it("narrows against the cost-type toggles rather than widening", () => {
+    // Hot Tap is Inactive but carries no Sub Code, so the pair matches nothing.
+    const { nodes } = pruneCbsTree(tree(), {
+      ...CBS_FILTER_NONE,
+      inactive: true,
+      sub: true,
+    });
+    expect(names(nodes)).toEqual([]);
+  });
+
+  it("counts as filtering, so an all-off filter still short-circuits", () => {
+    expect(cbsFilterIsEmpty(CBS_FILTER_NONE)).toBe(true);
+    expect(cbsFilterIsEmpty({ ...CBS_FILTER_NONE, inactive: true })).toBe(
+      false,
+    );
+  });
+});
+
 describe("cbsHasCostType", () => {
   const type = (key: string) => CBS_COST_TYPES.find((t) => t.key === key)!;
 

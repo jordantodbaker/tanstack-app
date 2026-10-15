@@ -99,7 +99,11 @@ const shop = item("101-00-0000-00-0", "Civil Shop Materials");
 const earthwork = item("101-05-0000-00-0", "Earthwork & Trenching");
 const topsoil = item("101-05-0500-00-M", "Topsoil", "MATERIAL");
 const piping = item("600-00-0000-00-0", "Piping");
-const CATALOG = [civil, shop, earthwork, topsoil, piping];
+const retired = {
+  ...item("101-05-0600-00-M", "Hot Tap (reserved)", "MATERIAL"),
+  status: "Inactive",
+};
+const CATALOG = [civil, shop, earthwork, topsoil, piping, retired];
 
 /** The full column set the detail panel fetches for one row. */
 function detail(
@@ -156,6 +160,29 @@ const checkbox = (label: string) =>
   screen.getByRole("checkbox", { name: `Toggle ${label}` });
 
 describe("Setup page", () => {
+  it("never lists a retired code", () => {
+    // Setup decides what a project may estimate against, so a retired account
+    // must not be grantable at all.
+    renderSetup([]);
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+    expect(screen.queryByText("Hot Tap (reserved)")).toBeNull();
+    expect(screen.getByText("Topsoil")).toBeInTheDocument();
+  });
+
+  it("does not revoke a retired code that was already granted", async () => {
+    // The row is hidden, so it is in no node's `descendantItemIds` and cannot
+    // reach `removeIds`. Checking its parent must leave the existing grant
+    // alone rather than silently dropping it.
+    renderSetup([retired.id]);
+    fireEvent.click(checkbox("Civil"));
+    await waitFor(() => expect(updateAllowedFefCbsItems).toHaveBeenCalled());
+    const { data } = vi.mocked(updateAllowedFefCbsItems).mock.calls[0][0] as {
+      data: { addIds: number[]; removeIds: number[] };
+    };
+    expect(data.removeIds).not.toContain(retired.id);
+    expect(data.addIds).not.toContain(retired.id);
+  });
+
   it("shows a parent as indeterminate when only some descendants are allowed", () => {
     renderSetup([topsoil.id]);
     expect(checkbox("Civil")).toHaveAttribute("aria-checked", "mixed");

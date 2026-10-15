@@ -45,6 +45,8 @@ export type CbsTreeItem = {
   equipmentCode?: boolean | null;
   /** The workbook's "Other Code" flag. */
   otherCode?: boolean | null;
+  /** The workbook's "Status" cell — "Active", "Inactive", or blank. */
+  status?: string | null;
   /**
    * True for a row included only so the hierarchy reads correctly — an
    * ancestor of something the project HAS been granted, which it has not been
@@ -482,12 +484,33 @@ export function cbsHasCostType(item: CbsTreeItem, type: CbsCostType): boolean {
  * What a CBS tree view is currently showing: free text plus the cost-type
  * toggles. `query` must already be lower-cased and trimmed.
  */
-export type CbsRowFilter = { query: string } & Record<CbsCostTypeKey, boolean>;
+/**
+ * The Status values the workbook uses, as filter buttons.
+ *
+ * "Retired" is offered although no row carries it today: Status is free text
+ * in the workbook, and `cbsIsActive` already treats any non-blank value that
+ * is not "Active" as not active, so the day someone types it the filter works
+ * without a code change.
+ */
+export const CBS_STATUSES = [
+  { key: "active", label: "Active" },
+  { key: "inactive", label: "Inactive" },
+  { key: "retired", label: "Retired" },
+] as const satisfies readonly { key: string; label: string }[];
+
+export type CbsStatusKey = (typeof CBS_STATUSES)[number]["key"];
+
+export type CbsRowFilter = { query: string } & Record<CbsCostTypeKey, boolean> &
+  Record<CbsStatusKey, boolean>;
 
 export const CBS_FILTER_NONE: CbsRowFilter = {
   query: "",
   ...(Object.fromEntries(CBS_COST_TYPES.map((t) => [t.key, false])) as Record<
     CbsCostTypeKey,
+    boolean
+  >),
+  ...(Object.fromEntries(CBS_STATUSES.map((s) => [s.key, false])) as Record<
+    CbsStatusKey,
     boolean
   >),
 };
@@ -529,6 +552,17 @@ export function cbsIsActive(status: string | null | undefined): boolean {
   return !value || value.toLowerCase() === "active";
 }
 
+/**
+ * Does this row carry the status that button stands for?
+ *
+ * "Active" also takes a blank cell, for the same reason `cbsIsActive` does —
+ * roughly 190 live accounts have no Status, section summaries among them.
+ */
+export function cbsHasStatus(item: CbsTreeItem, key: CbsStatusKey): boolean {
+  if (key === "active") return cbsIsActive(item.status);
+  return (item.status ?? "").trim().toLowerCase() === key;
+}
+
 /** An all-off cost-type selection — the state both tree views start in. */
 export function cbsNoCostTypes(): Record<CbsCostTypeKey, boolean> {
   return Object.fromEntries(
@@ -536,29 +570,56 @@ export function cbsNoCostTypes(): Record<CbsCostTypeKey, boolean> {
   ) as Record<CbsCostTypeKey, boolean>;
 }
 
-/** Is this filter showing everything (so callers can skip the walk)? */
+/** An all-off status selection. */
+export function cbsNoStatuses(): Record<CbsStatusKey, boolean> {
+  return Object.fromEntries(CBS_STATUSES.map((s) => [s.key, false])) as Record<
+    CbsStatusKey,
+    boolean
+  >;
+}
+
 /** Whether any cost-type button is pressed, text search aside. */
 export function cbsHasCostTypeFilter(filter: CbsRowFilter): boolean {
   return CBS_COST_TYPES.some((t) => filter[t.key]);
 }
 
+/** Whether any status button is pressed. */
+export function cbsHasStatusFilter(filter: CbsRowFilter): boolean {
+  return CBS_STATUSES.some((s) => filter[s.key]);
+}
+
+/** Is this filter showing everything (so callers can skip the walk)? */
 export function cbsFilterIsEmpty(filter: CbsRowFilter): boolean {
-  return !filter.query && !cbsHasCostTypeFilter(filter);
+  return (
+    !filter.query &&
+    !cbsHasCostTypeFilter(filter) &&
+    !cbsHasStatusFilter(filter)
+  );
 }
 
 /**
- * The text and the type toggles narrow each other: "pumps" with Subcontracts
- * on means subcontract rows mentioning pumps. The toggles widen each other,
- * since asking for two is asking for either.
+ * The text, the type toggles and the status toggles each narrow the others:
+ * "pumps" with Subcontracts and Inactive on means retired subcontract rows
+ * mentioning pumps. Within a group the toggles widen each other, since asking
+ * for two is asking for either.
  */
 function rowMatches<T extends CbsTreeItem>(
   node: CbsTreeNode<T>,
   filter: CbsRowFilter,
 ): boolean {
   if (filter.query && !node.searchHaystack.includes(filter.query)) return false;
-  const active = CBS_COST_TYPES.filter((t) => filter[t.key]);
-  if (active.length === 0) return true;
-  return active.some((t) => cbsHasCostType(node.item, t));
+  const types = CBS_COST_TYPES.filter((t) => filter[t.key]);
+  if (types.length > 0 && !types.some((t) => cbsHasCostType(node.item, t))) {
+    return false;
+  }
+  const statuses = CBS_STATUSES.filter((s) => filter[s.key]);
+  if (
+    statuses.length > 0 &&
+    !statuses.some((s) => cbsHasStatus(node.item, s.key))
+  ) {
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -659,12 +720,14 @@ export function pruneCbsTree<T extends CbsTreeItem>(
   if (cbsFilterIsEmpty(filter)) return { nodes, matches: 0 };
   let matches = 0;
   const onMatch = () => matches++;
-  // A cost-type filter is read as a report — "show me the Labor codes" — so
-  // only rows carrying that cost type survive. A bare text search still keeps
-  // ancestors: there, knowing WHERE a hit sits is most of the answer.
-  const kept = cbsHasCostTypeFilter(filter)
-    ? strictCbsRows(nodes, filter, 0, onMatch)
-    : searchCbsTree(nodes, filter, false, onMatch);
+  // A cost-type or status filter is read as a report — "show me the Labor
+  // codes", "show me the inactive ones" — so only rows that qualify survive. A
+  // bare text search still keeps ancestors: there, knowing WHERE a hit sits is
+  // most of the answer.
+  const kept =
+    cbsHasCostTypeFilter(filter) || cbsHasStatusFilter(filter)
+      ? strictCbsRows(nodes, filter, 0, onMatch)
+      : searchCbsTree(nodes, filter, false, onMatch);
   return { nodes: kept, matches };
 }
 

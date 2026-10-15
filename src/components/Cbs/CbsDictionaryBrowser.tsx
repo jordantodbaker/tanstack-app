@@ -3,13 +3,17 @@ import { Loader2 } from "lucide-react";
 import type { CbsBrowserRow } from "~/utils/cbs";
 import {
   buildCbsTree,
+  CBS_STATUSES,
   cbsFilterIsEmpty,
   cbsFlagBadges,
+  cbsHasStatus,
   cbsNoCostTypes,
+  cbsNoStatuses,
   pruneCbsTree,
   type CbsBadge,
   type CbsCostTypeKey,
   type CbsRowFilter,
+  type CbsStatusKey,
   type CbsTreeNode,
 } from "~/lib/cbs-tree";
 import {
@@ -142,10 +146,38 @@ export function CbsDictionaryBrowser({
       setCostTypes((prev) => ({ ...prev, [key]: !prev[key] })),
     [],
   );
+  const [statuses, setStatuses] = React.useState(cbsNoStatuses);
+  const toggleStatus = React.useCallback(
+    (key: CbsStatusKey) =>
+      setStatuses((prev) => ({ ...prev, [key]: !prev[key] })),
+    [],
+  );
+
+  // Which statuses this dataset actually contains. The Cost Accounts list and
+  // the Project Cost Code List are filtered to active rows before they reach
+  // this component, so every status button there would either do nothing
+  // (Active) or empty the tree (Inactive, Retired).
+  const statusAvailability = React.useMemo(
+    () =>
+      Object.fromEntries(
+        CBS_STATUSES.map((s) => [
+          s.key,
+          items.some((item) => cbsHasStatus(item, s.key)),
+        ]),
+      ) as Record<CbsStatusKey, boolean>,
+    [items],
+  );
+  // The row appears only where it can tell rows apart — two or more statuses
+  // present. On a list that is all one status the filter is not a disabled
+  // control, it is a question with one answer, so it is not asked. Where it
+  // does appear, a status the data lacks stays visible but disabled, so the
+  // set of buttons does not shift about between views.
+  const canFilterByStatus =
+    CBS_STATUSES.filter((s) => statusAvailability[s.key]).length > 1;
 
   const filter: CbsRowFilter = React.useMemo(
-    () => ({ query: query.trim().toLowerCase(), ...costTypes }),
-    [query, costTypes],
+    () => ({ query: query.trim().toLowerCase(), ...costTypes, ...statuses }),
+    [query, costTypes, statuses],
   );
   const filtering = !cbsFilterIsEmpty(filter);
   const { nodes: visibleNodes, matches } = React.useMemo(
@@ -177,6 +209,9 @@ export function CbsDictionaryBrowser({
         onCollapseAll={collapseAll}
         costTypes={costTypes}
         onToggleCostType={toggleCostType}
+        statuses={statuses}
+        onToggleStatus={canFilterByStatus ? toggleStatus : undefined}
+        statusAvailability={statusAvailability}
       >
         {exportView && (
           <ExportCbsXlsxButton

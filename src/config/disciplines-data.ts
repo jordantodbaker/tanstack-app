@@ -245,10 +245,25 @@ export const disciplinesData: DisciplineData[] = [
     l1Codes: ["900", "901", "902", "904", "930", "931", "932", "933"],
   },
   {
+    id: "specialty-services",
+    label: "Specialty Services",
+    to: "/specialty-services",
+    // 95 is a tens division: 950 is the summary, 951 Mechanical Services and
+    // 952 Industrial Cleaning Services its children. It arrived in the 2026-10
+    // workbook at 920 and moved to 950 when that renumber was repaired, which
+    // is why Commissioning used to list 951 and 952.
+    l1Codes: ["950", "951", "952"],
+  },
+  {
     id: "commissioning",
     label: "Commissioning",
     to: "/commissioning",
-    l1Codes: ["950", "951", "952", "961", "962", "963", "964", "969"],
+    // 960 is the Startup & Commissioning root, not 950: the 2026-10 workbook
+    // put Specialty Services at 950 and moved this division to 960. 951 and
+    // 952 (Mechanical Services, Industrial Cleaning Services) went with
+    // Specialty Services and are listed in the drift guard's backlog until
+    // that division has an owner.
+    l1Codes: ["960", "961", "962", "963", "964", "969"],
   },
   {
     id: "operations",

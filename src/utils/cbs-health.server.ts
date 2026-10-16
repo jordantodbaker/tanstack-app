@@ -1,5 +1,9 @@
 import { prisma } from "../server/db";
-import { loadCbsWorkbookCached } from "../../prisma/cbs-workbook";
+import {
+  loadCbsWorkbookCached,
+  type CbsWorkbookLoad,
+  type CbsWorkbookReport,
+} from "../../prisma/cbs-workbook";
 import { buildCoreLinks } from "~/lib/cbs-core-links";
 import { runCbsQcChecks } from "~/lib/cbs-qc";
 import { cbsIsActive } from "~/lib/cbs-tree";
@@ -35,9 +39,44 @@ export async function getCbsHealthReport(): Promise<HealthReport> {
 }
 
 export async function buildCbsHealthReport(): Promise<HealthReport> {
-  // Cached on the file’s mtime and size: parsing it is ~2.5s and the only
+  // Cached on the file's mtime and size: parsing it is ~2.5s and the only
   // thing that changes it is someone saving CBS.xlsx.
-  const { items: workbook, report } = await loadCbsWorkbookCached();
+  //
+  // Optional, because CBS.xlsx is a working file on somebody's machine, not
+  // part of the deployment. A built server has no copy of it, so the four
+  // checks that compare the sheet against the database simply cannot be asked
+  // there — and a page that died rather than saying so took the other
+  // eighteen down with it.
+  let workbookLoad: CbsWorkbookLoad | null = null;
+  let workbookProblem = "";
+  try {
+    workbookLoad = await loadCbsWorkbookCached();
+  } catch (err) {
+    workbookProblem =
+      (err as NodeJS.ErrnoException)?.code === "ENOENT"
+        ? "CBS.xlsx is not on this server — these checks only run where the workbook lives."
+        : `CBS.xlsx could not be read here: ${err instanceof Error ? err.message : String(err)}`;
+  }
+  const workbook = workbookLoad?.items ?? [];
+  const report = workbookLoad?.report;
+
+  /** A workbook check, or a note saying why it could not be asked. */
+  const workbookCheck = (
+    id: string,
+    title: string,
+    build: (sheet: CbsWorkbookReport) => HealthCheck,
+  ): HealthCheck =>
+    report
+      ? build(report)
+      : {
+          id,
+          title,
+          severity: "info",
+          count: 0,
+          summary: workbookProblem,
+          action: "",
+          findings: [],
+        };
   // Deliberately without `allowedInProjects`: including it turns this into a
   // join over every one of ~12,000 rows when only a handful of them — the
   // retired ones and the ones an import would delete — ever need it. Those are
@@ -92,57 +131,63 @@ export async function buildCbsHealthReport(): Promise<HealthReport> {
 
   // 1. Duplicate display codes. The import keeps one row and drops the rest,
   //    so the dropped account exists in the workbook and nowhere else.
-  const dropped = report.duplicates.filter((d) => !d.kept);
   checks.push(
-    check(
-      "duplicates",
-      "Duplicate display codes",
-      "error",
-      dropped.map((d) => ({
-        code: d.displayCode,
-        name: d.name,
-        detail: `workbook row ${d.row} — dropped, an earlier row already claims this code`,
-      })),
-      dropped.length,
-      "Two or more workbook rows claim the same display code. The import keeps the first and silently drops the rest, so those accounts exist in the workbook and nowhere in this app.",
-      "Give each account its own code in CBS.xlsx, then re-import. Until then the dropped names cannot be estimated against.",
-      "Every workbook row has a display code of its own.",
-    ),
+    workbookCheck("duplicates", "Duplicate display codes", (sheet) => {
+      const dropped = sheet.duplicates.filter((d) => !d.kept);
+      return check(
+        "duplicates",
+        "Duplicate display codes",
+        "error",
+        dropped.map((d) => ({
+          code: d.displayCode,
+          name: d.name,
+          detail: `workbook row ${d.row} — dropped, an earlier row already claims this code`,
+        })),
+        dropped.length,
+        "Two or more workbook rows claim the same display code. The import keeps the first and silently drops the rest, so those accounts exist in the workbook and nowhere in this app.",
+        "Give each account its own code in CBS.xlsx, then re-import. Until then the dropped names cannot be estimated against.",
+        "Every workbook row has a display code of its own.",
+      );
+    }),
   );
 
   // 2. Display codes the loader cannot parse — those rows never load at all.
   checks.push(
-    check(
-      "invalid",
-      "Unreadable display codes",
-      "error",
-      report.invalid.map((i) => ({
-        code: i.displayCode,
-        name: i.name,
-        detail: `workbook row ${i.row} — ${i.reason}`,
-      })),
-      report.invalid.length,
-      "These rows are in the workbook but their display code is not XXX-XX-XXXX-XX-X, so the import rejects them outright.",
-      "Fix the Display Code cells in CBS.xlsx and re-import. A doubled cost-type segment is the usual cause.",
-      "Every workbook row has a display code the import can read.",
+    workbookCheck("invalid", "Unreadable display codes", (sheet) =>
+      check(
+        "invalid",
+        "Unreadable display codes",
+        "error",
+        sheet.invalid.map((i) => ({
+          code: i.displayCode,
+          name: i.name,
+          detail: `workbook row ${i.row} — ${i.reason}`,
+        })),
+        sheet.invalid.length,
+        "These rows are in the workbook but their display code is not XXX-XX-XXXX-XX-X, so the import rejects them outright.",
+        "Fix the Display Code cells in CBS.xlsx and re-import. A doubled cost-type segment is the usual cause.",
+        "Every workbook row has a display code the import can read.",
+      ),
     ),
   );
 
   // 3. Helper columns disagreeing with the code: a half-finished renumber.
   checks.push(
-    check(
-      "segments",
-      "Renumbers left half-done",
-      "warning",
-      report.segmentMismatches.map((s) => ({
-        code: s.codeL1,
-        name: s.sample.name,
-        detail: `${s.rows} row(s) say ${s.columnsL1} but are coded ${s.codeL1} — e.g. workbook row ${s.sample.row}`,
-      })),
-      report.segmentMismatches.reduce((n, s) => n + s.rows, 0),
-      "The L1-L7 helper columns put these rows in a different division from their display code. The display code is the account's identity, so editing only the helper columns moves nothing.",
-      "Decide which is right and make the other match, then re-import.",
-      "Every row's L1-L7 columns agree with its display code.",
+    workbookCheck("segments", "Renumbers left half-done", (sheet) =>
+      check(
+        "segments",
+        "Renumbers left half-done",
+        "warning",
+        sheet.segmentMismatches.map((s) => ({
+          code: s.codeL1,
+          name: s.sample.name,
+          detail: `${s.rows} row(s) say ${s.columnsL1} but are coded ${s.codeL1} — e.g. workbook row ${s.sample.row}`,
+        })),
+        sheet.segmentMismatches.reduce((n, s) => n + s.rows, 0),
+        "The L1-L7 helper columns put these rows in a different division from their display code. The display code is the account's identity, so editing only the helper columns moves nothing.",
+        "Decide which is right and make the other match, then re-import.",
+        "Every row's L1-L7 columns agree with its display code.",
+      ),
     ),
   );
 
@@ -238,8 +283,12 @@ export async function buildCbsHealthReport(): Promise<HealthReport> {
   );
 
   // 8. Workbook against database: what the next import would change.
+  //
+  // Guarded, not just wrapped: without the sheet, `workbook` is empty and the
+  // arithmetic below would report every row in the catalog as about to be
+  // deleted — a false alarm far worse than saying nothing.
   const wanted = new Set(workbook.map((w) => w.displayCode.replace(/-/g, "")));
-  const stale = rows.filter((r) => !wanted.has(r.costCode));
+  const stale = report ? rows.filter((r) => !wanted.has(r.costCode)) : [];
   // Both sides are set lookups. The obvious `workbook.filter(w =>
   // !rows.some(...))` is quadratic — ~140 million comparisons at this size,
   // and on its own it took this report from under four seconds to thirty.
@@ -253,32 +302,34 @@ export async function buildCbsHealthReport(): Promise<HealthReport> {
     // The title is neutral rather than "…in step" / "…out of step". One check
     // has one name: it is the export's filename and the row you look for on
     // the page, and neither should change with the outcome.
-    check(
-      "import-drift",
-      "Workbook against the database",
-      "warning",
-      [
-        ...fresh.map((f) => ({
-          code: f.displayCode,
-          name: f.name,
-          detail: "in CBS.xlsx only — an import would add it",
-          masterRow: f.masterCbsRow,
-        })),
-        ...stale.map((s) => ({
-          code: s.displayCode,
-          name: s.name,
-          masterRow: s.masterCbsRow,
-          detail: `in the database only — an import would DELETE it${
-            (staleGrants.get(s.displayCode) ?? []).length
-              ? `, and it is granted to ${(staleGrants.get(s.displayCode) ?? []).join(", ")}`
-              : ""
-          }`,
-        })),
-      ],
-      drift,
-      `CBS.xlsx holds ${fresh.length} code(s) this database does not, and the database holds ${stale.length} the workbook no longer has. An import would create the first set and DELETE the second, taking their project grants with them.`,
-      "Run `npm run cbs:import -- --dry-run` to see the full plan before importing.",
-      "The catalog matches CBS.xlsx; an import would add and remove nothing.",
+    workbookCheck("import-drift", "Workbook against the database", () =>
+      check(
+        "import-drift",
+        "Workbook against the database",
+        "warning",
+        [
+          ...fresh.map((f) => ({
+            code: f.displayCode,
+            name: f.name,
+            detail: "in CBS.xlsx only — an import would add it",
+            masterRow: f.masterCbsRow,
+          })),
+          ...stale.map((s) => ({
+            code: s.displayCode,
+            name: s.name,
+            masterRow: s.masterCbsRow,
+            detail: `in the database only — an import would DELETE it${
+              (staleGrants.get(s.displayCode) ?? []).length
+                ? `, and it is granted to ${(staleGrants.get(s.displayCode) ?? []).join(", ")}`
+                : ""
+            }`,
+          })),
+        ],
+        drift,
+        `CBS.xlsx holds ${fresh.length} code(s) this database does not, and the database holds ${stale.length} the workbook no longer has. An import would create the first set and DELETE the second, taking their project grants with them.`,
+        "Run `npm run cbs:import -- --dry-run` to see the full plan before importing.",
+        "The catalog matches CBS.xlsx; an import would add and remove nothing.",
+      ),
     ),
   );
 
@@ -287,7 +338,9 @@ export async function buildCbsHealthReport(): Promise<HealthReport> {
 
   return {
     checks: sortChecks(checks),
-    workbookRows: workbook.length,
+    // Null rather than zero when the sheet is not on this server: "no rows"
+    // and "no workbook" are different things and the header says so.
+    workbookRows: report ? workbook.length : null,
     databaseRows: rows.length,
     generatedAt: new Date().toISOString(),
   };

@@ -62,8 +62,8 @@ export const FINDING_LIMIT = 10_000;
 
 export type HealthReport = {
   checks: HealthCheck[];
-  /** Rows in the workbook and in the database, for the header. */
-  workbookRows: number;
+  /** Rows in the workbook, or null when the workbook is not on this server. */
+  workbookRows: number | null;
   databaseRows: number;
   generatedAt: string;
 };

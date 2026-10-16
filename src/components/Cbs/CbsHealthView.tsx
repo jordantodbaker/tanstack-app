@@ -251,8 +251,10 @@ export function CbsHealthView() {
           {healthHeadline(report.checks)}
         </span>
         <span className="text-slate-400">
-          {report.workbookRows.toLocaleString()} rows in CBS.xlsx ·{" "}
-          {report.databaseRows.toLocaleString()} in the database
+          {report.workbookRows === null
+            ? "CBS.xlsx not on this server — workbook checks skipped"
+            : `${report.workbookRows.toLocaleString()} rows in CBS.xlsx`}{" "}
+          · {report.databaseRows.toLocaleString()} in the database
         </span>
       </div>
 

@@ -14,6 +14,9 @@ function row(over: Partial<CbsDictionaryRow> = {}): CbsDictionaryRow {
     name: "Fab",
     displayCode,
     uom: "LS",
+    // Where the row sits in the workbook; traced through, never keyed on.
+    masterCbsRow: null,
+    expandedRow: null,
     subReporting: false,
     materialCode: true,
     laborCode: true,

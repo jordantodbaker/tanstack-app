@@ -15,10 +15,29 @@ import { CbsDictionarySections } from "~/components/Cbs/CbsDictionarySections";
  * carries its own `requireAdmin` so the API is independently protected.
  */
 export const Route = createFileRoute("/admin/master-cbs")({
-  component: AdminMasterCbsPage,
+  // `?code=` opens the page on one account — the link you paste into an email
+  // so the reader lands on the row. Parsed leniently: an unknown code just
+  // shows the page as normal.
+  validateSearch: (search: Record<string, unknown>) => ({
+    code: typeof search.code === "string" ? search.code : undefined,
+  }),
+  component: AdminMasterCbsRoute,
 });
 
-function AdminMasterCbsPage() {
+/**
+ * Reads the search param and hands it down. Kept separate from the page so
+ * the page can be rendered in a test without a RouterProvider.
+ */
+function AdminMasterCbsRoute() {
+  const { code } = Route.useSearch();
+  return <AdminMasterCbsPage focusCode={code ?? null} />;
+}
+
+export function AdminMasterCbsPage({
+  focusCode = null,
+}: {
+  focusCode?: string | null;
+} = {}) {
   const query = useQuery(cbsCatalogQueryOptions());
 
   return (
@@ -42,7 +61,7 @@ function AdminMasterCbsPage() {
           errorMessage="Failed to load the CBS Code Book."
         />
       ) : (
-        <CbsDictionarySections items={query.data} />
+        <CbsDictionarySections items={query.data} focusCode={focusCode} />
       )}
     </div>
   );

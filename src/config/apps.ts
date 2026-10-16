@@ -2,10 +2,31 @@ import type React from "react";
 import type { LinkProps } from "@tanstack/react-router";
 import {
   BarChart3,
+  BookOpen,
+  CalendarClock,
+  CalendarRange,
   ClipboardList,
+  FileClock,
+  FileSignature,
+  FileSpreadsheet,
+  FileText,
+  Flame,
+  FolderKanban,
   FolderTree,
   GitPullRequestArrow,
+  HardHat,
+  HelpCircle,
+  IdCard,
+  LayoutDashboard,
+  ListTree,
+  Map,
+  Settings,
+  Share2,
   Shield,
+  Stethoscope,
+  TrendingUp,
+  UserCog,
+  Users,
 } from "lucide-react";
 import { disciplinesData } from "./disciplines-data";
 
@@ -34,6 +55,12 @@ type AppPath = NonNullable<LinkProps["to"]>;
 export type AppNavLink = {
   to: AppPath;
   label: string;
+  /**
+   * The sidebar's only content once it is collapsed, so every link needs one
+   * or it renders as a blank row. Where the page has a heading icon this is
+   * the same one, so the sidebar and the page agree.
+   */
+  icon: React.ElementType;
   /** Rendered only for administrators. The route is gated independently. */
   adminOnly?: boolean;
   /** Sidebar heading to file this link under. Ungrouped links render first. */
@@ -109,11 +136,11 @@ export const APPS: readonly AppDef[] = [
     home: "/changelog",
     showRecents: true,
     links: [
-      { to: "/changelog", label: "Change Log" },
-      { to: "/fco-log", label: "FCO Log" },
-      { to: "/rfis", label: "RFIs" },
-      { to: "/pco", label: "PCOs" },
-      { to: "/trends", label: "Trends" },
+      { to: "/changelog", label: "Change Log", icon: ClipboardList },
+      { to: "/fco-log", label: "FCO Log", icon: FileSignature },
+      { to: "/rfis", label: "RFIs", icon: HelpCircle },
+      { to: "/pco", label: "PCOs", icon: FileClock },
+      { to: "/trends", label: "Trends", icon: TrendingUp },
     ],
     ownedPaths: ["/fco-print", "/rfi-print"],
   },
@@ -125,9 +152,30 @@ export const APPS: readonly AppDef[] = [
     icon: FolderTree,
     home: "/project-cost-codes",
     links: [
-      { to: "/project-cost-codes", label: "Project Cost Code List" },
-      { to: "/admin/master-cbs", label: "CBS Code Book", adminOnly: true },
-      { to: "/admin/core-codes", label: "Core Code Roll-up", adminOnly: true },
+      {
+        to: "/project-cost-codes",
+        label: "Project Cost Code List",
+        icon: ListTree,
+      },
+      {
+        to: "/admin/master-cbs",
+        label: "CBS Code Book",
+        icon: BookOpen,
+        adminOnly: true,
+      },
+      {
+        to: "/admin/core-codes",
+        label: "Core Code Roll-up",
+        icon: Share2,
+        adminOnly: true,
+      },
+      { to: "/code-usage", label: "Code Usage", icon: Flame },
+      {
+        to: "/admin/cbs-health",
+        label: "CBS Health",
+        icon: Stethoscope,
+        adminOnly: true,
+      },
     ],
   },
   {
@@ -138,9 +186,14 @@ export const APPS: readonly AppDef[] = [
     icon: BarChart3,
     home: "/dashboard",
     links: [
-      { to: "/dashboard", label: "Dashboard" },
-      { to: "/reporting", label: "Periods & EVM" },
-      { to: "/admin/cvr-templates", label: "CVR Templates", adminOnly: true },
+      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { to: "/reporting", label: "Periods & EVM", icon: CalendarRange },
+      {
+        to: "/admin/cvr-templates",
+        label: "CVR Templates",
+        icon: FileSpreadsheet,
+        adminOnly: true,
+      },
     ],
     ownedPaths: ["/cvr-print"],
   },
@@ -153,31 +206,50 @@ export const APPS: readonly AppDef[] = [
     home: "/admin/projects",
     adminOnly: true,
     links: [
-      { to: "/admin/projects", label: "Projects", group: "Project data" },
-      { to: "/admin/areas", label: "Areas", group: "Project data" },
+      {
+        to: "/admin/projects",
+        label: "Projects",
+        icon: FolderKanban,
+        group: "Project data",
+      },
+      { to: "/admin/areas", label: "Areas", icon: Map, group: "Project data" },
       {
         to: "/admin/subcontractors",
         label: "Subcontractors",
+        icon: HardHat,
         group: "Project data",
       },
-      { to: "/admin/roles", label: "Roles", group: "Rates & resources" },
+      {
+        to: "/admin/roles",
+        label: "Roles",
+        icon: IdCard,
+        group: "Rates & resources",
+      },
       {
         to: "/admin/crew-mixes",
         label: "Crew Mixes",
+        icon: Users,
         group: "Rates & resources",
       },
       {
         to: "/admin/schedules",
         label: "Schedules",
+        icon: CalendarClock,
         group: "Rates & resources",
       },
       {
         to: "/admin/fco-templates",
         label: "FCO Templates",
+        icon: FileText,
         group: "Templates",
       },
-      { to: "/admin/users", label: "Users", group: "Platform" },
-      { to: "/admin/system", label: "System", group: "Platform" },
+      { to: "/admin/users", label: "Users", icon: UserCog, group: "Platform" },
+      {
+        to: "/admin/system",
+        label: "System",
+        icon: Settings,
+        group: "Platform",
+      },
     ],
     // CBS and CVR Templates are /admin routes that belong to other apps, so
     // this prefix has to lose to their longer, more specific matches.

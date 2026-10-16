@@ -7,6 +7,19 @@ import { ProjectCostCodeListView } from "~/components/Cbs/ProjectCostCodeListVie
  * mirrors the Master CBS Dictionary workbook. Project-scoped, so it flows
  * through `ProjectGuard` like the discipline pages (see `__root.tsx`).
  */
+/**
+ * `?code=` opens the page on one account — the link you paste into an email so
+ * the other person lands on the row rather than hunting for it. Parsed
+ * leniently: an unknown or malformed code simply shows the page as normal.
+ */
 export const Route = createFileRoute("/project-cost-codes")({
-  component: ProjectCostCodeListView,
+  validateSearch: (search: Record<string, unknown>) => ({
+    code: typeof search.code === "string" ? search.code : undefined,
+  }),
+  component: ProjectCostCodesPage,
 });
+
+function ProjectCostCodesPage() {
+  const { code } = Route.useSearch();
+  return <ProjectCostCodeListView focusCode={code ?? null} />;
+}

@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import type { CbsBrowserRow } from "~/utils/cbs";
 import {
   buildCbsTree,
+  cbsAncestorCodes,
   CBS_STATUSES,
   cbsFilterIsEmpty,
   cbsFlagBadges,
@@ -120,6 +121,7 @@ export function CbsDictionaryBrowser({
   emptyMessage,
   showRowTypeCounts = true,
   exportView,
+  focusCode = null,
 }: {
   items: CbsBrowserRow[];
   badgesFor?: (node: Node) => readonly CbsBadge[];
@@ -128,6 +130,12 @@ export function CbsDictionaryBrowser({
   showRowTypeCounts?: boolean;
   /** Which view to export as Excel. Omit to leave the button out. */
   exportView?: CbsExportView;
+  /**
+   * A display code to open on arrival — the `?code=` deep link. Its ancestors
+   * are expanded, the row is selected so the detail panel fills, and the list
+   * scrolls to it.
+   */
+  focusCode?: string | null;
 }) {
   const nodes = React.useMemo(() => buildCbsTree(items), [items]);
   const {
@@ -136,9 +144,27 @@ export function CbsDictionaryBrowser({
     expandAll,
     collapseAll,
     expandToLevel,
+    reveal,
     levelShown,
   } = useCbsTreeExpansion(nodes);
   const [selected, setSelected] = React.useState<Node | null>(null);
+
+  // Deep link: open the path down to the code, then select it. Runs on the
+  // code rather than on `nodes`, so re-rendering does not keep re-selecting a
+  // row the user has since clicked away from.
+  React.useEffect(() => {
+    if (!focusCode) return;
+    reveal(cbsAncestorCodes(focusCode));
+    const find = (list: Node[]): Node | null => {
+      for (const n of list) {
+        if (n.item.displayCode === focusCode) return n;
+        const hit = find(n.children);
+        if (hit) return hit;
+      }
+      return null;
+    };
+    setSelected(find(nodes));
+  }, [focusCode, nodes, reveal]);
   const [query, setQuery] = React.useState("");
   const [costTypes, setCostTypes] = React.useState(cbsNoCostTypes);
   const toggleCostType = React.useCallback(
@@ -233,6 +259,7 @@ export function CbsDictionaryBrowser({
           flat={flat}
           expanded={expanded}
           forceOpen={filtering}
+          scrollToKey={focusCode}
           selectedKey={selected?.pathKey ?? null}
           onToggle={toggle}
           onSelect={setSelected}

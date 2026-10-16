@@ -24,7 +24,13 @@ import {
 const SOURCE_NOTE =
   "Source: the CBS Dictionary, limited to the items selected for this project on the Setup page. Colours mirror the source workbook's outline levels.";
 
-function ProjectCostCodes({ projectId }: { projectId: number }) {
+function ProjectCostCodes({
+  projectId,
+  focusCode,
+}: {
+  projectId: number;
+  focusCode: string | null;
+}) {
   // Already filtered to original rows server-side.
   const query = useQuery(projectCostCodesQueryOptions(projectId));
 
@@ -46,12 +52,18 @@ function ProjectCostCodes({ projectId }: { projectId: number }) {
         emptyMessage="No cost codes selected for this project."
         showRowTypeCounts={false}
         exportView="projectCostCodes"
+        focusCode={focusCode}
       />
     </div>
   );
 }
 
-export function ProjectCostCodeListView() {
+export function ProjectCostCodeListView({
+  focusCode = null,
+}: {
+  /** A display code to open on arrival — the `?code=` deep link. */
+  focusCode?: string | null;
+} = {}) {
   const { projectId } = useSelectedProject();
 
   return (
@@ -77,7 +89,11 @@ export function ProjectCostCodeListView() {
           Choose a project to see its cost codes.
         </p>
       ) : (
-        <ProjectCostCodes key={projectId} projectId={projectId} />
+        <ProjectCostCodes
+          key={projectId}
+          projectId={projectId}
+          focusCode={focusCode}
+        />
       )}
     </div>
   );

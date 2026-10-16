@@ -46,6 +46,22 @@ export function useCbsTreeExpansion(nodes: CbsTreeNode[]) {
     setExpanded(new Set());
   }, []);
 
+  /**
+   * Opens the given nodes without closing anything — what a `?code=` deep link
+   * needs, since the row it names is usually four levels down and every
+   * ancestor has to be open for it to exist in the list at all.
+   */
+  const reveal = React.useCallback((pathKeys: string[]) => {
+    if (pathKeys.length === 0) return;
+    setLevelShown(null);
+    setExpanded((prev) => {
+      if (pathKeys.every((k) => prev.has(k))) return prev;
+      const next = new Set(prev);
+      for (const k of pathKeys) next.add(k);
+      return next;
+    });
+  }, []);
+
   const expandToLevel = React.useCallback(
     (level: number) => {
       setLevelShown(level);
@@ -60,6 +76,7 @@ export function useCbsTreeExpansion(nodes: CbsTreeNode[]) {
     expandAll,
     collapseAll,
     expandToLevel,
+    reveal,
     levelShown,
   };
 }

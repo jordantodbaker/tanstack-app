@@ -39,6 +39,8 @@ export const CBS_IMPORT_FIELDS = [
   "displayDescription",
   "rowType",
   "generatedFrom",
+  "masterCbsRow",
+  "expandedRow",
 ] as const satisfies readonly (keyof CbsDictionaryRow)[];
 
 export type CbsImportField = (typeof CBS_IMPORT_FIELDS)[number];

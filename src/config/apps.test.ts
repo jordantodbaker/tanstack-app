@@ -34,6 +34,7 @@ describe("appForPath", () => {
     // from under the user.
     expect(appForPath("/admin/master-cbs")?.id).toBe("cbs");
     expect(appForPath("/admin/core-codes")?.id).toBe("cbs");
+    expect(appForPath("/admin/cbs-health")?.id).toBe("cbs");
     expect(appForPath("/admin/cvr-templates")?.id).toBe("reports");
     expect(appForPath("/admin/projects")?.id).toBe("admin");
     expect(appForPath("/admin")?.id).toBe("admin");
@@ -90,13 +91,37 @@ describe("app registry", () => {
     ]);
   });
 
+  it("gives every nav link an icon", () => {
+    // A collapsed sidebar hides the label, so a link without an icon renders
+    // as a blank row you can still click. The type requires one; this catches
+    // a cast and records why it matters.
+    const missing = APPS.flatMap((app) =>
+      app.links.filter((l) => !l.icon).map((l) => `${app.id}: ${l.label}`),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it("orders the CBS app from project scope out to the whole catalog", () => {
+    expect(appById.cbs.links.map((l) => l.label)).toEqual([
+      "Project Cost Code List",
+      "CBS Code Book",
+      "Core Code Roll-up",
+      "Code Usage",
+      "CBS Health",
+    ]);
+  });
+
   it("hides admin-only apps and links from a non-admin", () => {
     expect(visibleApps(false).map((a) => a.id)).not.toContain("admin");
     expect(visibleApps(true).map((a) => a.id)).toContain("admin");
 
     const cbs = appById.cbs;
+    // The two project-scoped pages stay: both are about THIS project's own
+    // codes, and their server fns are guarded on project access. The three
+    // catalog-wide pages are admin-only because they span every project.
     expect(visibleAppLinks(cbs, false).map((l) => l.label)).toEqual([
       "Project Cost Code List",
+      "Code Usage",
     ]);
     expect(visibleAppLinks(cbs, true)).toHaveLength(cbs.links.length);
   });

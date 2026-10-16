@@ -167,6 +167,10 @@ export const qk = {
     catalog: () => ["cbsCatalog"] as const,
     /** The Core-code roll-up: which CBS items feed each core account. */
     coreLinks: () => ["cbsCoreLinks"] as const,
+    /** Granted vs actually used codes, for one project. */
+    codeUsage: (projectId: number) => ["cbsCodeUsage", projectId] as const,
+    /** Catalog health checks — workbook against database. */
+    health: () => ["cbsHealth"] as const,
     itemsByL1FilteredAll: () => ["cbsItemsByL1Filtered"] as const,
     itemsByL1Filtered: (input: {
       l1Values: string[];

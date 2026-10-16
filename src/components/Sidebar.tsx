@@ -182,21 +182,30 @@ function AppLinkNav({
               {group.name}
             </p>
           )}
-          {group.links.map((link) => (
-            <Link
-              key={link.to}
-              to={link.to}
-              activeOptions={{ exact: true }}
-              onClick={onItemClick}
-              title={collapsed ? link.label : undefined}
-              className={navClass(collapsed)}
-              activeProps={{
-                className: `${navClass(collapsed)} bg-red-50 text-red-800`,
-              }}
-            >
-              <span className={collapsed ? "md:hidden" : ""}>{link.label}</span>
-            </Link>
-          ))}
+          {group.links.map((link) => {
+            const Icon = link.icon;
+            return (
+              <Link
+                key={link.to}
+                to={link.to}
+                activeOptions={{ exact: true }}
+                onClick={onItemClick}
+                title={collapsed ? link.label : undefined}
+                className={navClass(collapsed)}
+                activeProps={{
+                  className: `${navClass(collapsed)} bg-red-50 text-red-800 [&>svg]:text-red-700`,
+                }}
+              >
+                {/* The only thing left once the sidebar is collapsed, which is
+                    why every link carries one. Same treatment as the estimate's
+                    discipline tree, so the two navs look like one product. */}
+                <Icon size={17} className="shrink-0 text-slate-500" />
+                <span className={collapsed ? "md:hidden" : ""}>
+                  {link.label}
+                </span>
+              </Link>
+            );
+          })}
         </div>
       ))}
     </>

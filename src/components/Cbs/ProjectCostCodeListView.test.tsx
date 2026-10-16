@@ -23,6 +23,8 @@ vi.mock("@tanstack/react-virtual", () => ({
         key: index,
       })),
     measureElement: () => {},
+    // The real virtualizer exposes this; a deep link calls it.
+    scrollToIndex: () => {},
   }),
 }));
 

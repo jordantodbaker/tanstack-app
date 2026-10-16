@@ -1375,6 +1375,13 @@ model CbsItem {
   rowType            CbsRowType @default(ORIGINAL)
   /// For SUB / MATERIAL rows: the displayCode of the original they came from.
   generatedFrom      String?
+  /// Where this row sits in the source workbook. "Expanded Row" is its line in
+  /// the CBS Expanded sheet; "Master CBS Row" is the line in the unexpanded
+  /// Master CBS it came from, which a generated cost-type twin shares with the
+  /// account it was generated from. Both are for tracing a code back to the
+  /// spreadsheet; nothing keys on them.
+  masterCbsRow       Int?
+  expandedRow        Int?
   costCode           String     @unique
   description        String?
   displayDescription String?

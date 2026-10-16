@@ -32,6 +32,7 @@ function CbsSection({
   defaultOpen = false,
   showRowTypeCounts,
   exportView,
+  focusCode = null,
 }: {
   title: string;
   description: string;
@@ -43,6 +44,7 @@ function CbsSection({
   /** Off for the accounts list, where the breakdown is always "0 sub · 0 material". */
   showRowTypeCounts?: boolean;
   exportView: CbsExportView;
+  focusCode?: string | null;
 }) {
   return (
     <CbsSectionShell
@@ -58,6 +60,7 @@ function CbsSection({
         emptyMessage={emptyMessage}
         showRowTypeCounts={showRowTypeCounts}
         exportView={exportView}
+        focusCode={focusCode}
       />
     </CbsSectionShell>
   );
@@ -117,7 +120,14 @@ const MASTER_EMPTY = "No CBS items in the catalog.";
  * and the full dictionary including the generated S/M rows. The Admin → Master
  * CBS page; project-scoped pages render a single `CbsDictionaryBrowser`.
  */
-export function CbsDictionarySections({ items }: { items: CbsTreeRow[] }) {
+export function CbsDictionarySections({
+  items,
+  focusCode = null,
+}: {
+  items: CbsTreeRow[];
+  /** A display code to open on arrival — the `?code=` deep link. */
+  focusCode?: string | null;
+}) {
   // One row per account: the "-0" backbone only. Its L / S / M / E / O
   // variants are the same account priced a different way, and the badges
   // already say which of them exist, so listing them again doubles the tree
@@ -131,6 +141,17 @@ export function CbsDictionarySections({ items }: { items: CbsTreeRow[] }) {
     [items],
   );
 
+  // Both sections are open already, so this decides which one FOLLOWS the
+  // deep link. Handing it to both would scroll two trees and select the row
+  // twice; Cost Accounts wins when both hold the code, since it is the
+  // shorter list and the one people work from.
+  const inAccounts =
+    focusCode !== null && accounts.some((r) => r.displayCode === focusCode);
+  const inDictionary =
+    focusCode !== null &&
+    !inAccounts &&
+    items.some((r) => r.displayCode === focusCode);
+
   return (
     <div className="flex flex-col gap-4">
       <CbsSection
@@ -143,6 +164,7 @@ export function CbsDictionarySections({ items }: { items: CbsTreeRow[] }) {
         showRowTypeCounts={false}
         defaultOpen
         exportView="codeBook"
+        focusCode={inAccounts ? focusCode : null}
       />
       <CbsSection
         title="CBS Dictionary"
@@ -152,6 +174,7 @@ export function CbsDictionarySections({ items }: { items: CbsTreeRow[] }) {
         emptyMessage={MASTER_EMPTY}
         defaultOpen
         exportView="dictionary"
+        focusCode={inDictionary ? focusCode : null}
       />
     </div>
   );

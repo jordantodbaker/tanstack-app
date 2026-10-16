@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import ExcelJS from "exceljs";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   formatCbsWorkbookReport,
   loadCbsWorkbook,
+  loadCbsWorkbookCached,
 } from "../../prisma/cbs-workbook";
 
 /**
@@ -75,6 +76,123 @@ async function writeWorkbook(
 let dir: string;
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), "master-cbs-"));
+});
+
+describe("workbook row numbers", () => {
+  const H = ["Name", "Display Code", "UOM", "Master CBS Row", "Expanded Row"];
+
+  it("carries both row numbers onto the item", () => {
+    // They trace a code back to the spreadsheet. A generated cost-type twin
+    // shares its Master CBS Row with the account it came from, which is how
+    // you tell it was expanded rather than typed.
+    const path = join(dir, "rownums.xlsx");
+    return writeWorkbook(path, [
+      {
+        name: "CBS",
+        rows: [H, ["Spool", "601-05-0000-00-0", "LS", "41", "57"]],
+      },
+    ])
+      .then(() => loadCbsWorkbook(path))
+      .then(({ items }) => {
+        expect(items[0]).toMatchObject({ masterCbsRow: 41, expandedRow: 57 });
+      });
+  });
+
+  it("leaves them null when the columns are absent or blank", async () => {
+    // Older copies of the workbook have no such columns, and must still load.
+    const path = join(dir, "rownums-missing.xlsx");
+    await writeWorkbook(path, [
+      {
+        name: "CBS",
+        rows: [
+          ["Name", "Display Code", "UOM"],
+          ["Spool", "601-05-0000-00-0", "LS"],
+        ],
+      },
+    ]);
+    const { items } = await loadCbsWorkbook(path);
+    expect(items[0]).toMatchObject({ masterCbsRow: null, expandedRow: null });
+  });
+
+  it("ignores a value that is not a number", async () => {
+    const path = join(dir, "rownums-junk.xlsx");
+    await writeWorkbook(path, [
+      {
+        name: "CBS",
+        rows: [H, ["Spool", "601-05-0000-00-0", "LS", "n/a", "12.9"]],
+      },
+    ]);
+    const { items } = await loadCbsWorkbook(path);
+    expect(items[0].masterCbsRow).toBeNull();
+    // A fractional row number is meaningless; take the whole part.
+    expect(items[0].expandedRow).toBe(12);
+  });
+});
+
+describe("loadCbsWorkbookCached", () => {
+  const HEADER = [
+    "L1",
+    "L2",
+    "L3",
+    "L4",
+    "L5",
+    "L6",
+    "L7",
+    "Name",
+    "Display Code",
+    "UOM",
+  ];
+  const row = (name: string) => [
+    "06",
+    "0",
+    "10",
+    "00",
+    "00",
+    "00",
+    "0",
+    name,
+    "060-10-0000-00-0",
+    "LS",
+  ];
+
+  it("reuses the parse while the file is untouched", async () => {
+    const path = join(dir, "cache-same.xlsx");
+    await writeWorkbook(path, [{ name: "CBS", rows: [HEADER, row("First")] }]);
+    const a = await loadCbsWorkbookCached(path);
+    const b = await loadCbsWorkbookCached(path);
+    // The same object, not merely equal: that is what makes it a cache.
+    expect(b).toBe(a);
+  });
+
+  it("re-parses when the file is replaced", async () => {
+    // CBS.xlsx is replaced often. A cache keyed on the path alone would keep
+    // serving the old workbook, which is worse than no cache at all.
+    const path = join(dir, "cache-replaced.xlsx");
+    await writeWorkbook(path, [{ name: "CBS", rows: [HEADER, row("Before")] }]);
+    const before = await loadCbsWorkbookCached(path);
+    expect(before.items[0].name).toBe("Before");
+
+    // Writing alone can land inside the filesystem's timestamp resolution, so
+    // move the mtime deliberately — the point is that a CHANGED file is noticed.
+    await writeWorkbook(path, [{ name: "CBS", rows: [HEADER, row("After")] }]);
+    const later = new Date(Date.now() + 2000);
+    utimesSync(path, later, later);
+
+    const after = await loadCbsWorkbookCached(path);
+    expect(after).not.toBe(before);
+    expect(after.items[0].name).toBe("After");
+  });
+
+  it("keeps separate files apart", async () => {
+    const one = join(dir, "cache-one.xlsx");
+    const two = join(dir, "cache-two.xlsx");
+    await writeWorkbook(one, [{ name: "CBS", rows: [HEADER, row("One")] }]);
+    await writeWorkbook(two, [{ name: "CBS", rows: [HEADER, row("Two")] }]);
+    expect((await loadCbsWorkbookCached(one)).items[0].name).toBe("One");
+    expect((await loadCbsWorkbookCached(two)).items[0].name).toBe("Two");
+    // Back to the first: a one-entry cache must not have poisoned it.
+    expect((await loadCbsWorkbookCached(one)).items[0].name).toBe("One");
+  });
 });
 afterAll(() => {
   rmSync(dir, { recursive: true, force: true });

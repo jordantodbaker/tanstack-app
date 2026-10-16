@@ -22,6 +22,8 @@ vi.mock("@tanstack/react-virtual", () => ({
         key: index,
       })),
     measureElement: () => {},
+    // The real virtualizer exposes this; a deep link calls it.
+    scrollToIndex: () => {},
   }),
 }));
 
@@ -35,7 +37,7 @@ vi.mock("~/lib/selected-project", () => ({
   }),
 }));
 
-import { Route } from "./admin.master-cbs";
+import { AdminMasterCbsPage } from "./admin.master-cbs";
 import { cbsCatalogQueryOptions, type CbsTreeRow } from "~/utils/cbs";
 import { parseCbsDisplayCode } from "~/lib/cbs-tree";
 
@@ -75,10 +77,17 @@ const CATALOG: CbsTreeRow[] = [
   item("600-20-0000-00-0", "Blank Status Account", { status: null }),
 ];
 
-function renderPage() {
+function seeded() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   qc.setQueryData(cbsCatalogQueryOptions().queryKey, CATALOG);
-  const Page = Route.options.component!;
+  return qc;
+}
+
+function renderPage() {
+  const qc = seeded();
+  // The page, not the route component: the latter reads a search param and
+  // would need a RouterProvider around it.
+  const Page = AdminMasterCbsPage;
   return render(
     <QueryClientProvider client={qc}>
       <Page />
@@ -192,6 +201,30 @@ describe("CBS Code Book", () => {
     const dictionary = trees[trees.length - 1];
     expect(
       within(dictionary).getByText("Hot Tap (reserved)"),
+    ).toBeInTheDocument();
+  });
+
+  it("opens a deep-linked code and selects it", () => {
+    // ?code= has to reveal the row AND fill the detail panel, or the link
+    // lands you on a collapsed tree with nothing to show for it.
+    render(
+      <QueryClientProvider client={seeded()}>
+        <AdminMasterCbsPage focusCode="600-20-0000-00-0" />
+      </QueryClientProvider>,
+    );
+    // Hidden behind its collapsed parent until the link expands the path.
+    const [accounts] = screen.getAllByRole("tree");
+    expect(within(accounts).getByText("Blank Status Account")).toBeTruthy();
+  });
+
+  it("ignores a code that is not in the catalog", () => {
+    render(
+      <QueryClientProvider client={seeded()}>
+        <AdminMasterCbsPage focusCode="999-99-9999-99-9" />
+      </QueryClientProvider>,
+    );
+    expect(
+      screen.getByRole("heading", { name: "CBS Code Book" }),
     ).toBeInTheDocument();
   });
 

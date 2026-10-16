@@ -9,6 +9,7 @@ import {
   cbsHasCostType,
   cbsIsActive,
   cbsIsBackbone,
+  cbsQueryTokens,
   cbsIsBackboneCode,
   collectExpandableKeys,
   collectKeysToLevel,
@@ -483,8 +484,11 @@ describe("buildCbsTree", () => {
         accountDescription: "Carbon Steel",
       }),
     ]);
+    // The code appears twice — as written and dashless — so a cost code
+    // pasted out of Excel ("601000000000") finds its row. UOM is included so
+    // "tn" finds the tonnage codes. Empty fields contribute nothing.
     expect(tree[0].searchHaystack).toBe(
-      "601-00-0000-00-0 piping spool carbon steel",
+      "601-00-0000-00-0 601000000000 piping spool carbon steel",
     );
   });
 
@@ -671,6 +675,68 @@ describe("cbsIsBackbone", () => {
     ]) {
       expect(cbsIsBackboneCode(code)).toBe(cbsIsBackbone(item(code)));
     }
+  });
+});
+
+describe("search terms", () => {
+  const tree = () =>
+    buildCbsTree([
+      item("604-00-0000-00-0", { name: "Pipe Shop Equipment" }),
+      item("604-20-0000-00-0", {
+        name: "Pipe Shop Third Party Rental",
+        uom: "DAY",
+      }),
+      item("604-30-0000-00-0", { name: "Steel Erection", uom: "TN" }),
+    ]);
+  const names = (nodes: CbsTreeNode[]): string[] => {
+    const out: string[] = [];
+    const walk = (l: CbsTreeNode[]) => {
+      for (const n of l) {
+        out.push(n.item.name);
+        walk(n.children);
+      }
+    };
+    walk(nodes);
+    return out;
+  };
+  const find = (q: string) =>
+    names(pruneCbsTree(tree(), { ...CBS_FILTER_NONE, query: q }).nodes);
+
+  it("matches terms in any order", () => {
+    // One substring over the whole haystack would miss this: nobody types an
+    // account's words in the order the workbook happens to have them.
+    expect(find("rental pipe")).toContain("Pipe Shop Third Party Rental");
+  });
+
+  it("requires every term, so a second word narrows", () => {
+    expect(find("pipe shop")).toContain("Pipe Shop Third Party Rental");
+    expect(find("pipe erection")).toEqual([]);
+  });
+
+  it("finds a code pasted without its dashes", () => {
+    // Cost codes travel dashless — the workbook's Cost Code column, exports,
+    // anything copied out of Excel.
+    expect(find("604200000000")).toContain("Pipe Shop Third Party Rental");
+    expect(find("60420")).toContain("Pipe Shop Third Party Rental");
+  });
+
+  it("still matches the code as written", () => {
+    expect(find("604-20")).toContain("Pipe Shop Third Party Rental");
+  });
+
+  it("searches the unit of measure", () => {
+    expect(find("tn")).toContain("Steel Erection");
+  });
+
+  it("ignores stray whitespace", () => {
+    expect(find("  pipe   rental  ")).toContain("Pipe Shop Third Party Rental");
+  });
+});
+
+describe("cbsQueryTokens", () => {
+  it("splits on whitespace and drops the empties", () => {
+    expect(cbsQueryTokens("  Pipe   Rental ")).toEqual(["pipe", "rental"]);
+    expect(cbsQueryTokens("   ")).toEqual([]);
   });
 });
 

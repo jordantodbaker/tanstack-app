@@ -22,7 +22,7 @@
  * (`scripts/import-cbs.ts`).
  */
 import ExcelJS from "exceljs";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { unzipSync, zipSync, strToU8, strFromU8 } from "fflate";
@@ -154,6 +154,51 @@ function toBool(v: string): boolean | null {
   return null;
 }
 
+export type CbsWorkbookLoad = {
+  items: CbsDictionaryRow[];
+  report: CbsWorkbookReport;
+};
+
+/** Keyed on the file's identity, not its path — see `loadCbsWorkbookCached`. */
+let workbookCache: {
+  path: string;
+  mtimeMs: number;
+  size: number;
+  load: CbsWorkbookLoad;
+} | null = null;
+
+/**
+ * `loadCbsWorkbook`, but reusing the last parse when the file has not changed.
+ *
+ * Parsing the 1.3 MB workbook costs ~2.5 seconds and is the single biggest
+ * stage of the CBS Health report, which re-reads it on every build. The
+ * contents only change when someone saves CBS.xlsx, so the cache is keyed on
+ * the file's modification time AND size: this workbook gets replaced often,
+ * and a cache keyed on the path alone would serve the old one.
+ *
+ * Deliberately a separate function. `loadCbsWorkbook` stays an honest read —
+ * the import must never act on a stale parse, and the tests write a fresh
+ * workbook to a temp path for each case.
+ *
+ * The returned object is shared between callers, so treat it as read-only.
+ */
+export async function loadCbsWorkbookCached(
+  path: string = CBS_WORKBOOK_PATH,
+): Promise<CbsWorkbookLoad> {
+  const { mtimeMs, size } = statSync(path);
+  if (
+    workbookCache &&
+    workbookCache.path === path &&
+    workbookCache.mtimeMs === mtimeMs &&
+    workbookCache.size === size
+  ) {
+    return workbookCache.load;
+  }
+  const load = await loadCbsWorkbook(path);
+  workbookCache = { path, mtimeMs, size, load };
+  return load;
+}
+
 export async function loadCbsWorkbook(
   path: string = CBS_WORKBOOK_PATH,
 ): Promise<{ items: CbsDictionaryRow[]; report: CbsWorkbookReport }> {
@@ -224,6 +269,13 @@ export async function loadCbsWorkbook(
       return c > 0 ? (row.getCell(c).text ?? "").toString().trim() : "";
     };
     const or = (label: string): string | null => text(label) || null;
+    /** A whole-number cell, or null when it is blank or not a number. */
+    const number = (label: string): number | null => {
+      const raw = text(label);
+      if (!raw) return null;
+      const n = Number(raw);
+      return Number.isFinite(n) ? Math.trunc(n) : null;
+    };
 
     const displayCode = normalizeDisplayCode(
       text("Display Code").toUpperCase(),
@@ -301,6 +353,8 @@ export async function loadCbsWorkbook(
       displayDescription: `${displayCode}:  ${name}`,
       rowType: "ORIGINAL",
       generatedFrom: null,
+      masterCbsRow: number("Master CBS Row"),
+      expandedRow: number("Expanded Row"),
     };
 
     const prior = byCode.get(displayCode);

@@ -24,6 +24,8 @@ vi.mock("@tanstack/react-virtual", () => ({
         key: index,
       })),
     measureElement: () => {},
+    // The real virtualizer exposes this; a deep link calls it.
+    scrollToIndex: () => {},
   }),
 }));
 
@@ -118,6 +120,9 @@ function detail(
     uom: row.uom,
     rowType: row.rowType,
     generatedFrom: null,
+    // Workbook provenance, shown at the bottom of the detail pane.
+    masterCbsRow: null,
+    expandedRow: null,
     subReporting: null,
     materialCode: null,
     materialType: null,

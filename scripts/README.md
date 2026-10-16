@@ -13,12 +13,13 @@ Anything destructive supports `-- --dry-run`. Run that first.
 ## CBS maintenance
 
 The CBS is maintained in `prisma/data/CBS.xlsx` and flows into the
-`CbsItem` table. These three run **in this order** after a new workbook lands;
+`CbsItem` table. These run **in this order** after a new workbook lands;
 the full sequence, and the hard-coded code tables a renumbering invalidates,
 are documented in [DEPLOYMENT.md §11a](../docs/DEPLOYMENT.md).
 
 | Script | npm | What it does |
 |---|---|---|
+| `repair-cbs-workbook.ts` | `cbs:repair` | Fixes the two defects that keep arriving with a fresh copy of CBS.xlsx: ~1,100 engineering Display Codes carrying their cost type twice (`022-00-0000-00-0-S`), which the loader rejects so the import reads them as deleted and cascades every project's grants away; and the 95/96 division renumber, where Specialty Services sits at 920 and Startup & Commissioning at 950. Dry run by default, `-- --apply` to write, and it backs the file up first. Idempotent — safe to run on a workbook that is already clean. Renames are **not** here; `cbs:rename -- --workbook` owns those. Run it **before** `cbs:import`. |
 | `import-cbs.ts` | `cbs:import` | Re-imports the workbook into `CbsItem`. Normalises summary codes to the `-0` backbone, strips the cost-type suffix from names, and generates any S/M twin the sheet is missing. Upserts by cost code, so row ids and every project's allow-list survive. New codes are **not** granted to any project. |
 | `sync-piping-group-codes.ts` | `piping:sync-codes` | Pushes the piping metallurgy codes from `piping_groups.csv` into `PipingGroup`. Not derived from the workbook, so a renumbered piping series leaves these stale and piping rows stop auto-populating. |
 | `rename-cbs-accounts.ts` | `cbs:rename` | Applies account renames. A rename has two halves: the database half (`cbs:rename`) shows the new name now, and the workbook half (`cbs:rename -- --workbook`) writes the Name cell so the next import carries it instead of reverting it. The cell is resolved against the workbook at run time, so the reference cannot go stale. `--workbook` is opt-in because CBS.xlsx is the master file — close it in Excel first, or the write fails with `EBUSY`. |

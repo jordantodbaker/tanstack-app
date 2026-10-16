@@ -226,6 +226,7 @@ export function CbsTreePanel({
   renderLeading,
   badgesFor = defaultBadgesFor,
   emptyMessage,
+  scrollToKey = null,
   children,
 }: {
   /** The visible rows — see `flattenVisibleCbsNodes`. */
@@ -242,6 +243,12 @@ export function CbsTreePanel({
    *  because that section lists no generated rows. */
   badgesFor?: (node: CbsTreeNode) => readonly CbsBadge[];
   emptyMessage: string;
+  /**
+   * Scroll this row into view once it is present. Set by a `?code=` deep
+   * link: the row is virtualised, so it does not exist in the DOM to scroll
+   * to until the list knows where it sits.
+   */
+  scrollToKey?: string | null;
   /** Overlay content (e.g. a load mask) rendered inside the bordered panel. */
   children?: React.ReactNode;
 }) {
@@ -252,6 +259,18 @@ export function CbsTreePanel({
     estimateSize: () => 29,
     overscan: 12,
   });
+
+  // Scroll once per target. `flat` changes on every expand and every
+  // keystroke, so re-running on its identity would yank the list back under
+  // anyone who scrolled away from a deep-linked row.
+  const scrolled = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!scrollToKey || scrolled.current === scrollToKey) return;
+    const index = flat.findIndex((n) => n.pathKey === scrollToKey);
+    if (index === -1) return; // not revealed yet; a later render will find it
+    scrolled.current = scrollToKey;
+    rowVirtualizer.scrollToIndex(index, { align: "center" });
+  }, [scrollToKey, flat, rowVirtualizer]);
 
   return (
     <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">

@@ -355,8 +355,20 @@ export function buildCbsTree<T extends CbsTreeItem>(
       item: node.item,
       children,
       descendantItemIds,
-      searchHaystack:
-        `${node.item.displayCode} ${node.item.name} ${node.item.accountDescription}`.toLowerCase(),
+      // The code appears twice: once as written and once with the dashes
+      // stripped, because cost codes travel without them (the workbook's Cost
+      // Code column, exports, anything pasted out of Excel) and "60420" should
+      // find 604-20-0000-00-0. UOM is in so "tn" finds the tonnage codes.
+      searchHaystack: [
+        node.item.displayCode,
+        node.item.displayCode.replace(/-/g, ""),
+        node.item.name,
+        node.item.accountDescription,
+        node.item.uom,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase(),
     };
   }
 
@@ -598,6 +610,20 @@ export function cbsFilterIsEmpty(filter: CbsRowFilter): boolean {
 }
 
 /**
+ * Splits a query into the terms every row must carry.
+ *
+ * Whitespace-separated and order-free, so "rental pipe" finds "Pipe Shop
+ * Third Party Rental" — one substring over the whole haystack would not, and
+ * nobody types an account's words in the order the workbook has them.
+ *
+ * Computed once per filter rather than per row: at ~12,000 rows a split per
+ * row per keystroke is the difference between instant and noticeable.
+ */
+export function cbsQueryTokens(query: string): string[] {
+  return query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+}
+
+/**
  * The text, the type toggles and the status toggles each narrow the others:
  * "pumps" with Subcontracts and Inactive on means retired subcontract rows
  * mentioning pumps. Within a group the toggles widen each other, since asking
@@ -606,8 +632,9 @@ export function cbsFilterIsEmpty(filter: CbsRowFilter): boolean {
 function rowMatches<T extends CbsTreeItem>(
   node: CbsTreeNode<T>,
   filter: CbsRowFilter,
+  tokens: string[],
 ): boolean {
-  if (filter.query && !node.searchHaystack.includes(filter.query)) return false;
+  if (tokens.some((t) => !node.searchHaystack.includes(t))) return false;
   const types = CBS_COST_TYPES.filter((t) => filter[t.key]);
   if (types.length > 0 && !types.some((t) => cbsHasCostType(node.item, t))) {
     return false;
@@ -633,17 +660,24 @@ function searchCbsTree<T extends CbsTreeItem>(
   /** A self-matching node keeps its WHOLE subtree, unrecursed, so the kept
    *  node is the original object. Off: only matching descendants survive. */
   keepMatchedSubtree: boolean,
+  tokens: string[],
   onMatch?: () => void,
 ): CbsTreeNode<T>[] {
   const out: CbsTreeNode<T>[] = [];
   for (const n of nodes) {
-    const selfMatch = rowMatches(n, filter);
+    const selfMatch = rowMatches(n, filter, tokens);
     if (selfMatch && keepMatchedSubtree) {
       onMatch?.();
       out.push(n);
       continue;
     }
-    const kids = searchCbsTree(n.children, filter, keepMatchedSubtree, onMatch);
+    const kids = searchCbsTree(
+      n.children,
+      filter,
+      keepMatchedSubtree,
+      tokens,
+      onMatch,
+    );
     if (selfMatch || kids.length > 0) {
       if (selfMatch) onMatch?.();
       out.push({ ...n, children: kids });
@@ -667,7 +701,12 @@ export function filterCbsTree<T extends CbsTreeItem>(
 ): CbsTreeNode<T>[] {
   if (cbsFilterIsEmpty(filter)) return nodes;
   const typeFiltered = filter.sub || filter.material;
-  return searchCbsTree(nodes, filter, !typeFiltered);
+  return searchCbsTree(
+    nodes,
+    filter,
+    !typeFiltered,
+    cbsQueryTokens(filter.query),
+  );
 }
 
 /**
@@ -695,19 +734,20 @@ function strictCbsRows<T extends CbsTreeItem>(
   nodes: CbsTreeNode<T>[],
   filter: CbsRowFilter,
   depth: number,
+  tokens: string[],
   onMatch: () => void,
 ): CbsTreeNode<T>[] {
   const out: CbsTreeNode<T>[] = [];
   for (const n of nodes) {
-    if (rowMatches(n, filter)) {
+    if (rowMatches(n, filter, tokens)) {
       onMatch();
       out.push({
         ...n,
         depth,
-        children: strictCbsRows(n.children, filter, depth + 1, onMatch),
+        children: strictCbsRows(n.children, filter, depth + 1, tokens, onMatch),
       });
     } else {
-      out.push(...strictCbsRows(n.children, filter, depth, onMatch));
+      out.push(...strictCbsRows(n.children, filter, depth, tokens, onMatch));
     }
   }
   return out;
@@ -724,10 +764,11 @@ export function pruneCbsTree<T extends CbsTreeItem>(
   // codes", "show me the inactive ones" — so only rows that qualify survive. A
   // bare text search still keeps ancestors: there, knowing WHERE a hit sits is
   // most of the answer.
+  const tokens = cbsQueryTokens(filter.query);
   const kept =
     cbsHasCostTypeFilter(filter) || cbsHasStatusFilter(filter)
-      ? strictCbsRows(nodes, filter, 0, onMatch)
-      : searchCbsTree(nodes, filter, false, onMatch);
+      ? strictCbsRows(nodes, filter, 0, tokens, onMatch)
+      : searchCbsTree(nodes, filter, false, tokens, onMatch);
   return { nodes: kept, matches };
 }
 

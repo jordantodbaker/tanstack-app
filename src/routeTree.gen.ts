@@ -14,6 +14,7 @@ import { Route as DisciplineRouteImport } from './routes/$discipline'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as BasisRouteImport } from './routes/basis'
 import { Route as ChangelogRouteImport } from './routes/changelog'
+import { Route as CodeUsageRouteImport } from './routes/code-usage'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as FcoLogRouteImport } from './routes/fco-log'
 import { Route as HelpRouteImport } from './routes/help'
@@ -28,6 +29,7 @@ import { Route as SummaryRouteImport } from './routes/summary'
 import { Route as TrendsRouteImport } from './routes/trends'
 import { Route as ValidationRouteImport } from './routes/validation'
 import { Route as AdminAreasRouteImport } from './routes/admin.areas'
+import { Route as AdminCbsHealthRouteImport } from './routes/admin.cbs-health'
 import { Route as AdminCoreCodesRouteImport } from './routes/admin.core-codes'
 import { Route as AdminCrewMixesRouteImport } from './routes/admin.crew-mixes'
 import { Route as AdminCvrTemplatesRouteImport } from './routes/admin.cvr-templates'
@@ -69,6 +71,11 @@ const ChangelogRoute = ChangelogRouteImport.update({
   path: '/changelog',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/changelog.lazy').then((d) => d.Route))
+const CodeUsageRoute = CodeUsageRouteImport.update({
+  id: '/code-usage',
+  path: '/code-usage',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -137,6 +144,11 @@ const ValidationRoute = ValidationRouteImport.update({
 const AdminAreasRoute = AdminAreasRouteImport.update({
   id: '/areas',
   path: '/areas',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminCbsHealthRoute = AdminCbsHealthRouteImport.update({
+  id: '/cbs-health',
+  path: '/cbs-health',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminCoreCodesRoute = AdminCoreCodesRouteImport.update({
@@ -221,6 +233,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRouteWithChildren
   '/basis': typeof BasisRoute
   '/changelog': typeof ChangelogRoute
+  '/code-usage': typeof CodeUsageRoute
   '/dashboard': typeof DashboardRoute
   '/fco-log': typeof FcoLogRoute
   '/help': typeof HelpRoute
@@ -235,6 +248,7 @@ export interface FileRoutesByFullPath {
   '/trends': typeof TrendsRoute
   '/validation': typeof ValidationRoute
   '/admin/areas': typeof AdminAreasRoute
+  '/admin/cbs-health': typeof AdminCbsHealthRoute
   '/admin/core-codes': typeof AdminCoreCodesRoute
   '/admin/crew-mixes': typeof AdminCrewMixesRoute
   '/admin/cvr-templates': typeof AdminCvrTemplatesRoute
@@ -257,6 +271,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRouteWithChildren
   '/basis': typeof BasisRoute
   '/changelog': typeof ChangelogRoute
+  '/code-usage': typeof CodeUsageRoute
   '/dashboard': typeof DashboardRoute
   '/fco-log': typeof FcoLogRoute
   '/help': typeof HelpRoute
@@ -271,6 +286,7 @@ export interface FileRoutesByTo {
   '/trends': typeof TrendsRoute
   '/validation': typeof ValidationRoute
   '/admin/areas': typeof AdminAreasRoute
+  '/admin/cbs-health': typeof AdminCbsHealthRoute
   '/admin/core-codes': typeof AdminCoreCodesRoute
   '/admin/crew-mixes': typeof AdminCrewMixesRoute
   '/admin/cvr-templates': typeof AdminCvrTemplatesRoute
@@ -294,6 +310,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteWithChildren
   '/basis': typeof BasisRoute
   '/changelog': typeof ChangelogRoute
+  '/code-usage': typeof CodeUsageRoute
   '/dashboard': typeof DashboardRoute
   '/fco-log': typeof FcoLogRoute
   '/help': typeof HelpRoute
@@ -308,6 +325,7 @@ export interface FileRoutesById {
   '/trends': typeof TrendsRoute
   '/validation': typeof ValidationRoute
   '/admin/areas': typeof AdminAreasRoute
+  '/admin/cbs-health': typeof AdminCbsHealthRoute
   '/admin/core-codes': typeof AdminCoreCodesRoute
   '/admin/crew-mixes': typeof AdminCrewMixesRoute
   '/admin/cvr-templates': typeof AdminCvrTemplatesRoute
@@ -332,6 +350,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/basis'
     | '/changelog'
+    | '/code-usage'
     | '/dashboard'
     | '/fco-log'
     | '/help'
@@ -346,6 +365,7 @@ export interface FileRouteTypes {
     | '/trends'
     | '/validation'
     | '/admin/areas'
+    | '/admin/cbs-health'
     | '/admin/core-codes'
     | '/admin/crew-mixes'
     | '/admin/cvr-templates'
@@ -368,6 +388,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/basis'
     | '/changelog'
+    | '/code-usage'
     | '/dashboard'
     | '/fco-log'
     | '/help'
@@ -382,6 +403,7 @@ export interface FileRouteTypes {
     | '/trends'
     | '/validation'
     | '/admin/areas'
+    | '/admin/cbs-health'
     | '/admin/core-codes'
     | '/admin/crew-mixes'
     | '/admin/cvr-templates'
@@ -404,6 +426,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/basis'
     | '/changelog'
+    | '/code-usage'
     | '/dashboard'
     | '/fco-log'
     | '/help'
@@ -418,6 +441,7 @@ export interface FileRouteTypes {
     | '/trends'
     | '/validation'
     | '/admin/areas'
+    | '/admin/cbs-health'
     | '/admin/core-codes'
     | '/admin/crew-mixes'
     | '/admin/cvr-templates'
@@ -441,6 +465,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRouteWithChildren
   BasisRoute: typeof BasisRoute
   ChangelogRoute: typeof ChangelogRoute
+  CodeUsageRoute: typeof CodeUsageRoute
   DashboardRoute: typeof DashboardRoute
   FcoLogRoute: typeof FcoLogRoute
   HelpRoute: typeof HelpRoute
@@ -495,6 +520,13 @@ declare module '@tanstack/react-router' {
       path: '/changelog'
       fullPath: '/changelog'
       preLoaderRoute: typeof ChangelogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/code-usage': {
+      id: '/code-usage'
+      path: '/code-usage'
+      fullPath: '/code-usage'
+      preLoaderRoute: typeof CodeUsageRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -593,6 +625,13 @@ declare module '@tanstack/react-router' {
       path: '/areas'
       fullPath: '/admin/areas'
       preLoaderRoute: typeof AdminAreasRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/cbs-health': {
+      id: '/admin/cbs-health'
+      path: '/cbs-health'
+      fullPath: '/admin/cbs-health'
+      preLoaderRoute: typeof AdminCbsHealthRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/core-codes': {
@@ -705,6 +744,7 @@ declare module '@tanstack/react-router' {
 
 interface AdminRouteChildren {
   AdminAreasRoute: typeof AdminAreasRoute
+  AdminCbsHealthRoute: typeof AdminCbsHealthRoute
   AdminCoreCodesRoute: typeof AdminCoreCodesRoute
   AdminCrewMixesRoute: typeof AdminCrewMixesRoute
   AdminCvrTemplatesRoute: typeof AdminCvrTemplatesRoute
@@ -720,6 +760,7 @@ interface AdminRouteChildren {
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAreasRoute: AdminAreasRoute,
+  AdminCbsHealthRoute: AdminCbsHealthRoute,
   AdminCoreCodesRoute: AdminCoreCodesRoute,
   AdminCrewMixesRoute: AdminCrewMixesRoute,
   AdminCvrTemplatesRoute: AdminCvrTemplatesRoute,
@@ -741,6 +782,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRouteWithChildren,
   BasisRoute: BasisRoute,
   ChangelogRoute: ChangelogRoute,
+  CodeUsageRoute: CodeUsageRoute,
   DashboardRoute: DashboardRoute,
   FcoLogRoute: FcoLogRoute,
   HelpRoute: HelpRoute,

@@ -76,21 +76,39 @@ export type HealthReport = {
  * — spells both out twice per check, which is two chances per check for them
  * to drift apart.
  *
+ * An options object rather than eight positional arguments: four of them are
+ * adjacent strings, so transposing `summary` and `action` would typecheck
+ * and quietly show the remedy where the explanation belongs.
+ *
  * `count` is taken separately from `findings.length` because a check may count
  * rows while listing something coarser, and because the list is capped while
  * the count must stay true.
  */
-export function check(
-  id: string,
-  title: string,
-  severity: HealthSeverity,
-  findings: HealthFinding[],
-  count: number,
-  summary: string,
-  action: string,
+export type CheckInput = {
+  id: string;
+  title: string;
+  severity: HealthSeverity;
+  findings: HealthFinding[];
+  /** How many rows/values are affected; 0 selects the "all clear" wording. */
+  count: number;
+  /** What the number means. */
+  summary: string;
+  /** What to do about it. */
+  action: string;
   /** What to say when the check passes. */
-  clear: string,
-): HealthCheck {
+  clear: string;
+};
+
+export function check({
+  id,
+  title,
+  severity,
+  findings,
+  count,
+  summary,
+  action,
+  clear,
+}: CheckInput): HealthCheck {
   if (count === 0) return passing(id, title, clear);
   return {
     id,

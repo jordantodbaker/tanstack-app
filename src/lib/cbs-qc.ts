@@ -170,16 +170,20 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
     (r) => l3Of(r.displayCode) === "00" && l7Of(r.displayCode) !== "0",
   );
   checks.push(
-    check(
-      "qc-l3-cost-type",
-      "Roll-up rows with a cost type",
-      "error",
-      l3.map((r) => at(r, `cost type ${l7Of(r.displayCode)}, expected 0`)),
-      l3.length,
-      "A row whose L3 segment is 00 is a roll-up level and must carry cost type 0. These carry a priced type instead, so they total as though they were line items.",
-      "Set the cost type to 0 in CBS.xlsx, or move the cost to a child row.",
-      "Every roll-up level carries cost type 0.",
-    ),
+    check({
+      id: "qc-l3-cost-type",
+      title: "Roll-up rows with a cost type",
+      severity: "error",
+      findings: l3.map((r) =>
+        at(r, `cost type ${l7Of(r.displayCode)}, expected 0`),
+      ),
+      count: l3.length,
+      summary:
+        "A row whose L3 segment is 00 is a roll-up level and must carry cost type 0. These carry a priced type instead, so they total as though they were line items.",
+      action:
+        "Set the cost type to 0 in CBS.xlsx, or move the cost to a child row.",
+      clear: "Every roll-up level carries cost type 0.",
+    }),
   );
 
   // --- 2. A parent's cost type against its children's.
@@ -213,16 +217,18 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
     }
   }
   checks.push(
-    check(
-      "qc-parent-cost-type",
-      "Parent cost type disagrees with its children",
-      "error",
-      parentType,
-      parentType.length,
-      "A parent either summarises mixed cost types, in which case it must be 0, or it shares its children's single type. These do neither, so a roll-up double-counts or lands in the wrong column.",
-      "Set the parent's cost type to 0 in CBS.xlsx, or correct the children.",
-      "Every parent's cost type agrees with its children.",
-    ),
+    check({
+      id: "qc-parent-cost-type",
+      title: "Parent cost type disagrees with its children",
+      severity: "error",
+      findings: parentType,
+      count: parentType.length,
+      summary:
+        "A parent either summarises mixed cost types, in which case it must be 0, or it shares its children's single type. These do neither, so a roll-up double-counts or lands in the wrong column.",
+      action:
+        "Set the parent's cost type to 0 in CBS.xlsx, or correct the children.",
+      clear: "Every parent's cost type agrees with its children.",
+    }),
   );
 
   // --- 3. Required fields.
@@ -243,16 +249,16 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
     .map(([label, n]) => `${label} ${n.toLocaleString()}`)
     .join(", ");
   checks.push(
-    check(
-      "qc-required-fields",
-      "Required fields left blank",
-      "warning",
-      missing,
-      missing.length,
-      `Every row is meant to carry Name, UOM, Description, Cost Center, Cost Classification, Status, Account Description, L2 Description, G/L, Discipline and Cost Code. By column: ${byColumn}. A blank Discipline or Cost Center is what makes a code unreportable downstream.`,
-      "Fill them in CBS.xlsx and re-import.",
-      "Every row carries all eleven required fields.",
-    ),
+    check({
+      id: "qc-required-fields",
+      title: "Required fields left blank",
+      severity: "warning",
+      findings: missing,
+      count: missing.length,
+      summary: `Every row is meant to carry Name, UOM, Description, Cost Center, Cost Classification, Status, Account Description, L2 Description, G/L, Discipline and Cost Code. By column: ${byColumn}. A blank Discipline or Cost Center is what makes a code unreportable downstream.`,
+      action: "Fill them in CBS.xlsx and re-import.",
+      clear: "Every row carries all eleven required fields.",
+    }),
   );
 
   // --- 4. Material category without a material type.
@@ -265,28 +271,34 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
       (r.materialType ?? "").trim().toLowerCase() === "n/a",
   );
   checks.push(
-    check(
-      "qc-material-type",
-      "Material rows with no material type",
-      "error",
-      matBlank.map((r) => at(r, "Material Code YES, Material Type blank")),
-      matBlank.length,
-      "Material Code is YES but Material Type is blank, so the row is a material that does not say which kind.",
-      "Set Material Type (Bulks / Tagged) in CBS.xlsx.",
-      "Every material row names its material type.",
-    ),
+    check({
+      id: "qc-material-type",
+      title: "Material rows with no material type",
+      severity: "error",
+      findings: matBlank.map((r) =>
+        at(r, "Material Code YES, Material Type blank"),
+      ),
+      count: matBlank.length,
+      summary:
+        "Material Code is YES but Material Type is blank, so the row is a material that does not say which kind.",
+      action: "Set Material Type (Bulks / Tagged) in CBS.xlsx.",
+      clear: "Every material row names its material type.",
+    }),
   );
   checks.push(
-    check(
-      "qc-material-type-na",
-      'Material rows typed "n/a"',
-      "warning",
-      matNa.map((r) => at(r, 'Material Type "n/a", expected Bulks or Tagged')),
-      matNa.length,
-      'Material Code is YES but Material Type reads "n/a", which is not one of the material types.',
-      "Replace with Bulks or Tagged in CBS.xlsx.",
-      'No material row is typed "n/a".',
-    ),
+    check({
+      id: "qc-material-type-na",
+      title: 'Material rows typed "n/a"',
+      severity: "warning",
+      findings: matNa.map((r) =>
+        at(r, 'Material Type "n/a", expected Bulks or Tagged'),
+      ),
+      count: matNa.length,
+      summary:
+        'Material Code is YES but Material Type reads "n/a", which is not one of the material types.',
+      action: "Replace with Bulks or Tagged in CBS.xlsx.",
+      clear: 'No material row is typed "n/a".',
+    }),
   );
 
   // --- 5. Sub Code against equipment ownership.
@@ -320,16 +332,19 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
     );
   }
   checks.push(
-    check(
-      "qc-sub-code-ownership",
-      "Sub Code wrong for the equipment's ownership",
-      "error",
-      subWrong,
-      subWrong.length,
-      "Haskell Owned Equipment must have Sub Code NO; Third Party Equipment must have Sub Code YES. Ownership is taken from the row's own name, or from the nearest ancestor that states it.",
-      "Correct the Sub Code column in CBS.xlsx. Getting this wrong puts owned plant into subcontract reporting, or leaves rented plant out of it.",
-      "Sub Code matches the equipment's ownership everywhere it is stated.",
-    ),
+    check({
+      id: "qc-sub-code-ownership",
+      title: "Sub Code wrong for the equipment's ownership",
+      severity: "error",
+      findings: subWrong,
+      count: subWrong.length,
+      summary:
+        "Haskell Owned Equipment must have Sub Code NO; Third Party Equipment must have Sub Code YES. Ownership is taken from the row's own name, or from the nearest ancestor that states it.",
+      action:
+        "Correct the Sub Code column in CBS.xlsx. Getting this wrong puts owned plant into subcontract reporting, or leaves rented plant out of it.",
+      clear:
+        "Sub Code matches the equipment's ownership everywhere it is stated.",
+    }),
   );
 
   // --- 6/7/8. Format of the controlled columns.
@@ -337,32 +352,33 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
     (r) => !blank(r.costCenter) && !/^\d{4}$/.test(r.costCenter!.trim()),
   );
   checks.push(
-    check(
-      "qc-cost-center",
-      "Cost Center is not a 4-digit code",
-      "warning",
-      costCentre.map((r) => at(r, `Cost Center "${r.costCenter}"`)),
-      costCentre.length,
-      "Cost Center is expected to be four digits.",
-      "Correct the Cost Center column in CBS.xlsx.",
-      "Every Cost Center is a 4-digit code.",
-    ),
+    check({
+      id: "qc-cost-center",
+      title: "Cost Center is not a 4-digit code",
+      severity: "warning",
+      findings: costCentre.map((r) => at(r, `Cost Center "${r.costCenter}"`)),
+      count: costCentre.length,
+      summary: "Cost Center is expected to be four digits.",
+      action: "Correct the Cost Center column in CBS.xlsx.",
+      clear: "Every Cost Center is a 4-digit code.",
+    }),
   );
 
   const badStatus = rows.filter(
     (r) => !blank(r.status) && !/^(Active|Inactive)$/i.test(r.status!.trim()),
   );
   checks.push(
-    check(
-      "qc-status-values",
-      "Status is neither Active nor Inactive",
-      "warning",
-      badStatus.map((r) => at(r, `Status "${r.status}"`)),
-      badStatus.length,
-      "Status is a controlled value. Anything else is treated as not active by every view that filters on it.",
-      "Use Active or Inactive in CBS.xlsx.",
-      "Every Status is Active or Inactive.",
-    ),
+    check({
+      id: "qc-status-values",
+      title: "Status is neither Active nor Inactive",
+      severity: "warning",
+      findings: badStatus.map((r) => at(r, `Status "${r.status}"`)),
+      count: badStatus.length,
+      summary:
+        "Status is a controlled value. Anything else is treated as not active by every view that filters on it.",
+      action: "Use Active or Inactive in CBS.xlsx.",
+      clear: "Every Status is Active or Inactive.",
+    }),
   );
 
   const badUom = rows.filter(
@@ -374,21 +390,24 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
     uomCounts.set(u, (uomCounts.get(u) ?? 0) + 1);
   }
   checks.push(
-    check(
-      "qc-uom-standard",
-      "Non-standard unit of measure",
-      "warning",
-      badUom.map((r) => at(r, `unit "${r.uom.trim().toUpperCase()}"`)),
-      badUom.length,
-      `The standard units are ${[...STANDARD_UOM].join(", ")}. These rows use something else, which estimators cannot total against. By unit: ${[
+    check({
+      id: "qc-uom-standard",
+      title: "Non-standard unit of measure",
+      severity: "warning",
+      findings: badUom.map((r) =>
+        at(r, `unit "${r.uom.trim().toUpperCase()}"`),
+      ),
+      count: badUom.length,
+      summary: `The standard units are ${[...STANDARD_UOM].join(", ")}. These rows use something else, which estimators cannot total against. By unit: ${[
         ...uomCounts.entries(),
       ]
         .sort((a, b) => b[1] - a[1])
         .map(([u, n]) => `${u} ${n.toLocaleString()}`)
         .join(", ")}.`,
-      "Map each to a standard unit in CBS.xlsx, or add it to the standard list if it is genuinely new.",
-      "Every unit of measure is one of the standard set.",
-    ),
+      action:
+        "Map each to a standard unit in CBS.xlsx, or add it to the standard list if it is genuinely new.",
+      clear: "Every unit of measure is one of the standard set.",
+    }),
   );
 
   // --- 9. A unit that disagrees with what the name describes.
@@ -408,16 +427,17 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
     }
   }
   checks.push(
-    check(
-      "qc-uom-vs-name",
-      "Unit of measure looks wrong for the item",
-      "warning",
-      uomVsName,
-      uomVsName.length,
-      "The name describes something measured one way and the unit says another — pipe priced by the each, a rental priced by the hour.",
-      "Check each one; this rule reads the name, so it can be wrong.",
-      "Every unit of measure suits the item it is on.",
-    ),
+    check({
+      id: "qc-uom-vs-name",
+      title: "Unit of measure looks wrong for the item",
+      severity: "warning",
+      findings: uomVsName,
+      count: uomVsName.length,
+      summary:
+        "The name describes something measured one way and the unit says another — pipe priced by the each, a rental priced by the hour.",
+      action: "Check each one; this rule reads the name, so it can be wrong.",
+      clear: "Every unit of measure suits the item it is on.",
+    }),
   );
 
   // --- 10. Stray whitespace in the text columns.
@@ -443,16 +463,17 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
     }
   }
   checks.push(
-    check(
-      "qc-extra-spaces",
-      "Leading, trailing or doubled spaces",
-      "warning",
-      spaces,
-      spaceCount,
-      "Stray whitespace in a text column. It survives the import, so it shows up in exports and breaks exact-match lookups.",
-      "Trim the cells in CBS.xlsx.",
-      "No text column carries stray whitespace.",
-    ),
+    check({
+      id: "qc-extra-spaces",
+      title: "Leading, trailing or doubled spaces",
+      severity: "warning",
+      findings: spaces,
+      count: spaceCount,
+      summary:
+        "Stray whitespace in a text column. It survives the import, so it shows up in exports and breaks exact-match lookups.",
+      action: "Trim the cells in CBS.xlsx.",
+      clear: "No text column carries stray whitespace.",
+    }),
   );
 
   // --- 11. Discipline against the rest of its division.
@@ -477,21 +498,23 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
       modeOf.get(r.displayCode.slice(0, 3)) !== r.discipline,
   );
   checks.push(
-    check(
-      "qc-discipline-consistency",
-      "Discipline differs from the rest of its division",
-      "warning",
-      oddDiscipline.map((r) =>
+    check({
+      id: "qc-discipline-consistency",
+      title: "Discipline differs from the rest of its division",
+      severity: "warning",
+      findings: oddDiscipline.map((r) =>
         at(
           r,
           `${r.discipline}, rest of ${r.displayCode.slice(0, 3)} is ${modeOf.get(r.displayCode.slice(0, 3))}`,
         ),
       ),
-      oddDiscipline.length,
-      "Rows in one division normally share a Discipline. These disagree with the majority of their own division.",
-      "Correct the Discipline column in CBS.xlsx, or confirm the division really is shared.",
-      "Every division has one discipline.",
-    ),
+      count: oddDiscipline.length,
+      summary:
+        "Rows in one division normally share a Discipline. These disagree with the majority of their own division.",
+      action:
+        "Correct the Discipline column in CBS.xlsx, or confirm the division really is shared.",
+      clear: "Every division has one discipline.",
+    }),
   );
 
   // --- 12. Duplicate names.
@@ -508,31 +531,34 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
   }
   const dupNames = [...byName.entries()].filter(([, list]) => list.length > 1);
   checks.push(
-    check(
-      "qc-duplicate-names",
-      "The same name on several codes",
-      "info",
+    check({
+      id: "qc-duplicate-names",
+      title: "The same name on several codes",
+      severity: "info",
       // One row per affected code, not one per name: the export is a list of
-      // codes to go and look at.
-      dupNames
-        .sort((a, b) => b[1].length - a[1].length)
-        .flatMap(([, list]) =>
-          list.map((r) =>
-            at(
-              r,
-              `shares this name with ${list.length - 1} other code(s): ${list
-                .filter((other) => other !== r)
-                .slice(0, 4)
-                .map((other) => other.displayCode)
-                .join(", ")}`,
+      findings:
+        // codes to go and look at.
+        dupNames
+          .sort((a, b) => b[1].length - a[1].length)
+          .flatMap(([, list]) =>
+            list.map((r) =>
+              at(
+                r,
+                `shares this name with ${list.length - 1} other code(s): ${list
+                  .filter((other) => other !== r)
+                  .slice(0, 4)
+                  .map((other) => other.displayCode)
+                  .join(", ")}`,
+              ),
             ),
           ),
-        ),
-      dupNames.reduce((n, [, list]) => n + list.length, 0),
-      "The same account name appears on more than one code. Usually deliberate — every discipline has a Field Staff — but it makes a name search ambiguous.",
-      "No action needed unless two of them are meant to be the same account.",
-      "Every account name is unique.",
-    ),
+      count: dupNames.reduce((n, [, list]) => n + list.length, 0),
+      summary:
+        "The same account name appears on more than one code. Usually deliberate — every discipline has a Field Staff — but it makes a name search ambiguous.",
+      action:
+        "No action needed unless two of them are meant to be the same account.",
+      clear: "Every account name is unique.",
+    }),
   );
 
   // --- 13. Import order against cost code order.
@@ -552,16 +578,18 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
     );
   }
   checks.push(
-    check(
-      "qc-sort-order",
-      "Workbook rows out of code order",
-      "info",
-      outOfOrder,
-      outOfOrder.length,
-      "The workbook is expected to run in cost code order. These rows sit after a row that should follow them, which makes the sheet hard to read and hides gaps.",
-      "Sort the sheet by Cost Code in CBS.xlsx. Nothing in the app depends on the order.",
-      "The workbook runs in cost code order.",
-    ),
+    check({
+      id: "qc-sort-order",
+      title: "Workbook rows out of code order",
+      severity: "info",
+      findings: outOfOrder,
+      count: outOfOrder.length,
+      summary:
+        "The workbook is expected to run in cost code order. These rows sit after a row that should follow them, which makes the sheet hard to read and hides gaps.",
+      action:
+        "Sort the sheet by Cost Code in CBS.xlsx. Nothing in the app depends on the order.",
+      clear: "The workbook runs in cost code order.",
+    }),
   );
 
   return checks;

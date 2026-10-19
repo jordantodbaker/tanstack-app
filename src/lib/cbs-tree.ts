@@ -18,6 +18,18 @@
  * below it. This mirrors the hierarchy of the Master CBS Dictionary workbook.
  */
 
+/**
+ * Whether a row came from the Master CBS or was generated as its S/M twin
+ * (see `expandCbsDictionary`).
+ *
+ * Every row in the database currently reads "ORIGINAL", so the badges and the
+ * Dictionary's sub/material counts all sit at zero — which looks like dead
+ * code and is not. CBS.xlsx now arrives pre-expanded, with each account's
+ * cost-type rows already present under their own display codes, so the
+ * generator finds every twin it would create already there and skips it
+ * (4,737 skipped on the 2026-10 workbook, 0 generated). It used to arrive
+ * un-expanded, and would fill these in again if it ever does.
+ */
 export type CbsRowType = "ORIGINAL" | "SUB" | "MATERIAL";
 
 export type CbsTreeItem = {

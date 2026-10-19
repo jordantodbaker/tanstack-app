@@ -28,6 +28,17 @@ vi.mock("@tanstack/react-virtual", () => ({
   }),
 }));
 
+// The "Export Excel" button is the only thing that imports this, and the
+// export itself is server-side. Stub it so a test can read the payload the
+// page sends — the toggle has to reach the file, not just the screen.
+const { exportCall } = vi.hoisted(() => ({
+  exportCall: vi.fn(async (_opts: { data: Record<string, unknown> }) => ({
+    filename: "cbs-project-cost-codes.xlsx",
+    base64: "",
+  })),
+}));
+vi.mock("~/utils/cbsExport", () => ({ cbsExporterFor: () => exportCall }));
+
 // Fix the selected project so the component renders without localStorage
 // hydration, and so our seeded query key (projectId 1) lines up.
 vi.mock("~/lib/selected-project", () => ({
@@ -47,6 +58,7 @@ import {
 import { parseCbsDisplayCode } from "~/lib/cbs-tree";
 
 afterEach(cleanup);
+afterEach(() => exportCall.mockClear());
 
 let nextId = 1;
 function item(
@@ -221,6 +233,35 @@ describe("ProjectCostCodeListView", () => {
       // The catalog views have none; a checkbox that can do nothing is noise.
       renderView(FIXTURE);
       expect(screen.queryByLabelText("Hide ungranted parents")).toBeNull();
+    });
+
+    it("exports the rows on screen when the toggle is on", async () => {
+      // The export is rebuilt server-side from the view and filter, so the
+      // toggle only reaches the file if the page sends it. It did not, once.
+      renderView(CONTEXT_FIXTURE);
+      const exportButton = screen.getByRole("button", {
+        name: /Export Excel/,
+      });
+      const payload = (call: number) => exportCall.mock.calls[call][0].data;
+
+      fireEvent.click(exportButton);
+      await vi.waitFor(() => expect(exportCall).toHaveBeenCalledTimes(1));
+      expect(payload(0)).toMatchObject({ hideContext: false });
+
+      fireEvent.click(screen.getByLabelText("Hide ungranted parents"));
+      fireEvent.click(exportButton);
+      await vi.waitFor(() => expect(exportCall).toHaveBeenCalledTimes(2));
+      expect(payload(1)).toMatchObject({ hideContext: true });
+    });
+
+    it("never asks to hide parents on a view that has none", async () => {
+      // Nothing to hide, so the file must not be labelled as though there was.
+      renderView(FIXTURE);
+      fireEvent.click(screen.getByRole("button", { name: /Export Excel/ }));
+      await vi.waitFor(() => expect(exportCall).toHaveBeenCalledTimes(1));
+      expect(exportCall.mock.calls[0][0].data).toMatchObject({
+        hideContext: false,
+      });
     });
 
     it("nests a granted leaf under its ungranted parents", () => {

@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { buildSummaryRows, toSummaryExportRows } from "./summary-rows";
+import {
+  buildSummaryRows,
+  ESTIMATE_CSV_COLUMNS,
+  parseMoney,
+  totalCost,
+  toSummaryExportRows,
+  type SummaryRow,
+} from "./summary-rows";
 import { formatMoney } from "./formatting";
 import { SUMMARY_DISCIPLINES } from "~/config/disciplines";
 import type { ProjectFefRowTotals } from "~/utils/projectTotals";
@@ -138,5 +145,116 @@ describe("toSummaryExportRows", () => {
         "TIC Before Contingency",
       ]),
     );
+  });
+});
+
+/**
+ * The money helpers behind the Summary table and its CSV. Display cells hold
+ * formatted strings, so every number makes a round trip through a comma-grouped
+ * string on its way to Excel — which is the part that can go wrong silently.
+ */
+
+/** A display row with the five cost cells set and the rest blank. */
+const costRow = (over: Partial<SummaryRow> = {}): SummaryRow => ({
+  description: "Piping",
+  qty: "",
+  uom: "",
+  unitRate: "",
+  hrs: "",
+  rate: "",
+  totalLabor: "",
+  material: "",
+  sub: "",
+  equip: "",
+  other: "",
+  ...over,
+});
+
+describe("parseMoney", () => {
+  it("reads a comma-grouped display string back as a number", () => {
+    expect(parseMoney("1,234.56")).toBe(1234.56);
+    expect(parseMoney("1,234,567.89")).toBe(1234567.89);
+    expect(parseMoney("12.00")).toBe(12);
+  });
+
+  it("gives NaN for a blank or non-numeric cell", () => {
+    // Callers branch on NaN to tell "no value" from zero, which is a real
+    // distinction on an estimate: a blank discipline is not a free one.
+    expect(parseMoney("")).toBeNaN();
+    expect(parseMoney("—")).toBeNaN();
+  });
+});
+
+describe("totalCost", () => {
+  it("stays blank when every cost cell is blank", () => {
+    // A row with nothing in it must export as empty, not as 0.00 — a zero
+    // reads as a priced scope that happens to cost nothing.
+    expect(totalCost(costRow())).toBe("");
+  });
+
+  it("counts blank cells as zero once any cell has a value", () => {
+    // The row is priced, so the blanks are genuinely nothing rather than
+    // unknown, and the total is still worth showing.
+    expect(totalCost(costRow({ totalLabor: "1,000.00" }))).toBe("1,000.00");
+  });
+
+  it("adds the five cost columns", () => {
+    const row = costRow({
+      totalLabor: "1,000.00",
+      material: "250.50",
+      sub: "100.00",
+      equip: "49.50",
+      other: "0.00",
+    });
+    expect(totalCost(row)).toBe("1,400.00");
+  });
+
+  it("always shows two decimal places and groups thousands", () => {
+    expect(totalCost(costRow({ material: "1000" }))).toBe("1,000.00");
+    expect(totalCost(costRow({ material: "0.5" }))).toBe("0.50");
+  });
+
+  it("handles a credit without losing the sign", () => {
+    const row = costRow({ totalLabor: "1,000.00", material: "-250.00" });
+    expect(totalCost(row)).toBe("750.00");
+  });
+});
+
+describe("ESTIMATE_CSV_COLUMNS", () => {
+  const cellFor = (header: string, row: SummaryRow) =>
+    ESTIMATE_CSV_COLUMNS.find((c) => c.header === header)!.get({
+      section: "Disciplines",
+      row,
+    });
+
+  it("emits money as numbers so Excel can sum the column", () => {
+    // Strings would arrive as text and silently refuse to total.
+    const cell = cellFor("Material", costRow({ material: "1,234.56" }));
+    expect(cell).toBe(1234.56);
+    expect(typeof cell).toBe("number");
+  });
+
+  it("round-trips Total Cost through its formatted string", () => {
+    // Total Cost is the one computed column: `totalCost` formats the sum to
+    // "12,345.60" and the column parses it straight back. Over 1,000 the comma
+    // is in play, so a change to either side blanks the column with no error
+    // anywhere — this is the assertion that would catch it.
+    const row = costRow({ totalLabor: "12,000.00", material: "345.60" });
+    expect(totalCost(row)).toBe("12,345.60");
+    const cell = cellFor("Total Cost", row);
+    expect(cell).toBe(12345.6);
+    expect(typeof cell).toBe("number");
+  });
+
+  it("leaves a blank cell blank rather than writing zero", () => {
+    expect(cellFor("Material", costRow())).toBe("");
+    expect(cellFor("Total Cost", costRow())).toBe("");
+  });
+
+  it("keeps the text columns as text", () => {
+    const row = costRow({ uom: "LF" });
+    expect(cellFor("Description", row)).toBe("Piping");
+    expect(cellFor("UOM", row)).toBe("LF");
+    expect(cellFor("Section", row)).toBe("Disciplines");
   });
 });

@@ -236,6 +236,13 @@ parent that does not carry it is dropped with its matching children lifted into
 its place. A parent kept purely to hold children would show no badge and read
 as a code that is not of that kind. A plain text search still keeps parents.
 
+While a cost-type filter is on, each row shows **only the badges for the types
+you selected**. Filter on **Materials** and a row that carries both labour and
+material shows just **M**; turn **Subcontracts** on as well and it shows
+**S M**. Every row on screen has already earned its place on the filtered type,
+so the other letters only invite reading the row as something it is not here
+for. Clear the filter and the full set comes back.
+
 **Search** matches the code, the name, the account description and the unit.
 Terms are order-free and all required, so "rental pipe" finds "Pipe Shop Third
 Party Rental", and a code typed without its dashes ("60420") finds its row —
@@ -294,13 +301,33 @@ The whole catalog, no project allow-list applied, in two sections:
 
 - **Cost Accounts** — one row per account: the codes ending in **0**, and
   **active ones only**. The **L / S / M / E / O** badges say which cost types
-  that account carries, so its priced variants need no separate rows.
+  that account carries, so its priced variants need no separate rows. Under a
+  cost-type filter these narrow to the types you selected, as on the Project
+  Cost Code List.
 - **CBS Dictionary** — every row, each cost type on its own line, including
   retired codes. This is the one view that hides nothing, so a code you cannot
-  find anywhere else is findable here.
+  find anywhere else is findable here. It carries no cost-type badges: each
+  row's own code already ends in its cost type, so a badge would only repeat it.
 
 Because Cost Accounts is active-only and single-status, it shows no **Status**
 filter; the Dictionary does.
+
+The two sections also read a **cost-type filter** differently, because they
+list different things:
+
+- In **Cost Accounts** a row qualifies if its cost type is the matching letter
+  **or** its corresponding column (**Labor Code**, **Sub Code**, **Material
+  Code**, …) is YES. Every row there ends in **0**, so its own cost type can
+  never match — the columns are the only thing that can answer for it.
+- In the **CBS Dictionary** a row qualifies on **its own cost type and nothing
+  else**. Filter on **Materials** and you get the codes ending in **M**: not
+  the **S** row of an account that happens to carry a material code, and not
+  the **0** roll-up above them, whose cost type is 0.
+
+So the same button answers "which accounts have material?" in the first
+section and "which codes _are_ material?" in the second. The **Export Excel**
+button in each section follows its own section's rule, so the file matches what
+you were looking at.
 
 ### Core Code Roll-up (administrators)
 

@@ -825,12 +825,22 @@ export function cbsRowTypeBadges(item: CbsTreeItem): CbsBadge[] {
  * Badges by the workbook's own flags — what a row HAS. Used where only
  * original rows are listed (the Original Codes view), so the row itself shows
  * whether it carries a sub code, a material code, or both.
+ *
+ * `only` is the toolbar's cost-type filter. While one is on, a row's other
+ * badges are noise: the list is answering "which codes are Material codes?",
+ * and every row shown has already earned its place on that flag alone (see
+ * `strictCbsRows`), so an L beside the M invites reading the row as Labor too.
+ * With nothing filtered the row shows everything it carries, as before.
  */
-export function cbsFlagBadges(item: CbsTreeItem): CbsBadge[] {
-  return CBS_COST_TYPES.filter((t) => item[t.flag] === true).map((t) => ({
-    label: t.code,
-    title: `${t.column}: YES`,
-  }));
+export function cbsFlagBadges(
+  item: CbsTreeItem,
+  only?: Partial<Record<CbsCostTypeKey, boolean>>,
+): CbsBadge[] {
+  const selected = CBS_COST_TYPES.filter((t) => only?.[t.key]);
+  const shown = selected.length > 0 ? selected : CBS_COST_TYPES;
+  return shown
+    .filter((t) => item[t.flag] === true)
+    .map((t) => ({ label: t.code, title: `${t.column}: YES` }));
 }
 
 /**

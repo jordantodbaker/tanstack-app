@@ -42,9 +42,12 @@ import { useCbsTreeExpansion } from "~/components/Cbs/useCbsTreeExpansion";
 type Node = CbsTreeNode;
 
 /** For views that list only original rows: a badge reports what the row itself
- *  carries (its Sub Code / Material Code) rather than what it is. */
-export const cbsFlagBadgesFor = (node: Node): readonly CbsBadge[] =>
-  cbsFlagBadges(node.item);
+ *  carries (its Sub Code / Material Code) rather than what it is. Narrowed to
+ *  the cost types being filtered on, when any are. */
+export const cbsFlagBadgesFor = (
+  node: Node,
+  only?: Partial<Record<CbsCostTypeKey, boolean>>,
+): readonly CbsBadge[] => cbsFlagBadges(node.item, only);
 
 type Counts = {
   total: number;
@@ -124,7 +127,11 @@ export function CbsDictionaryBrowser({
   focusCode = null,
 }: {
   items: CbsBrowserRow[];
-  badgesFor?: (node: Node) => readonly CbsBadge[];
+  badgesFor?: (
+    node: Node,
+    /** The cost types currently filtered on, so a producer can narrow to them. */
+    only: Record<CbsCostTypeKey, boolean>,
+  ) => readonly CbsBadge[];
   sourceNote: string;
   emptyMessage: string;
   showRowTypeCounts?: boolean;
@@ -212,6 +219,13 @@ export function CbsDictionaryBrowser({
   const canFilterByStatus =
     CBS_STATUSES.filter((s) => statusAvailability[s.key]).length > 1;
 
+  // The tree panel asks for a row's badges and knows nothing about filters, so
+  // the filter is bound in here rather than threaded through it.
+  const badgesForRow = React.useMemo(
+    () => (badgesFor ? (node: Node) => badgesFor(node, costTypes) : undefined),
+    [badgesFor, costTypes],
+  );
+
   const filter: CbsRowFilter = React.useMemo(
     () => ({ query: query.trim().toLowerCase(), ...costTypes, ...statuses }),
     [query, costTypes, statuses],
@@ -281,7 +295,7 @@ export function CbsDictionaryBrowser({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_22rem]">
         <CbsTreePanel
-          badgesFor={badgesFor}
+          badgesFor={badgesForRow}
           flat={flat}
           expanded={expanded}
           forceOpen={filtering}

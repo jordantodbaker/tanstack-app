@@ -193,6 +193,83 @@ describe("ProjectCostCodeListView", () => {
     expect(row).toHaveStyle({ backgroundColor: "#C0504D" });
   });
 
+  describe("badges under a cost-type filter", () => {
+    // A row carrying several cost types shows them all until a filter is on.
+    // While one is, the other badges contradict the list: every row shown has
+    // earned its place on the filtered flag alone, so an L beside the M reads
+    // as though the row were Labor too.
+    const MULTI = [
+      item("601-10-0000-00-0", "Bolt-up", {
+        laborCode: true,
+        subReporting: true,
+        materialCode: true,
+      }),
+    ];
+
+    const badgesOn = (name: string) =>
+      Array.from(
+        within(screen.getByRole("tree"))
+          .getByText(name)
+          .closest('[role="treeitem"]')!
+          .querySelectorAll("[title$='YES']"),
+      ).map((el) => el.textContent);
+
+    const filterBy = (label: string) =>
+      fireEvent.click(screen.getByRole("button", { name: label }));
+
+    it("shows every cost type the row carries when nothing is filtered", () => {
+      renderView(MULTI);
+      expect(badgesOn("Bolt-up")).toEqual(["L", "S", "M"]);
+    });
+
+    it("shows only the filtered cost type", () => {
+      renderView(MULTI);
+      filterBy("Materials");
+      expect(badgesOn("Bolt-up")).toEqual(["M"]);
+    });
+
+    it("shows only the filtered cost type for a different one", () => {
+      renderView(MULTI);
+      filterBy("Subcontracts");
+      expect(badgesOn("Bolt-up")).toEqual(["S"]);
+    });
+
+    it("shows both when two cost types are filtered on", () => {
+      // The badges follow the filter, not a single choice.
+      renderView(MULTI);
+      filterBy("Subcontracts");
+      filterBy("Materials");
+      expect(badgesOn("Bolt-up")).toEqual(["S", "M"]);
+    });
+
+    it("keeps the workbook's column order, not the click order", () => {
+      renderView(MULTI);
+      filterBy("Materials");
+      filterBy("Labor");
+      expect(badgesOn("Bolt-up")).toEqual(["L", "M"]);
+    });
+
+    it("restores the full set when the filter is cleared", () => {
+      renderView(MULTI);
+      filterBy("Materials");
+      expect(badgesOn("Bolt-up")).toEqual(["M"]);
+      filterBy("Materials");
+      expect(badgesOn("Bolt-up")).toEqual(["L", "S", "M"]);
+    });
+
+    it("does not invent a badge the row does not carry", () => {
+      // Filtering on Equipment must not badge a row that has no equipment
+      // code — and that row should not survive the filter at all.
+      renderView(MULTI);
+      filterBy("Equipment");
+      // It drops out entirely rather than appearing with no badge, so there is
+      // no tree left to look in.
+      expect(screen.queryByText("Bolt-up")).toBeNull();
+      expect(
+        screen.getByText("No rows match this filter."),
+      ).toBeInTheDocument();
+    });
+  });
   /**
    * Setup lets a user tick a leaf without its parent. Before the query pulled
    * ancestors in, such a leaf rendered at the top level — "Field Staff" beside

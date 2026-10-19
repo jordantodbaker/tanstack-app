@@ -5,6 +5,7 @@ import {
   cbsIsActive,
   cbsIsBackbone,
   type CbsBadge,
+  type CbsCostTypeKey,
   type CbsTreeNode,
 } from "~/lib/cbs-tree";
 import type { CbsExportView } from "~/lib/cbs-export";
@@ -37,7 +38,10 @@ function CbsSection({
   title: string;
   description: string;
   items: CbsTreeRow[];
-  badgesFor?: (node: Node) => readonly CbsBadge[];
+  badgesFor?: (
+    node: Node,
+    only: Record<CbsCostTypeKey, boolean>,
+  ) => readonly CbsBadge[];
   sourceNote: string;
   emptyMessage: string;
   defaultOpen?: boolean;

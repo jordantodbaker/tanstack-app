@@ -159,3 +159,130 @@ describe("buildCbsHealthReport without CBS.xlsx", () => {
     expect(summary).not.toContain("not on this server");
   });
 });
+
+/**
+ * The check that stands in front of a destructive import.
+ *
+ * `import-drift` is what tells you an import is about to DELETE accounts and
+ * take their project grants with them. It is the most intricate logic in the
+ * report — two set differences across the workbook and the database, plus a
+ * grant lookup for the doomed rows — and it already carried one real bug: the
+ * quadratic scan that took the report from four seconds to thirty.
+ */
+
+/** A workbook row, matching what the loader hands back. */
+function sheetRow(displayCode: string, over: Record<string, unknown> = {}) {
+  return {
+    displayCode,
+    costCode: displayCode.replace(/-/g, ""),
+    name: `Account ${displayCode}`,
+    masterCbsRow: 10,
+    rowType: "ORIGINAL",
+    ...over,
+  };
+}
+
+/** A clean report: nothing wrong with the sheet itself. */
+const CLEAN_REPORT = {
+  source: "CBS.xlsx",
+  sheet: "CBS",
+  sheetRows: 0,
+  originals: 0,
+  generatedSub: 0,
+  generatedMaterial: 0,
+  skippedExistingSub: 0,
+  skippedExistingMaterial: 0,
+  costCodeMismatches: 0,
+  segmentMismatches: [],
+  duplicates: [],
+  invalid: [],
+};
+
+/** Hands the report a workbook holding exactly `codes`. */
+const withWorkbook = (codes: string[], over: Record<string, unknown> = {}) =>
+  loadWorkbook.mockResolvedValue({
+    items: codes.map((c) => sheetRow(c)),
+    report: {
+      ...CLEAN_REPORT,
+      sheetRows: codes.length,
+      originals: codes.length,
+      ...over,
+    },
+  });
+
+describe("the import-drift check", () => {
+  it("counts both sides of the difference, not just one", async () => {
+    // The database has 600-…-L and 601-…-0; the workbook has 601-…-0 and a new
+    // 602-…-0. So one row would be added and one deleted.
+    withWorkbook(["601-00-0000-00-0", "602-00-0000-00-0"]);
+    const c = byId((await buildCbsHealthReport()).checks, "import-drift");
+    expect(c.count).toBe(2);
+    expect(c.severity).toBe("warning");
+  });
+
+  it("says which rows an import would add", async () => {
+    withWorkbook(["600-00-0000-00-L", "601-00-0000-00-0", "602-00-0000-00-0"]);
+    const c = byId((await buildCbsHealthReport()).checks, "import-drift");
+    const added = c.findings.filter((f) => f.detail.includes("would add"));
+    expect(added.map((f) => f.code)).toEqual(["602-00-0000-00-0"]);
+    expect(c.count).toBe(1);
+  });
+
+  it("shouts about a deletion, in capitals", async () => {
+    // The asymmetry is deliberate: an add is routine, a delete loses data.
+    withWorkbook(["600-00-0000-00-L"]);
+    const c = byId((await buildCbsHealthReport()).checks, "import-drift");
+    const doomed = c.findings.find((f) => f.code === "601-00-0000-00-0")!;
+    expect(doomed.detail).toContain("would DELETE it");
+  });
+
+  it("names the projects that would lose a granted code", async () => {
+    // The whole point of the check: a delete takes the project grants with it,
+    // and the grant is invisible on Setup because the row is retired.
+    withWorkbook(["600-00-0000-00-L"]);
+    const c = byId((await buildCbsHealthReport()).checks, "import-drift");
+    const doomed = c.findings.find((f) => f.code === "601-00-0000-00-0")!;
+    expect(doomed.detail).toContain("granted to 1901");
+  });
+
+  it("does not claim a grant for a doomed row that has none", async () => {
+    // 600-…-L is in the database and not the workbook, and no project holds it.
+    withWorkbook(["601-00-0000-00-0"]);
+    const c = byId((await buildCbsHealthReport()).checks, "import-drift");
+    const doomed = c.findings.find((f) => f.code === "600-00-0000-00-L")!;
+    expect(doomed.detail).toContain("would DELETE it");
+    expect(doomed.detail).not.toContain("granted to");
+  });
+
+  it("reports all clear when the catalog matches the workbook", async () => {
+    // Both database rows, nothing else: an import would change nothing.
+    withWorkbook(["600-00-0000-00-L", "601-00-0000-00-0"]);
+    const c = byId((await buildCbsHealthReport()).checks, "import-drift");
+    expect(c).toMatchObject({ count: 0, severity: "info", findings: [] });
+    expect(c.summary).toContain("would add and remove nothing");
+  });
+
+  it("keeps its title whichever way the comparison comes out", async () => {
+    // The title is the export's filename and the row you look for on the page.
+    withWorkbook(["600-00-0000-00-L", "601-00-0000-00-0"]);
+    const clean = byId((await buildCbsHealthReport()).checks, "import-drift");
+    withWorkbook(["602-00-0000-00-0"]);
+    const dirty = byId((await buildCbsHealthReport()).checks, "import-drift");
+    expect(clean.title).toBe(dirty.title);
+    expect(clean.title).toBe("Workbook against the database");
+  });
+
+  it("matches on the code, not on the hyphens", async () => {
+    // The database stores `costCode` without separators; the workbook carries
+    // the display code. Comparing them raw would report every row twice over.
+    withWorkbook(["600-00-0000-00-L", "601-00-0000-00-0"]);
+    expect(
+      byId((await buildCbsHealthReport()).checks, "import-drift").count,
+    ).toBe(0);
+  });
+
+  it("reports the workbook's row count once the sheet is present", async () => {
+    withWorkbook(["601-00-0000-00-0", "602-00-0000-00-0"]);
+    expect((await buildCbsHealthReport()).workbookRows).toBe(2);
+  });
+});

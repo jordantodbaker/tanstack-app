@@ -399,7 +399,10 @@ describe("buildCbsTree", () => {
     ]);
   });
 
-  it("hangs a group root's S/M twins directly under the root, beside its accounts", () => {
+  it("nests every cost type under its own roll-up row", () => {
+    // "0" is the account's roll-up code, so its priced variants are its
+    // children. 101's M twin belongs under 101's own "-0" row, not beside it
+    // under the 100 root.
     const tree = buildCbsTree([
       item("100-00-0000-00-0"),
       item("100-00-0000-00-S", { rowType: "SUB" }),
@@ -411,10 +414,10 @@ describe("buildCbsTree", () => {
       "100-00-0000-00-S",
       "100-00-0000-00-M",
       "101-00-0000-00-0",
-      "101-00-0000-00-M",
     ]);
-    // The account's twin parents to the root, not to the root's twin.
-    expect(parentOf(tree, "101-00-0000-00-M")).toBe("100-00-0000-00-0");
+    expect(parentOf(tree, "101-00-0000-00-M")).toBe("101-00-0000-00-0");
+    // The root's own twins still hang off the root, which IS their roll-up.
+    expect(parentOf(tree, "100-00-0000-00-S")).toBe("100-00-0000-00-0");
   });
 
   it("parents cost-type rows to the nearest ancestor of the same type, else the backbone", () => {
@@ -428,7 +431,9 @@ describe("buildCbsTree", () => {
       item("101-15-0500-00-M"),
       item("101-15-0700-00-L"),
     ]);
-    expect(parentOf(tree, "101-05-0000-00-M")).toBe("101-00-0000-00-M");
+    // Its own roll-up row wins over any same-type ancestor.
+    expect(parentOf(tree, "101-05-0000-00-M")).toBe("101-05-0000-00-0");
+    // No roll-up at 101-05-0500 → the same-type ancestor walk takes over.
     expect(parentOf(tree, "101-05-0500-00-M")).toBe("101-05-0000-00-M");
     // No M twin at 101-15 → climbs to the account-level M summary.
     expect(parentOf(tree, "101-15-0500-00-M")).toBe("101-00-0000-00-M");
@@ -1004,13 +1009,12 @@ describe("row-type filters", () => {
       sub: true,
       material: true,
     });
-    // Piping still has neither code. Bolt-up keeps its place under Pipe Spool
-    // because that parent is itself a match now, and the S twin is a sibling,
-    // so it follows Pipe Spool's children in pre-order.
+    // Piping still has neither code. The S twin is now a CHILD of Pipe Spool
+    // rather than its sibling, so it comes before Bolt-up in pre-order.
     expect(names(nodes)).toEqual([
       "Pipe Spool",
-      "Bolt-up",
       "Pipe Spool Subcontracts",
+      "Bolt-up",
     ]);
   });
 

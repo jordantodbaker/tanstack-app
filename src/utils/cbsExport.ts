@@ -47,6 +47,11 @@ const ExportInput = z.object({
   view: z.enum(CBS_EXPORT_VIEWS),
   /** Required for the project-scoped view, ignored by the catalog views. */
   projectId: z.number().int().positive().nullable().default(null),
+  /**
+   * Drop the ancestor rows the project was not granted, mirroring the page's
+   * "Hide ungranted parents" toggle. Only the project view has any.
+   */
+  hideContext: z.boolean().default(false),
   filter: z
     .object({
       query: z.string().max(200).default(""),
@@ -135,7 +140,10 @@ async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
       throw new Error("A project must be selected to export its cost codes");
     }
     rows = await projectCostCodeRows(input.projectId);
-    scope = "Codes granted to this project on the Setup page";
+    if (input.hideContext) rows = rows.filter((r) => !r.context);
+    scope = input.hideContext
+      ? "Codes granted to this project on the Setup page — ungranted parents hidden"
+      : "Codes granted to this project on the Setup page";
   } else {
     // The Cost Accounts view lists one row per account — the "-0" backbone,
     // and only while it is active — so the export has to apply the same two

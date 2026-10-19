@@ -191,17 +191,25 @@ the discipline roots, L5 is the same as **Expand all**. The swatch in force is
 outlined, and the outline clears once you open or close a row yourself.
 Ticking a parent allows everything beneath it; a
 half-filled box means only some of its children are allowed.
-**Subcontracts** and **Materials** narrow the tree to one kind of code.
-A row counts as a subcontract if its cost type (the workbook's L7) is **S** or
-its **Sub Code** is YES; as a material if its cost type is **M** or its
-**Material Code** is YES. Only matching rows and the parents needed to reach
-them stay on screen. The two buttons widen each other — turning both on shows
-either kind — and both narrow the search box rather than widening it, so
-"pumps" with **Subcontracts** on means subcontract rows mentioning pumps. While
-either is on the surviving rows are opened for you, so the level swatches take
-effect again once you turn them off. Rows badged **S**
-or **M** are the generated subcontract and material versions of the row above
-them — allow those too if the project will book cost against them.
+**Cost types** — **Labor**, **Subcontracts**, **Materials**, **Equipment** and
+**Other** — narrow the tree to one kind of code. A row counts as that kind if
+its cost type (the workbook's L7) is the matching letter, or its corresponding
+column (**Labor Code**, **Sub Code**, **Material Code**, **Equipment Code**,
+**Other Code**) is YES. The buttons widen each other — turning two on shows
+either kind — and they narrow the search box rather than widening it, so
+"pumps" with **Subcontracts** on means subcontract rows mentioning pumps.
+
+A cost-type filter is **strict**: a row earns its place on its own flags, so a
+parent that does not carry the cost type is dropped and its matching children
+are lifted into its place. That is deliberate — a parent kept only to carry
+children shows no badge, and would read as a code that is not of that kind. A
+plain text search still keeps the parents, because knowing where a hit sits is
+most of the answer.
+
+Setup lists **active codes only**; a retired code cannot be granted. Rows
+badged **S** or **M** are the generated subcontract and material versions of
+the row above them — allow those too if the project will book cost against
+them.
 
 > **After a CBS update:** new codes are never granted automatically. Come back
 > here and allow the new items each project needs, or its pickers won't offer
@@ -214,16 +222,28 @@ what an admin allowed in Setup — as a colour-coded, collapsible hierarchy you
 can search. The **L0–L5 swatches** under "Level colours" open the tree to one
 level at a time, the same as on the Setup page.
 
-**Subcontracts** and **Materials** narrow the tree to one kind of code.
-A row counts as a subcontract if its cost type (the workbook's L7) is **S** or
-its **Sub Code** is YES; as a material if its cost type is **M** or its
-**Material Code** is YES. Only matching rows and the parents needed to reach
-them stay on screen. The two buttons widen each other — turning both on shows
-either kind — and both narrow the search box rather than widening it, so
-"pumps" with **Subcontracts** on means subcontract rows mentioning pumps. While
-either is on the surviving rows are opened for you, so the level swatches take
-effect again once you turn them off. Select a row to see its full detail: unit, cost code, account, cost
-classification, discipline, description and more.
+The toolbar has two rows of filters above the search box. **Cost types** —
+**Labor**, **Subcontracts**, **Materials**, **Equipment**, **Other** — narrow
+the tree to one kind of code: a row qualifies if its cost type (the workbook's
+L7) is the matching letter, or its corresponding column (**Labor Code**,
+**Sub Code**, **Material Code**, **Equipment Code**, **Other Code**) is YES.
+The buttons widen each other, and they narrow the search rather than widening
+it, so "pumps" with **Subcontracts** on means subcontract rows mentioning
+pumps.
+
+A cost-type filter is **strict**: only rows carrying that type survive, and a
+parent that does not carry it is dropped with its matching children lifted into
+its place. A parent kept purely to hold children would show no badge and read
+as a code that is not of that kind. A plain text search still keeps parents.
+
+**Search** matches the code, the name, the account description and the unit.
+Terms are order-free and all required, so "rental pipe" finds "Pipe Shop Third
+Party Rental", and a code typed without its dashes ("60420") finds its row —
+useful when pasting from the workbook's Cost Code column or from Excel.
+
+Select a row to see its full detail: unit, cost code, account, cost
+classification, discipline, description, and the **Row** and **Expanded Row**
+it occupies in the source workbook.
 
 Only the **original** CBS rows are listed. **S** means a code's own
 **Sub Code** is YES, **M** means its **Material Code** is YES, and a code
@@ -243,7 +263,7 @@ says.
 The file keeps the level colours and turns the hierarchy into Excel's own row
 grouping, so the ± controls in the margin collapse it the way the page does.
 Collapsing branches on screen doesn't change the file: Excel's grouping is
-what collapses it there. The same button is on the **Original Codes** and
+what collapses it there. The same button is on the **Cost Accounts** and
 **CBS Dictionary** sections of the **CBS Code Book**.
 
 Greyed-out, italic rows are **parent summaries the project wasn't granted**,
@@ -258,6 +278,77 @@ a row only opens its detail; ticking the checkbox is what changes the
 allow-list.
 
 > **Saving:** edits autosave as you go (debounced). No "Save" button to hunt for.
+
+### Linking to one code
+
+Both lists accept a `?code=` link — for example
+`/project-cost-codes?code=052-15-0500-00-L`. Opening it expands the tree down
+to that account, selects it so the detail panel fills, and scrolls it into
+view. Useful when pointing someone at a specific code in an email rather than
+describing where to find it. An unknown code is ignored and the page opens
+normally.
+
+### CBS Code Book (administrators)
+
+The whole catalog, no project allow-list applied, in two sections:
+
+- **Cost Accounts** — one row per account: the codes ending in **0**, and
+  **active ones only**. The **L / S / M / E / O** badges say which cost types
+  that account carries, so its priced variants need no separate rows.
+- **CBS Dictionary** — every row, each cost type on its own line, including
+  retired codes. This is the one view that hides nothing, so a code you cannot
+  find anywhere else is findable here.
+
+Because Cost Accounts is active-only and single-status, it shows no **Status**
+filter; the Dictionary does.
+
+### Core Code Roll-up (administrators)
+
+A CBS code says **where** a cost sits; a Core code says **what kind** of cost
+it is, by pointing at the account in 050 Field Indirects it belongs with. Civil's
+field staff, Concrete's and Piping's all point at `052-00` "Field Staff", so the
+same estimate totals two ways: by discipline, and by core account.
+
+Each row of the grid is a core account and each column a discipline; the number
+is how many of that discipline's codes point there. A **·** is a discipline not
+yet core-coded for that account. Click a row to see the actual items, grouped by
+discipline. Coverage bars at the foot show how far the coding has got per
+discipline — it is a work in progress, so the gaps are the point.
+
+An amber panel lists Core codes that resolve to nothing, which usually means the
+account they named was removed by a workbook change.
+
+### Code Usage
+
+How much of a project's cost code list the estimate actually uses, by division:
+granted against used, shaded by utilisation, with the unused codes listed first
+when you open a division — those are the ones worth revoking. Usage counts rows
+in **every** estimate version, not just the current one, so a code dropped from
+the latest version is not mistaken for dead.
+
+> **Read the percentages as a floor.** The take-off pages build codes from an
+> account plus the row's own attributes — metallurgy, bore size,
+> fabricate/erect — so a piping row books to something like
+> `604-MB-ST00-00-C`, which was never a dictionary row and cannot be matched to
+> a granted code. The page says how many of those it found.
+
+### CBS Health (administrators)
+
+What is wrong with the catalog, if anything — the checks the import prints once
+and then forgets, run against CBS.xlsx and the database as they stand. Checks
+that pass are listed too, so "nothing reported" is distinguishable from "never
+asked".
+
+Each failing check lists every affected row with the **Row** it occupies in the
+master spreadsheet, sorted ascending, and exports to Excel as a worklist with
+the same column. Errors cover things like two accounts sharing one display code
+(the import keeps one and silently drops the other), a material row with no
+material type, a roll-up row carrying a priced cost type, and Sub Code
+contradicting an equipment row's ownership.
+
+Four of the checks compare the spreadsheet against the database. Those only run
+where CBS.xlsx actually is — on the deployed app they are listed as skipped,
+and the rest still run.
 
 ---
 

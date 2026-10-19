@@ -18,10 +18,13 @@ import type { CbsRowFilter } from "~/lib/cbs-tree";
 export function ExportCbsXlsxButton({
   view,
   filter,
+  hideContext = false,
   disabled,
 }: {
   view: CbsExportView;
   filter: CbsRowFilter;
+  /** Mirrors the page's "Hide ungranted parents" toggle. */
+  hideContext?: boolean;
   disabled?: boolean;
 }) {
   // The selected project scopes the project view's rows, and labels the
@@ -32,7 +35,10 @@ export function ExportCbsXlsxButton({
     disabled || (view === "projectCostCodes" && projectId === null);
 
   const { busy, failed, start } = useXlsxExport(
-    () => cbsExporterFor(view)({ data: { view, projectId, filter } }),
+    () =>
+      cbsExporterFor(view)({
+        data: { view, projectId, filter, hideContext },
+      }),
     { export: "cbs-tree", view, projectId },
   );
 

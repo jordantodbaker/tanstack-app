@@ -15,8 +15,11 @@ Procurement, Construction) firm. It manages:
 - Change Variation Requests (CVR) and the approval workflow
 - Field Change Orders (FCO), Requests for Information (RFI), Trends, and
   Prime/Owner Change Orders (PCO)
-- The Cost Breakdown Structure — each project's cost code list and the
-  whole CBS Code Book, with Excel export of either
+- The Cost Breakdown Structure — five pages, with Excel export from each:
+  the project's cost code list, the whole CBS Code Book, the Core Code
+  Roll-up (how codes across disciplines link to shared core accounts), Code
+  Usage (granted against actually used) and CBS Health (the catalog's
+  data-quality checks)
 - Project administration (projects, areas, subcontractors, users, roles,
   crew mixes, CVR/FCO templates)
 - Earned-Value-Management (EVM) reporting against estimate snapshots
@@ -81,6 +84,15 @@ Node↔Web-Fetch adapter in [api/handler.js](../api/handler.js).
 - The build emits a static client bundle (`dist/client`) and a Node server
   bundle (`dist/server`) that the serverless function imports.
 - Cold-start time is acceptable for an internal tool; no warm-pool needed.
+- **Nothing in the repo is readable from the deployed server.** `dist/` holds
+  the bundles and nothing else, and a path built from `import.meta.url`
+  resolves inside `dist/server`, not the source tree. `prisma/data/CBS.xlsx` is
+  a working file on somebody's machine, not part of the deployment.
+  CBS Health is the only feature that wants it at run time; it treats the
+  workbook as optional and reports its four workbook-versus-database checks as
+  skipped when the file is absent, leaving the other eighteen to run. Anything
+  else that reads a repo file at run time will fail on Vercel and pass locally
+  — the failure mode that produced "Failed to run the CBS health checks".
 
 ---
 
@@ -125,6 +137,14 @@ exist on the searched columns:
 [scripts/verify-trigram-indexes.ts](../scripts/verify-trigram-indexes.ts).
 
 ### Schema migrations
+> **After any schema change, restart the dev server.** Node caches the Prisma
+> client at import, and Vite's HMR updates your source but not that module, so
+> a freshly added column reads as `Unknown field … for select statement` until
+> the process restarts. A column genuinely missing from the database says
+> `The column … does not exist in the current database` instead — the two look
+> identical in the UI and are fixed differently. `npx prisma db push` the other
+> database too; the two Neon branches drift apart otherwise.
+
 The codebase uses `prisma db push` (no migration history table). Schema
 changes are applied by running `npx prisma db push` against the production
 `DATABASE_URL`. There is no down-migration path; schema changes are
@@ -468,9 +488,26 @@ segment, and the cost-type suffix is stripped from the name (`Executive (L)`
 already carries that code. Level segments are derived from the Display Code,
 not from the workbook's L1–L7 helper columns. See `prisma/cbs-workbook.ts`.
 
+The 2026-10 sheet also carries **Master CBS Row** and **Expanded Row**, stored
+on every `CbsItem`: the first is the line in the unexpanded master (a generated
+cost-type twin shares it with the account it came from), the second is the line
+in the sheet you are reading. They are traced through to the CBS detail panel
+and to every CBS Health finding, so a reported problem names the row to go and
+fix. Nothing keys on them. **Columns are matched by header name, never by
+position** — those two were inserted ahead of `L7`, and anything reading by
+column letter would have written into the wrong cell.
+
 When a new master arrives:
 
 1. Replace `prisma/data/CBS.xlsx` (same sheet/column layout).
+1a. `npm run cbs:repair` — twice now a fresh copy has arrived carrying the same
+   two defects, and both are invisible until an import runs: ~1,100 engineering
+   Display Codes with their cost type written twice (`022-00-0000-00-0-S`),
+   which the loader rejects so the import reads them as *deleted* and cascades
+   every project's grants away; and the 95/96 division renumber. Dry run by
+   default, `-- --apply` to write, backs the file up first, and is safe to run
+   on a workbook that is already clean. Then `npm run cbs:rename -- --workbook`
+   to re-apply account renames the new copy reverted.
 2. `npm run cbs:import -- --dry-run` — prints the workbook report (duplicate
    codes, invalid rows, generated-twin counts) and the create/update/delete
    plan without writing anything. Fix the workbook if the report flags

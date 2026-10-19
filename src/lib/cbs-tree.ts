@@ -301,14 +301,32 @@ export function buildCbsTree<T extends CbsTreeItem>(
     const isGroupRoot = ancestors.length === 0;
 
     let parent: Build | null = null;
-    for (const a of ancestors) {
-      const hit = placed.get(`${a}|${type}`);
-      if (hit) {
-        parent = hit;
-        break;
+    // The "0" cost type IS the account's roll-up code, so an account's priced
+    // variants are its children rather than its siblings: 013-00-0000-00-M and
+    // -S belong under 013-00-0000-00-0, not beside it. Checked before the
+    // ancestor walk, because that walk would otherwise hand them to the
+    // account's own parent and leave the three looking like peers.
+    //
+    // `lineage` keys on the level segments alone, so an account and all its
+    // cost types share one key and are told apart by the "|type" suffix.
+    const ownRollUp =
+      type === BACKBONE_TYPE
+        ? null
+        : (placed.get(`${key}|${BACKBONE_TYPE}`) ?? null);
+    parent = ownRollUp;
+
+    if (!parent) {
+      for (const a of ancestors) {
+        const hit = placed.get(`${a}|${type}`);
+        if (hit) {
+          parent = hit;
+          break;
+        }
       }
     }
     if (!parent && type !== BACKBONE_TYPE) {
+      // No roll-up row for this account — the ~1,000 deliverable-style codes
+      // have none — so fall back to the nearest backbone above it.
       for (const a of ancestors) {
         const hit = placed.get(`${a}|${BACKBONE_TYPE}`);
         if (hit) {
@@ -316,16 +334,13 @@ export function buildCbsTree<T extends CbsTreeItem>(
           break;
         }
       }
-      // A cost-type twin of a group root (Civil Materials under Civil) hangs
-      // off its own backbone row.
-      if (!parent && isGroupRoot) {
-        parent = placed.get(`${key}|${BACKBONE_TYPE}`) ?? null;
-      }
     }
 
     const node: Build = {
       depth: parent ? parent.depth + 1 : 0,
-      level,
+      // Colour follows the nesting when a row sits under its own roll-up: the
+      // variant reads one level in from the account it prices.
+      level: ownRollUp ? ownRollUp.level + 1 : level,
       item,
       children: [],
     };

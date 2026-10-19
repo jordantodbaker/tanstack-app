@@ -19,7 +19,7 @@ nav. `/` is a launcher with one card per app.
 |---|---|
 | **Field Estimate Form** | Per-discipline take-off sheets, crews and rates, then Summary / Basis / Validation. The only app with the discipline tree and the version picker. |
 | **Change Log** | Trends → PCOs → RFIs → Field Change Orders, with approval workflow, templates and print views. |
-| **Cost Breakdown Structure** | A project's cost code list, and the whole CBS Code Book. Excel export of either. |
+| **Cost Breakdown Structure** | The project's cost code list, the whole CBS Code Book, the Core Code Roll-up, Code Usage (granted vs actually used) and CBS Health (the catalog's data-quality checks). Excel export from each. |
 | **Reporting** | Dashboard, cost periods, EVM, CVR templates. |
 | **Administration** | Projects, areas, subcontractors, labour rates, crew mixes, users, system settings. |
 
@@ -82,6 +82,7 @@ point it anywhere real.
 | `npm run test:coverage` | Coverage report — useful for finding which logic is untested |
 | `npm run test:integration` | DB-backed suite — see [docs/integration-testing.md](docs/integration-testing.md) |
 | `npm run check:client-leak` | Fails if a client-reachable module pulls in Prisma. Run it in CI. |
+| `npm run cbs:repair` | Fix the defects a fresh copy of `CBS.xlsx` keeps arriving with — run **before** importing |
 | `npm run cbs:import` | Re-import `prisma/data/CBS.xlsx` into `CbsItem` |
 | `npm run cbs:rename` | Re-apply account renames the workbook doesn't carry yet |
 | `npm run piping:sync-codes` | Push piping metallurgy codes into `PipingGroup` |

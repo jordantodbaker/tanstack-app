@@ -192,6 +192,37 @@ describe("ProjectCostCodeListView", () => {
         .getByText(name)
         .closest('[role="treeitem"]')! as HTMLElement;
 
+    it("offers a toggle that hides the ungranted parents", async () => {
+      renderView(CONTEXT_FIXTURE);
+      const toggle = screen.getByLabelText("Hide ungranted parents");
+      expect(within(screen.getByRole("tree")).getByText("Civil")).toBeTruthy();
+
+      fireEvent.click(toggle);
+      const tree = screen.getByRole("tree");
+      for (const gone of [
+        "Civil",
+        "Civil Shop Materials",
+        "Earthwork & Trenching",
+      ]) {
+        expect(within(tree).queryByText(gone)).toBeNull();
+      }
+      // The granted code survives: hiding its parents must not strand it.
+      expect(within(tree).getByText("Topsoil")).toBeInTheDocument();
+      // And it climbs to the top, since nothing above it was granted.
+      expect(rowFor("Topsoil")).toHaveAttribute("aria-level", "1");
+
+      fireEvent.click(toggle);
+      expect(
+        within(screen.getByRole("tree")).getByText("Civil"),
+      ).toBeInTheDocument();
+    });
+
+    it("does not offer the toggle when there are no ungranted parents", () => {
+      // The catalog views have none; a checkbox that can do nothing is noise.
+      renderView(FIXTURE);
+      expect(screen.queryByLabelText("Hide ungranted parents")).toBeNull();
+    });
+
     it("nests a granted leaf under its ungranted parents", () => {
       renderView(CONTEXT_FIXTURE);
       fireEvent.click(screen.getByRole("button", { name: "Expand all" }));

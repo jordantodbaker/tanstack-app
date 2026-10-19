@@ -498,10 +498,13 @@ export const HELP_SECTIONS: HelpSection[] = [
               "Only the original CBS rows are listed. S means a code's own Sub Code is YES and M means its Material Code is YES; a code with both shows both.",
               "The generated subcontract and material rows are not listed here — the badges already tell you which codes have them. Administrators can see both views over the whole catalog under Cost Breakdown Structure → CBS Code Book.",
               'Export Excel downloads the rows currently shown — whatever the search box and the Subcontracts / Materials buttons left. The sheet starts with a labelled block giving the project number and title, the scope, the filter applied, the code count and the export date, and the project number is in the filename too. The file keeps the level colours and turns the hierarchy into Excel row grouping, so it collapses in Excel the way it does on the page. Context rows come through italic and marked "Context only".',
-              "Subcontracts and Materials narrow the tree to one kind of code: a row counts as a subcontract if its cost type (L7) is S or its Sub Code is YES, and as a material if its cost type is M or its Material Code is YES. Only matching rows and the parents needed to reach them stay on screen. Turning both on shows either kind; both narrow the search box rather than widening it.",
+              "Cost types — Labor, Subcontracts, Materials, Equipment and Other — narrow the tree to one kind of code: a row qualifies if its cost type (L7) is the matching letter, or its matching column (Labor Code, Sub Code, Material Code, Equipment Code, Other Code) is YES. Turning two on shows either kind; they narrow the search box rather than widening it.",
+              "A cost-type filter is strict: only rows carrying that type survive. A parent that does not carry it is dropped and its matching children are lifted into its place — a parent kept only to hold children shows no badge and would read as a code that is not of that kind. A plain text search still keeps the parents, because knowing where a hit sits is most of the answer.",
+              'Search matches the code, the name, the account description and the unit. Terms are order-free and all required, so "rental pipe" finds "Pipe Shop Third Party Rental"; a code typed without its dashes ("60420") finds its row, which helps when pasting from Excel.',
+              "A ?code= link — /project-cost-codes?code=052-15-0500-00-L — opens the page on that account: the tree expands to it, it is selected, and the list scrolls to it. Handy for pointing someone at one code.",
               'The L0–L5 swatches under "Level colours" open the tree to one code level at a time — L0 is just the discipline roots, L5 is everything. The one in force is outlined until you open or close a row yourself.',
               "Greyed-out italic rows are parent summaries the project was not granted. They appear only so the codes beneath them nest correctly — they carry no badges, are left out of the row count, and cannot be used on an estimate. Tick one in Setup to make it usable.",
-              "Select any row to see its full detail: unit, cost code, account, cost classification, discipline, description and more.",
+              "Select any row to see its full detail: unit, cost code, account, cost classification, discipline, description, and the Row and Expanded Row it occupies in the source workbook.",
             ],
           },
           {
@@ -520,11 +523,76 @@ export const HELP_SECTIONS: HelpSection[] = [
         blocks: [
           {
             kind: "p",
-            text: "The CBS Code Book (in the Cost Breakdown Structure app, administrators only) is the complete CBS in the same browser as the Project Cost Code List, but with no project allow-list applied. It has two sections — Original Codes, and the CBS Dictionary with the generated S/M rows — and lists every account, including ones no project has been granted. It ignores the selected project entirely.",
+            text: "The CBS Code Book (in the Cost Breakdown Structure app, administrators only) is the complete CBS in the same browser as the Project Cost Code List, but with no project allow-list applied. It lists every account, including ones no project has been granted, and ignores the selected project entirely.",
+          },
+          {
+            kind: "ul",
+            items: [
+              "Cost Accounts — one row per account: the codes ending in 0, active ones only. The L / S / M / E / O badges say which cost types that account carries, so its priced variants need no rows of their own.",
+              "CBS Dictionary — every row, each cost type on its own line, retired codes included. It is the one view that hides nothing, so a code you cannot find anywhere else is findable here.",
+              "Because Cost Accounts is active-only, it shows no Status filter — there would be nothing to choose between. The Dictionary has one.",
+            ],
           },
           {
             kind: "p",
             text: "Use it to look an account up before granting it to a project on the Setup page. It is read-only: the catalog itself changes only through a CBS import.",
+          },
+        ],
+      },
+      {
+        id: "core-code-roll-up",
+        title: "Core Code Roll-up (administrators)",
+        minRole: "ADMINISTRATOR",
+        blocks: [
+          {
+            kind: "p",
+            text: "A CBS code says WHERE a cost sits; a Core code says WHAT KIND of cost it is, by pointing at the account in 050 Field Indirects it belongs with. Civil's field staff, Concrete's and Piping's all point at 052-00 Field Staff, so the same estimate totals two ways: by discipline, and by kind of cost.",
+          },
+          {
+            kind: "ul",
+            items: [
+              "Each row of the grid is a core account and each column a discipline; the number is how many of that discipline's codes point there. A dot is a discipline not yet core-coded for that account.",
+              "Click a row to see the actual items feeding it, grouped by discipline.",
+              "Coverage bars at the foot show how far the coding has got, discipline by discipline. It is a work in progress, so the gaps are as much the point as the links.",
+              "An amber panel lists Core codes that resolve to nothing — usually the account they named was removed by a workbook change.",
+            ],
+          },
+        ],
+      },
+      {
+        id: "code-usage",
+        title: "Code Usage",
+        blocks: [
+          {
+            kind: "p",
+            text: "How much of this project's cost code list the estimate actually uses. The Project Cost Code List shows what is permitted; this shows what is used, by division, so an allow-list can be trimmed on evidence rather than guesswork.",
+          },
+          {
+            kind: "ul",
+            items: [
+              "Each division is shaded by utilisation — granted against used — and opening one lists its codes with the unused first, since those are the ones worth revoking.",
+              "Usage counts rows in EVERY estimate version, not just the current one: a code dropped from the latest version is still why an earlier one reads as it does.",
+              "Read the percentages as a floor. The take-off pages build codes from an account plus the row's own attributes — metallurgy, bore size, fabricate/erect — so a piping row books to something like 604-MB-ST00-00-C, which was never a dictionary row and cannot be matched to a granted code. The page says how many of those it found.",
+            ],
+          },
+        ],
+      },
+      {
+        id: "cbs-health",
+        title: "CBS Health (administrators)",
+        minRole: "ADMINISTRATOR",
+        blocks: [
+          {
+            kind: "p",
+            text: 'What is wrong with the cost code catalog, if anything — the checks the import prints once and then forgets, run against CBS.xlsx and the database as they stand now. Checks that pass are listed too, so you can tell "nothing reported" from "never asked".',
+          },
+          {
+            kind: "ul",
+            items: [
+              "Errors first: two accounts sharing one display code (the import keeps one and silently drops the other, so the dropped account exists nowhere in the app), a material row with no material type, a roll-up row carrying a priced cost type, and Sub Code contradicting an equipment row's ownership.",
+              "Every affected row is listed with the Row it occupies in the master spreadsheet, sorted ascending, and exports to Excel with the same column — so each check is a worklist you can hand to whoever maintains the workbook.",
+              "Four checks compare the spreadsheet against the database. Those only run where CBS.xlsx actually is; on the deployed app they are listed as skipped and the rest still run.",
+            ],
           },
         ],
       },

@@ -137,7 +137,18 @@ export function CbsDictionaryBrowser({
    */
   focusCode?: string | null;
 }) {
-  const nodes = React.useMemo(() => buildCbsTree(items), [items]);
+  // Context rows are ancestors the project was never granted, carried in so
+  // the codes under them nest correctly. Hiding them is a view choice, so it
+  // happens before the tree is built: `buildCbsTree` already collapses a row
+  // whose intermediate code is absent up to the nearest ancestor that exists,
+  // which is exactly the shape wanted once the ungranted parents are gone.
+  const [hideContext, setHideContext] = React.useState(false);
+  const hasContext = React.useMemo(() => items.some((i) => i.context), [items]);
+  const shown = React.useMemo(
+    () => (hideContext && hasContext ? items.filter((i) => !i.context) : items),
+    [items, hideContext, hasContext],
+  );
+  const nodes = React.useMemo(() => buildCbsTree(shown), [shown]);
   const {
     expanded,
     toggle,
@@ -239,10 +250,25 @@ export function CbsDictionaryBrowser({
         onToggleStatus={canFilterByStatus ? toggleStatus : undefined}
         statusAvailability={statusAvailability}
       >
+        {/* Offered only where there are any — the catalog views have none. */}
+        {hasContext && (
+          <label
+            className="flex items-center gap-1.5 text-xs text-slate-600"
+            title="Hide the greyed-out parent summaries this project was not granted. The codes under them move up to the nearest parent it does have."
+          >
+            <input
+              type="checkbox"
+              checked={hideContext}
+              onChange={(e) => setHideContext(e.target.checked)}
+            />
+            Hide ungranted parents
+          </label>
+        )}
         {exportView && (
           <ExportCbsXlsxButton
             view={exportView}
             filter={filter}
+            hideContext={hideContext && hasContext}
             disabled={items.length === 0}
           />
         )}

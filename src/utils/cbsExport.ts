@@ -172,7 +172,13 @@ async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
         });
 
   const tree = buildCbsTree(rows.map(withCbsLevels));
-  const visible = pruneCbsTree(tree, filter).nodes;
+  // The Dictionary judges a row on its own cost type; the account views read
+  // the flag columns. Mirrored here or the file stops matching the screen.
+  const visible = pruneCbsTree(
+    tree,
+    filter,
+    input.view === "dictionary" ? "code" : "codeOrFlag",
+  ).nodes;
   const exportRows = flattenCbsForExport(visible);
 
   const buffer = await buildCbsWorkbook(exportRows, {

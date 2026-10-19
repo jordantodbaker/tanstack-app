@@ -13,6 +13,7 @@ import {
   pruneCbsTree,
   type CbsBadge,
   type CbsCostTypeKey,
+  type CbsCostTypeMatch,
   type CbsRowFilter,
   type CbsStatusKey,
   type CbsTreeNode,
@@ -122,6 +123,7 @@ export function CbsDictionaryBrowser({
   badgesFor,
   sourceNote,
   emptyMessage,
+  costTypeMatch = "codeOrFlag",
   showRowTypeCounts = true,
   exportView,
   focusCode = null,
@@ -134,6 +136,12 @@ export function CbsDictionaryBrowser({
   ) => readonly CbsBadge[];
   sourceNote: string;
   emptyMessage: string;
+  /**
+   * How this view reads a cost-type filter. The Dictionary lists one row per
+   * cost type, so a row qualifies on its own code alone; an account list has
+   * only "-0" rows and must read the flag columns. See `CbsCostTypeMatch`.
+   */
+  costTypeMatch?: CbsCostTypeMatch;
   showRowTypeCounts?: boolean;
   /** Which view to export as Excel. Omit to leave the button out. */
   exportView?: CbsExportView;
@@ -232,7 +240,7 @@ export function CbsDictionaryBrowser({
   );
   const filtering = !cbsFilterIsEmpty(filter);
   const { nodes: visibleNodes, matches } = React.useMemo(
-    () => pruneCbsTree(nodes, filter),
+    () => pruneCbsTree(nodes, filter, costTypeMatch),
     [filter, nodes],
   );
 

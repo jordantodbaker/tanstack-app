@@ -6,6 +6,7 @@ import {
   cbsIsBackbone,
   type CbsBadge,
   type CbsCostTypeKey,
+  type CbsCostTypeMatch,
   type CbsTreeNode,
 } from "~/lib/cbs-tree";
 import type { CbsExportView } from "~/lib/cbs-export";
@@ -31,6 +32,7 @@ function CbsSection({
   sourceNote,
   emptyMessage,
   defaultOpen = false,
+  costTypeMatch,
   showRowTypeCounts,
   exportView,
   focusCode = null,
@@ -45,6 +47,8 @@ function CbsSection({
   sourceNote: string;
   emptyMessage: string;
   defaultOpen?: boolean;
+  /** How this list reads a cost-type filter — see `CbsCostTypeMatch`. */
+  costTypeMatch?: CbsCostTypeMatch;
   /** Off for the accounts list, where the breakdown is always "0 sub · 0 material". */
   showRowTypeCounts?: boolean;
   exportView: CbsExportView;
@@ -62,6 +66,7 @@ function CbsSection({
         badgesFor={badgesFor}
         sourceNote={sourceNote}
         emptyMessage={emptyMessage}
+        costTypeMatch={costTypeMatch}
         showRowTypeCounts={showRowTypeCounts}
         exportView={exportView}
         focusCode={focusCode}
@@ -177,6 +182,7 @@ export function CbsDictionarySections({
         sourceNote={MASTER_SOURCE_NOTE}
         emptyMessage={MASTER_EMPTY}
         defaultOpen
+        costTypeMatch="code"
         exportView="dictionary"
         focusCode={inDictionary ? focusCode : null}
       />

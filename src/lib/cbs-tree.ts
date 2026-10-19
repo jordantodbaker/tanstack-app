@@ -514,9 +514,30 @@ export const CBS_COST_TYPES = [
 export type CbsCostType = (typeof CBS_COST_TYPES)[number];
 export type CbsCostTypeKey = CbsCostType["key"];
 
-/** Does `item` carry this cost type, by its own code or by its flag column? */
-export function cbsHasCostType(item: CbsTreeItem, type: CbsCostType): boolean {
-  return item.l6 === type.code || item[type.flag] === true;
+/**
+ * How a view reads "does this row carry cost type M?".
+ *
+ * `codeOrFlag` — the row IS an M code, or its Material Code column says YES.
+ * Right for a list of ACCOUNTS: the Cost Accounts view shows only the "-0"
+ * backbone rows, whose own cost type is 0, so the flag columns are the only
+ * thing that can answer for them.
+ *
+ * `code` — the row's own cost type, and nothing else. Right for a list of COST
+ * LINES: the CBS Dictionary puts every variant on its own row, and there the
+ * flags belong to the account rather than the row. Reading them would keep an
+ * account's "-S" row under a Materials filter, because the account does carry
+ * a material code — just not on that line.
+ */
+export type CbsCostTypeMatch = "code" | "codeOrFlag";
+
+/** Does `item` carry this cost type? See {@link CbsCostTypeMatch}. */
+export function cbsHasCostType(
+  item: CbsTreeItem,
+  type: CbsCostType,
+  match: CbsCostTypeMatch = "codeOrFlag",
+): boolean {
+  if (item.l6 === type.code) return true;
+  return match === "codeOrFlag" && item[type.flag] === true;
 }
 
 /**
@@ -656,14 +677,31 @@ export function cbsQueryTokens(query: string): string[] {
  * mentioning pumps. Within a group the toggles widen each other, since asking
  * for two is asking for either.
  */
+type CbsCriteria = {
+  filter: CbsRowFilter;
+  /** The query, pre-split — computed once rather than per row. */
+  tokens: string[];
+  costTypeMatch: CbsCostTypeMatch;
+};
+
+/** The criteria for a view that reads cost types the default way. */
+function criteriaFor(
+  filter: CbsRowFilter,
+  costTypeMatch: CbsCostTypeMatch = "codeOrFlag",
+): CbsCriteria {
+  return { filter, tokens: cbsQueryTokens(filter.query), costTypeMatch };
+}
+
 function rowMatches<T extends CbsTreeItem>(
   node: CbsTreeNode<T>,
-  filter: CbsRowFilter,
-  tokens: string[],
+  { filter, tokens, costTypeMatch }: CbsCriteria,
 ): boolean {
   if (tokens.some((t) => !node.searchHaystack.includes(t))) return false;
   const types = CBS_COST_TYPES.filter((t) => filter[t.key]);
-  if (types.length > 0 && !types.some((t) => cbsHasCostType(node.item, t))) {
+  if (
+    types.length > 0 &&
+    !types.some((t) => cbsHasCostType(node.item, t, costTypeMatch))
+  ) {
     return false;
   }
   const statuses = CBS_STATUSES.filter((s) => filter[s.key]);
@@ -683,16 +721,15 @@ function rowMatches<T extends CbsTreeItem>(
  */
 function searchCbsTree<T extends CbsTreeItem>(
   nodes: CbsTreeNode<T>[],
-  filter: CbsRowFilter,
+  criteria: CbsCriteria,
   /** A self-matching node keeps its WHOLE subtree, unrecursed, so the kept
    *  node is the original object. Off: only matching descendants survive. */
   keepMatchedSubtree: boolean,
-  tokens: string[],
   onMatch?: () => void,
 ): CbsTreeNode<T>[] {
   const out: CbsTreeNode<T>[] = [];
   for (const n of nodes) {
-    const selfMatch = rowMatches(n, filter, tokens);
+    const selfMatch = rowMatches(n, criteria);
     if (selfMatch && keepMatchedSubtree) {
       onMatch?.();
       out.push(n);
@@ -700,9 +737,8 @@ function searchCbsTree<T extends CbsTreeItem>(
     }
     const kids = searchCbsTree(
       n.children,
-      filter,
+      criteria,
       keepMatchedSubtree,
-      tokens,
       onMatch,
     );
     if (selfMatch || kids.length > 0) {
@@ -728,12 +764,7 @@ export function filterCbsTree<T extends CbsTreeItem>(
 ): CbsTreeNode<T>[] {
   if (cbsFilterIsEmpty(filter)) return nodes;
   const typeFiltered = filter.sub || filter.material;
-  return searchCbsTree(
-    nodes,
-    filter,
-    !typeFiltered,
-    cbsQueryTokens(filter.query),
-  );
+  return searchCbsTree(nodes, criteriaFor(filter), !typeFiltered);
 }
 
 /**
@@ -759,22 +790,21 @@ export function filterCbsTree<T extends CbsTreeItem>(
  */
 function strictCbsRows<T extends CbsTreeItem>(
   nodes: CbsTreeNode<T>[],
-  filter: CbsRowFilter,
+  criteria: CbsCriteria,
   depth: number,
-  tokens: string[],
   onMatch: () => void,
 ): CbsTreeNode<T>[] {
   const out: CbsTreeNode<T>[] = [];
   for (const n of nodes) {
-    if (rowMatches(n, filter, tokens)) {
+    if (rowMatches(n, criteria)) {
       onMatch();
       out.push({
         ...n,
         depth,
-        children: strictCbsRows(n.children, filter, depth + 1, tokens, onMatch),
+        children: strictCbsRows(n.children, criteria, depth + 1, onMatch),
       });
     } else {
-      out.push(...strictCbsRows(n.children, filter, depth, tokens, onMatch));
+      out.push(...strictCbsRows(n.children, criteria, depth, onMatch));
     }
   }
   return out;
@@ -783,6 +813,8 @@ function strictCbsRows<T extends CbsTreeItem>(
 export function pruneCbsTree<T extends CbsTreeItem>(
   nodes: CbsTreeNode<T>[],
   filter: CbsRowFilter,
+  /** See {@link CbsCostTypeMatch}. Defaults to the account-list reading. */
+  costTypeMatch: CbsCostTypeMatch = "codeOrFlag",
 ): { nodes: CbsTreeNode<T>[]; matches: number } {
   if (cbsFilterIsEmpty(filter)) return { nodes, matches: 0 };
   let matches = 0;
@@ -791,11 +823,11 @@ export function pruneCbsTree<T extends CbsTreeItem>(
   // codes", "show me the inactive ones" — so only rows that qualify survive. A
   // bare text search still keeps ancestors: there, knowing WHERE a hit sits is
   // most of the answer.
-  const tokens = cbsQueryTokens(filter.query);
+  const criteria = criteriaFor(filter, costTypeMatch);
   const kept =
     cbsHasCostTypeFilter(filter) || cbsHasStatusFilter(filter)
-      ? strictCbsRows(nodes, filter, 0, tokens, onMatch)
-      : searchCbsTree(nodes, filter, false, tokens, onMatch);
+      ? strictCbsRows(nodes, criteria, 0, onMatch)
+      : searchCbsTree(nodes, criteria, false, onMatch);
   return { nodes: kept, matches };
 }
 

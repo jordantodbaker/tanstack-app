@@ -235,3 +235,78 @@ describe("CBS Code Book", () => {
     ).toBeGreaterThan(0);
   });
 });
+
+/**
+ * A cost-type filter means different things on the two lists.
+ *
+ * CBS.xlsx ships pre-expanded: an account's S and M rows are separate rows
+ * that all carry the account's flag columns. So on a list of cost lines the
+ * flags cannot be read — the account's "-S" row would answer YES to "is this
+ * a Material code?" because the ACCOUNT has one, just not on that line.
+ */
+describe("cost-type filter across the two lists", () => {
+  const FLAGGED = { subReporting: true, materialCode: true };
+  const MIXED: CbsTreeRow[] = [
+    item("700-00-0000-00-0", "Welding", FLAGGED),
+    item("700-00-0000-00-S", "Welding Subcontracts", FLAGGED),
+    item("700-00-0000-00-M", "Welding Materials", FLAGGED),
+  ];
+
+  function renderWith(rows: CbsTreeRow[]) {
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    qc.setQueryData(cbsCatalogQueryOptions().queryKey, rows);
+    return render(
+      <QueryClientProvider client={qc}>
+        <AdminMasterCbsPage />
+      </QueryClientProvider>,
+    );
+  }
+
+  /** Both sections carry the same controls; the Dictionary is the second. */
+  const filterDictionaryBy = (label: string) =>
+    fireEvent.click(screen.getAllByRole("button", { name: label })[1]);
+  const filterAccountsBy = (label: string) =>
+    fireEvent.click(screen.getAllByRole("button", { name: label })[0]);
+  const dictionaryTree = () => screen.getAllByRole("tree")[1];
+
+  it("shows only M codes in the Dictionary under a Materials filter", () => {
+    renderWith(MIXED);
+    filterDictionaryBy("Materials");
+    const tree = dictionaryTree();
+    expect(within(tree).getByText("Welding Materials")).toBeInTheDocument();
+    // The one that used to leak through on its account's material flag.
+    expect(within(tree).queryByText("Welding Subcontracts")).toBeNull();
+    // And the roll-up, whose own cost type is 0.
+    expect(within(tree).queryByText("Welding")).toBeNull();
+  });
+
+  it("shows only S codes under a Subcontracts filter", () => {
+    renderWith(MIXED);
+    filterDictionaryBy("Subcontracts");
+    const tree = dictionaryTree();
+    expect(within(tree).getByText("Welding Subcontracts")).toBeInTheDocument();
+    expect(within(tree).queryByText("Welding Materials")).toBeNull();
+  });
+
+  it("keeps reading the flag columns on the Cost Accounts list", () => {
+    // Its rows are all "-0", so their own cost type can never match a filter
+    // and the flags are the only thing that can answer for them. Were this
+    // list to change with the Dictionary, Materials would empty it.
+    renderWith(MIXED);
+    filterAccountsBy("Materials");
+    expect(
+      within(screen.getAllByRole("tree")[0]).getByText("Welding"),
+    ).toBeInTheDocument();
+  });
+
+  it("filters the two lists independently", () => {
+    renderWith(MIXED);
+    filterDictionaryBy("Materials");
+    // Cost Accounts was not touched, so its account row stays put.
+    expect(
+      within(screen.getAllByRole("tree")[0]).getByText("Welding"),
+    ).toBeInTheDocument();
+  });
+});

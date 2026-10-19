@@ -1202,3 +1202,111 @@ describe("computeCbsSelectionCounts / selectionStateFromCounts", () => {
     expect(selectionStateFromCounts(rootNode, new Map())).toBe("unchecked");
   });
 });
+
+/**
+ * The two readings of a cost-type filter.
+ *
+ * The workbook ships pre-expanded: an account's L / S / M rows are separate
+ * rows that all carry the SAME flag columns, because the flags describe the
+ * account. So a list of cost lines cannot read the flags — an account's "-S"
+ * row would answer YES to "is this a Material code?" purely because the
+ * account has one somewhere.
+ */
+describe("pruneCbsTree cost-type matching", () => {
+  // One account with every variant the workbook would ship for it. The flags
+  // are on all of them, which is what makes the two readings diverge.
+  const flags = { laborCode: true, subReporting: true, materialCode: true };
+  const tree = () =>
+    buildCbsTree([
+      item("601-00-0000-00-0", { name: "Account", ...flags }),
+      item("601-00-0000-00-L", { name: "Account Labor", ...flags }),
+      item("601-00-0000-00-S", { name: "Account Subcontracts", ...flags }),
+      item("601-00-0000-00-M", { name: "Account Materials", ...flags }),
+    ]);
+
+  const kept = (
+    costTypeMatch: "code" | "codeOrFlag",
+    over: Partial<CbsRowFilter>,
+  ) => {
+    const out: string[] = [];
+    const walk = (nodes: ReturnType<typeof buildCbsTree>) => {
+      for (const n of nodes) {
+        out.push(n.item.displayCode);
+        walk(n.children);
+      }
+    };
+    walk(
+      pruneCbsTree(tree(), { ...CBS_FILTER_NONE, ...over }, costTypeMatch)
+        .nodes,
+    );
+    return out;
+  };
+
+  it("keeps only the M row when a cost-line list filters on Materials", () => {
+    // What the Dictionary needs. The "-S" row is the one that used to leak.
+    expect(kept("code", { material: true })).toEqual(["601-00-0000-00-M"]);
+  });
+
+  it("keeps only the S row when filtering on Subcontracts", () => {
+    expect(kept("code", { sub: true })).toEqual(["601-00-0000-00-S"]);
+  });
+
+  it("asking for two cost types keeps both and nothing else", () => {
+    expect(kept("code", { sub: true, material: true })).toEqual([
+      "601-00-0000-00-S",
+      "601-00-0000-00-M",
+    ]);
+  });
+
+  it("drops the roll-up row, whose own cost type is 0", () => {
+    // It is the parent of the M row, but a filter asking for Material codes
+    // should not answer with a code that is not one — the same rule the other
+    // views already follow for ungranted parents.
+    expect(kept("code", { material: true })).not.toContain("601-00-0000-00-0");
+  });
+
+  it("still reads the flag columns for an account list", () => {
+    // What Cost Accounts needs: its rows are all "-0", so their own cost type
+    // can never match and the flags are the only thing that can answer.
+    expect(kept("codeOrFlag", { material: true })).toContain(
+      "601-00-0000-00-0",
+    );
+  });
+
+  it("defaults to the account-list reading", () => {
+    // Every caller that predates the distinction keeps its behaviour.
+    const out: string[] = [];
+    const walk = (nodes: ReturnType<typeof buildCbsTree>) => {
+      for (const n of nodes) {
+        out.push(n.item.displayCode);
+        walk(n.children);
+      }
+    };
+    walk(pruneCbsTree(tree(), { ...CBS_FILTER_NONE, material: true }).nodes);
+    expect(out).toEqual(kept("codeOrFlag", { material: true }));
+    expect(out).toContain("601-00-0000-00-0");
+  });
+
+  it("leaves a text search alone", () => {
+    // The mode only governs cost types; a query still keeps ancestors.
+    expect(kept("code", { query: "subcontracts" })).toContain(
+      "601-00-0000-00-S",
+    );
+  });
+});
+
+describe("cbsHasCostType", () => {
+  const M = CBS_COST_TYPES.find((t) => t.key === "material")!;
+
+  it("says yes to a row that IS the cost type, under either reading", () => {
+    const row = item("601-00-0000-00-M", { materialCode: false });
+    expect(cbsHasCostType(row, M, "code")).toBe(true);
+    expect(cbsHasCostType(row, M, "codeOrFlag")).toBe(true);
+  });
+
+  it("reads the flag only for the account-list reading", () => {
+    const row = item("601-00-0000-00-S", { materialCode: true });
+    expect(cbsHasCostType(row, M, "code")).toBe(false);
+    expect(cbsHasCostType(row, M, "codeOrFlag")).toBe(true);
+  });
+});

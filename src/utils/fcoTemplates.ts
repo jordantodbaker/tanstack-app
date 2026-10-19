@@ -2,24 +2,29 @@ import { queryOptions } from "@tanstack/react-query";
 import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
-import {
-  adminHandler,
-  adminHandlerNoInput,
-  requireRole,
-} from "./users.server";
+import { adminHandler, adminHandlerNoInput, requireRole } from "./users.server";
 import {
   parseIdInput,
   parseUpsertFcoTemplate,
   parseInstantiateFcoTemplate,
 } from "~/lib/validators";
-import { pickFields } from "~/lib/pick";
+import {
+  templateOps,
+  type TemplateMeta,
+  type TemplatePickerItem,
+  type UpsertTemplateInput,
+} from "./templates.server";
 import type { FcoOriginType, FcoPriority } from "./fcoLog";
 
 /**
  * FCO templates — reusable scaffolds for repeat field changes. Mirrors
- * `cvrTemplates.ts` exactly; see that file's header for the design
- * rationale (templatable subset, usage-count sort, instantiation
- * semantics).
+ * `cvrTemplates.ts`; see that file's header for the design rationale
+ * (templatable subset, usage-count sort, instantiation semantics).
+ *
+ * The two differ only in this field set and the model they write, which is
+ * why the six operations live in `templates.server.ts`. The server functions
+ * stay here: `createServerFn` identifies one by its call site, so sharing
+ * them would risk both features answering on a single RPC id.
  */
 export const FCO_TEMPLATE_FIELDS = [
   "title",
@@ -61,29 +66,15 @@ export type FcoTemplateFieldSet = {
   notes: string;
 };
 
-export type FcoTemplatePickerItem = {
-  id: number;
-  name: string;
-  templateDescription: string;
-  discipline: string;
-  usageCount: number;
-};
+/** Built inside each handler, for the reason given in `cvrTemplates.ts`. */
+const ops = () =>
+  templateOps<FcoTemplateFieldSet>(prisma.fcoTemplate, FCO_TEMPLATE_FIELDS);
+
+export type FcoTemplatePickerItem = TemplatePickerItem;
 
 export const fetchFcoTemplatePickerItems = createServerFn({
   method: "GET",
-}).handler(async (): Promise<FcoTemplatePickerItem[]> => {
-  const rows = await prisma.fcoTemplate.findMany({
-    select: {
-      id: true,
-      name: true,
-      templateDescription: true,
-      discipline: true,
-      usageCount: true,
-    },
-    orderBy: [{ usageCount: "desc" }, { name: "asc" }],
-  });
-  return rows;
-});
+}).handler((): Promise<FcoTemplatePickerItem[]> => ops().picker());
 
 export const fcoTemplatePickerQueryOptions = () =>
   queryOptions({
@@ -92,26 +83,10 @@ export const fcoTemplatePickerQueryOptions = () =>
     staleTime: Infinity,
   });
 
-export type FcoTemplateAdminItem = FcoTemplateFieldSet & {
-  id: number;
-  name: string;
-  templateDescription: string;
-  usageCount: number;
-};
+export type FcoTemplateAdminItem = FcoTemplateFieldSet & TemplateMeta;
 
 export const fetchFcoTemplatesAdmin = createServerFn({ method: "GET" }).handler(
-  adminHandlerNoInput(async (): Promise<FcoTemplateAdminItem[]> => {
-    const rows = await prisma.fcoTemplate.findMany({
-      orderBy: { name: "asc" },
-    });
-    return rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      templateDescription: r.templateDescription,
-      usageCount: r.usageCount,
-      ...(pickFields(r, FCO_TEMPLATE_FIELDS) as FcoTemplateFieldSet),
-    }));
-  }),
+  adminHandlerNoInput((): Promise<FcoTemplateAdminItem[]> => ops().admin()),
 );
 
 export const fcoTemplatesAdminQueryOptions = () =>
@@ -121,46 +96,15 @@ export const fcoTemplatesAdminQueryOptions = () =>
     staleTime: Infinity,
   });
 
-export type UpsertFcoTemplateInput = {
-  id?: number;
-  name: string;
-  templateDescription: string;
-} & FcoTemplateFieldSet;
-
-/** The DB payload for a create/update — the templatable fields (derived from
- *  `FCO_TEMPLATE_FIELDS`) plus the trimmed name/description. Shared by
- *  `upsertFcoTemplate` and `saveAsFcoTemplate` so the field list lives once. */
-const fcoTemplatePayload = (data: UpsertFcoTemplateInput) => ({
-  name: data.name.trim(),
-  templateDescription: data.templateDescription.trim(),
-  ...pickFields(data, FCO_TEMPLATE_FIELDS),
-});
+export type UpsertFcoTemplateInput = UpsertTemplateInput<FcoTemplateFieldSet>;
 
 export const upsertFcoTemplate = createServerFn({ method: "POST" })
   .inputValidator(parseUpsertFcoTemplate)
-  .handler(
-    adminHandler(async ({ data }): Promise<{ ok: true }> => {
-      const payload = fcoTemplatePayload(data);
-      if (data.id) {
-        await prisma.fcoTemplate.update({
-          where: { id: data.id },
-          data: payload,
-        });
-      } else {
-        await prisma.fcoTemplate.create({ data: payload });
-      }
-      return { ok: true };
-    }),
-  );
+  .handler(adminHandler(({ data }) => ops().upsert(data)));
 
 export const deleteFcoTemplate = createServerFn({ method: "POST" })
   .inputValidator(parseIdInput)
-  .handler(
-    adminHandler(async ({ data }): Promise<{ ok: true }> => {
-      await prisma.fcoTemplate.delete({ where: { id: data.id } });
-      return { ok: true };
-    }),
-  );
+  .handler(adminHandler(({ data }) => ops().remove(data.id)));
 
 /**
  * Fetches a template's field set and bumps its `usageCount`. Requires a
@@ -173,20 +117,9 @@ export const instantiateFcoTemplate = createServerFn({ method: "POST" })
   .inputValidator(parseInstantiateFcoTemplate)
   .handler(async ({ data }): Promise<FcoTemplateFieldSet> => {
     await requireRole("USER");
-    const row = await prisma.fcoTemplate.update({
-      where: { id: data.id },
-      data: { usageCount: { increment: 1 } },
-    });
-    return pickFields(row, FCO_TEMPLATE_FIELDS) as FcoTemplateFieldSet;
+    return ops().instantiate(data.id);
   });
 
 export const saveAsFcoTemplate = createServerFn({ method: "POST" })
   .inputValidator(parseUpsertFcoTemplate)
-  .handler(
-    adminHandler(async ({ data }): Promise<{ ok: true; id: number }> => {
-      const created = await prisma.fcoTemplate.create({
-        data: fcoTemplatePayload(data),
-      });
-      return { ok: true, id: created.id };
-    }),
-  );
+  .handler(adminHandler(({ data }) => ops().saveAs(data)));

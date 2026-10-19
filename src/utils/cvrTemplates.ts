@@ -2,17 +2,18 @@ import { queryOptions } from "@tanstack/react-query";
 import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
-import {
-  adminHandler,
-  adminHandlerNoInput,
-  requireRole,
-} from "./users.server";
+import { adminHandler, adminHandlerNoInput, requireRole } from "./users.server";
 import {
   parseIdInput,
   parseUpsertCvrTemplate,
   parseInstantiateCvrTemplate,
 } from "~/lib/validators";
-import { pickFields } from "~/lib/pick";
+import {
+  templateOps,
+  type TemplateMeta,
+  type TemplatePickerItem,
+  type UpsertTemplateInput,
+} from "./templates.server";
 import type { ChangeType, RiskLevel } from "./changelog";
 
 /**
@@ -26,6 +27,12 @@ import type { ChangeType, RiskLevel } from "./changelog";
  * sort can show most-used templates first — Phase 2 of the templates
  * feature. The bump is best-effort and not gated on the CVR-create success;
  * a failed CVR-create still counts as an attempt (the template was chosen).
+ *
+ * What a template IS lives here — the field set, the guards, the query keys.
+ * What the six operations DO is shared with the FCO templates in
+ * `templates.server.ts`; only the field list and the model differ. The server
+ * functions stay here because `createServerFn` identifies one by its call
+ * site, so the two features cannot share them.
  */
 export const CVR_TEMPLATE_FIELDS = [
   "title",
@@ -60,34 +67,25 @@ export type CvrTemplateFieldSet = {
 };
 
 /**
+ * Built inside each handler rather than once at module scope: a top-level
+ * `prisma.cvrTemplate` reference survives the client transform, and this
+ * module is client-reachable. Not exported, so it is dead-stripped with the
+ * handler bodies — see the `no-prisma-in-client` guard.
+ */
+const ops = () =>
+  templateOps<CvrTemplateFieldSet>(prisma.cvrTemplate, CVR_TEMPLATE_FIELDS);
+
+/**
  * Picker payload shown in the dialog. Slim — drops `notes` and the longer
  * `description` until the user actually selects the template. The full
  * field set arrives via `instantiateCvrTemplate`, which is what populates
  * the form.
  */
-export type CvrTemplatePickerItem = {
-  id: number;
-  name: string;
-  templateDescription: string;
-  discipline: string;
-  usageCount: number;
-};
+export type CvrTemplatePickerItem = TemplatePickerItem;
 
 export const fetchCvrTemplatePickerItems = createServerFn({
   method: "GET",
-}).handler(async (): Promise<CvrTemplatePickerItem[]> => {
-  const rows = await prisma.cvrTemplate.findMany({
-    select: {
-      id: true,
-      name: true,
-      templateDescription: true,
-      discipline: true,
-      usageCount: true,
-    },
-    orderBy: [{ usageCount: "desc" }, { name: "asc" }],
-  });
-  return rows;
-});
+}).handler((): Promise<CvrTemplatePickerItem[]> => ops().picker());
 
 export const cvrTemplatePickerQueryOptions = () =>
   queryOptions({
@@ -97,26 +95,10 @@ export const cvrTemplatePickerQueryOptions = () =>
   });
 
 /** Admin-side row: everything the admin dialog needs to render + edit. */
-export type CvrTemplateAdminItem = CvrTemplateFieldSet & {
-  id: number;
-  name: string;
-  templateDescription: string;
-  usageCount: number;
-};
+export type CvrTemplateAdminItem = CvrTemplateFieldSet & TemplateMeta;
 
 export const fetchCvrTemplatesAdmin = createServerFn({ method: "GET" }).handler(
-  adminHandlerNoInput(async (): Promise<CvrTemplateAdminItem[]> => {
-    const rows = await prisma.cvrTemplate.findMany({
-      orderBy: { name: "asc" },
-    });
-    return rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      templateDescription: r.templateDescription,
-      usageCount: r.usageCount,
-      ...(pickFields(r, CVR_TEMPLATE_FIELDS) as CvrTemplateFieldSet),
-    }));
-  }),
+  adminHandlerNoInput((): Promise<CvrTemplateAdminItem[]> => ops().admin()),
 );
 
 export const cvrTemplatesAdminQueryOptions = () =>
@@ -126,46 +108,15 @@ export const cvrTemplatesAdminQueryOptions = () =>
     staleTime: Infinity,
   });
 
-export type UpsertCvrTemplateInput = {
-  id?: number;
-  name: string;
-  templateDescription: string;
-} & CvrTemplateFieldSet;
-
-/** The DB payload for a create/update — the templatable fields (derived from
- *  `CVR_TEMPLATE_FIELDS`) plus the trimmed name/description. Shared by
- *  `upsertCvrTemplate` and `saveAsCvrTemplate` so the field list lives once. */
-const cvrTemplatePayload = (data: UpsertCvrTemplateInput) => ({
-  name: data.name.trim(),
-  templateDescription: data.templateDescription.trim(),
-  ...pickFields(data, CVR_TEMPLATE_FIELDS),
-});
+export type UpsertCvrTemplateInput = UpsertTemplateInput<CvrTemplateFieldSet>;
 
 export const upsertCvrTemplate = createServerFn({ method: "POST" })
   .inputValidator(parseUpsertCvrTemplate)
-  .handler(
-    adminHandler(async ({ data }): Promise<{ ok: true }> => {
-      const payload = cvrTemplatePayload(data);
-      if (data.id) {
-        await prisma.cvrTemplate.update({
-          where: { id: data.id },
-          data: payload,
-        });
-      } else {
-        await prisma.cvrTemplate.create({ data: payload });
-      }
-      return { ok: true };
-    }),
-  );
+  .handler(adminHandler(({ data }) => ops().upsert(data)));
 
 export const deleteCvrTemplate = createServerFn({ method: "POST" })
   .inputValidator(parseIdInput)
-  .handler(
-    adminHandler(async ({ data }): Promise<{ ok: true }> => {
-      await prisma.cvrTemplate.delete({ where: { id: data.id } });
-      return { ok: true };
-    }),
-  );
+  .handler(adminHandler(({ data }) => ops().remove(data.id)));
 
 /**
  * Returns the full templatable field set for one template and increments
@@ -185,11 +136,7 @@ export const instantiateCvrTemplate = createServerFn({ method: "POST" })
   .inputValidator(parseInstantiateCvrTemplate)
   .handler(async ({ data }): Promise<CvrTemplateFieldSet> => {
     await requireRole("USER");
-    const row = await prisma.cvrTemplate.update({
-      where: { id: data.id },
-      data: { usageCount: { increment: 1 } },
-    });
-    return pickFields(row, CVR_TEMPLATE_FIELDS) as CvrTemplateFieldSet;
+    return ops().instantiate(data.id);
   });
 
 /**
@@ -199,11 +146,4 @@ export const instantiateCvrTemplate = createServerFn({ method: "POST" })
  */
 export const saveAsCvrTemplate = createServerFn({ method: "POST" })
   .inputValidator(parseUpsertCvrTemplate)
-  .handler(
-    adminHandler(async ({ data }): Promise<{ ok: true; id: number }> => {
-      const created = await prisma.cvrTemplate.create({
-        data: cvrTemplatePayload(data),
-      });
-      return { ok: true, id: created.id };
-    }),
-  );
+  .handler(adminHandler(({ data }) => ops().saveAs(data)));

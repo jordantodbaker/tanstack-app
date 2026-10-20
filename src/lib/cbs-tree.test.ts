@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  stripCostTypeSuffix,
+  costTypeSuffixOf,
   buildCbsTree,
   CBS_FILTER_NONE,
   type CbsRowFilter,
@@ -1308,5 +1310,28 @@ describe("cbsHasCostType", () => {
     const row = item("601-00-0000-00-S", { materialCode: true });
     expect(cbsHasCostType(row, M, "code")).toBe(false);
     expect(cbsHasCostType(row, M, "codeOrFlag")).toBe(true);
+  });
+});
+
+describe("stripCostTypeSuffix / costTypeSuffixOf", () => {
+  it("separates the workbook's cost-type marker from the name", () => {
+    expect(stripCostTypeSuffix("Executive (L)")).toBe("Executive");
+    expect(stripCostTypeSuffix("Overhead (*)")).toBe("Overhead");
+    expect(stripCostTypeSuffix("Specialty Services  (*) ")).toBe(
+      "Specialty Services",
+    );
+    expect(costTypeSuffixOf("Executive (L)")).toBe(" (L)");
+    expect(costTypeSuffixOf("Specialty Services  (*) ")).toBe(" (*)");
+  });
+
+  it("leaves a name that only looks parenthesized alone", () => {
+    // Only a one-letter or "*" marker at the very end is a cost type.
+    expect(stripCostTypeSuffix("Hot Tap (reserved)")).toBe("Hot Tap (reserved)");
+    expect(stripCostTypeSuffix("Pipe (L) Rack")).toBe("Pipe (L) Rack");
+    expect(costTypeSuffixOf("Hot Tap (reserved)")).toBe("");
+  });
+
+  it("never empties a name that is nothing but a marker", () => {
+    expect(stripCostTypeSuffix("(*)")).toBe("(*)");
   });
 });

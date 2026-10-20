@@ -325,7 +325,7 @@ describe("loadCbsWorkbook", () => {
       displayDescription: "100-00-0000-00-0:  Civil",
     });
     expect(byCode.get("100-00-0000-00-S")).toMatchObject({
-      name: "Civil Subcontracts",
+      name: "Civil Subcontracts (S)",
       l6: "S",
       costCode: "10000000000S",
       gl: "5200",
@@ -363,7 +363,7 @@ describe("loadCbsWorkbook", () => {
    * summary type, so the loader absorbs that difference rather than teaching
    * the whole app a second shape.
    */
-  it("normalizes a summary code and strips the cost-type suffix from the name", async () => {
+  it("normalizes a summary code and keeps the cost-type marker on the name", async () => {
     const path = join(dir, "expanded.xlsx");
     await writeWorkbook(path, [
       {
@@ -389,8 +389,9 @@ describe("loadCbsWorkbook", () => {
       "012-05-0000-00-0",
       "012-05-1000-00-L",
     ]);
-    // Parentheses that ARE the cost type go; the name is otherwise verbatim.
-    expect(items.map((i) => i.name)).toEqual(["Overhead", "Executive"]);
+    // Verbatim, marker included: the dictionary shows each line's cost type.
+    // Only the Cost Accounts list strips it, where badges say the same thing.
+    expect(items.map((i) => i.name)).toEqual(["Overhead (*)", "Executive (L)"]);
     // The normalized code drives the levels, so "0" is the summary's L6.
     expect(items[0]).toMatchObject({ l1: "012", l2: "05", l6: "0" });
   });

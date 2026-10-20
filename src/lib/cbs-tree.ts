@@ -29,6 +29,8 @@ export {
   parseCbsDisplayCode,
   withCbsLevels,
   compareCbsDisplayCodes,
+  stripCostTypeSuffix,
+  costTypeSuffixOf,
 } from "./cbs/codes";
 
 export { buildCbsTree } from "./cbs/build";

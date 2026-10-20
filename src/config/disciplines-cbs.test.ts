@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadCbsWorkbook } from "../../prisma/cbs-workbook";
+import { stripCostTypeSuffix } from "~/lib/cbs-tree";
 import { disciplinesData, isMaterialL1, isSupportL1 } from "./disciplines-data";
 
 /**
@@ -79,7 +80,8 @@ function rootNameOf(l1: string): string {
   const rows = workbook.items.filter((i) => i.l1 === l1);
   const root =
     rows.find((i) => i.displayCode.endsWith("-00-0000-00-0")) ?? rows[0];
-  return root?.name ?? "";
+  // Names are stored with their "(*)" marker; the fingerprints are the words.
+  return stripCostTypeSuffix(root?.name ?? "");
 }
 
 const withCodes = disciplinesData.filter((d) => d.l1Codes?.length);

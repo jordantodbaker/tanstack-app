@@ -516,10 +516,12 @@ stores the _expanded_ CBS Dictionary in `CbsItem`. Since the 2026-10 workbook
 the sheet arrives pre-expanded: every row flagged **Labor**, **Sub**,
 **Material**, **Equipment** or **Other Code** already carries its typed
 companion, so the loader's own `S`/`M` generation now fills gaps rather than
-doing the bulk of the work. Two things it normalizes on every row: a summary
-code written with four segments (`012-05-0000-00`) gains the `-0` backbone
-segment, and the cost-type suffix is stripped from the name (`Executive (L)`
-→ `Executive`). A generated twin is skipped when the workbook
+doing the bulk of the work. On every row it normalizes a summary code written
+with four segments (`012-05-0000-00`) by adding the `-0` backbone segment.
+Names are stored as the workbook writes them, cost-type marker included
+(`Executive (L)`), so the CBS Dictionary shows each line's cost type; the Cost
+Accounts list on the CBS Code Book strips the marker because its badges
+already show it. A generated twin is skipped when the workbook
 already carries that code. Level segments are derived from the Display Code,
 not from the workbook's L1–L6 helper columns. See `prisma/cbs-workbook.ts`.
 

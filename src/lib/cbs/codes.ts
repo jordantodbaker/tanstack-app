@@ -138,6 +138,32 @@ export function costType(item: CbsTreeItem): string {
   return item.l6 || BACKBONE_TYPE;
 }
 
+/**
+ * The cost-type marker the workbook ends every name with: "(*)" on an
+ * account's own row, "(L)" / "(S)" / "(M)" / … on its typed variants. Only a
+ * trailing marker of that shape — a name that genuinely ends in parentheses
+ * keeps them.
+ */
+const COST_TYPE_NAME_SUFFIX = /\s*\((?:\*|[A-Z])\)\s*$/;
+
+/**
+ * A CBS name without its cost-type marker: "Executive (L)" → "Executive".
+ *
+ * Names are STORED with the marker, as the workbook writes them, so the
+ * dictionary shows which cost type each line is. Strip it only where
+ * something else already says so — the Cost Accounts badges — or where
+ * comparing names, so "Civil (*)" and "Civil" are the same account.
+ */
+export function stripCostTypeSuffix(name: string): string {
+  return name.replace(COST_TYPE_NAME_SUFFIX, "").trim() || name.trim();
+}
+
+/** The marker itself, with its leading space (" (S)"), or "" when there is none. */
+export function costTypeSuffixOf(name: string): string {
+  const m = COST_TYPE_NAME_SUFFIX.exec(name);
+  return m ? ` ${m[0].trim()}` : "";
+}
+
 /** The stored level segments of a display code `XXX-YY-ZZWW-VV-T`. */
 export function parseCbsDisplayCode(
   displayCode: string,

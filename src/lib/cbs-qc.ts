@@ -1,4 +1,5 @@
 import { check, type HealthCheck, type HealthFinding } from "./cbs-health";
+import { stripCostTypeSuffix } from "./cbs-tree";
 
 /**
  * The deterministic rules from the CBS QC pass, applied to this catalog.
@@ -415,7 +416,8 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
   const uomVsName: HealthFinding[] = [];
   for (const r of rows) {
     if (hasChildren.has(r.displayCode) || blank(r.uom)) continue;
-    const name = r.name.toLowerCase();
+    // The words only: a "(L)" marker is not a unit hint.
+    const name = stripCostTypeSuffix(r.name).toLowerCase();
     const unit = r.uom.trim().toUpperCase();
     for (const rule of UOM_RULES) {
       if (rule.test.test(name) && !rule.ok.includes(unit)) {
@@ -526,7 +528,7 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
   const byName = new Map<string, QcRow[]>();
   for (const r of accounts) {
     if (blank(r.name)) continue;
-    const key = r.name.trim().toLowerCase().replace(/\s+/g, " ");
+    const key = stripCostTypeSuffix(r.name).toLowerCase().replace(/\s+/g, " ");
     byName.set(key, [...(byName.get(key) ?? []), r]);
   }
   const dupNames = [...byName.entries()].filter(([, list]) => list.length > 1);

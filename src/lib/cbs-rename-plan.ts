@@ -9,6 +9,7 @@
  * NEVER writes blind: an entry whose stored name is neither the old name nor
  * the new one means the workbook has since said something else, and that wins.
  */
+import { costTypeSuffixOf, stripCostTypeSuffix } from "./cbs-tree";
 
 /** One rename, as the script's table declares it. */
 export type CbsRename = {
@@ -45,12 +46,16 @@ export function planCbsRenames(
   return renames.map((r): CbsRenameOutcome => {
     const row = byCode.get(r.displayCode);
     if (!row) return { kind: "missing", displayCode: r.displayCode };
+    // Stored names carry the workbook's cost-type marker ("Piping (*)");
+    // renames are written without it. Compare the stems, and keep whatever
+    // marker the row had, so the rename changes the words and nothing else.
+    const stem = stripCostTypeSuffix(row.name);
     // Check "already done" before "unexpected", so a second run after a
     // successful rename reports `current` rather than refusing.
-    if (row.name === r.to) {
+    if (stem === r.to) {
       return { kind: "current", displayCode: r.displayCode, name: row.name };
     }
-    if (row.name !== r.from) {
+    if (stem !== r.from) {
       return {
         kind: "stale",
         displayCode: r.displayCode,
@@ -63,7 +68,7 @@ export function planCbsRenames(
       displayCode: r.displayCode,
       id: row.id,
       from: row.name,
-      to: r.to,
+      to: `${r.to}${costTypeSuffixOf(row.name)}`,
     };
   });
 }

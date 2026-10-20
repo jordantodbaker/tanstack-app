@@ -11,7 +11,11 @@
  * / "… Materials"), set the G/L (5200 / 5100) and record `generatedFrom` —
  * the same shape as the "CBS S-M Generated" dictionary sheet.
  */
-import { parseCbsDisplayCode, type CbsRowType } from "./cbs-tree";
+import {
+  parseCbsDisplayCode,
+  stripCostTypeSuffix,
+  type CbsRowType,
+} from "./cbs-tree";
 
 export type { CbsRowType };
 
@@ -76,10 +80,12 @@ function generateTwin(
   type: "S" | "M",
 ): CbsDictionaryRow {
   const displayCode = withCostType(original.displayCode, type);
-  const name = suffixName(
-    original.name,
+  // Built from the original's name without its "(*)" marker, then marked with
+  // its own cost type, the way the workbook writes a typed row.
+  const name = `${suffixName(
+    stripCostTypeSuffix(original.name),
     type === "S" ? "Subcontracts" : "Materials",
-  );
+  )} (${type})`;
   return {
     ...original,
     ...parseCbsDisplayCode(displayCode),

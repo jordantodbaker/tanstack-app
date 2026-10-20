@@ -72,17 +72,17 @@ describe("expandCbsDictionary", () => {
     ]);
     const [, sub, mat] = items;
     expect(sub).toMatchObject({
-      name: "Civil Subcontracts",
+      name: "Civil Subcontracts (S)",
       l6: "S",
       costCode: "10000000000S",
       gl: "5200",
       rowType: "SUB",
       generatedFrom: "100-00-0000-00-0",
-      displayDescription: "100-00-0000-00-S:  Civil Subcontracts",
+      displayDescription: "100-00-0000-00-S:  Civil Subcontracts (S)",
       description: "Summary of Civil.",
     });
     expect(mat).toMatchObject({
-      name: "Civil Materials",
+      name: "Civil Materials (M)",
       l6: "M",
       gl: "5100",
       rowType: "MATERIAL",
@@ -94,7 +94,7 @@ describe("expandCbsDictionary", () => {
     const { items } = expandCbsDictionary([
       original("101-00-0000-00-0", "Civil Shop Materials", { material: true }),
     ]);
-    expect(items[1].name).toBe("Civil Shop Materials");
+    expect(items[1].name).toBe("Civil Shop Materials (M)");
   });
 
   it("skips a twin whose code already exists in the workbook", () => {

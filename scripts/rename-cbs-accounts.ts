@@ -25,6 +25,7 @@ import {
   openCbsSheet,
   writeCbsWorkbookCells,
 } from "../prisma/cbs-workbook-cells";
+import { costTypeSuffixOf, stripCostTypeSuffix } from "../src/lib/cbs-tree";
 import {
   cbsDisplayDescription,
   planCbsRenames,
@@ -164,9 +165,9 @@ async function main() {
       );
       continue;
     }
-    // The loader strips the " (*)" / " (L)" cost-type suffix, so compare on the
-    // stem rather than demanding an exact match.
-    const stem = at.value.replace(/\s*\((?:\*|[A-Z])\)\s*$/, "").trim();
+    // Renames are written without the " (*)" / " (L)" cost-type marker, so
+    // compare on the stem rather than demanding an exact match.
+    const stem = stripCostTypeSuffix(at.value);
     // The recorded cell is a hand-written note; say so when it has drifted.
     const note =
       at.cell === r.workbookCell ? "" : ` (recorded as ${r.workbookCell})`;
@@ -177,11 +178,10 @@ async function main() {
     console.log(
       `  EDIT "${at.sheet}" ${at.cell}: "${at.value}" → "${r.to}"${note}`,
     );
-    // Keep whatever cost-type suffix the cell carried — "(*)" marks the
-    // account's own row and the loader strips it on the way in, so dropping it
-    // would be a second, silent edit.
-    const suffix = /\s*\((?:\*|[A-Z])\)\s*$/.exec(at.value)?.[0] ?? "";
-    pending.push({ cell: at.cell, value: `${r.to}${suffix}` });
+    // Keep whatever cost-type marker the cell carried — "(*)" marks the
+    // account's own row and the import stores it, so dropping it would be a
+    // second, silent edit.
+    pending.push({ cell: at.cell, value: `${r.to}${costTypeSuffixOf(at.value)}` });
   }
 
   if (pending.length === 0) {

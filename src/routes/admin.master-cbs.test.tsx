@@ -176,6 +176,32 @@ describe("CBS Code Book", () => {
     ).toBeTruthy();
   });
 
+  it("shows names without their cost-type marker only on Cost Accounts", () => {
+    // Names are stored as the workbook writes them, "(*)" / "(S)" and all.
+    // Cost Accounts has badges for the cost type, so it drops the marker; the
+    // Dictionary keeps it, since there it tells an account's lines apart.
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    qc.setQueryData(cbsCatalogQueryOptions().queryKey, [
+      item("100-00-0000-00-0", "Civil (*)", { subReporting: true }),
+      item("100-00-0000-00-S", "Civil (S)", { rowType: "SUB" }),
+    ]);
+    render(
+      <QueryClientProvider client={qc}>
+        <AdminMasterCbsPage />
+      </QueryClientProvider>,
+    );
+    for (const btn of screen.getAllByRole("button", { name: "Expand all" })) {
+      fireEvent.click(btn);
+    }
+    const [accounts, dictionary] = screen.getAllByRole("tree");
+    expect(within(accounts).getByText("Civil")).toBeInTheDocument();
+    expect(within(accounts).queryByText("Civil (*)")).toBeNull();
+    expect(within(dictionary).getByText("Civil (*)")).toBeInTheDocument();
+    expect(within(dictionary).getByText("Civil (S)")).toBeInTheDocument();
+  });
+
   it("keeps retired accounts out of the Cost Accounts list", () => {
     renderPage();
     // Both rows hang under "Pipe Shop", so open the branch before looking.

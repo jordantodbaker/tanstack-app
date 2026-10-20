@@ -34,6 +34,29 @@ describe("planCbsRenames", () => {
     ]);
   });
 
+  it("matches a stored name that carries its cost-type marker, and keeps it", () => {
+    // Names are stored as the workbook writes them ("… (*)"); the rename table
+    // is written without the marker. The words change, the marker stays.
+    expect(
+      planCbsRenames(
+        [rename()],
+        [row({ name: "Structural Steel Shop Fabrication (*)" })],
+      ),
+    ).toEqual([
+      {
+        kind: "rename",
+        displayCode: "300-00-0000-00-0",
+        id: 7,
+        from: "Structural Steel Shop Fabrication (*)",
+        to: "Structural Steel (*)",
+      },
+    ]);
+    expect(
+      planCbsRenames([rename()], [row({ name: "Structural Steel (*)" })])[0]
+        .kind,
+    ).toBe("current");
+  });
+
   it("reports a row already carrying the new name, so re-running is a no-op", () => {
     // The script runs again after every CBS import; the common case is that
     // the workbook was fixed and there is nothing left to do.

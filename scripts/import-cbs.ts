@@ -18,7 +18,7 @@
 // sheet — so the loader's own S/M generation is now a safety net rather than
 // the main event, and the report's "generated" counts are near zero. What the
 // loader still does to every row is normalize the four-segment summary codes
-// to the "-0" backbone and strip the "(L)" / "(*)" suffix from the name; see
+// to the "-0" backbone; names keep their "(L)" / "(*)" cost-type marker. See
 // `prisma/cbs-workbook.ts`.
 //
 // Existing rows are compared column-by-column against the workbook and only

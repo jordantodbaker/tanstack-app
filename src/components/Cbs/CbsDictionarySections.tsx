@@ -4,6 +4,7 @@ import type { CbsTreeRow } from "~/utils/cbs";
 import {
   cbsIsActive,
   cbsIsBackbone,
+  stripCostTypeSuffix,
   type CbsBadge,
   type CbsCostTypeKey,
   type CbsCostTypeMatch,
@@ -145,8 +146,16 @@ export function CbsDictionarySections({
   // Retired accounts are dropped too. This is the list people pick codes from,
   // and the Dictionary below is the one place that still shows everything, so
   // nothing becomes unfindable by being hidden here.
+  //
+  // Names lose their "(*)" marker here — every row in this list is an account
+  // row, and the badges say which cost types it carries. The Dictionary below
+  // keeps the marker, since there it is the only thing telling the lines of
+  // one account apart. The export follows what is shown.
   const accounts = React.useMemo(
-    () => items.filter((r) => cbsIsBackbone(r) && cbsIsActive(r.status)),
+    () =>
+      items
+        .filter((r) => cbsIsBackbone(r) && cbsIsActive(r.status))
+        .map((r) => ({ ...r, name: stripCostTypeSuffix(r.name) })),
     [items],
   );
 

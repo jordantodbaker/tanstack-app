@@ -101,18 +101,6 @@ function normalizeDisplayCode(raw: string): string {
 const BACKBONE_COST_TYPE = "0";
 
 /**
- * The workbook suffixes every name with its cost type — "Executive (L)",
- * "Overhead (*)". The code's last segment and the row's badge both already say
- * that, so the suffix is dropped for display. Only a trailing marker in the
- * known set is removed: a name that genuinely ends in parentheses survives.
- */
-const NAME_COST_TYPE_SUFFIX = /\s*\((?:\*|[A-Z])\)\s*$/;
-
-function stripCostTypeSuffix(name: string): string {
-  return name.replace(NAME_COST_TYPE_SUFFIX, "").trim() || name.trim();
-}
-
-/**
  * ExcelJS throws on the `colorFilter` autofilter nodes inside Excel Tables.
  * Strip the table parts in memory — only cell values are needed. A no-op for
  * workbooks without tables.
@@ -280,7 +268,10 @@ export async function loadCbsWorkbook(
     const displayCode = normalizeDisplayCode(
       text("Display Code").toUpperCase(),
     );
-    const name = stripCostTypeSuffix(text("Name"));
+    // Kept as written, cost-type marker and all ("Executive (L)"): the
+    // dictionary shows which cost type each line is. The Cost Accounts list,
+    // which has badges for that, strips it on display.
+    const name = text("Name");
     if (!displayCode && !name) continue;
     report.sheetRows++;
 

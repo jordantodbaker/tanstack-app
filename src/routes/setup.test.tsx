@@ -60,6 +60,7 @@ import {
   type CbsItemDetail,
   type CbsTreeRow,
 } from "~/utils/cbs";
+import { qk } from "~/lib/query-keys";
 import { parseCbsDisplayCode, type CbsTreeItem } from "~/lib/cbs-tree";
 
 type SetupItem = CbsTreeRow;
@@ -154,11 +155,14 @@ function renderSetup(allowedIds: number[]) {
     );
   }
   const SetupPage = Route.options.component!;
-  return render(
-    <QueryClientProvider client={qc}>
-      <SetupPage />
-    </QueryClientProvider>,
-  );
+  return {
+    qc,
+    ...render(
+      <QueryClientProvider client={qc}>
+        <SetupPage />
+      </QueryClientProvider>,
+    ),
+  };
 }
 
 const checkbox = (label: string) =>
@@ -209,6 +213,22 @@ describe("Setup page", () => {
           removeIds: [],
         },
       }),
+    );
+  });
+
+  it("refreshes the take-off pickers after a grant change", async () => {
+    // Discipline pages load only the codes the project is granted, cached
+    // with no expiry. Unless a save invalidates that cache, a newly granted
+    // code never reaches the Name picker until a full reload.
+    const { qc } = renderSetup([topsoil.id]);
+    const picker = qk.cbs.itemsByL1Filtered({ l1Values: ["100"], projectId: 1 });
+    qc.setQueryData(picker, []);
+    expect(qc.getQueryState(picker)?.isInvalidated).toBe(false);
+
+    fireEvent.click(checkbox("Civil"));
+    await waitFor(() => expect(updateAllowedFefCbsItems).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(qc.getQueryState(picker)?.isInvalidated).toBe(true),
     );
   });
 

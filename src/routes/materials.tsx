@@ -4,6 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { DisciplinePage } from "~/components/FefTable";
 import type { CbsOption, FefRow } from "~/lib/types";
 import { disciplineById } from "~/config/disciplines";
+import {
+  isMaterialL1,
+  MATERIAL_L1_SUFFIXES,
+} from "~/config/disciplines-data";
 import { fetchCbsItemsByL1EndsWith } from "~/utils/cbs";
 import {
   Accordion,
@@ -16,7 +20,7 @@ import { allowedFefCbsItemIdsQueryOptions } from "~/utils/setup";
 import { makeFefRow, toCbsOption } from "~/lib/fef-helpers";
 
 export const Route = createFileRoute("/materials")({
-  loader: () => fetchCbsItemsByL1EndsWith({ data: ["01", "31"] }),
+  loader: () => fetchCbsItemsByL1EndsWith({ data: MATERIAL_L1_SUFFIXES }),
   component: MaterialsPage,
 });
 
@@ -40,10 +44,13 @@ function MaterialsPage() {
   const allowedIdSet = useMemo(() => new Set(allowedIds ?? []), [allowedIds]);
 
   const sections = useMemo<MaterialSection[]>(() => {
+    // The server matches on the suffix alone; `isMaterialL1` also drops the
+    // project-root block (001), which ends the same way.
+    const materialItems = cbsItems.filter((item) => isMaterialL1(item.l1));
     const visibleItems =
       projectId === null
-        ? cbsItems
-        : cbsItems.filter((item) => allowedIdSet.has(item.id));
+        ? materialItems
+        : materialItems.filter((item) => allowedIdSet.has(item.id));
 
     const groups = new Map<string, typeof visibleItems>();
     for (const item of visibleItems) {

@@ -1,4 +1,5 @@
 import type { CbsOption, FefRow } from "./types";
+import { cbsDisplayDescription } from "./cbs-rename-plan";
 
 /**
  * Shared stable empty array for `useQuery` fallbacks (`data = EMPTY_ARRAY`) in
@@ -169,7 +170,11 @@ export function toCbsOption(item: CbsItemFields): CbsOption {
     costCode: item.costCode,
     name: item.name ?? "",
     uom: item.uom,
-    displayDescription: item.displayDescription ?? null,
+    // Not shipped by the catalog loaders: it is only "<code>:  <name>", so it
+    // is rebuilt here rather than sent alongside the two fields it repeats.
+    displayDescription:
+      item.displayDescription ??
+      cbsDisplayDescription(item.displayCode, item.name ?? ""),
     subReporting: item.subReporting ?? null,
   };
 }

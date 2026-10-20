@@ -516,6 +516,10 @@ model FefRow {
 
   @@unique([versionId, discipline, section, position])
   @@index([versionId, discipline, section])
+  // Code Usage counts rows per code across every version of a project
+  // (`fetchProjectCodeUsage`) — the one FefRow read keyed on the project rather
+  // than a version. Without this it is a sequential scan of every estimate.
+  @@index([projectId, cbsCode])
 }
 
 /// A user-defined take-off column: the label an estimator gave one of

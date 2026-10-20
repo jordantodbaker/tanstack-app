@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadCbsWorkbook } from "../../prisma/cbs-workbook";
-import { disciplinesData } from "./disciplines-data";
+import { disciplinesData, isMaterialL1, isSupportL1 } from "./disciplines-data";
 
 /**
  * Drift guard: `disciplines-data.ts` against the CBS workbook it describes.
@@ -162,6 +162,20 @@ describe("disciplines-data against the CBS workbook", () => {
     // owner or a recorded reason. The number only goes up with a note saying
     // why, and that note has to say when it comes back down.
     expect(Object.keys(UNCLAIMED_BACKLOG)).toHaveLength(0);
+  });
+
+  it("keeps the materials and support-labor suffixes on those blocks", () => {
+    // `isMaterialL1` / `isSupportL1` decide which sheet a code lands on by its
+    // last two digits alone. A renumber that put something else at XY1 / XY2
+    // would quietly move it off the take-off.
+    const wrong = [...cbsL1s]
+      .filter((l1) => isMaterialL1(l1) || isSupportL1(l1))
+      .map((l1) => ({ l1, name: rootNameOf(l1) }))
+      .filter(({ l1, name }) =>
+        isMaterialL1(l1) ? !/material/i.test(name) : !/staff|support/i.test(name),
+      )
+      .map(({ l1, name }) => `${l1} "${name}"`);
+    expect(wrong).toEqual([]);
   });
 
   it("still points each discipline at the accounts it is named for", () => {

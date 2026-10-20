@@ -5,6 +5,7 @@ import { PipingDisciplinePage } from "~/components/PipingTable";
 import { LoadMask } from "~/components/LoadMask";
 import type { CbsOption } from "~/lib/types";
 import { disciplineById } from "~/config/disciplines";
+import { isMaterialL1, isSupportL1 } from "~/config/disciplines-data";
 import {
   cbsItemsByL1QueryOptions,
   cbsItemsByL1FilteredQueryOptions,
@@ -29,10 +30,8 @@ import { resolveVersionIdForLoader } from "~/utils/versionCookie";
 import { makeFefRow, toCbsOption } from "~/lib/fef-helpers";
 
 const PIPING_L1 = disciplineById.piping.l1Codes!;
-const PIPING_CRAFT_L1 = PIPING_L1.filter(
-  (code) => !code.endsWith("01") && !code.endsWith("31"),
-);
-const SUPPORT_LABOR_L1 = ["602", "632"];
+const PIPING_CRAFT_L1 = PIPING_L1.filter((code) => !isMaterialL1(code));
+const SUPPORT_LABOR_L1 = PIPING_L1.filter(isSupportL1);
 
 // Stable empty array for query fallbacks. Using one shared reference (instead of
 // a fresh `[]`/`?? []` each render) keeps the piping meta references stable while

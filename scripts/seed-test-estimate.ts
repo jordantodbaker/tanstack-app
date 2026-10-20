@@ -44,7 +44,11 @@ import {
   unpackPipingFactors,
 } from "../src/lib/piping-factors";
 import { computeBoreSize } from "../src/lib/utils";
-import { disciplineL1Codes } from "../src/config/disciplines-data";
+import {
+  disciplineL1Codes,
+  isMaterialL1,
+  isSupportL1,
+} from "../src/config/disciplines-data";
 
 const LABEL = "Generated test data";
 
@@ -247,23 +251,21 @@ async function main() {
     return pickSkewed(sets[sets.length - 1]);
   };
 
-  // The CBS L1 suffix says which sheet a code belongs on — see
-  // `DisciplineRoute.tsx`, which builds the Take Off dropdown and the Support
-  // Labor rows from exactly these predicates. Ignoring them produces rows the
-  // app itself could never have created: a take-off row stamped with a code its
-  // Name dropdown excludes, or a support-labor row with no code at all (which
-  // then renders as the `__fe-blank-loaded-…` sentinel in the ID column).
-  const isMaterialCode = (l1: string) => l1.endsWith("01") || l1.endsWith("31");
-  const isSupportCode = (l1: string) => l1.endsWith("02") || l1.endsWith("32");
+  // The CBS L1 suffix says which sheet a code belongs on: `isMaterialL1` /
+  // `isSupportL1` are the same predicates `DisciplineRoute.tsx` builds the Take
+  // Off dropdown and the Support Labor rows from. Ignoring them produces rows
+  // the app itself could never have created: a take-off row stamped with a code
+  // its Name dropdown excludes, or a support-labor row with no code at all
+  // (which then renders as the `__fe-blank-loaded-…` sentinel in the ID column).
 
   const blocksFor = (d: string, keep: (l1: string) => boolean) =>
     (L1[d] ?? []).filter((l1) => keep(l1) && byL1.has(l1));
 
   /** Selectable in the Take Off Name dropdown: neither material nor support. */
   const takeOffBlocks = (d: string) =>
-    blocksFor(d, (l1) => !isMaterialCode(l1) && !isSupportCode(l1));
+    blocksFor(d, (l1) => !isMaterialL1(l1) && !isSupportL1(l1));
   /** What the Support Labor sheet is seeded from. */
-  const supportBlocks = (d: string) => blocksFor(d, isSupportCode);
+  const supportBlocks = (d: string) => blocksFor(d, isSupportL1);
 
   // Roles carry the disciplines they serve, so labor can be assigned by craft
   // rather than at random — otherwise piping ends up priced as "Painter".
@@ -585,7 +587,7 @@ async function main() {
     // app decides that sheet by the same 01/31 suffix.
     .filter(
       ([l1, items]) =>
-        isMaterialCode(l1) &&
+        isMaterialL1(l1) &&
         items.length >= MIN_ITEMS &&
         !MATERIALS_MIX.some((m) => m[0] === l1),
     )

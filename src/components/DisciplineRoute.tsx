@@ -3,27 +3,23 @@ import { useQuery } from "@tanstack/react-query";
 import type { CbsOption, FefRow } from "~/lib/types";
 import { DisciplinePage } from "~/components/FefTable";
 import { disciplines } from "~/config/disciplines";
+import { isMaterialL1, isSupportL1 } from "~/config/disciplines-data";
 import { roleDataQueryOptions } from "~/utils/roles";
 import { crewMixDataQueryOptions } from "~/utils/crewMixes";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useSelectedVersion } from "~/lib/selected-version";
-import { allowedFefCbsItemIdsQueryOptions } from "~/utils/setup";
 import { steelMembersQueryOptions } from "~/utils/steel";
 import { toCbsOption, makeFefRow } from "~/lib/fef-helpers";
 
 type CbsItem = {
   id: number;
   displayCode: string;
+  costCode: string;
   name: string | null;
   uom: string;
-  displayDescription: string | null;
   l1: string;
+  subReporting: boolean | null;
 };
-
-const isMaterialCode = (item: CbsItem) =>
-  item.l1.endsWith("01") || item.l1.endsWith("31");
-const isSupportLaborCode = (item: CbsItem) =>
-  item.l1.endsWith("02") || item.l1.endsWith("32");
 
 function toSupportLaborRow(item: CbsItem): FefRow {
   return makeFefRow({
@@ -90,40 +86,20 @@ export function DisciplineRoute({
     [steelMembers],
   );
 
-  const { data: allowedIds } = useQuery({
-    ...allowedFefCbsItemIdsQueryOptions(projectId ?? 0),
-    enabled: projectId !== null,
-  });
-
-  const allowedIdSet = React.useMemo(
-    () => new Set(allowedIds ?? []),
-    [allowedIds],
-  );
-
-  const isAllowed = (item: CbsItem) =>
-    projectId === null || allowedIdSet.has(item.id);
-
+  // `cbsItems` arrives already narrowed to the project's grants (server-side,
+  // see `$discipline.tsx`), so only the sheet split is decided here.
   const supportLaborInitialRows: FefRow[] = React.useMemo(
     () =>
-      cbsItems
-        .filter((item) => isSupportLaborCode(item) && isAllowed(item))
-        .map(toSupportLaborRow),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [cbsItems, allowedIdSet, projectId],
+      cbsItems.filter((item) => isSupportL1(item.l1)).map(toSupportLaborRow),
+    [cbsItems],
   );
 
   const cbsOptions: CbsOption[] = React.useMemo(
     () =>
       cbsItems
-        .filter(
-          (item) =>
-            !isMaterialCode(item) &&
-            !isSupportLaborCode(item) &&
-            isAllowed(item),
-        )
+        .filter((item) => !isMaterialL1(item.l1) && !isSupportL1(item.l1))
         .map(toCbsOption),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [cbsItems, allowedIdSet, projectId],
+    [cbsItems],
   );
 
   return (

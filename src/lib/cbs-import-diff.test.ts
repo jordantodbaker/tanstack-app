@@ -3,6 +3,7 @@ import { parseCbsDisplayCode } from "./cbs-tree";
 import type { CbsDictionaryRow } from "./cbs-dictionary";
 import {
   CBS_IMPORT_FIELDS,
+  cbsBulkUpdateSql,
   changedCbsFields,
   type StoredCbsRow,
 } from "./cbs-import-diff";
@@ -95,5 +96,29 @@ describe("changedCbsFields", () => {
     expect(
       changedCbsFields(stored(r, { costCode: "different" }), r),
     ).toBeNull();
+  });
+});
+
+describe("cbsBulkUpdateSql", () => {
+  const sql = cbsBulkUpdateSql();
+
+  it("writes every import field, keyed on costCode", () => {
+    for (const f of CBS_IMPORT_FIELDS) {
+      expect(sql).toContain(`v."${f}"`);
+    }
+    expect(sql).toContain(`WHERE c."costCode" = v."costCode"`);
+    // The key is matched on, never rewritten.
+    expect(sql).not.toMatch(/"costCode" = v\."costCode",/);
+  });
+
+  it("writes Original Row into its mapped column", () => {
+    // The schema keeps the database column as masterCbsRow; a column named
+    // after the field would not exist and fail the whole batch.
+    expect(sql).toContain(`"masterCbsRow" = v."originalRow"`);
+    expect(sql).not.toContain(`"originalRow" = `);
+  });
+
+  it("casts the row type to its enum", () => {
+    expect(sql).toContain(`"rowType" = v."rowType"::"CbsRowType"`);
   });
 });

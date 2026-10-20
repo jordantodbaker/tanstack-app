@@ -18,13 +18,15 @@
 //   npm run cbs:repair                 see the plan, write nothing
 //   npm run cbs:repair -- --apply      back up, then repair in place
 //
-// Writes only the cells it names, by editing the sheet XML inside the archive.
-// exceljs would be less code but cannot round-trip the sheet's table
-// definition (xl/tables/table1.xml), which this workbook has.
-import { copyFileSync, readFileSync, writeFileSync } from "node:fs";
-import ExcelJS from "exceljs";
-import JSZip from "jszip";
-import { CBS_WORKBOOK_PATH, SHEET_NAMES } from "../prisma/cbs-workbook";
+// Writes only the cells it names, through `writeCbsWorkbookCells`.
+import { copyFileSync } from "node:fs";
+import { CBS_WORKBOOK_PATH } from "../prisma/cbs-workbook";
+import {
+  cellAddress,
+  cellText,
+  openCbsSheet,
+  writeCbsWorkbookCells,
+} from "../prisma/cbs-workbook-cells";
 import {
   costCodeFor,
   planCbsWorkbookRepair,
@@ -33,46 +35,22 @@ import {
 
 const apply = process.argv.includes("--apply");
 
-/** Spreadsheet column letter for a 1-based index. */
-function letter(n: number): string {
-  let s = "";
-  while (n > 0) {
-    const r = (n - 1) % 26;
-    s = String.fromCharCode(65 + r) + s;
-    n = (n - r - 1) / 26;
-  }
-  return s;
-}
-
 async function main() {
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.readFile(CBS_WORKBOOK_PATH);
-  const ws =
-    SHEET_NAMES.map((n) => wb.getWorksheet(n)).find(Boolean) ??
-    wb.worksheets[0];
-  if (!ws) throw new Error(`${CBS_WORKBOOK_PATH}: no sheets`);
-
-  // Columns by header, never by position: this workbook has been re-ordered
-  // before, and a fixed index would write into the wrong column silently.
-  const column: Record<string, number> = {};
-  ws.getRow(1).eachCell((cell, n) => {
-    column[`${cell.value ?? ""}`.trim()] = n;
-  });
+  const sheet = await openCbsSheet();
+  const { ws } = sheet;
   for (const needed of ["Display Code", "Cost Code", "Name"]) {
-    if (!column[needed]) {
+    if (!sheet.column[needed]) {
       throw new Error(`${CBS_WORKBOOK_PATH}: no "${needed}" column on "${ws.name}"`);
     }
   }
-  const text = (row: ExcelJS.Row, name: string) =>
-    `${row.getCell(column[name]).value ?? ""}`.trim();
 
   const rows: RepairRow[] = [];
   ws.eachRow((row, r) => {
     if (r === 1) return;
     rows.push({
       row: r,
-      displayCode: text(row, "Display Code"),
-      name: text(row, "Name"),
+      displayCode: cellText(sheet, row, "Display Code"),
+      name: cellText(sheet, row, "Name"),
     });
   });
 
@@ -109,46 +87,20 @@ async function main() {
   }
 
   // Each fix touches the display code and the cost code derived from it.
-  const edits = new Map<string, string>();
-  for (const f of fixes) {
-    edits.set(`${letter(column["Display Code"])}${f.row}`, f.displayCode);
-    edits.set(`${letter(column["Cost Code"])}${f.row}`, costCodeFor(f.displayCode));
-  }
+  const edits = fixes.flatMap((f) => [
+    { cell: cellAddress(sheet, "Display Code", f.row), value: f.displayCode },
+    {
+      cell: cellAddress(sheet, "Cost Code", f.row),
+      value: costCodeFor(f.displayCode),
+    },
+  ]);
 
   const backup = `${CBS_WORKBOOK_PATH}.${new Date().toISOString().replace(/[:.]/g, "-")}.bak`;
   copyFileSync(CBS_WORKBOOK_PATH, backup);
   console.log(`\nbacked up to ${backup}`);
 
-  const zip = await JSZip.loadAsync(readFileSync(CBS_WORKBOOK_PATH));
-  const sheetPath = Object.keys(zip.files).find((f) =>
-    /^xl\/worksheets\/sheet\d+\.xml$/.test(f),
-  );
-  if (!sheetPath) throw new Error("no worksheet XML in the archive");
-  let xml = await zip.file(sheetPath)!.async("string");
-
-  const escape = (v: string) =>
-    v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  for (const [cell, value] of edits) {
-    // `[^]` rather than a backslash class: this pattern is built in a template.
-    const re = new RegExp(`<c r="${cell}"([^>]*?)(/>|>[^]*?</c>)`);
-    const hit = re.exec(xml);
-    if (!hit) throw new Error(`cell ${cell} not found — nothing written`);
-    // Keep the style, drop the old type, write an inline string. That leaves
-    // the shared-string table untouched, so no other cell is affected.
-    const attrs = hit[1].replace(/\s*t="[^"]*"/, "");
-    xml =
-      xml.slice(0, hit.index) +
-      `<c r="${cell}"${attrs} t="inlineStr"><is><t>${escape(value)}</t></is></c>` +
-      xml.slice(hit.index + hit[0].length);
-  }
-
-  zip.file(sheetPath, xml);
-  const buffer = await zip.generateAsync({
-    type: "nodebuffer",
-    compression: "DEFLATE",
-  });
-  writeFileSync(CBS_WORKBOOK_PATH, buffer);
-  console.log(`wrote ${edits.size.toLocaleString()} cells (${buffer.length.toLocaleString()} bytes)`);
+  const { cells, bytes } = await writeCbsWorkbookCells(edits);
+  console.log(`wrote ${cells.length.toLocaleString()} cells (${bytes.toLocaleString()} bytes)`);
   console.log("\nNext: npm run cbs:rename -- --workbook, then npm run cbs:import -- --dry-run");
 }
 

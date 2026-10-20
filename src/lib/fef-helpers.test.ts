@@ -99,17 +99,29 @@ describe("toCbsOption", () => {
     expect(opt.name).toBe("Conduit");
   });
 
-  it("defaults displayDescription to null when absent or undefined", () => {
+  it("builds displayDescription from code and name when it isn't sent", () => {
+    // The catalog loaders no longer ship it — it only repeats those two
+    // fields — so it is rebuilt in the stored "<code>:  <name>" shape.
     const opt = toCbsOption({ displayCode: "X", name: "n", uom: "EA" });
-    expect(opt.displayDescription).toBeNull();
+    expect(opt.displayDescription).toBe("X:  n");
 
     const opt2 = toCbsOption({
       displayCode: "X",
-      name: "n",
+      name: null,
       uom: "EA",
       displayDescription: undefined,
     });
-    expect(opt2.displayDescription).toBeNull();
+    expect(opt2.displayDescription).toBe("X:  ");
+  });
+
+  it("keeps a displayDescription that is sent", () => {
+    const opt = toCbsOption({
+      displayCode: "X",
+      name: "n",
+      uom: "EA",
+      displayDescription: "custom",
+    });
+    expect(opt.displayDescription).toBe("custom");
   });
 
   it("forwards subReporting false vs. null vs. undefined correctly", () => {

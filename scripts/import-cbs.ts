@@ -22,9 +22,9 @@
 // `prisma/cbs-workbook.ts`.
 //
 // Existing rows are compared column-by-column against the workbook and only
-// the ones that actually differ are written (in small parallel batches), so a
-// routine re-import after a small workbook edit is a handful of round trips
-// rather than one per row.
+// the ones that actually differ are written, a whole batch per statement
+// (`cbsBulkUpdateSql`), so even a renumber that touches most of the catalog is
+// a handful of round trips rather than one per row.
 //
 // Run:  npx tsx scripts/import-cbs.ts [--dry-run]
 import "dotenv/config";
@@ -36,14 +36,15 @@ import {
 } from "../prisma/cbs-workbook";
 import {
   CBS_IMPORT_FIELDS,
+  cbsBulkUpdateSql,
   changedCbsFields,
   type CbsImportField,
 } from "../src/lib/cbs-import-diff";
 
 const dryRun = process.argv.includes("--dry-run");
-// Parallel updates per batch — kept at the adapter's default pool size so a
-// batch never queues on connections.
-const CHUNK = 10;
+// Rows per bulk UPDATE. Each row is ~1 KB of JSON, so a batch stays well
+// inside a single statement's comfortable size.
+const CHUNK = 1000;
 
 async function main() {
   const { items, report } = await loadCbsWorkbook();
@@ -69,13 +70,13 @@ async function main() {
     .filter((e) => !byCost.has(e.costCode))
     .map((e) => e.costCode);
   const toCreate = items.filter((i) => !existingByCost.has(i.costCode));
-  const toUpdate: { costCode: string; data: Partial<CbsDictionaryRow> }[] = [];
+  const toUpdate: { row: CbsDictionaryRow; changed: string[] }[] = [];
   let unchanged = 0;
   for (const it of items) {
     const prior = existingByCost.get(it.costCode);
     if (!prior) continue;
     const diff = changedCbsFields(prior, it);
-    if (diff) toUpdate.push({ costCode: it.costCode, data: diff });
+    if (diff) toUpdate.push({ row: it, changed: Object.keys(diff) });
     else unchanged++;
   }
 
@@ -94,7 +95,7 @@ async function main() {
     if (toUpdate.length) {
       const sample = toUpdate
         .slice(0, 10)
-        .map((u) => `${u.costCode} [${Object.keys(u.data).join(", ")}]`)
+        .map((u) => `${u.row.costCode} [${u.changed.join(", ")}]`)
         .join("; ");
       console.log(`Changed rows (first 10): ${sample}`);
     }
@@ -115,21 +116,27 @@ async function main() {
   if (toCreate.length) console.log(`Created ${toCreate.length} new CbsItems.`);
 
   // Update in place — keeps the row id, so allow-list join rows survive.
-  // Rows are updated in small parallel batches rather than one transaction
-  // per chunk: a 200-row transaction exceeds Prisma's 5 s transaction limit
-  // against a remote pooler, and atomicity isn't needed — each update is
-  // keyed by costCode and the change detection above makes a re-run after a
-  // partial failure pick up exactly where it left off.
+  // One statement per batch, outside any interactive transaction (Prisma's
+  // 5 s limit is easy to hit against a remote pooler). Atomicity across
+  // batches isn't needed: each row is keyed by costCode and the change
+  // detection above makes a re-run after a partial failure pick up exactly
+  // where it left off.
+  const sql = cbsBulkUpdateSql();
   for (let i = 0; i < toUpdate.length; i += CHUNK) {
-    const chunk = toUpdate.slice(i, i + CHUNK);
-    await Promise.all(
-      chunk.map((u) =>
-        prisma.cbsItem.update({
-          where: { costCode: u.costCode },
-          data: u.data,
-        }),
+    const chunk = toUpdate.slice(i, i + CHUNK).map(({ row }) =>
+      Object.fromEntries(
+        ["costCode", ...CBS_IMPORT_FIELDS].map((f) => [
+          f,
+          row[f as keyof CbsDictionaryRow],
+        ]),
       ),
     );
+    const n = await prisma.$executeRawUnsafe(sql, JSON.stringify(chunk));
+    if (n !== chunk.length) {
+      throw new Error(
+        `Bulk update wrote ${n} of ${chunk.length} rows — a costCode went missing mid-import.`,
+      );
+    }
     console.log(
       `  updated ${Math.min(i + CHUNK, toUpdate.length)}/${toUpdate.length}…`,
     );

@@ -18,11 +18,13 @@
 // Cost codes, ids and every project's allow-list are untouched, so nothing
 // downstream moves.
 import "dotenv/config";
-import { readFileSync, writeFileSync } from "node:fs";
-import ExcelJS from "exceljs";
-import JSZip from "jszip";
 import { prisma } from "../src/server/db";
-import { CBS_WORKBOOK_PATH, SHEET_NAMES } from "../prisma/cbs-workbook";
+import {
+  cellAddress,
+  cellText,
+  openCbsSheet,
+  writeCbsWorkbookCells,
+} from "../prisma/cbs-workbook-cells";
 import {
   cbsDisplayDescription,
   planCbsRenames,
@@ -81,84 +83,21 @@ async function resolveWorkbookNames(
   displayCodes: string[],
 ): Promise<Map<string, WorkbookName>> {
   const found = new Map<string, WorkbookName>();
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.readFile(CBS_WORKBOOK_PATH);
-  const ws =
-    SHEET_NAMES.map((n) => wb.getWorksheet(n)).find(Boolean) ??
-    wb.worksheets[0];
-  if (!ws) return found;
-
-  let codeCol = 0;
-  let nameCol = 0;
-  ws.getRow(1).eachCell((cell, n) => {
-    const header = `${cell.value ?? ""}`.trim();
-    if (header === "Display Code") codeCol = n;
-    if (header === "Name") nameCol = n;
-  });
-  if (!codeCol || !nameCol) return found;
+  const sheet = await openCbsSheet();
+  if (!sheet.column["Display Code"] || !sheet.column["Name"]) return found;
 
   const wanted = new Set(displayCodes);
-  ws.eachRow((row, r) => {
+  sheet.ws.eachRow((row, r) => {
     if (r === 1 || wanted.size === found.size) return;
-    const code = `${row.getCell(codeCol).value ?? ""}`.trim();
+    const code = cellText(sheet, row, "Display Code");
     if (!wanted.has(code) || found.has(code)) return;
     found.set(code, {
-      sheet: ws.name,
-      cell: `${ws.getColumn(nameCol).letter}${r}`,
-      value: `${row.getCell(nameCol).value ?? ""}`.trim(),
+      sheet: sheet.ws.name,
+      cell: cellAddress(sheet, "Name", r),
+      value: cellText(sheet, row, "Name"),
     });
   });
   return found;
-}
-
-/**
- * Rewrites Name cells in CBS.xlsx, one zip entry replaced and nothing else
- * touched.
- *
- * exceljs would be less code but cannot round-trip the sheet's table
- * definition (xl/tables/table1.xml), so the cell XML is edited directly. Each
- * rewritten cell becomes an inline string, which keeps the shared-string table
- * out of it entirely — no re-indexing, no other cell affected.
- *
- * Returns the cells it changed, or throws if one was not found; a silent miss
- * here would look like success and revert on the next import.
- */
-async function writeWorkbookNames(
-  edits: { cell: string; value: string }[],
-): Promise<string[]> {
-  if (edits.length === 0) return [];
-  const zip = await JSZip.loadAsync(readFileSync(CBS_WORKBOOK_PATH));
-  const sheetPath = Object.keys(zip.files).find((f) =>
-    /^xl\/worksheets\/sheet\d+\.xml$/.test(f),
-  );
-  if (!sheetPath) throw new Error("CBS.xlsx: no worksheet XML found");
-  let xml = await zip.file(sheetPath)!.async("string");
-
-  const done: string[] = [];
-  for (const { cell, value } of edits) {
-    // `[^]` rather than a backslash class: this pattern is built in a template.
-    const re = new RegExp(`<c r="${cell}"([^>]*?)(/>|>[^]*?</c>)`);
-    const hit = re.exec(xml);
-    if (!hit) throw new Error(`CBS.xlsx: cell ${cell} not found`);
-    const attrs = hit[1].replace(/\s*t="[^"]*"/, "");
-    const escaped = value
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-    xml =
-      xml.slice(0, hit.index) +
-      `<c r="${cell}"${attrs} t="inlineStr"><is><t>${escaped}</t></is></c>` +
-      xml.slice(hit.index + hit[0].length);
-    done.push(cell);
-  }
-
-  zip.file(sheetPath, xml);
-  const buf = await zip.generateAsync({
-    type: "nodebuffer",
-    compression: "DEFLATE",
-  });
-  writeFileSync(CBS_WORKBOOK_PATH, buf);
-  return done;
 }
 
 async function main() {
@@ -254,8 +193,8 @@ async function main() {
       `\n  Re-run with --workbook to apply ${pending.length === 1 ? "that edit" : `those ${pending.length} edits`}, or the next import reverts the rename.`,
     );
   } else {
-    const written = await writeWorkbookNames(pending);
-    console.log(`\n  Wrote ${written.join(", ")} to CBS.xlsx.`);
+    const { cells } = await writeCbsWorkbookCells(pending);
+    console.log(`\n  Wrote ${cells.join(", ")} to CBS.xlsx.`);
   }
 }
 

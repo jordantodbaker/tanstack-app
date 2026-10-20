@@ -30,12 +30,32 @@ export type DisciplineData = {
  * block sits at X00–X29 and a field block at X30 and up; since the 2026-10
  * renumber, field-only disciplines (civil, buildings, electrical, I&C,
  * coatings) keep just the X30 block (e.g. civil 131 materials, 140+ labor).
- * The materials ("01"/"31") and support-labor ("02"/"32") suffix rules in
- * DisciplineRoute, materials.tsx and piping.tsx rely on that layout. Re-check
+ * The materials and support-labor rules below rely on that layout. Re-check
  * these lists when the master changes — `disciplines-cbs.test.ts` does it
  * against the real workbook: an L1 missing here is invisible to its
  * discipline's take-off page.
  */
+
+/** L1 endings of a materials block (XY1): shop "01", field "31". */
+export const MATERIAL_L1_SUFFIXES = ["01", "31"];
+/** L1 endings of a field-staff / support-labor block (XY2): "02", "32". */
+export const SUPPORT_L1_SUFFIXES = ["02", "32"];
+
+/**
+ * The suffixes only mean something inside a discipline's block. 00X is the
+ * project root — 001 is Project Development, not a materials account — and
+ * reading it by suffix put Project Development's only code on the Materials
+ * page and off its own take-off.
+ */
+const inDisciplineBlock = (l1: string) => !l1.startsWith("00");
+
+/** Belongs on the Materials sheet, not a take-off. */
+export const isMaterialL1 = (l1: string) =>
+  inDisciplineBlock(l1) && MATERIAL_L1_SUFFIXES.some((s) => l1.endsWith(s));
+/** Seeds the Support Labor sheet, not a take-off. */
+export const isSupportL1 = (l1: string) =>
+  inDisciplineBlock(l1) && SUPPORT_L1_SUFFIXES.some((s) => l1.endsWith(s));
+
 export const disciplinesData: DisciplineData[] = [
   {
     id: "summary",

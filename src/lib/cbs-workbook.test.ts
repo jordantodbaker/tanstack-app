@@ -79,11 +79,11 @@ beforeAll(() => {
 });
 
 describe("workbook row numbers", () => {
-  const H = ["Name", "Display Code", "UOM", "Master CBS Row", "Expanded Row"];
+  const H = ["Name", "Display Code", "UOM", "Original Row", "Expanded Row"];
 
   it("carries both row numbers onto the item", () => {
     // They trace a code back to the spreadsheet. A generated cost-type twin
-    // shares its Master CBS Row with the account it came from, which is how
+    // shares its Original Row with the account it came from, which is how
     // you tell it was expanded rather than typed.
     const path = join(dir, "rownums.xlsx");
     return writeWorkbook(path, [
@@ -94,9 +94,27 @@ describe("workbook row numbers", () => {
     ])
       .then(() => loadCbsWorkbook(path))
       .then(({ items }) => {
-        expect(items[0]).toMatchObject({ masterCbsRow: 41, expandedRow: 57 });
+        expect(items[0]).toMatchObject({ originalRow: 41, expandedRow: 57 });
       });
   });
+
+  it.each(["Master Row", "Master CBS Row"])(
+    "still reads the Original Row from an older %s header",
+    async (header) => {
+      const path = join(dir, `rownums-${header.replace(/ /g, "")}.xlsx`);
+      await writeWorkbook(path, [
+        {
+          name: "CBS",
+          rows: [
+            ["Name", "Display Code", "UOM", header, "Expanded Row"],
+            ["Spool", "601-05-0000-00-0", "LS", "41", "57"],
+          ],
+        },
+      ]);
+      const { items } = await loadCbsWorkbook(path);
+      expect(items[0]).toMatchObject({ originalRow: 41, expandedRow: 57 });
+    },
+  );
 
   it("leaves them null when the columns are absent or blank", async () => {
     // Older copies of the workbook have no such columns, and must still load.
@@ -111,7 +129,7 @@ describe("workbook row numbers", () => {
       },
     ]);
     const { items } = await loadCbsWorkbook(path);
-    expect(items[0]).toMatchObject({ masterCbsRow: null, expandedRow: null });
+    expect(items[0]).toMatchObject({ originalRow: null, expandedRow: null });
   });
 
   it("ignores a value that is not a number", async () => {
@@ -123,7 +141,7 @@ describe("workbook row numbers", () => {
       },
     ]);
     const { items } = await loadCbsWorkbook(path);
-    expect(items[0].masterCbsRow).toBeNull();
+    expect(items[0].originalRow).toBeNull();
     // A fractional row number is meaningless; take the whole part.
     expect(items[0].expandedRow).toBe(12);
   });
@@ -137,7 +155,6 @@ describe("loadCbsWorkbookCached", () => {
     "L4",
     "L5",
     "L6",
-    "L7",
     "Name",
     "Display Code",
     "UOM",
@@ -149,7 +166,6 @@ describe("loadCbsWorkbookCached", () => {
     "00",
     "00",
     "00",
-    "0",
     name,
     "060-10-0000-00-0",
     "LS",
@@ -459,13 +475,13 @@ describe("loadCbsWorkbook", () => {
   });
 
   /**
-   * The sheet carries L1–L7 helper columns beside the Display Code. The loader
+   * The sheet carries L1–L6 helper columns beside the Display Code. The loader
    * derives every level segment from the CODE, because the two disagreed in
    * ~1,100 rows of the first master and the code is what the app stores on
    * estimate rows. That makes a half-finished renumber — helper columns moved,
    * Display Code left behind — silent, so the report calls it out.
    */
-  it("reports rows whose L1–L7 columns disagree with the Display Code", async () => {
+  it("reports rows whose L1–L6 columns disagree with the Display Code", async () => {
     const FULL = [
       "L1",
       "L2",
@@ -473,7 +489,6 @@ describe("loadCbsWorkbook", () => {
       "L4",
       "L5",
       "L6",
-      "L7",
       "Name",
       "Display Code",
       "Cost Code",
@@ -486,7 +501,6 @@ describe("loadCbsWorkbook", () => {
       segments.slice(5, 7),
       segments.slice(7, 9),
       segments.slice(9, 11),
-      segments.slice(11, 12),
       name,
       code,
       code.replace(/-/g, ""),
@@ -534,11 +548,11 @@ describe("loadCbsWorkbook", () => {
     );
 
     const text = formatCbsWorkbookReport(report);
-    expect(text).toContain("4 row(s) whose L1–L7 columns disagree");
+    expect(text).toContain("4 row(s) whose L1–L6 columns disagree");
     expect(text).toContain("L1 columns say 680, Display Codes say 700");
   });
 
-  it("reports nothing when the sheet has no L1–L7 columns to compare", async () => {
+  it("reports nothing when the sheet has no L1–L6 columns to compare", async () => {
     // The dictionary-style exports carry only a subset; absence is not a
     // disagreement.
     const path = join(dir, "no-segments.xlsx");

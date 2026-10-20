@@ -156,7 +156,7 @@ export function parseCbsDisplayCode(
  * Restores the l1-l6 segments that the CBS wire payload omits.
  *
  * They are pure slices of the display code — the import derives them from the
- * code in the first place rather than trusting the workbook's own L1-L7
+ * code in the first place rather than trusting the workbook's own L1-L6
  * columns (see `prisma/cbs-workbook.ts`), and a check across all 7,169 rows
  * found none where the stored columns differ from the parse. So the two were
  * the same data twice: leaving them out cut the catalog payload from 134 KB to

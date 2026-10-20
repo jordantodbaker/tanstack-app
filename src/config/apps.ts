@@ -100,7 +100,6 @@ export type AppDef = {
  * `$discipline` catch-all, so a hand-written list would go stale silently.
  */
 const ESTIMATE_PATHS: readonly string[] = [
-  "/setup",
   "/summary",
   "/basis",
   "/validation",
@@ -152,6 +151,11 @@ export const APPS: readonly AppDef[] = [
     icon: FolderTree,
     home: "/project-cost-codes",
     links: [
+      // First: Setup is where a project's codes are granted, and everything
+      // below reads from that. Same icon as the page's own heading. The route
+      // gates on ADMINISTRATOR itself — this flag only hides the link, which
+      // is also why `home` stays the cost code list a non-admin can open.
+      { to: "/setup", label: "Setup", icon: Settings, adminOnly: true },
       {
         to: "/project-cost-codes",
         label: "Project Cost Code List",

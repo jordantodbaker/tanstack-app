@@ -121,7 +121,7 @@ function detail(
     rowType: row.rowType,
     generatedFrom: null,
     // Workbook provenance, shown at the bottom of the detail pane.
-    masterCbsRow: null,
+    originalRow: null,
     expandedRow: null,
     subReporting: null,
     materialCode: null,

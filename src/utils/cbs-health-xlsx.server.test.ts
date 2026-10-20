@@ -25,13 +25,13 @@ const CHECK: HealthCheck = {
       code: "052-00-0000-00-L",
       name: "Field Staff",
       detail: "cost type L, expected 0",
-      masterRow: 41,
+      originalRow: 41,
     },
     {
       code: "091-00-0000-00-M",
       name: "Demolition Materials",
       detail: "cost type M, expected 0",
-      masterRow: 57,
+      originalRow: 57,
     },
   ],
 };

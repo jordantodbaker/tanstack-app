@@ -21,7 +21,7 @@ function row(displayCode: string, over: Partial<QcRow> = {}): QcRow {
     materialType: null,
     materialCode: null,
     subReporting: null,
-    masterCbsRow: 100,
+    originalRow: 100,
     ...over,
   };
 }
@@ -231,25 +231,25 @@ describe("runCbsQcChecks", () => {
     // The list is worked down in the spreadsheet, so it has to arrive sorted
     // rather than in whatever order each rule happened to walk the rows.
     const rows = [
-      { ...row("603-00-0000-00-L"), masterCbsRow: 900 },
-      { ...row("601-00-0000-00-L"), masterCbsRow: 100 },
-      { ...row("602-00-0000-00-L"), masterCbsRow: 500 },
+      { ...row("603-00-0000-00-L"), originalRow: 900 },
+      { ...row("601-00-0000-00-L"), originalRow: 100 },
+      { ...row("602-00-0000-00-L"), originalRow: 500 },
     ];
     // Every one of these is a roll-up level carrying a cost type.
     const c = find(
       rows.map((r) => ({ ...r, displayCode: r.displayCode })),
       "qc-l3-cost-type",
     );
-    expect(c.findings.map((f) => f.masterRow)).toEqual([100, 500, 900]);
+    expect(c.findings.map((f) => f.originalRow)).toEqual([100, 500, 900]);
   });
 
   it("sorts findings with no row to the end, not the top", () => {
     const rows = [
-      { ...row("603-00-0000-00-L"), masterCbsRow: null },
-      { ...row("601-00-0000-00-L"), masterCbsRow: 100 },
+      { ...row("603-00-0000-00-L"), originalRow: null },
+      { ...row("601-00-0000-00-L"), originalRow: 100 },
     ];
     const c = find(rows, "qc-l3-cost-type");
-    expect(c.findings.map((f) => f.masterRow)).toEqual([100, null]);
+    expect(c.findings.map((f) => f.originalRow)).toEqual([100, null]);
   });
 
   it("reports a passing check as clear rather than leaving it out", () => {

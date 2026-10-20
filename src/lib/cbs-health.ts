@@ -26,12 +26,12 @@ export type HealthFinding = {
   /** What is wrong with this one, and what it should be. */
   detail: string;
   /**
-   * The row in the unexpanded Master CBS, so a reader can go straight to the
+   * The Original Row in the workbook, so a reader can go straight to the
    * cell. Absent where the finding is not a catalog row — a Core value that
    * resolves to nothing, or a workbook row the loader rejected before it
    * could carry a row number; those say "workbook row N" in `detail` instead.
    */
-  masterRow?: number | null;
+  originalRow?: number | null;
 };
 
 export type HealthCheck = {
@@ -124,8 +124,8 @@ export function check({
     findings: [...findings]
       .sort(
         (a, b) =>
-          (a.masterRow ?? Number.POSITIVE_INFINITY) -
-            (b.masterRow ?? Number.POSITIVE_INFINITY) ||
+          (a.originalRow ?? Number.POSITIVE_INFINITY) -
+            (b.originalRow ?? Number.POSITIVE_INFINITY) ||
           a.code.localeCompare(b.code),
       )
       .slice(0, FINDING_LIMIT),

@@ -16,11 +16,11 @@ import {
  * that feed them (those are covered in `cbs-qc.test.ts`).
  */
 
-const finding = (code: string, masterRow?: number | null): HealthFinding => ({
+const finding = (code: string, originalRow?: number | null): HealthFinding => ({
   code,
   name: `Account ${code}`,
   detail: "something is wrong",
-  masterRow,
+  originalRow,
 });
 
 /** A failing check, since that is the interesting case for ordering. */
@@ -100,7 +100,7 @@ describe("check", () => {
     // breaks it ("b" before "d"), which is what makes the order deterministic
     // rather than dependent on how the rule happened to walk the catalog.
     expect(c.findings.map((f) => f.code)).toEqual(["a", "c", "b", "d"]);
-    expect(c.findings.slice(2).map((f) => f.masterRow ?? null)).toEqual([
+    expect(c.findings.slice(2).map((f) => f.originalRow ?? null)).toEqual([
       null,
       null,
     ]);
@@ -137,7 +137,7 @@ describe("check", () => {
       clear: "c",
     });
     expect(c.findings).toHaveLength(FINDING_LIMIT);
-    expect(c.findings[0].masterRow).toBe(1);
+    expect(c.findings[0].originalRow).toBe(1);
     // `count` still tells the truth about the tail that was dropped.
     expect(c.count).toBe(FINDING_LIMIT + 50);
   });

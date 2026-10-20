@@ -326,7 +326,7 @@ export const fetchCbsItemDetail = createServerFn({ method: "GET" })
         discipline: true,
         description: true,
         notes: true,
-        masterCbsRow: true,
+        originalRow: true,
         expandedRow: true,
       },
     }),

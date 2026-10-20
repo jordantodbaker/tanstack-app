@@ -42,9 +42,9 @@ const DETAIL_FIELDS: {
   { label: "Description", get: (i) => i.description },
   { label: "Notes", get: (i) => i.notes },
   // Where the row sits in the source workbook. A generated cost-type twin
-  // shares its Master CBS Row with the account it came from, which is how you
+  // shares its Original Row with the account it came from, which is how you
   // tell at a glance that it was expanded rather than typed.
-  { label: "Master CBS Row", get: (i) => i.masterCbsRow?.toString() },
+  { label: "Original Row", get: (i) => i.originalRow?.toString() },
   { label: "Expanded Row", get: (i) => i.expandedRow?.toString() },
   { label: "Generated From", get: (i) => i.generatedFrom },
   { label: "Row Type", get: (i) => rowTypeLabel(i.rowType) },

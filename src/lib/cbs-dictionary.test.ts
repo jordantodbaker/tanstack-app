@@ -23,7 +23,7 @@ function original(
     displayCode,
     uom: "LS",
     // Where the row sits in the workbook; traced through, never keyed on.
-    masterCbsRow: null,
+    originalRow: null,
     expandedRow: null,
     subReporting: flags.sub ?? false,
     materialCode: flags.material ?? false,

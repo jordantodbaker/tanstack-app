@@ -116,7 +116,7 @@ export async function buildCbsHealthReport(): Promise<HealthReport> {
       materialType: true,
       materialCode: true,
       subReporting: true,
-      masterCbsRow: true,
+      originalRow: true,
     },
     // No `orderBy`. The one check that cares about workbook order — the QC
     // sort-order rule — sorts by id itself, so ordering here only made the
@@ -194,9 +194,9 @@ export async function buildCbsHealthReport(): Promise<HealthReport> {
       })),
       count: sheet.segmentMismatches.reduce((n, s) => n + s.rows, 0),
       summary:
-        "The L1-L7 helper columns put these rows in a different division from their display code. The display code is the account's identity, so editing only the helper columns moves nothing.",
+        "The L1-L6 helper columns put these rows in a different division from their display code. The display code is the account's identity, so editing only the helper columns moves nothing.",
       action: "Decide which is right and make the other match, then re-import.",
-      clear: "Every row's L1-L7 columns agree with its display code.",
+      clear: "Every row's L1-L6 columns agree with its display code.",
     })),
   );
 
@@ -261,7 +261,7 @@ export async function buildCbsHealthReport(): Promise<HealthReport> {
         code: o.displayCode,
         name: o.name,
         detail: `no ${o.displayCode.replace(/-[^-]+$/, "-0")} account row`,
-        masterRow: o.masterCbsRow,
+        originalRow: o.originalRow,
       })),
       count: orphans.length,
       summary:
@@ -288,7 +288,7 @@ export async function buildCbsHealthReport(): Promise<HealthReport> {
         code: r.displayCode,
         name: r.name,
         detail: `${r.status}, still granted to ${(retiredGrants.get(r.displayCode) ?? []).join(", ")}`,
-        masterRow: r.masterCbsRow,
+        originalRow: r.originalRow,
       })),
       count: retainedRetired.length,
       summary:
@@ -326,12 +326,12 @@ export async function buildCbsHealthReport(): Promise<HealthReport> {
           code: f.displayCode,
           name: f.name,
           detail: "in CBS.xlsx only — an import would add it",
-          masterRow: f.masterCbsRow,
+          originalRow: f.originalRow,
         })),
         ...stale.map((s) => ({
           code: s.displayCode,
           name: s.name,
-          masterRow: s.masterCbsRow,
+          originalRow: s.originalRow,
           detail: `in the database only — an import would DELETE it${
             (staleGrants.get(s.displayCode) ?? []).length
               ? `, and it is granted to ${(staleGrants.get(s.displayCode) ?? []).join(", ")}`

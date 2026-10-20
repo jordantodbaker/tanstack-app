@@ -383,29 +383,6 @@ export const HELP_SECTIONS: HelpSection[] = [
           },
         ],
       },
-      {
-        id: "setup",
-        title: "Setup (administrators)",
-        minRole: "ADMINISTRATOR",
-        blocks: [
-          {
-            kind: "p",
-            text: "Setup is project configuration: which CBS items a project may use, and the defaults the discipline pages inherit. Only administrators see or reach it, and the disciplines a project shows in the sidebar follow from what you allow here.",
-          },
-          {
-            kind: "p",
-            text: 'The tree is the full CBS Dictionary, colored by level the way the source workbook colors it. The L0–L5 swatches under "Level colors" are buttons — click one to open the whole tree to that level and no deeper, with L0 collapsing to the discipline roots and L5 matching Expand all. Ticking a parent allows everything beneath it; a half-filled box means only some of its children are allowed. The Subcontracts and Materials buttons narrow the tree to codes whose cost type (L7) is S or M, or whose Sub Code / Material Code is YES — handy for granting a project just its subcontract or material accounts. Rows marked S or M are the generated subcontract and material versions of the row above them, so allow those too if the project will book cost against them.',
-          },
-          {
-            kind: "p",
-            text: "Click any row to see its full detail in the panel on the right — unit, cost code, account, cost classification, discipline, description and more. Clicking a row only opens its detail; ticking the checkbox is what changes the allow-list.",
-          },
-          {
-            kind: "p",
-            text: "A CBS update never grants new codes automatically. After one, come back here and allow the new items a project needs, or its pickers will not offer them.",
-          },
-        ],
-      },
     ],
   },
 
@@ -498,7 +475,7 @@ export const HELP_SECTIONS: HelpSection[] = [
               "Only the original CBS rows are listed. S means a code's own Sub Code is YES and M means its Material Code is YES; a code with both shows both.",
               "The generated subcontract and material rows are not listed here — the badges already tell you which codes have them. Administrators can see both views over the whole catalog under Cost Breakdown Structure → CBS Code Book.",
               'Export Excel downloads the rows currently shown — whatever the search box and the Subcontracts / Materials buttons left. The sheet starts with a labeled block giving the project number and title, the scope, the filter applied, the code count and the export date, and the project number is in the filename too. The file keeps the level colors and turns the hierarchy into Excel row grouping, so it collapses in Excel the way it does on the page. Context rows come through italic and marked "Context only".',
-              "Cost types — Labor, Subcontracts, Materials, Equipment and Other — narrow the tree to one kind of code: a row qualifies if its cost type (L7) is the matching letter, or its matching column (Labor Code, Sub Code, Material Code, Equipment Code, Other Code) is YES. Turning two on shows either kind; they narrow the search box rather than widening it.",
+              "Cost types — Labor, Subcontracts, Materials, Equipment and Other — narrow the tree to one kind of code: a row qualifies if its cost type (the last segment of the code) is the matching letter, or its matching column (Labor Code, Sub Code, Material Code, Equipment Code, Other Code) is YES. Turning two on shows either kind; they narrow the search box rather than widening it.",
               "A cost-type filter is strict: only rows carrying that type survive. A parent that does not carry it is dropped and its matching children are lifted into its place — a parent kept only to hold children shows no badge and would read as a code that is not of that kind. A plain text search still keeps the parents, because knowing where a hit sits is most of the answer.",
               "While a cost-type filter is on, a row shows only the badges for the types you selected: filter on Materials and a row carrying both labor and material shows just M, and turning Subcontracts on as well shows S M. Every row on screen already qualifies on the filtered type, so the other letters only invite reading the row as something it is not here for. Clear the filter and the full set returns.",
               'Search matches the code, the name, the account description and the unit. Terms are order-free and all required, so "rental pipe" finds "Pipe Shop Third Party Rental"; a code typed without its dashes ("60420") finds its row, which helps when pasting from Excel.',
@@ -514,6 +491,33 @@ export const HELP_SECTIONS: HelpSection[] = [
             alt: "The Project Cost Code List: a row count, the L0 to L5 level-color swatches, a search box with Expand all, Collapse all, Subcontracts, Materials and Export Excel buttons, and the color-coded discipline roots of the hierarchy.",
             caption:
               "The row count, the level swatches and the filter buttons sit above the tree; the detail panel fills in on the right when you select a row.",
+          },
+        ],
+      },
+      {
+        id: "setup",
+        title: "Setup (administrators)",
+        minRole: "ADMINISTRATOR",
+        blocks: [
+          {
+            kind: "p",
+            text: "Setup is the first link in the Cost Breakdown Structure app, above the Project Cost Code List it feeds, and is for administrators only. It applies to the project selected in the header. ",
+          },
+          {
+            kind: "p",
+            text: "Setup is project configuration: which CBS items a project may use, and the defaults the discipline pages inherit. Only administrators see or reach it, and the disciplines a project shows in the sidebar follow from what you allow here.",
+          },
+          {
+            kind: "p",
+            text: 'The tree is the full CBS Dictionary, colored by level the way the source workbook colors it. The L0–L5 swatches under "Level colors" are buttons — click one to open the whole tree to that level and no deeper, with L0 collapsing to the discipline roots and L5 matching Expand all. Ticking a parent allows everything beneath it; a half-filled box means only some of its children are allowed. The Subcontracts and Materials buttons narrow the tree to codes whose cost type (the last segment of the code) is S or M, or whose Sub Code / Material Code is YES — handy for granting a project just its subcontract or material accounts. Rows marked S or M are the generated subcontract and material versions of the row above them, so allow those too if the project will book cost against them.',
+          },
+          {
+            kind: "p",
+            text: "Click any row to see its full detail in the panel on the right — unit, cost code, account, cost classification, discipline, description and more. Clicking a row only opens its detail; ticking the checkbox is what changes the allow-list.",
+          },
+          {
+            kind: "p",
+            text: "A CBS update never grants new codes automatically. After one, come back here and allow the new items a project needs, or its pickers will not offer them.",
           },
         ],
       },
@@ -592,7 +596,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             kind: "ul",
             items: [
               "Errors first: two accounts sharing one display code (the import keeps one and silently drops the other, so the dropped account exists nowhere in the app), a material row with no material type, a roll-up row carrying a priced cost type, and Sub Code contradicting an equipment row's ownership.",
-              "Every affected row is listed with the Row it occupies in the master spreadsheet, sorted ascending, and exports to Excel with the same column — so each check is a worklist you can hand to whoever maintains the workbook.",
+              "Every affected row is listed with its Original Row in the spreadsheet, sorted ascending, and exports to Excel with the same column — so each check is a worklist you can hand to whoever maintains the workbook.",
               "Four checks compare the spreadsheet against the database. Those only run where CBS.xlsx actually is; on the deployed app they are listed as skipped and the rest still run.",
             ],
           },

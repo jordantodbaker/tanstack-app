@@ -64,7 +64,7 @@ export async function buildHealthCheckWorkbook(
   check.findings.forEach((finding, i) => {
     const row = ws.getRow(HEADER_ROW + 1 + i);
     // A real number, so Excel sorts it as one rather than as text.
-    if (finding.masterRow != null) row.getCell(1).value = finding.masterRow;
+    if (finding.originalRow != null) row.getCell(1).value = finding.originalRow;
     const code = row.getCell(2);
     code.value = finding.code;
     // Text, or Excel eats the leading zero on "052-15-...".

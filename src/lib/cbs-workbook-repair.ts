@@ -17,8 +17,6 @@ export type RepairRow = {
   row: number;
   displayCode: string;
   name: string;
-  /** The sheet's L7 column — the cost type, which must track the code. */
-  l7: string;
 };
 
 export type RepairReason = "doubled-cost-type" | "division-renumber";
@@ -27,8 +25,6 @@ export type RepairFix = {
   row: number;
   was: string;
   displayCode: string;
-  /** Set only when the L7 column disagrees with the corrected code. */
-  l7?: string;
   reason: RepairReason;
   note: string;
 };
@@ -101,10 +97,6 @@ export function planCbsWorkbookRepair(
     if (doubled) {
       const [, base, first, second] = doubled;
       // Keep the cost type and drop the duplicated "0" backbone segment.
-      //
-      // The sheet's own L7 column is NOT the authority here: it still reads
-      // "0" on the "-0-S" and "-0-M" rows, and trusting it collapsed each of
-      // those accounts' 0 / S / M rows onto one code.
       const keep = first !== "0" ? first : second;
       const fixed = `${base}-${keep}`;
 
@@ -120,7 +112,6 @@ export function planCbsWorkbookRepair(
         row: r.row,
         was: code,
         displayCode: fixed,
-        l7: r.l7.trim().toUpperCase() === keep ? undefined : keep,
         reason: "doubled-cost-type",
         note: `cost type written twice; keeping "${keep}"`,
       });

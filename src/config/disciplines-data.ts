@@ -26,14 +26,17 @@ export type DisciplineData = {
  * CBS L1 convention (prisma/data/CBS.xlsx): each discipline owns
  * a block XY0–XY9 of overhead accounts — XY0 summary, XY1 materials, XY2 field
  * staff, XY3 support services, XY4 equipment, XY5 facilities, XY6 mob/demob,
- * XY7 training, XY9 testing — followed by its direct-labor accounts (X10 and
- * up) and a subcontracts account (X90 / 629 / 990). The materials ("01"/"31")
- * and support-labor ("02"/"32") suffix rules in DisciplineRoute, materials.tsx
- * and piping.tsx rely on that layout. Re-check these lists when the master
- * changes: an L1 missing here is invisible to its discipline's take-off page.
+ * XY7 training, XY9 testing — followed by its direct-labor accounts. A shop
+ * block sits at X00–X29 and a field block at X30 and up; since the 2026-10
+ * renumber, field-only disciplines (civil, buildings, electrical, I&C,
+ * coatings) keep just the X30 block (e.g. civil 131 materials, 140+ labor).
+ * The materials ("01"/"31") and support-labor ("02"/"32") suffix rules in
+ * DisciplineRoute, materials.tsx and piping.tsx rely on that layout. Re-check
+ * these lists when the master changes — `disciplines-cbs.test.ts` does it
+ * against the real workbook: an L1 missing here is invisible to its
+ * discipline's take-off page.
  */
 export const disciplinesData: DisciplineData[] = [
-  { id: "setup", label: "Setup", to: "/setup" },
   {
     id: "summary",
     label: "Summary",
@@ -88,7 +91,18 @@ export const disciplinesData: DisciplineData[] = [
     id: "civil",
     label: "Civil",
     to: "/civil",
-    l1Codes: ["100", "101", "102", "104", "105", "109", "110", "112", "113"],
+    l1Codes: [
+      "100",
+      "131",
+      "132",
+      "134",
+      "135",
+      "139",
+      "140",
+      "141",
+      "142",
+      "150",
+    ],
   },
   {
     id: "concrete",
@@ -126,13 +140,18 @@ export const disciplinesData: DisciplineData[] = [
       "334",
       "339",
       "340",
+      "341",
+      "342",
+      "343",
+      "344",
+      "345",
     ],
   },
   {
     id: "buildings",
     label: "Buildings",
     to: "/buildings",
-    l1Codes: ["400", "401", "402", "404", "410"],
+    l1Codes: ["400", "431", "432", "434", "440"],
   },
   {
     id: "equipment",
@@ -215,20 +234,21 @@ export const disciplinesData: DisciplineData[] = [
     to: "/electric",
     l1Codes: [
       "700",
-      "701",
-      "702",
-      "703",
-      "704",
-      "709",
       "730",
       "731",
       "732",
       "733",
       "734",
-      "735",
-      "736",
-      "737",
-      "738",
+      "739",
+      "740",
+      "741",
+      "742",
+      "743",
+      "744",
+      "745",
+      "746",
+      "747",
+      "748",
     ],
   },
   {
@@ -236,13 +256,36 @@ export const disciplinesData: DisciplineData[] = [
     label: "Instruments & Controls",
     summaryLabel: "Instrumentation",
     to: "/instruments",
-    l1Codes: ["800", "801", "802", "804", "809", "830", "831", "832", "833"],
+    l1Codes: [
+      "800",
+      "830",
+      "831",
+      "832",
+      "834",
+      "839",
+      "840",
+      "841",
+      "842",
+      "843",
+    ],
   },
   {
     id: "coatings",
     label: "Coatings",
     to: "/coatings",
-    l1Codes: ["900", "901", "902", "904", "930", "931", "932", "933"],
+    // 940–943 (Painting, Insulation, Fireproofing, Refractory) are the
+    // direct-labor accounts under 930 Coatings Installation.
+    l1Codes: [
+      "900",
+      "930",
+      "931",
+      "932",
+      "934",
+      "940",
+      "941",
+      "942",
+      "943",
+    ],
   },
   {
     id: "specialty-services",

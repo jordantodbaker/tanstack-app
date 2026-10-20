@@ -54,7 +54,7 @@ function row(displayCode: string, over: Record<string, unknown> = {}) {
     materialType: null,
     materialCode: null,
     subReporting: null,
-    masterCbsRow: 100,
+    originalRow: 100,
     ...over,
   };
 }
@@ -176,7 +176,7 @@ function sheetRow(displayCode: string, over: Record<string, unknown> = {}) {
     displayCode,
     costCode: displayCode.replace(/-/g, ""),
     name: `Account ${displayCode}`,
-    masterCbsRow: 10,
+    originalRow: 10,
     rowType: "ORIGINAL",
     ...over,
   };

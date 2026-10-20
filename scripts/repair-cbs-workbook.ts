@@ -58,7 +58,7 @@ async function main() {
   ws.getRow(1).eachCell((cell, n) => {
     column[`${cell.value ?? ""}`.trim()] = n;
   });
-  for (const needed of ["Display Code", "Cost Code", "Name", "L7"]) {
+  for (const needed of ["Display Code", "Cost Code", "Name"]) {
     if (!column[needed]) {
       throw new Error(`${CBS_WORKBOOK_PATH}: no "${needed}" column on "${ws.name}"`);
     }
@@ -73,7 +73,6 @@ async function main() {
       row: r,
       displayCode: text(row, "Display Code"),
       name: text(row, "Name"),
-      l7: text(row, "L7"),
     });
   });
 
@@ -109,13 +108,11 @@ async function main() {
     return;
   }
 
-  // Each fix touches the display code, the cost code derived from it, and the
-  // L7 column when that has fallen out of step.
+  // Each fix touches the display code and the cost code derived from it.
   const edits = new Map<string, string>();
   for (const f of fixes) {
     edits.set(`${letter(column["Display Code"])}${f.row}`, f.displayCode);
     edits.set(`${letter(column["Cost Code"])}${f.row}`, costCodeFor(f.displayCode));
-    if (f.l7) edits.set(`${letter(column["L7"])}${f.row}`, f.l7);
   }
 
   const backup = `${CBS_WORKBOOK_PATH}.${new Date().toISOString().replace(/[:.]/g, "-")}.bak`;

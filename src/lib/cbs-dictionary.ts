@@ -49,8 +49,8 @@ export type CbsDictionaryRow = {
   displayDescription: string;
   rowType: CbsRowType;
   generatedFrom: string | null;
-  /** The row in the unexpanded Master CBS this came from. */
-  masterCbsRow: number | null;
+  /** The Original Row in the workbook this came from. */
+  originalRow: number | null;
   /** This row's line in the CBS Expanded sheet. */
   expandedRow: number | null;
 };

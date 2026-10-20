@@ -103,6 +103,7 @@ describe("app registry", () => {
 
   it("orders the CBS app from project scope out to the whole catalog", () => {
     expect(appById.cbs.links.map((l) => l.label)).toEqual([
+      "Setup",
       "Project Cost Code List",
       "CBS Code Book",
       "Core Code Roll-up",

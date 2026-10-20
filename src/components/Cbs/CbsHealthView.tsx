@@ -107,7 +107,7 @@ function FindingsTable({ check }: { check: HealthCheck }) {
               {/* First, because this list is worked down in the spreadsheet. */}
               <th
                 className="px-2 py-1 text-right font-semibold text-slate-600"
-                title="Row in the unexpanded Master CBS"
+                title="Original Row in the CBS workbook"
               >
                 Row
               </th>
@@ -129,7 +129,7 @@ function FindingsTable({ check }: { check: HealthCheck }) {
                 className="border-t border-slate-100"
               >
                 <td className="whitespace-nowrap px-2 py-1 text-right font-mono tabular-nums text-slate-700">
-                  {f.masterRow ?? "—"}
+                  {f.originalRow ?? "—"}
                 </td>
                 <td className="whitespace-nowrap px-2 py-1 font-mono text-slate-700">
                   {f.code}

@@ -521,16 +521,20 @@ code written with four segments (`012-05-0000-00`) gains the `-0` backbone
 segment, and the cost-type suffix is stripped from the name (`Executive (L)`
 → `Executive`). A generated twin is skipped when the workbook
 already carries that code. Level segments are derived from the Display Code,
-not from the workbook's L1–L7 helper columns. See `prisma/cbs-workbook.ts`.
+not from the workbook's L1–L6 helper columns. See `prisma/cbs-workbook.ts`.
 
-The 2026-10 sheet also carries **Master CBS Row** and **Expanded Row**, stored
-on every `CbsItem`: the first is the line in the unexpanded master (a generated
-cost-type twin shares it with the account it came from), the second is the line
-in the sheet you are reading. They are traced through to the CBS detail panel
-and to every CBS Health finding, so a reported problem names the row to go and
-fix. Nothing keys on them. **Columns are matched by header name, never by
-position** — those two were inserted ahead of `L7`, and anything reading by
-column letter would have written into the wrong cell.
+The 2026-10 sheet also carries **Original Row** and **Expanded Row**, stored
+on every `CbsItem`: the first is the line in the unexpanded original (a
+generated cost-type twin shares it with the account it came from), the second
+is the line in the sheet you are reading. They are traced through to the CBS
+detail panel and to every CBS Health finding, so a reported problem names the
+row to go and fix. Nothing keys on them. Original Row was headed "Master Row"
+and before that "Master CBS Row"; the loader still reads either. In the
+database the column is still `masterCbsRow` (`@map` in the schema), so the
+rename needed no `db push`. The sheet no longer has an `L7` column: the cost
+type is the last Display Code segment. **Columns are matched by header name,
+never by position**, because columns have been inserted and removed before, and
+anything reading by column letter would have written into the wrong cell.
 
 When a new master arrives:
 

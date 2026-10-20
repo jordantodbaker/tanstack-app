@@ -63,7 +63,8 @@ const DISCIPLINE_ROOT_NAME: Record<string, string> = {
   piping: "Piping",
   electric: "Electrical",
   instruments: "Instrument & Controls",
-  coatings: "Coatings & Insulation",
+  // Was "Coatings & Insulation" until the 2026-10 renumber renamed 900.
+  coatings: "Coatings",
   "specialty-services": "Specialty Services",
   commissioning: "Startup & Commissioning",
   operations: "Operations & Maintenance",

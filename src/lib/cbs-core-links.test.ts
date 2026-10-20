@@ -24,10 +24,10 @@ const CATALOG: CoreLinkRow[] = [
   row("052-00-0000-00-0", "Field Staff"),
   row("054-20-0000-00-0", "Third Party Rental Equipment"),
   // Excel drops the leading zero, so these arrive ten characters long.
-  row("102-00-0000-00-0", "Civil Field Staff", "5200000000"),
+  row("132-00-0000-00-0", "Civil Field Staff", "5200000000"),
   row("232-00-0000-00-0", "Concrete Field Staff", "5200000000"),
   row("602-00-0000-00-0", "Pipe Shop Field Staff", "5200000000"),
-  row("104-20-0000-00-0", "Civil Equipment Rental", "5420000000"),
+  row("134-20-0000-00-0", "Civil Equipment Rental", "5420000000"),
   row("600-00-0000-00-0", "Piping"),
 ];
 
@@ -65,7 +65,7 @@ describe("buildCoreLinks", () => {
     expect(staff.disciplineCount).toBe(3);
     expect(staff.counts).toMatchObject({ civil: 1, concrete: 1, piping: 1 });
     expect(staff.items.map((i) => i.displayCode)).toEqual([
-      "102-00-0000-00-0",
+      "132-00-0000-00-0",
       "232-00-0000-00-0",
       "602-00-0000-00-0",
     ]);

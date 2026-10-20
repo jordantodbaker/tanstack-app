@@ -12,7 +12,7 @@ import { BACKBONE_TYPE, type CbsTreeItem } from "./types";
  * The cost types a row can carry a companion for.
  *
  * A row counts as one of these two ways: it IS a code of that cost type — its
- * own L7, which covers both the rows the workbook ships that way and the twins
+ * own cost type, which covers both the rows the workbook ships that way and the twins
  * the dictionary generates — or its matching workbook column says YES, meaning
  * a companion of that type exists for it. The badges and the toolbar's filter
  * buttons both ask exactly that question, so they read from this one table

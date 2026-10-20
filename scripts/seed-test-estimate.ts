@@ -4,6 +4,12 @@
 //   npx tsx scripts/seed-test-estimate.ts --rows 3000
 //   npx tsx scripts/seed-test-estimate.ts --project 1902
 //   npx tsx scripts/seed-test-estimate.ts --remove         # undo
+//   npx tsx scripts/seed-test-estimate.ts --grant-missing  # see below
+//
+// --grant-missing first grants the project every code in any take-off or
+// materials block it holds no grants in at all, so a discipline whose grants
+// were dropped by a CBS renumber still gets rows. `--remove` does NOT revoke
+// those grants.
 //
 // It creates its own estimate revision rather than writing into an existing
 // one, so nothing already in the project is touched and `--remove` is a single
@@ -19,6 +25,11 @@
 // formatted the way `applyRoleRate` formats them, so a "Refresh rates" run over
 // this data reports no drift.
 //
+// Codes are not drawn uniformly. Each CBS block gets a working set — some
+// blocks untouched, most partly used — and rows favor the front of that set,
+// the way a real estimate leans on a few accounts. That is what makes the Code
+// Usage page read like a real project rather than a flat 20% everywhere.
+//
 // Deterministic: the same --seed produces the same estimate.
 import "dotenv/config";
 import { prisma } from "../src/server/db";
@@ -33,6 +44,7 @@ import {
   unpackPipingFactors,
 } from "../src/lib/piping-factors";
 import { computeBoreSize } from "../src/lib/utils";
+import { disciplineL1Codes } from "../src/config/disciplines-data";
 
 const LABEL = "Generated test data";
 
@@ -44,6 +56,7 @@ const TARGET_ROWS = Number(arg("--rows", "1200"));
 const PROJECT_DISPLAY_ID = arg("--project", "1901");
 const SEED = Number(arg("--seed", "1901"));
 const REMOVE = process.argv.includes("--remove");
+const GRANT_MISSING = process.argv.includes("--grant-missing");
 
 /** Deterministic PRNG, so a given --seed always yields the same estimate. */
 function mulberry32(a: number) {
@@ -90,25 +103,13 @@ const SUPPORT_MIX: [string, number][] = [
 /** Materials sheets are keyed by CBS L1 code, not by discipline name. */
 const MATERIALS_MIX: [string, number][] = [
   ["601", 0.025],
-  ["701", 0.015],
-  ["101", 0.012],
-  ["301", 0.012],
+  ["731", 0.015],
+  ["131", 0.012],
+  ["331", 0.012],
 ];
 
-/** L1 prefixes per discipline, mirroring src/config/disciplines-data.ts. */
-const L1: Record<string, string[]> = {
-  piping: ["600", "601", "602", "603", "604", "605", "606", "607", "608", "609", "610", "611", "612", "613", "630", "631", "632", "633", "634", "635", "636", "637", "638", "639", "640", "641", "642", "643", "680", "681", "690", "691"],
-  concrete: ["200", "201", "202", "203", "231", "232", "233"],
-  steel: ["300", "301", "302", "303", "330", "331", "332", "333", "390", "391"],
-  electric: ["700", "701", "702", "703", "790"],
-  equipment: ["500", "501", "502", "503", "530", "531", "532", "533", "534", "535", "536", "537", "538", "539", "540", "590"],
-  instruments: ["800", "801", "802", "803", "890"],
-  civil: ["100", "101", "102", "103", "131", "132", "133", "134", "135", "136", "137"],
-  buildings: ["400", "401", "402", "403", "407"],
-  coatings: ["900", "901", "902", "903", "904", "905"],
-  demolition: ["090", "091", "092", "093", "099"],
-  grout: ["290", "291", "292", "293"],
-};
+/** L1 prefixes per discipline — the app's own list, so a renumber can't strand it. */
+const L1: Record<string, string[]> = disciplineL1Codes;
 
 const PIPE_SIZES = [0.5, 0.75, 1, 1.5, 2, 2.5, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 24];
 const SYSTEMS = ["Cooling Water", "Process Steam", "Condensate", "Instrument Air", "Caustic", "CIP Supply", "CIP Return", "Glycol", "Plant Water", "Nitrogen"];
@@ -153,6 +154,32 @@ async function main() {
     );
   }
 
+  // ---- grants -------------------------------------------------------------
+  if (GRANT_MISSING) {
+    const wanted = new Set([
+      ...TAKE_OFF_MIX.flatMap(([d]) => L1[d] ?? []),
+      ...MATERIALS_MIX.map(([l1]) => l1),
+    ]);
+    const held = await prisma.cbsItem.groupBy({
+      by: ["l1"],
+      where: { allowedInProjects: { some: { id: project.id } } },
+    });
+    const empty = [...wanted].filter((l1) => !held.some((h) => h.l1 === l1));
+    const toGrant = await prisma.cbsItem.findMany({
+      where: { l1: { in: empty } },
+      select: { id: true },
+    });
+    if (toGrant.length) {
+      await prisma.project.update({
+        where: { id: project.id },
+        data: { allowedFefCbsItems: { connect: toGrant } },
+      });
+    }
+    console.log(
+      `Granted ${toGrant.length} codes across ${empty.length} blocks the project held none of.`,
+    );
+  }
+
   // ---- catalogs -----------------------------------------------------------
   // Only items the project is allowed to use: picking outside the allow-list
   // would produce rows the Take Off page filters out of its own dropdowns.
@@ -175,6 +202,51 @@ async function main() {
   }
   const byL1entries = () => byL1.entries();
 
+  /**
+   * The slice of each block this estimate books against, most-used first.
+   *
+   * One block in six is left untouched and the rest keep 10–80% of their
+   * codes, so the Code Usage page has whole unused divisions to prune as well
+   * as partly used ones. Fixed per block, so every sheet drawing from a block
+   * agrees on what is in use.
+   */
+  const workingSets = new Map<string, typeof cbs>();
+  const workingSet = (l1: string): typeof cbs => {
+    const hit = workingSets.get(l1);
+    if (hit) return hit;
+    const items = [...(byL1.get(l1) ?? [])];
+    for (let i = items.length - 1; i > 0; i--) {
+      const j = Math.floor(rnd() * (i + 1));
+      [items[i], items[j]] = [items[j], items[i]];
+    }
+    const share = rnd() < 1 / 6 ? 0 : between(0.1, 0.8);
+    const set = items.slice(0, Math.ceil(items.length * share));
+    workingSets.set(l1, set);
+    return set;
+  };
+  /** Favor the front of a list — a few accounts carry most of the rows. */
+  const pickSkewed = <T,>(xs: readonly T[]): T =>
+    xs[Math.floor(rnd() ** 2.5 * xs.length)];
+  /**
+   * A code from the blocks' working sets: the block in proportion to how much
+   * of it is in use, then skewed within it. Falls back to the whole of the
+   * blocks only when every working set is empty, so a sheet the app would
+   * always seed (materials, support labor) never comes out blank.
+   */
+  const pickWorking = (l1s: string[]) => {
+    const sets = l1s.map(workingSet).filter((s) => s.length > 0);
+    if (sets.length === 0) {
+      const all = l1s.flatMap((l1) => byL1.get(l1) ?? []);
+      return all.length ? pickSkewed(all) : null;
+    }
+    let n = Math.floor(rnd() * sets.reduce((t, s) => t + s.length, 0));
+    for (const s of sets) {
+      if (n < s.length) return pickSkewed(s);
+      n -= s.length;
+    }
+    return pickSkewed(sets[sets.length - 1]);
+  };
+
   // The CBS L1 suffix says which sheet a code belongs on — see
   // `DisciplineRoute.tsx`, which builds the Take Off dropdown and the Support
   // Labor rows from exactly these predicates. Ignoring them produces rows the
@@ -184,14 +256,14 @@ async function main() {
   const isMaterialCode = (l1: string) => l1.endsWith("01") || l1.endsWith("31");
   const isSupportCode = (l1: string) => l1.endsWith("02") || l1.endsWith("32");
 
-  const codesFor = (d: string, keep: (l1: string) => boolean) =>
-    (L1[d] ?? []).filter(keep).flatMap((code) => byL1.get(code) ?? []);
+  const blocksFor = (d: string, keep: (l1: string) => boolean) =>
+    (L1[d] ?? []).filter((l1) => keep(l1) && byL1.has(l1));
 
   /** Selectable in the Take Off Name dropdown: neither material nor support. */
-  const forDiscipline = (d: string) =>
-    codesFor(d, (l1) => !isMaterialCode(l1) && !isSupportCode(l1));
+  const takeOffBlocks = (d: string) =>
+    blocksFor(d, (l1) => !isMaterialCode(l1) && !isSupportCode(l1));
   /** What the Support Labor sheet is seeded from. */
-  const supportItemsFor = (d: string) => codesFor(d, isSupportCode);
+  const supportBlocks = (d: string) => blocksFor(d, isSupportCode);
 
   // Roles carry the disciplines they serve, so labor can be assigned by craft
   // rather than at random — otherwise piping ends up priced as "Painter".
@@ -429,10 +501,10 @@ async function main() {
   // TAKE_OFF — every other discipline.
   for (const [discipline, share] of TAKE_OFF_MIX) {
     if (discipline === "piping") continue;
-    const items = forDiscipline(discipline);
+    const blocks = takeOffBlocks(discipline);
     const count = Math.round(TARGET_ROWS * share);
     for (let i = 0; i < count; i++) {
-      const item = items.length ? pick(items) : null;
+      const item = pickWorking(blocks);
       const labor = laborPick(discipline);
       const quantity = int(1, 250);
       rows.push({
@@ -465,16 +537,16 @@ async function main() {
   // off the CBS item. A support row without a code has no id to show, and the
   // grid falls back to the `__fe-blank-loaded-…` sentinel.
   for (const [discipline, share] of SUPPORT_MIX) {
-    const items = supportItemsFor(discipline);
+    const blocks = supportBlocks(discipline);
     const count = Math.round(TARGET_ROWS * share);
-    if (items.length === 0) {
+    if (blocks.length === 0) {
       console.log(
         `Support labor: ${discipline} has no allowed 02/32 CBS items — skipping its sheet.`,
       );
       continue;
     }
     for (let i = 0; i < count; i++) {
-      const item = pick(items);
+      const item = pickWorking(blocks)!;
       const labor = laborPick(discipline);
       rows.push({
         ...base(discipline, "SUPPORT_LABOR", i),
@@ -529,10 +601,9 @@ async function main() {
   }
 
   for (const [l1, share] of [...usable, ...substitutes]) {
-    const items = byL1.get(l1) ?? [];
     const count = Math.round(TARGET_ROWS * share);
     for (let i = 0; i < count; i++) {
-      const item = items.length ? pick(items) : null;
+      const item = pickWorking([l1]);
       rows.push({
         ...base(l1, "MATERIALS", i),
         cbsCode: item?.displayCode ?? "",

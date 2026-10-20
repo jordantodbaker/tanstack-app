@@ -17,8 +17,8 @@ import { check, type HealthCheck, type HealthFinding } from "./cbs-health";
  * times.
  *
  * Column names below are the WORKBOOK's. This app slices the display code
- * differently: the workbook's L1+L2 is one field here, its L3 is `l2`, and its
- * L7 — the cost type — is `l6`.
+ * differently: the workbook's L1+L2 is one field here and its L3 is `l2`; the
+ * cost type, which has no workbook column, is `l6`.
  */
 
 export type QcRow = {
@@ -41,15 +41,15 @@ export type QcRow = {
   materialCode: boolean | null;
   /** The workbook's "Sub Code". */
   subReporting: boolean | null;
-  /** Row in the unexpanded Master CBS, carried onto every finding. */
-  masterCbsRow: number | null;
+  /** Original Row in the workbook, carried onto every finding. */
+  originalRow: number | null;
 };
 
 const blank = (v: string | null | undefined) => !v || v.trim() === "";
 /** The workbook's L3 segment. "00" means a roll-up level. */
 const l3Of = (code: string) => code.slice(4, 6);
-/** The workbook's L7 segment — the cost type. */
-const l7Of = (code: string) => code.slice(15, 16);
+/** The cost type — the display code's last segment. */
+const costTypeOf = (code: string) => code.slice(15, 16);
 
 const STANDARD_UOM = new Set([
   "LS",
@@ -114,8 +114,8 @@ const at = (r: QcRow, detail: string): HealthFinding => ({
   code: r.displayCode,
   name: r.name,
   detail,
-  // So the reader can go straight to the row in the master spreadsheet.
-  masterRow: r.masterCbsRow,
+  // So the reader can go straight to the row in the spreadsheet.
+  originalRow: r.originalRow,
 });
 
 export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
@@ -160,14 +160,14 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
       const hits = byPrefix.get(prefix);
       if (!hits) continue;
       // Prefer the account's own "-0" row; it is the one that summarizes.
-      return hits.find((h) => l7Of(h.displayCode) === "0") ?? hits[0];
+      return hits.find((h) => costTypeOf(h.displayCode) === "0") ?? hits[0];
     }
     return null;
   };
 
   // --- 1. A roll-up level (workbook L3 = 00) must carry the "0" cost type.
   const l3 = rows.filter(
-    (r) => l3Of(r.displayCode) === "00" && l7Of(r.displayCode) !== "0",
+    (r) => l3Of(r.displayCode) === "00" && costTypeOf(r.displayCode) !== "0",
   );
   checks.push(
     check({
@@ -175,7 +175,7 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
       title: "Roll-up rows with a cost type",
       severity: "error",
       findings: l3.map((r) =>
-        at(r, `cost type ${l7Of(r.displayCode)}, expected 0`),
+        at(r, `cost type ${costTypeOf(r.displayCode)}, expected 0`),
       ),
       count: l3.length,
       summary:
@@ -192,13 +192,13 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
     const parent = parentOf(r);
     if (!parent) continue;
     const set = childTypes.get(parent.displayCode) ?? new Set<string>();
-    set.add(l7Of(r.displayCode));
+    set.add(costTypeOf(r.displayCode));
     childTypes.set(parent.displayCode, set);
   }
   const parentType: HealthFinding[] = [];
   for (const [code, types] of childTypes) {
     const row = byCode.get(code)!;
-    const own = l7Of(code);
+    const own = costTypeOf(code);
     if (own === "0") continue;
     if (types.size > 1) {
       parentType.push(
@@ -522,7 +522,7 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
   // Account rows only. This workbook is pre-expanded, so every account also
   // carries its L / S / M / E / O variants under the SAME name — comparing all
   // rows reported 11,556 "duplicates" that are one account seen five times.
-  const accounts = rows.filter((r) => l7Of(r.displayCode) === "0");
+  const accounts = rows.filter((r) => costTypeOf(r.displayCode) === "0");
   const byName = new Map<string, QcRow[]>();
   for (const r of accounts) {
     if (blank(r.name)) continue;

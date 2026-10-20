@@ -118,7 +118,9 @@ describe("Sidebar", () => {
     const aside = nav("Field Estimate Form");
     expect(within(aside).getByText("Civil")).toBeInTheDocument();
     expect(within(aside).getByText("Piping")).toBeInTheDocument();
-    expect(within(aside).getByText("Setup")).toBeInTheDocument();
+    // Setup is not here: it configures which codes a project may use, so it
+    // lives in the Cost Breakdown Structure app.
+    expect(within(aside).queryByText("Setup")).toBeNull();
   });
 
   it("keeps the discipline tree out of every other app", () => {
@@ -171,12 +173,21 @@ describe("Sidebar", () => {
     expect(within(aside).queryByText("CBS Code Book")).toBeNull();
   });
 
-  it("hides Setup from a non-admin in the estimate", () => {
+  it("offers Setup in the CBS app, to administrators only", () => {
+    // It grants a project its codes, so it sits with the list it feeds — and
+    // it is still admin-only. The route redirects a non-admin independently.
+    renderSidebar(appById.cbs);
+    expect(
+      within(nav("Cost Breakdown Structure")).getByText("Setup"),
+    ).toBeInTheDocument();
+
+    cleanup();
     isAdmin = false;
-    renderSidebar(appById.estimate);
-    const aside = nav("Field Estimate Form");
+    renderSidebar(appById.cbs);
+    const aside = nav("Cost Breakdown Structure");
     expect(within(aside).queryByText("Setup")).toBeNull();
-    expect(within(aside).getByText("Civil")).toBeInTheDocument();
+    // The non-admin link is still there, so the nav did render.
+    expect(within(aside).getByText("Project Cost Code List")).toBeTruthy();
   });
 
   it("offers the version picker only where versions apply", () => {

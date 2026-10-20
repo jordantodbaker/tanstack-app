@@ -50,7 +50,7 @@ The platform is split into **apps**, each with its own navigation:
 | ----------------------------- | -------------------------------------------------------------------------------- |
 | **Field Estimate Form**       | Build the estimate — take-offs by discipline, then Summary, Basis and Validation |
 | **Change Log**                | Trends, PCOs, RFIs and field change orders                                       |
-| **Cost Breakdown Structure**  | The cost code library — this project's list, and the full catalog                |
+| **Cost Breakdown Structure**  | The cost code library — which codes a project may use, its list, and the catalog |
 | **Reporting**                 | Dashboard, cost periods, earned value and CVRs                                   |
 | **Administration** _(admins)_ | Projects, rates, templates, users, system                                        |
 
@@ -270,6 +270,11 @@ exports by its own rules, so the file always matches the screen.
 Project configuration — which **CBS items** a project may use. This controls
 which disciplines appear in the sidebar and which items the pickers offer.
 
+Setup is the first link in the **Cost Breakdown Structure** app, above the
+**Project Cost Code List** it feeds, and is offered to administrators only. It
+applies to the **selected project**, so check the project in the header before
+granting anything.
+
 The tree is the full CBS Dictionary. **Ticking a parent allows everything
 beneath it**; a half-filled box means only some of its children are allowed.
 Clicking a row only opens its detail — ticking its checkbox is what changes the
@@ -366,8 +371,8 @@ and then forgets, run against CBS.xlsx and the database as they stand. Checks
 that pass are listed too, so "nothing reported" is distinguishable from "never
 asked".
 
-Each failing check lists every affected row with the **Row** it occupies in the
-master spreadsheet, sorted ascending, and exports to Excel as a worklist with
+Each failing check lists every affected row with its **Original Row** in the
+spreadsheet, sorted ascending, and exports to Excel as a worklist with
 the same column. Errors cover things like two accounts sharing one display code
 (the import keeps one and silently drops the other), a material row with no
 material type, a roll-up row carrying a priced cost type, and Sub Code

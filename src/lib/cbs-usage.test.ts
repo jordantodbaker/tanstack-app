@@ -6,12 +6,12 @@ const granted: UsageRow[] = [
   { displayCode: "604-20-0000-00-0", name: "Third Party Rental" },
   { displayCode: "604-20-1000-00-L", name: "Crane Rental" },
   { displayCode: "604-20-2000-00-L", name: "Manlift Rental" },
-  { displayCode: "101-05-0000-00-0", name: "Earthwork & Trenching" },
+  { displayCode: "140-05-0000-00-0", name: "Earthwork & Trenching" },
 ];
 
 const usage = new Map([
   ["604-20-1000-00-L", 12],
-  ["101-05-0000-00-0", 3],
+  ["140-05-0000-00-0", 3],
 ]);
 
 describe("buildCodeUsage", () => {
@@ -19,7 +19,7 @@ describe("buildCodeUsage", () => {
     const { divisions } = buildCodeUsage(granted, usage);
     const six = divisions.find((d) => d.l1 === "604")!;
     expect(six).toMatchObject({ granted: 3, used: 1, rows: 12 });
-    const one = divisions.find((d) => d.l1 === "101")!;
+    const one = divisions.find((d) => d.l1 === "140")!;
     expect(one).toMatchObject({ granted: 1, used: 1, rows: 3 });
   });
 
@@ -57,7 +57,7 @@ describe("buildCodeUsage", () => {
 
   it("attributes each division to the discipline that owns the block", () => {
     const { divisions } = buildCodeUsage(granted, usage);
-    expect(divisions.find((d) => d.l1 === "101")!.discipline).toBe("civil");
+    expect(divisions.find((d) => d.l1 === "140")!.discipline).toBe("civil");
     expect(divisions.find((d) => d.l1 === "604")!.discipline).toBe("piping");
   });
 

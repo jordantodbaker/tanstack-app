@@ -107,11 +107,7 @@ export function Sidebar({
           </div>
 
           {app.disciplineNav ? (
-            <DisciplineNav
-              collapsed={collapsed}
-              onItemClick={onMobileClose}
-              isAdmin={isAdmin}
-            />
+            <DisciplineNav collapsed={collapsed} onItemClick={onMobileClose} />
           ) : (
             <AppLinkNav
               app={app}
@@ -220,11 +216,9 @@ function AppLinkNav({
 function DisciplineNav({
   collapsed,
   onItemClick,
-  isAdmin,
 }: {
   collapsed: boolean;
   onItemClick?: () => void;
-  isAdmin: boolean;
 }) {
   const [openSections, setOpenSections] = React.useState<Set<string>>(
     () => new Set(["project-controls"]),
@@ -253,19 +247,17 @@ function DisciplineNav({
   );
 
   const visibleDisciplines = React.useMemo(() => {
-    // Setup is project-configuration; only admins should see or reach it.
-    const allowed = isAdmin
-      ? disciplines
-      : disciplines.filter((d) => d.id !== "setup");
-    if (projectId === null) {
-      return allowed.filter((d) => d.id === "setup");
-    }
+    // Nothing in the estimate is reachable without a project, and Setup — the
+    // one page that used to be, since it is what picks the codes — now lives
+    // in the Cost Breakdown Structure app. This was already what a non-admin
+    // saw here with no project selected.
+    if (projectId === null) return [];
     const allowedSet = new Set(allowedL1Codes ?? []);
-    return allowed.filter((d) => {
+    return disciplines.filter((d) => {
       if (!d.l1Codes) return true;
       return d.l1Codes.some((code) => allowedSet.has(code));
     });
-  }, [projectId, allowedL1Codes, isAdmin]);
+  }, [projectId, allowedL1Codes]);
 
   return (
     <>

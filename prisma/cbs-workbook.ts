@@ -4,7 +4,7 @@
  *
  *   - every workbook row ("ORIGINAL"), plus
  *   - for each row with Sub Code = YES, a "SUB" twin whose cost type (the
- *     trailing code segment, L7 in the workbook) is `S`, and
+ *     trailing code segment) is `S`, and
  *   - for each row with Material Code = YES, a "MATERIAL" twin with type `M`.
  *
  * A twin is skipped when the workbook already carries that code. Generated
@@ -12,7 +12,7 @@
  * set the G/L (5200 / 5100) and record `generatedFrom` — the same shape as
  * the "CBS S-M Generated" dictionary sheet.
  *
- * The workbook's own L1–L7 helper columns and outline levels are NOT trusted
+ * The workbook's own L1–L6 helper columns and outline levels are NOT trusted
  * (they disagree with the Display Code in ~1,100 rows); every level segment is
  * derived from the Display Code `XXX-YY-ZZWW-VV-T`, and the cost code is the
  * display code without hyphens. Duplicate display codes keep the first named
@@ -53,7 +53,7 @@ export type CbsWorkbookReport = {
   /** Rows whose "Cost Code" cell disagreed with the Display Code (derived wins). */
   costCodeMismatches: number;
   /**
-   * Rows whose L1–L7 helper columns disagree with the Display Code, grouped by
+   * Rows whose L1–L6 helper columns disagree with the Display Code, grouped by
    * the move they imply. The Display Code is the account's identity — the app
    * stores it on every estimate row — so renumbering only the helper columns
    * does nothing, and usually leaves the row colliding with whatever still owns
@@ -301,13 +301,14 @@ export async function loadCbsWorkbook(
     if (sheetCostCode && sheetCostCode !== costCode)
       report.costCodeMismatches++;
 
-    // The sheet splits the code across L1–L7 (L1 holds the first two digits of
-    // the division, L2 the third). Compare the whole thing against the code we
-    // actually use, so a partial renumber is reported rather than ignored.
-    const segments = ["L1", "L2", "L3", "L4", "L5", "L6", "L7"].map(text);
+    // The sheet splits the code across L1–L6 (L1 holds the first two digits of
+    // the division, L2 the third); the cost type has no column of its own.
+    // Compare them against the code we actually use, less its cost type, so a
+    // partial renumber is reported rather than ignored.
+    const segments = ["L1", "L2", "L3", "L4", "L5", "L6"].map(text);
     if (segments.every((seg) => seg !== "")) {
       const fromColumns = segments.join("").toUpperCase();
-      if (fromColumns !== costCode) {
+      if (fromColumns !== costCode.slice(0, -1)) {
         // Group by the DIVISION move, so a renumbered block of forty rows
         // reads as one line instead of forty.
         const columnsL1 = (segments[0] + segments[1]).toUpperCase();
@@ -353,7 +354,12 @@ export async function loadCbsWorkbook(
       displayDescription: `${displayCode}:  ${name}`,
       rowType: "ORIGINAL",
       generatedFrom: null,
-      masterCbsRow: number("Master CBS Row"),
+      // "Original Row" was "Master Row" and before that "Master CBS Row"; read
+      // any of them so an older copy of the workbook still traces.
+      originalRow:
+        number("Original Row") ??
+        number("Master Row") ??
+        number("Master CBS Row"),
       expandedRow: number("Expanded Row"),
     };
 
@@ -405,8 +411,8 @@ export function formatCbsWorkbookReport(report: CbsWorkbookReport): string {
   if (report.segmentMismatches.length) {
     const rows = report.segmentMismatches.reduce((n, m) => n + m.rows, 0);
     lines.push(
-      `  ${rows} row(s) whose L1–L7 columns disagree with their Display Code.`,
-      "  The Display Code is the account's identity — renumbering only the L1–L7",
+      `  ${rows} row(s) whose L1–L6 columns disagree with their Display Code.`,
+      "  The Display Code is the account's identity — renumbering only the L1–L6",
       "  columns has NO effect, and usually collides with whatever still owns the",
       "  old code. Edit the Display Code (and Cost Code) to complete the move:",
     );

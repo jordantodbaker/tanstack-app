@@ -74,6 +74,6 @@ export type CbsTreeNode<T extends CbsTreeItem = CbsTreeItem> = {
 
 export const LEVEL_DEFAULT = "00";
 export const BACKBONE_TYPE = "0";
-/** Cost types (the workbook's L7) for the generated subcontract / material rows. */
+/** Cost types (the last Display Code segment) for the generated subcontract / material rows. */
 export const SUB_TYPE = "S";
 export const MATERIAL_TYPE = "M";

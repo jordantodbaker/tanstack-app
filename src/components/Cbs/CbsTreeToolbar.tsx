@@ -14,7 +14,7 @@ import {
  * (the Excel export, a match count, a selected count, saving…). Shared by the
  * Setup editor and the CBS dictionary viewers.
  *
- * The filters get a row of their own, under the level-colour legend, because
+ * The filters get a row of their own, under the level-color legend, because
  * sharing one line with the search box put five toggles that change WHICH
  * rows exist beside the controls that only change how they are shown.
  */

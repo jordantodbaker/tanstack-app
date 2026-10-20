@@ -12,7 +12,7 @@ import {
  * whole catalog open.
  *
  * `expandToLevel` opens the tree down to one code level, which is what the
- * colour legend's L0…L5 buttons call. `levelShown` is the level last asked for,
+ * color legend's L0…L5 buttons call. `levelShown` is the level last asked for,
  * so the legend can mark it; any other change to the expansion clears it,
  * because the tree no longer stands at a single level.
  */

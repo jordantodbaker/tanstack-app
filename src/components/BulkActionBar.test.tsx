@@ -46,13 +46,15 @@ describe("BulkActionBar", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("shows the selected count and one button per action, labelled with its id count", () => {
+  it("shows the selected count and one button per action, labeled with its id count", () => {
     setup();
     expect(screen.getByText("2 selected")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Approve (3)" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Void (1)" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Void (1)" }),
+    ).toBeInTheDocument();
   });
 
   it("passes the action name, ids, and destructive flag through onRunAction", () => {

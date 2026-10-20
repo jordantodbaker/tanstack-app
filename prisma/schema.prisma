@@ -652,7 +652,7 @@ model SteelMember {
 }
 
 // Construction discipline role (Pipefitter, Electrician, etc.) — the
-// labour role assigned to a Take Off row. `disciplines` holds discipline
+// labor role assigned to a Take Off row. `disciplines` holds discipline
 // ids from src/config/disciplines.ts; a role only appears in the Take Off
 // "Role" dropdown for a discipline whose id is in this list. Empty means
 // the role shows up nowhere.

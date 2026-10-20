@@ -5,7 +5,7 @@ import type { FC } from "react";
  *  - `pill`  → bordered rounded-full (status). Each domain picks its own
  *              per-value bg/text/border classes.
  *  - `tag`   → solid rounded (priority, risk level). Smaller padding, no
- *              border; per-value styles supply bg + text colour.
+ *              border; per-value styles supply bg + text color.
  *
  * Centralizing the base shape strings means a future visual tweak (e.g.
  * "make all status pills a bit larger") changes one file instead of ten
@@ -21,7 +21,7 @@ const SHAPE_BASE_CLASS: Record<BadgeShape, string> = {
 /**
  * Builds a badge component for an enum. `labels` maps each enum value to its
  * display string, `styles` maps it to the Tailwind class fragment for
- * background/text/border colour. The returned component takes the enum value
+ * background/text/border color. The returned component takes the enum value
  * via a `value` prop; domain files wrap it in a thin component that preserves
  * the existing public prop name (e.g. `status`, `priority`, `level`).
  */
@@ -55,6 +55,6 @@ export const SHARED_PRIORITY_STYLES = {
   URGENT: "bg-red-100 text-red-800 animate-pulse",
 } as const;
 
-/** Terminal "this enum value is void/cancelled" pill style. */
+/** Terminal "this enum value is void/canceled" pill style. */
 export const VOID_PILL_STYLE =
   "bg-slate-50 text-slate-400 border-slate-200 line-through";

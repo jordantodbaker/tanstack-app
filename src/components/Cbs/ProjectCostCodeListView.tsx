@@ -22,7 +22,7 @@ import {
  */
 
 const SOURCE_NOTE =
-  "Source: the CBS Dictionary, limited to the items selected for this project on the Setup page. Colours mirror the source workbook's outline levels.";
+  "Source: the CBS Dictionary, limited to the items selected for this project on the Setup page. Colors mirror the source workbook's outline levels.";
 
 function ProjectCostCodes({
   projectId,
@@ -74,13 +74,13 @@ export function ProjectCostCodeListView({
         </h1>
         <p className="mt-1 max-w-3xl text-sm text-slate-500">
           The cost codes available on this project — the CBS rows selected on
-          the Setup page — as a colour-coded, collapsible hierarchy.{" "}
+          the Setup page — as a color-coded, collapsible hierarchy.{" "}
           <strong>L</strong>, <strong>S</strong>, <strong>M</strong>,{" "}
           <strong>E</strong> and <strong>O</strong> mark a code's own Labor,
-          Sub, Material, Equipment and Other Code. Greyed-out rows are parent
+          Sub, Material, Equipment and Other Code. Grayed-out rows are parent
           summaries the project wasn't given, shown so the codes under them nest
           correctly. Retired codes are not listed — see the CBS Dictionary for
-          those. Colours and grouping mirror the source workbook.
+          those. Colors and grouping mirror the source workbook.
         </p>
       </header>
 

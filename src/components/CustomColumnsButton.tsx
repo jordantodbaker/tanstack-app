@@ -73,7 +73,7 @@ export function CustomColumnsButton({ discipline }: { discipline: string }) {
               </ul>
               {/* Says where the controls are rather than duplicating them: two
                   menus for the same actions is how the first version ended up
-                  with four unlabelled glyphs nobody found. */}
+                  with four unlabeled glyphs nobody found. */}
               <p className="px-1.5 text-xs text-slate-500">
                 Rename, reorder or remove a column from the ⋮ on its heading in
                 the sheet.

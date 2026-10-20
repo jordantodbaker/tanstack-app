@@ -238,7 +238,7 @@ describe("loadCbsWorkbook", () => {
               "Material Code": "",
             }),
           ),
-          // Lower-case code → normalised to upper case.
+          // Lower-case code → normalized to upper case.
           toRow(r("101-20-0000-00-l", "Lowercase")),
         ],
       },
@@ -347,7 +347,7 @@ describe("loadCbsWorkbook", () => {
    * summary type, so the loader absorbs that difference rather than teaching
    * the whole app a second shape.
    */
-  it("normalises a summary code and strips the cost-type suffix from the name", async () => {
+  it("normalizes a summary code and strips the cost-type suffix from the name", async () => {
     const path = join(dir, "expanded.xlsx");
     await writeWorkbook(path, [
       {
@@ -375,7 +375,7 @@ describe("loadCbsWorkbook", () => {
     ]);
     // Parentheses that ARE the cost type go; the name is otherwise verbatim.
     expect(items.map((i) => i.name)).toEqual(["Overhead", "Executive"]);
-    // The normalised code drives the levels, so "0" is the summary's L6.
+    // The normalized code drives the levels, so "0" is the summary's L6.
     expect(items[0]).toMatchObject({ l1: "012", l2: "05", l6: "0" });
   });
 
@@ -413,7 +413,7 @@ describe("loadCbsWorkbook", () => {
 
   it("still rejects a code with a doubled cost type", async () => {
     // "022-00-0000-00-0-S" — the expansion appended the type instead of
-    // replacing the backbone "0". Six segments is not a shape we normalise;
+    // replacing the backbone "0". Six segments is not a shape we normalize;
     // rejecting it is what surfaced twelve of these in the real workbook.
     const path = join(dir, "doubled.xlsx");
     await writeWorkbook(path, [

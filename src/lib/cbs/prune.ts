@@ -135,7 +135,7 @@ export function filterCbsTree<T extends CbsTreeItem>(
  * `depth` is re-assigned on the way down, since it drives indentation and the
  * promoted rows would otherwise indent as though their parent were still
  * above them. `level` is left alone — it is the CODE's level and drives the
- * colour, which should not change because a filter is on.
+ * color, which should not change because a filter is on.
  */
 function strictCbsRows<T extends CbsTreeItem>(
   nodes: CbsTreeNode<T>[],

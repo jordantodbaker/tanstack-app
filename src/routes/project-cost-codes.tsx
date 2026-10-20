@@ -3,7 +3,7 @@ import { ProjectCostCodeListView } from "~/components/Cbs/ProjectCostCodeListVie
 
 /**
  * The cost codes available on the selected project: the Master CBS rows
- * toggled on the Setup page, as an expand/collapse hierarchy whose colouring
+ * toggled on the Setup page, as an expand/collapse hierarchy whose coloring
  * mirrors the Master CBS Dictionary workbook. Project-scoped, so it flows
  * through `ProjectGuard` like the discipline pages (see `__root.tsx`).
  */

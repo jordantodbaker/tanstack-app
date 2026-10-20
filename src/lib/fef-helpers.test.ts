@@ -18,18 +18,18 @@ const row = (overrides: Partial<FefRow>): FefRow =>
 
 describe("canComputeTotalCost", () => {
   it("returns true when hours > 0 and rate is a parseable non-empty string", () => {
-    expect(
-      canComputeTotalCost(row({ laborHours: "4", laborRate: "50" })),
-    ).toBe(true);
+    expect(canComputeTotalCost(row({ laborHours: "4", laborRate: "50" }))).toBe(
+      true,
+    );
     expect(
       canComputeTotalCost(row({ laborHours: "0.5", laborRate: "75.25" })),
     ).toBe(true);
   });
 
   it("returns false when hours are zero or negative", () => {
-    expect(
-      canComputeTotalCost(row({ laborHours: "0", laborRate: "50" })),
-    ).toBe(false);
+    expect(canComputeTotalCost(row({ laborHours: "0", laborRate: "50" }))).toBe(
+      false,
+    );
     expect(
       canComputeTotalCost(row({ laborHours: "-1", laborRate: "50" })),
     ).toBe(false);
@@ -39,15 +39,15 @@ describe("canComputeTotalCost", () => {
     expect(
       canComputeTotalCost(row({ laborHours: "abc", laborRate: "50" })),
     ).toBe(false);
-    expect(
-      canComputeTotalCost(row({ laborHours: "", laborRate: "50" })),
-    ).toBe(false);
+    expect(canComputeTotalCost(row({ laborHours: "", laborRate: "50" }))).toBe(
+      false,
+    );
   });
 
   it("returns false when the rate string is empty even if hours are positive", () => {
-    expect(
-      canComputeTotalCost(row({ laborHours: "4", laborRate: "" })),
-    ).toBe(false);
+    expect(canComputeTotalCost(row({ laborHours: "4", laborRate: "" }))).toBe(
+      false,
+    );
   });
 
   it("returns false when the rate string is not parseable", () => {
@@ -58,9 +58,9 @@ describe("canComputeTotalCost", () => {
 
   it("returns true when the rate string parses to zero (a valid known rate)", () => {
     // "0" is a legitimate authored rate (e.g. owner-furnished labor).
-    expect(
-      canComputeTotalCost(row({ laborHours: "4", laborRate: "0" })),
-    ).toBe(true);
+    expect(canComputeTotalCost(row({ laborHours: "4", laborRate: "0" }))).toBe(
+      true,
+    );
   });
 });
 
@@ -235,9 +235,7 @@ describe("makeFefRow", () => {
   });
 
   it("produces exactly the FefRow key set — guards against field drift", () => {
-    expect(Object.keys(makeFefRow()).sort()).toEqual(
-      [...EXPECTED_KEYS].sort(),
-    );
+    expect(Object.keys(makeFefRow()).sort()).toEqual([...EXPECTED_KEYS].sort());
     // FEF_ROW_STRING_FIELDS is every key except `id`.
     expect([...FEF_ROW_STRING_FIELDS].sort()).toEqual(
       EXPECTED_KEYS.filter((k) => k !== "id").sort(),
@@ -280,9 +278,7 @@ describe("isTakeOffRowInvalid", () => {
   };
 
   it("returns false for an untouched blank-template row (client form)", () => {
-    expect(
-      isTakeOffRowInvalid({ id: "__fe-blank-3", ...blank }),
-    ).toBe(false);
+    expect(isTakeOffRowInvalid({ id: "__fe-blank-3", ...blank })).toBe(false);
   });
 
   it("returns false for a row with no started signals (server form)", () => {
@@ -295,9 +291,7 @@ describe("isTakeOffRowInvalid", () => {
     // Client representation: id holds the CBS code, no blank-prefix.
     expect(isTakeOffRowInvalid({ id: "601-01", ...blank })).toBe(true);
     // Server representation: cbsCode column non-empty.
-    expect(
-      isTakeOffRowInvalid({ cbsCode: "601-01", ...blank }),
-    ).toBe(true);
+    expect(isTakeOffRowInvalid({ cbsCode: "601-01", ...blank })).toBe(true);
   });
 
   it("flags a row where the user typed only a name", () => {
@@ -315,9 +309,7 @@ describe("isTakeOffRowInvalid", () => {
   });
 
   it("flags a row where the user picked only a task code", () => {
-    expect(isTakeOffRowInvalid({ taskCode: "INST-PIPE", ...blank })).toBe(
-      true,
-    );
+    expect(isTakeOffRowInvalid({ taskCode: "INST-PIPE", ...blank })).toBe(true);
   });
 
   it("flags a row where the user typed only a note", () => {
@@ -325,15 +317,11 @@ describe("isTakeOffRowInvalid", () => {
   });
 
   it("flags a row with hours but no rate", () => {
-    expect(
-      isTakeOffRowInvalid({ ...blank, laborHours: "4" }),
-    ).toBe(true);
+    expect(isTakeOffRowInvalid({ ...blank, laborHours: "4" })).toBe(true);
   });
 
   it("flags a row with rate but no hours", () => {
-    expect(
-      isTakeOffRowInvalid({ ...blank, laborRate: "50" }),
-    ).toBe(true);
+    expect(isTakeOffRowInvalid({ ...blank, laborRate: "50" })).toBe(true);
   });
 
   it("flags a row with zero hours (not strictly positive)", () => {
@@ -368,7 +356,7 @@ describe("isTakeOffRowInvalid", () => {
  * The custom-column slots.
  *
  * The design bet is that making them ordinary entries in
- * `FEF_ROW_STRING_FIELDS` gets every derived behaviour for free. These assert
+ * `FEF_ROW_STRING_FIELDS` gets every derived behavior for free. These assert
  * that bet directly — if a future change special-cases them out of the array,
  * or a JSON-blob refactor moves the data elsewhere, these fail rather than the
  * breakage showing up as silently dropped estimator data.

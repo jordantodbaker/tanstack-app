@@ -106,12 +106,12 @@ export function TopNav({
     observer.observe(nav);
     // Label widths change when the web font swaps in; the nav box itself
     // doesn't, so the ResizeObserver alone would miss it.
-    let cancelled = false;
+    let canceled = false;
     document.fonts?.ready.then(() => {
-      if (!cancelled) measure();
+      if (!canceled) measure();
     });
     return () => {
-      cancelled = true;
+      canceled = true;
       observer.disconnect();
     };
   }, [links]);

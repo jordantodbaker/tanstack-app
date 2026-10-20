@@ -64,7 +64,7 @@ const openGuide = async () => {
 const heading = (name: string) => screen.queryByRole("heading", { name });
 
 describe("HelpButton", () => {
-  it("renders a labelled trigger and opens the guide on click", async () => {
+  it("renders a labeled trigger and opens the guide on click", async () => {
     signedInAs("USER");
     render(<HelpButton />);
 

@@ -30,11 +30,11 @@ import type { CbsExportView } from "~/lib/cbs-export";
 import { useCbsTreeExpansion } from "~/components/Cbs/useCbsTreeExpansion";
 
 /**
- * One CBS dataset as a searchable, colour-by-level hierarchy with a detail
+ * One CBS dataset as a searchable, color-by-level hierarchy with a detail
  * panel — the Project Cost Code List renders this directly, and
  * `CbsDictionarySections` stacks two of them for Admin → Master CBS.
  *
- * Colours mirror the workbook's outline fills (see ~/config/cbs-level-colors);
+ * Colors mirror the workbook's outline fills (see ~/config/cbs-level-colors);
  * the tree itself is the shared `CbsTreePanel`.
  */
 
@@ -72,7 +72,7 @@ function countRows(items: readonly CbsBrowserRow[]): Counts {
 }
 
 /**
- * Row-count pills + the per-level colour legend. The row-type breakdown is
+ * Row-count pills + the per-level color legend. The row-type breakdown is
  * only worth showing where generated rows can actually appear; a Code Book
  * view would just read "… · 0 sub · 0 material".
  */
@@ -100,7 +100,7 @@ function CountsLegend({
         </span>
       )}
       <span className="ml-1 text-xs text-slate-500">
-        Level colours (click to expand to a level):
+        Level colors (click to expand to a level):
       </span>
       <CbsLevelLegend
         onExpandToLevel={onExpandToLevel}
@@ -276,7 +276,7 @@ export function CbsDictionaryBrowser({
         {hasContext && (
           <label
             className="flex items-center gap-1.5 text-xs text-slate-600"
-            title="Hide the greyed-out parent summaries this project was not granted. The codes under them move up to the nearest parent it does have."
+            title="Hide the grayed-out parent summaries this project was not granted. The codes under them move up to the nearest parent it does have."
           >
             <input
               type="checkbox"

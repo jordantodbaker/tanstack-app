@@ -10,7 +10,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // jsdom has no layout, so the real virtualizer would render 0 rows. Stub it to
-// render every row — these tests exercise the tree logic (flatten/colour/search),
+// render every row — these tests exercise the tree logic (flatten/color/search),
 // not the windowing itself.
 vi.mock("@tanstack/react-virtual", () => ({
   useVirtualizer: ({ count }: { count: number }) => ({
@@ -187,7 +187,7 @@ describe("ProjectCostCodeListView", () => {
     expect(within(earthwork).queryByTitle(/Code: YES/)).toBeNull();
   });
 
-  it("colours the L0 discipline roots red", () => {
+  it("colors the L0 discipline roots red", () => {
     renderView();
     const row = screen.getByText("Civil").closest('[role="treeitem"]');
     expect(row).toHaveStyle({ backgroundColor: "#C0504D" });
@@ -332,7 +332,7 @@ describe("ProjectCostCodeListView", () => {
     });
 
     it("never asks to hide parents on a view that has none", async () => {
-      // Nothing to hide, so the file must not be labelled as though there was.
+      // Nothing to hide, so the file must not be labeled as though there was.
       renderView(FIXTURE);
       fireEvent.click(screen.getByRole("button", { name: /Export Excel/ }));
       await vi.waitFor(() => expect(exportCall).toHaveBeenCalledTimes(1));
@@ -377,7 +377,7 @@ describe("ProjectCostCodeListView", () => {
   });
 
   /**
-   * The colour legend doubles as the depth control: the key to the colours is
+   * The color legend doubles as the depth control: the key to the colors is
    * how you get to them. Levels here are CODE levels, matching the swatches.
    */
   describe("level swatches", () => {

@@ -288,9 +288,7 @@ function CbsTreeEditor({
       </CbsTreeToolbar>
 
       <div className="flex flex-wrap items-center gap-1 text-xs text-slate-500">
-        <span className="mr-1">
-          Level colours (click to expand to a level):
-        </span>
+        <span className="mr-1">Level colors (click to expand to a level):</span>
         <CbsLevelLegend
           onExpandToLevel={expandToLevel}
           levelShown={levelShown}

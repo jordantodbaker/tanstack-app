@@ -13,7 +13,7 @@ import type { UserRole } from "~/utils/users";
  *     renaming one breaks every link anyone has saved or pasted in an email.
  *   - `minRole` on a section or a block means "hidden below this privilege".
  *     Omit it for content everyone can use. Filtering is subtractive: a USER
- *     is never shown a greyed-out admin feature, matching the nav.
+ *     is never shown a grayed-out admin feature, matching the nav.
  *   - Don't hand-list workflow actions — use a `workflow` block. It reads the
  *     real transition maps in `~/utils/workflow.ts` and renders only what the
  *     reader's role may actually do, so the guide can't drift from the app.
@@ -394,7 +394,7 @@ export const HELP_SECTIONS: HelpSection[] = [
           },
           {
             kind: "p",
-            text: 'The tree is the full CBS Dictionary, coloured by level the way the source workbook colours it. The L0–L5 swatches under "Level colours" are buttons — click one to open the whole tree to that level and no deeper, with L0 collapsing to the discipline roots and L5 matching Expand all. Ticking a parent allows everything beneath it; a half-filled box means only some of its children are allowed. The Subcontracts and Materials buttons narrow the tree to codes whose cost type (L7) is S or M, or whose Sub Code / Material Code is YES — handy for granting a project just its subcontract or material accounts. Rows marked S or M are the generated subcontract and material versions of the row above them, so allow those too if the project will book cost against them.',
+            text: 'The tree is the full CBS Dictionary, colored by level the way the source workbook colors it. The L0–L5 swatches under "Level colors" are buttons — click one to open the whole tree to that level and no deeper, with L0 collapsing to the discipline roots and L5 matching Expand all. Ticking a parent allows everything beneath it; a half-filled box means only some of its children are allowed. The Subcontracts and Materials buttons narrow the tree to codes whose cost type (L7) is S or M, or whose Sub Code / Material Code is YES — handy for granting a project just its subcontract or material accounts. Rows marked S or M are the generated subcontract and material versions of the row above them, so allow those too if the project will book cost against them.',
           },
           {
             kind: "p",
@@ -490,28 +490,28 @@ export const HELP_SECTIONS: HelpSection[] = [
         blocks: [
           {
             kind: "p",
-            text: "The Project Cost Code List shows the cost codes available on the selected project — exactly the ones an administrator allowed in Setup — as a colour-coded, collapsible hierarchy you can search. It is a reference view: nothing here changes the estimate.",
+            text: "The Project Cost Code List shows the cost codes available on the selected project — exactly the ones an administrator allowed in Setup — as a color-coded, collapsible hierarchy you can search. It is a reference view: nothing here changes the estimate.",
           },
           {
             kind: "ul",
             items: [
               "Only the original CBS rows are listed. S means a code's own Sub Code is YES and M means its Material Code is YES; a code with both shows both.",
               "The generated subcontract and material rows are not listed here — the badges already tell you which codes have them. Administrators can see both views over the whole catalog under Cost Breakdown Structure → CBS Code Book.",
-              'Export Excel downloads the rows currently shown — whatever the search box and the Subcontracts / Materials buttons left. The sheet starts with a labelled block giving the project number and title, the scope, the filter applied, the code count and the export date, and the project number is in the filename too. The file keeps the level colours and turns the hierarchy into Excel row grouping, so it collapses in Excel the way it does on the page. Context rows come through italic and marked "Context only".',
+              'Export Excel downloads the rows currently shown — whatever the search box and the Subcontracts / Materials buttons left. The sheet starts with a labeled block giving the project number and title, the scope, the filter applied, the code count and the export date, and the project number is in the filename too. The file keeps the level colors and turns the hierarchy into Excel row grouping, so it collapses in Excel the way it does on the page. Context rows come through italic and marked "Context only".',
               "Cost types — Labor, Subcontracts, Materials, Equipment and Other — narrow the tree to one kind of code: a row qualifies if its cost type (L7) is the matching letter, or its matching column (Labor Code, Sub Code, Material Code, Equipment Code, Other Code) is YES. Turning two on shows either kind; they narrow the search box rather than widening it.",
               "A cost-type filter is strict: only rows carrying that type survive. A parent that does not carry it is dropped and its matching children are lifted into its place — a parent kept only to hold children shows no badge and would read as a code that is not of that kind. A plain text search still keeps the parents, because knowing where a hit sits is most of the answer.",
-              "While a cost-type filter is on, a row shows only the badges for the types you selected: filter on Materials and a row carrying both labour and material shows just M, and turning Subcontracts on as well shows S M. Every row on screen already qualifies on the filtered type, so the other letters only invite reading the row as something it is not here for. Clear the filter and the full set returns.",
+              "While a cost-type filter is on, a row shows only the badges for the types you selected: filter on Materials and a row carrying both labor and material shows just M, and turning Subcontracts on as well shows S M. Every row on screen already qualifies on the filtered type, so the other letters only invite reading the row as something it is not here for. Clear the filter and the full set returns.",
               'Search matches the code, the name, the account description and the unit. Terms are order-free and all required, so "rental pipe" finds "Pipe Shop Third Party Rental"; a code typed without its dashes ("60420") finds its row, which helps when pasting from Excel.',
               "A ?code= link — /project-cost-codes?code=052-15-0500-00-L — opens the page on that account: the tree expands to it, it is selected, and the list scrolls to it. Handy for pointing someone at one code.",
-              'The L0–L5 swatches under "Level colours" open the tree to one code level at a time — L0 is just the discipline roots, L5 is everything. The one in force is outlined until you open or close a row yourself.',
-              "Greyed-out italic rows are parent summaries the project was not granted. They appear only so the codes beneath them nest correctly — they carry no badges, are left out of the row count, and cannot be used on an estimate. Tick one in Setup to make it usable.",
+              'The L0–L5 swatches under "Level colors" open the tree to one code level at a time — L0 is just the discipline roots, L5 is everything. The one in force is outlined until you open or close a row yourself.',
+              "Grayed-out italic rows are parent summaries the project was not granted. They appear only so the codes beneath them nest correctly — they carry no badges, are left out of the row count, and cannot be used on an estimate. Tick one in Setup to make it usable.",
               "Select any row to see its full detail: unit, cost code, account, cost classification, discipline, description, and the Row and Expanded Row it occupies in the source workbook.",
             ],
           },
           {
             kind: "image",
             src: "/help/project-cost-codes.png",
-            alt: "The Project Cost Code List: a row count, the L0 to L5 level-colour swatches, a search box with Expand all, Collapse all, Subcontracts, Materials and Export Excel buttons, and the colour-coded discipline roots of the hierarchy.",
+            alt: "The Project Cost Code List: a row count, the L0 to L5 level-color swatches, a search box with Expand all, Collapse all, Subcontracts, Materials and Export Excel buttons, and the color-coded discipline roots of the hierarchy.",
             caption:
               "The row count, the level swatches and the filter buttons sit above the tree; the detail panel fills in on the right when you select a row.",
           },
@@ -572,7 +572,7 @@ export const HELP_SECTIONS: HelpSection[] = [
           {
             kind: "ul",
             items: [
-              "Each division is shaded by utilisation — granted against used — and opening one lists its codes with the unused first, since those are the ones worth revoking.",
+              "Each division is shaded by utilization — granted against used — and opening one lists its codes with the unused first, since those are the ones worth revoking.",
               "Usage counts rows in EVERY estimate version, not just the current one: a code dropped from the latest version is still why an earlier one reads as it does.",
               "Read the percentages as a floor. The take-off pages build codes from an account plus the row's own attributes — metallurgy, bore size, fabricate/erect — so a piping row books to something like 604-MB-ST00-00-C, which was never a dictionary row and cannot be matched to a granted code. The page says how many of those it found.",
             ],

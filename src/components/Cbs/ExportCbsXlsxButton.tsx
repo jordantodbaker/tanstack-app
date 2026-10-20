@@ -51,7 +51,7 @@ export function ExportCbsXlsxButton({
       title={
         failed
           ? "The export failed — try again"
-          : "Export the rows shown (filters applied) to Excel, with colours and collapsible grouping"
+          : "Export the rows shown (filters applied) to Excel, with colors and collapsible grouping"
       }
     >
       <FileSpreadsheet className="mr-1 size-3.5" />

@@ -26,10 +26,10 @@ function AdminCoreCodesPage() {
         </h1>
         <p className="mt-1 max-w-3xl text-sm text-slate-500">
           How CBS items across the disciplines link to shared core accounts, so
-          an estimate can be totalled by discipline <em>and</em> by kind of
-          cost. Read-only — core codes change only through a CBS import. The
-          coding is a work in progress, so this page is as much about the gaps
-          as the links.
+          an estimate can be totaled by discipline <em>and</em> by kind of cost.
+          Read-only — core codes change only through a CBS import. The coding is
+          a work in progress, so this page is as much about the gaps as the
+          links.
         </p>
       </header>
 

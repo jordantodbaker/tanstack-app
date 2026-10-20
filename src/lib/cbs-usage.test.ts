@@ -90,7 +90,7 @@ describe("buildCodeUsage", () => {
 
   it("treats everything unmatched as built when no catalog is supplied", () => {
     // The default keeps the function usable without a catalog lookup, and errs
-    // towards "not a dictionary code" rather than inventing allow-list gaps.
+    // toward "not a dictionary code" rather than inventing allow-list gaps.
     const { ungranted, unknown } = buildCodeUsage(
       granted,
       new Map([["999-00-0000-00-0", 7]]),

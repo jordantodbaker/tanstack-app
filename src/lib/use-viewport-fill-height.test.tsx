@@ -10,7 +10,12 @@ import {
 describe("computeFillHeight", () => {
   it("fills the gap between the pane's top and the viewport bottom", () => {
     expect(
-      computeFillHeight({ top: 200, viewportHeight: 900, reserve: 100, min: 240 }),
+      computeFillHeight({
+        top: 200,
+        viewportHeight: 900,
+        reserve: 100,
+        min: 240,
+      }),
     ).toBe(600);
   });
 
@@ -37,7 +42,12 @@ describe("computeFillHeight", () => {
     // 240px floor over a sheet four times that tall. The page scrolls to reach
     // a pane in this position anyway, so give it a real working height.
     expect(
-      computeFillHeight({ top: 700, viewportHeight: 760, reserve: 116, min: 240 }),
+      computeFillHeight({
+        top: 700,
+        viewportHeight: 760,
+        reserve: 116,
+        min: 240,
+      }),
     ).toBe(532);
   });
 
@@ -68,17 +78,27 @@ describe("computeFillHeight", () => {
     expect(h).toBe(300);
   });
 
-  it("still honours the minimum on a genuinely tiny viewport", () => {
+  it("still honors the minimum on a genuinely tiny viewport", () => {
     // A share of a very short viewport is smaller than the floor; the floor
     // wins, because a pane a few rows tall is not usable at any ratio.
     expect(
-      computeFillHeight({ top: 400, viewportHeight: 300, reserve: 116, min: 240 }),
+      computeFillHeight({
+        top: 400,
+        viewportHeight: 300,
+        reserve: 116,
+        min: 240,
+      }),
     ).toBe(240);
   });
 
   it("rounds to whole pixels", () => {
     expect(
-      computeFillHeight({ top: 100.4, viewportHeight: 900, reserve: 0, min: 0 }),
+      computeFillHeight({
+        top: 100.4,
+        viewportHeight: 900,
+        reserve: 0,
+        min: 0,
+      }),
     ).toBe(800);
   });
 });

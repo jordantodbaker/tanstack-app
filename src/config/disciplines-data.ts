@@ -282,7 +282,7 @@ export const disciplinesData: DisciplineData[] = [
     id: "subcontracts",
     label: "Subcontracts",
     // Not built yet. All three are `to`-less so the sidebar renders them as
-    // greyed-out placeholders; "Civil Subcontracts" used to point at "/",
+    // grayed-out placeholders; "Civil Subcontracts" used to point at "/",
     // which bounced the user out of the estimate.
     items: [
       { label: "Civil Subcontracts" },
@@ -295,7 +295,7 @@ export const disciplinesData: DisciplineData[] = [
 /**
  * Leading CBS digit → the canonical discipline for that digit. Fallback for
  * attributing an L1 code that isn't explicitly listed under any discipline
- * (e.g. legacy/synthetic codes) — mirrors the old digit-bucket behaviour so no
+ * (e.g. legacy/synthetic codes) — mirrors the old digit-bucket behavior so no
  * cost is dropped from roll-ups.
  */
 export const DIGIT_TO_DISCIPLINE: Record<string, string> = {

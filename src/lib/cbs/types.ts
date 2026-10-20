@@ -59,8 +59,8 @@ export type CbsTreeNode<T extends CbsTreeItem = CbsTreeItem> = {
   pathKey: string;
   /** Nesting depth in the built tree (0 = root). Drives indentation. */
   depth: number;
-  /** Code level (see `getCbsLevel`). Drives colouring, like the workbook's
-   *  colour-by-outline-level; can exceed `depth` when an intermediate code
+  /** Code level (see `getCbsLevel`). Drives coloring, like the workbook's
+   *  color-by-outline-level; can exceed `depth` when an intermediate code
    *  is absent and the row collapsed up to a shallower ancestor. */
   level: number;
   item: T;

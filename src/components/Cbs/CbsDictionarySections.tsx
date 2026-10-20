@@ -121,7 +121,7 @@ function CbsSectionShell({
 }
 
 const MASTER_SOURCE_NOTE =
-  "Source: the CBS Dictionary, in full — no project allow-list applied. Colours mirror the source workbook's outline levels.";
+  "Source: the CBS Dictionary, in full — no project allow-list applied. Colors mirror the source workbook's outline levels.";
 const MASTER_EMPTY = "No CBS items in the catalog.";
 
 /**

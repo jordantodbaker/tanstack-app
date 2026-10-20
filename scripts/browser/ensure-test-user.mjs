@@ -9,7 +9,7 @@ import { appendFileSync, readFileSync } from "node:fs";
  * The address uses Clerk's `+clerk_test` convention, which test instances
  * accept without a real mailbox or a delivered verification code. The account
  * exists only so an automated browser can reach authenticated pages; it is
- * plainly labelled so it is obvious what it is in the Clerk dashboard, and
+ * plainly labeled so it is obvious what it is in the Clerk dashboard, and
  * deleting it there is the whole cleanup.
  *
  * The generated password is written to `.env` (gitignored) rather than printed,

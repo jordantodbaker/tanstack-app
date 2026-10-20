@@ -25,7 +25,7 @@ function HelpPage() {
   const { data: user } = useCurrentUser();
   const { role, query, setQuery, sections, contents } = useHelpGuide();
 
-  // Honour the `#section` in the URL once the (role-filtered) content is on
+  // Honor the `#section` in the URL once the (role-filtered) content is on
   // the page. Runs on every section change so a search that re-renders the
   // body doesn't strand the reader away from their anchor.
   React.useEffect(() => {

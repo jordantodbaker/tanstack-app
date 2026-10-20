@@ -3,7 +3,7 @@
 > **The shipped guide lives in the app**, not here. `src/config/help-guide.ts`
 > is the authoritative copy: it is what the header's **?** button and the
 > `/help` route render, and it is filtered to each reader's role. Edit that
-> file when app behaviour changes.
+> file when app behavior changes.
 >
 > This document is kept as the plain-text reference for anyone reading the
 > repo rather than using the app. It has no role filtering, so it describes
@@ -181,13 +181,13 @@ Cost = Total Cost**.
 
 ### Working with the CBS tree
 
-Three pages show the CBS as a colour-coded, collapsible hierarchy: **Setup**,
+Three pages show the CBS as a color-coded, collapsible hierarchy: **Setup**,
 the **Project Cost Code List**, and the administrators' **CBS Code Book**. They
 differ in what they list and what you can do there, but the controls are the
 same on all three, so they are described once here.
 
-**Level colours.** The tree is coloured by code level, the way the source
-workbook colours it. The **L0–L5 swatches** under "Level colours" are buttons:
+**Level colors.** The tree is colored by code level, the way the source
+workbook colors it. The **L0–L5 swatches** under "Level colors" are buttons:
 click one to open the whole tree to that level and no deeper — **L0** collapses
 to the discipline roots, **L5** is the same as **Expand all**. The swatch in
 force is outlined, and the outline clears once you open or close a row
@@ -230,7 +230,7 @@ children would show no badge and would read as a code that is not of that kind.
 
 **Badges under a filter.** Where a page shows the **L / S / M / E / O** badges,
 a cost-type filter narrows them to the types you selected. Filter on
-**Materials** and a row carrying both labour and material shows just **M**; turn
+**Materials** and a row carrying both labor and material shows just **M**; turn
 **Subcontracts** on as well and it shows **S M**. Every row on screen has
 already earned its place on the filtered type, so the other letters only invite
 reading the row as something it is not here for. Clear the filter and the full
@@ -256,11 +256,11 @@ describing where to find it. An unknown code is ignored and the page opens
 normally.
 
 **Export Excel** downloads what you are looking at — the rows left by the search
-box and the filter buttons, and nothing else. The sheet opens with a labelled
+box and the filter buttons, and nothing else. The sheet opens with a labeled
 block giving the **project number** and **project title**, what the rows cover,
 the filter applied, the code count and the export date; the project number is in
 the filename too, so forwarded files can be told apart. The file keeps the level
-colours and turns the hierarchy into Excel's own row grouping, so the ± controls
+colors and turns the hierarchy into Excel's own row grouping, so the ± controls
 in the margin collapse it the way the page does. Collapsing branches on screen
 doesn't change the file — Excel's grouping is what collapses it there. Each page
 exports by its own rules, so the file always matches the screen.
@@ -298,7 +298,7 @@ both. The generated subcontract and material rows are not listed here, since
 those badges already tell you which codes have them; administrators can see both
 views over the whole CBS under **Cost Breakdown Structure → CBS Code Book**.
 
-Greyed-out, italic rows are **parent summaries the project wasn't granted**,
+Grayed-out, italic rows are **parent summaries the project wasn't granted**,
 shown only so the codes beneath them sit in the right place in the hierarchy.
 They carry no badges, aren't counted in the row count, and don't appear in the
 Field Estimate Form's code pickers — they are not codes you can use. To make one
@@ -348,7 +348,7 @@ account they named was removed by a workbook change.
 ### Code Usage
 
 How much of a project's cost code list the estimate actually uses, by division:
-granted against used, shaded by utilisation, with the unused codes listed first
+granted against used, shaded by utilization, with the unused codes listed first
 when you open a division — those are the ones worth revoking. Usage counts rows
 in **every** estimate version, not just the current one, so a code dropped from
 the latest version is not mistaken for dead.

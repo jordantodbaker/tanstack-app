@@ -59,9 +59,9 @@ describe("flattenCbsForExport", () => {
     ]);
   });
 
-  it("carries the code level separately, since that is what colours a row", () => {
+  it("carries the code level separately, since that is what colors a row", () => {
     // Depth and level diverge when an intermediate code is absent; the fill
-    // follows the level so the export matches the page's colouring.
+    // follows the level so the export matches the page's coloring.
     const rows = flattenCbsForExport(
       buildCbsTree([
         item("600-00-0000-00-0", { name: "Piping" }),
@@ -95,7 +95,7 @@ describe("flattenCbsForExport", () => {
     expect(rows.at(-1)!.outlineLevel).toBe(3);
   });
 
-  it("honours the Subcontracts / Materials toggles", () => {
+  it("honors the Subcontracts / Materials toggles", () => {
     const tree = buildCbsTree([
       item("600-00-0000-00-0", { name: "Piping" }),
       item("601-00-0000-00-0", { name: "Spool", subReporting: true }),

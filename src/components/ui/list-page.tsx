@@ -30,7 +30,9 @@ export function StatCard({
             visually compact on 2-col mobile grids where they wrap to 2 lines.
             `text-sm sm:text-xs` raises the on-phone size above the ~14px
             sustained-reading threshold; desktop keeps the denser look. */}
-        <p className="text-sm sm:text-xs leading-tight text-slate-500">{label}</p>
+        <p className="text-sm sm:text-xs leading-tight text-slate-500">
+          {label}
+        </p>
         {Icon && <Icon className={`size-4 ${toneClass} opacity-70 shrink-0`} />}
       </div>
       <p className={`mt-1 text-xl font-bold tabular-nums ${toneClass}`}>
@@ -126,7 +128,7 @@ export function Th({
 
 /**
  * Standard table-body cell — the shared padding + bottom border every admin/
- * list row cell carries. Extra classes (alignment, font, colour, `text-right
+ * list row cell carries. Extra classes (alignment, font, color, `text-right
  * tabular-nums`, …) compose via `className`; note `align-top` is NOT in the
  * base, so a cell opts into it explicitly the way the old per-route `cellCls`
  * string did. Replaces that string, which was redeclared in every admin route.
@@ -137,7 +139,10 @@ export function Td({
   ...rest
 }: React.TdHTMLAttributes<HTMLTableCellElement>) {
   return (
-    <td className={cn("px-3 py-2 border-b border-slate-100", className)} {...rest}>
+    <td
+      className={cn("px-3 py-2 border-b border-slate-100", className)}
+      {...rest}
+    >
       {children}
     </td>
   );

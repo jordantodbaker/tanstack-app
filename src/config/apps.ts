@@ -201,7 +201,7 @@ export const APPS: readonly AppDef[] = [
     id: "admin",
     label: "Administration",
     description:
-      "Projects and areas, labour rates and crew mixes, templates, users and system settings.",
+      "Projects and areas, labor rates and crew mixes, templates, users and system settings.",
     icon: Shield,
     home: "/admin/projects",
     adminOnly: true,
@@ -267,7 +267,7 @@ export const appById = Object.fromEntries(APPS.map((a) => [a.id, a])) as Record<
  * launcher and the help guide.
  *
  * Anything left over is a take-off page: `$discipline` is a catch-all for a
- * single path segment, so an unrecognised one-segment route is the estimate's.
+ * single path segment, so an unrecognized one-segment route is the estimate's.
  */
 export function appForPath(pathname: string): AppDef | null {
   if (GLOBAL_PATHS.has(pathname)) return null;

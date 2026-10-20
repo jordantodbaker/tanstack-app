@@ -33,7 +33,7 @@ import {
  * route supplies the entity-specific pieces (query data, server fns, the
  * haystack/discipline accessors) and keeps its own stats, columns, and dialog.
  *
- * `accessors` must be stable across renders (memoise it, or its fields) — it
+ * `accessors` must be stable across renders (memoize it, or its fields) — it
  * feeds the `matchesFilters`/`filtered` memos, like the hand-written predicates
  * each route used to inline.
  */
@@ -320,7 +320,9 @@ export function ListPageLayout({
         {newAction}
       </div>
 
-      {!projectScoped && <SelectProjectBanner>{bannerText}</SelectProjectBanner>}
+      {!projectScoped && (
+        <SelectProjectBanner>{bannerText}</SelectProjectBanner>
+      )}
 
       <StatCardRow cards={cards} />
 

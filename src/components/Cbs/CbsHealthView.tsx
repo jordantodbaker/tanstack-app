@@ -23,7 +23,7 @@ import { healthHeadline, type HealthCheck } from "~/lib/cbs-health";
  * the import keeps one row and drops the rest, so an account sits in the
  * workbook and exists nowhere in the app, with nothing anywhere saying so.
  *
- * A passing check is shown too, collapsed and grey. "Nothing reported" and
+ * A passing check is shown too, collapsed and gray. "Nothing reported" and
  * "never asked" are different things, and the page should not blur them.
  */
 
@@ -80,7 +80,7 @@ function ExportHealthCheckButton({ check }: { check: HealthCheck }) {
   );
 }
 
-/** How many rows show before "Show all". Enough to recognise the pattern. */
+/** How many rows show before "Show all". Enough to recognize the pattern. */
 const PREVIEW = 10;
 
 /**

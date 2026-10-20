@@ -8,7 +8,7 @@ import {
 
 const STATUS_STYLES: Record<PcoStatus, string> = {
   DRAFT: "bg-slate-100 text-slate-700 border-slate-300",
-  // SUBMITTED is the "waiting on owner" state — stand-out colour.
+  // SUBMITTED is the "waiting on owner" state — stand-out color.
   SUBMITTED: "bg-amber-50 text-amber-800 border-amber-300",
   // NEGOTIATING is louder; owner has pushed back.
   NEGOTIATING: "bg-orange-50 text-orange-800 border-orange-300",

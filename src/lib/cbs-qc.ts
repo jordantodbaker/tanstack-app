@@ -159,7 +159,7 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
     for (const prefix of ancestorPrefixes(r.displayCode)) {
       const hits = byPrefix.get(prefix);
       if (!hits) continue;
-      // Prefer the account's own "-0" row; it is the one that summarises.
+      // Prefer the account's own "-0" row; it is the one that summarizes.
       return hits.find((h) => l7Of(h.displayCode) === "0") ?? hits[0];
     }
     return null;
@@ -224,7 +224,7 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
       findings: parentType,
       count: parentType.length,
       summary:
-        "A parent either summarises mixed cost types, in which case it must be 0, or it shares its children's single type. These do neither, so a roll-up double-counts or lands in the wrong column.",
+        "A parent either summarizes mixed cost types, in which case it must be 0, or it shares its children's single type. These do neither, so a roll-up double-counts or lands in the wrong column.",
       action:
         "Set the parent's cost type to 0 in CBS.xlsx, or correct the children.",
       clear: "Every parent's cost type agrees with its children.",
@@ -348,7 +348,7 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
   );
 
   // --- 6/7/8. Format of the controlled columns.
-  const costCentre = rows.filter(
+  const costCenter = rows.filter(
     (r) => !blank(r.costCenter) && !/^\d{4}$/.test(r.costCenter!.trim()),
   );
   checks.push(
@@ -356,8 +356,8 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
       id: "qc-cost-center",
       title: "Cost Center is not a 4-digit code",
       severity: "warning",
-      findings: costCentre.map((r) => at(r, `Cost Center "${r.costCenter}"`)),
-      count: costCentre.length,
+      findings: costCenter.map((r) => at(r, `Cost Center "${r.costCenter}"`)),
+      count: costCenter.length,
       summary: "Cost Center is expected to be four digits.",
       action: "Correct the Cost Center column in CBS.xlsx.",
       clear: "Every Cost Center is a 4-digit code.",

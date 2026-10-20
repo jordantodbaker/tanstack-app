@@ -107,7 +107,7 @@ describe("resolveCbsStamp", () => {
     });
   });
 
-  it("resolves the copper/brass/aluminium series to its plain bore rollup", () => {
+  it("resolves the copper/brass/aluminum series to its plain bore rollup", () => {
     expect(resolveCbsStamp("645", "MB", find)).toEqual({
       id: "645-MB-0000-00-L",
       name: "Install Copper Medium Bore",
@@ -268,7 +268,10 @@ describe("pipingCostCodes with size and Fabricate / Erect", () => {
   const ROLLUPS = ["640LB0000LBL", "640LB000000L"];
 
   it("puts the work-type codes ahead of every rollup", () => {
-    const codes = pipingCostCodes("640", "LB", { sizeCode: "12", feCode: "ER" });
+    const codes = pipingCostCodes("640", "LB", {
+      sizeCode: "12",
+      feCode: "ER",
+    });
     expect(codes.slice(0, 2)).toEqual(["640LB12ER00L", "640LB12ERSTL"]);
   });
 
@@ -293,7 +296,10 @@ describe("pipingCostCodes with size and Fabricate / Erect", () => {
   it("keeps the rollups below the narrower codes as a fallback", () => {
     // A project whose enabled scope stops at the bore level still resolves,
     // just less specifically.
-    const codes = pipingCostCodes("640", "LB", { sizeCode: "12", feCode: "ER" });
+    const codes = pipingCostCodes("640", "LB", {
+      sizeCode: "12",
+      feCode: "ER",
+    });
     expect(codes.slice(2)).toEqual([
       "640LB1200STL",
       "640LB120000L",
@@ -310,9 +316,9 @@ describe("resolveCbsStamp with size and Fabricate / Erect", () => {
       : undefined;
 
   const CATALOG = catalog({
-    "640LB12ER00L": "Install Carbon Steel Large Bore 12\" - Erect",
-    "640LB12FB00L": "Install Carbon Steel Large Bore 12\" - Field Fabricate",
-    "640LB1200STL": "Install Carbon Steel Large Bore 12\"",
+    "640LB12ER00L": 'Install Carbon Steel Large Bore 12" - Erect',
+    "640LB12FB00L": 'Install Carbon Steel Large Bore 12" - Field Fabricate',
+    "640LB1200STL": 'Install Carbon Steel Large Bore 12"',
     "640LB000000L": "Install Carbon Steel Large Bore",
   });
 
@@ -343,14 +349,16 @@ describe("resolveCbsStamp with size and Fabricate / Erect", () => {
   });
 
   it("falls back when the project hasn't enabled the fabrication code", () => {
-    const narrow = catalog({ "640LB000000L": "Install Carbon Steel Large Bore" });
+    const narrow = catalog({
+      "640LB000000L": "Install Carbon Steel Large Bore",
+    });
     expect(
       resolveCbsStamp("640", "LB", narrow, { sizeCode: "12", feCode: "ER" }),
     ).toMatchObject({ name: "Install Carbon Steel Large Bore" });
   });
 
   it("uses the schedule-qualified row for a series that has no plain work-type code", () => {
-    // Copper, brass, aluminium and the high alloys only carry "…{FE}{ST|XH|XX}".
+    // Copper, brass, aluminum and the high alloys only carry "…{FE}{ST|XH|XX}".
     const copper = catalog({
       "645LB12FBSTL": 'Field Fab Copper LB: 12" Sch Standard or less',
     });
@@ -363,7 +371,10 @@ describe("resolveCbsStamp with size and Fabricate / Erect", () => {
 
   it("still clears the item when nothing in the ladder matches", () => {
     expect(
-      resolveCbsStamp("640", "LB", catalog({}), { sizeCode: "12", feCode: "ER" }),
+      resolveCbsStamp("640", "LB", catalog({}), {
+        sizeCode: "12",
+        feCode: "ER",
+      }),
     ).toEqual({ id: "", name: "", unit: "" });
   });
 });

@@ -159,7 +159,7 @@ function UsageBody({ model }: { model: UsageModel }) {
             piping row books to something like{" "}
             <code className="font-mono">604-MB-ST00-00-C</code>, which was never
             a dictionary row. Those rows cannot be matched to a granted code, so
-            the utilisation below counts only the codes that are shared between
+            the utilization below counts only the codes that are shared between
             the estimate and the catalog. Treat it as a floor, not a verdict.
           </p>
         </div>
@@ -191,7 +191,7 @@ function UsageBody({ model }: { model: UsageModel }) {
                 Unused
               </th>
               <th className="px-2 py-2 text-left font-semibold text-slate-700">
-                Utilisation
+                Utilization
               </th>
               <th className="px-3 py-2 text-right font-semibold text-slate-700">
                 Rows

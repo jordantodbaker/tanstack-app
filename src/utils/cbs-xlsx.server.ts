@@ -130,15 +130,15 @@ export async function buildCbsWorkbook(
     const excelRow = ws.addRow(CBS_EXPORT_COLUMNS.map((c) => c.get(row)));
     excelRow.outlineLevel = Math.min(row.outlineLevel, MAX_OUTLINE_LEVEL);
 
-    const colour = cbsColorForLevel(row.level);
+    const color = cbsColorForLevel(row.level);
     excelRow.eachCell((cell) => {
       cell.fill = {
         type: "pattern",
         pattern: "solid",
-        fgColor: { argb: argb(colour.fill) },
+        fgColor: { argb: argb(color.fill) },
       };
       cell.font = {
-        color: { argb: argb(colour.text) },
+        color: { argb: argb(color.text) },
         // Context rows read as muted on the page; italic is the closest
         // equivalent that survives a cell already carrying a level fill.
         italic: row.context,

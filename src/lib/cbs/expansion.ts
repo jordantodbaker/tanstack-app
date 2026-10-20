@@ -1,13 +1,13 @@
 /**
- * Which nodes to open — the path keys behind "expand all" and the colour
+ * Which nodes to open — the path keys behind "expand all" and the color
  * legend's L0…L5 buttons.
  */
 import { type CbsTreeNode } from "./types";
 
 /**
  * Path keys to open so the tree shows down to `level` and no further — what
- * the colour legend's L0…L5 buttons set. Keyed on the CODE level (the legend's
- * own colour key), not tree depth, so "L2" means the blue rows whatever depth
+ * the color legend's L0…L5 buttons set. Keyed on the CODE level (the legend's
+ * own color key), not tree depth, so "L2" means the blue rows whatever depth
  * they landed at. Level 0 opens nothing, which is "collapse all".
  */
 export function collectKeysToLevel(

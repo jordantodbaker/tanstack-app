@@ -4,10 +4,10 @@ import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
 import { cn } from "~/lib/utils";
 
 /**
- * Labelled action menu, styled to match `popover.tsx`.
+ * Labeled action menu, styled to match `popover.tsx`.
  *
- * Exists because a row of unlabelled icon buttons reads as decoration: the
- * custom-columns popover had rename, reorder and remove as four 14px grey
+ * Exists because a row of unlabeled icon buttons reads as decoration: the
+ * custom-columns popover had rename, reorder and remove as four 14px gray
  * glyphs, and people did not find them. Named items in a menu cost one click
  * and are legible without hovering for a tooltip.
  *
@@ -25,7 +25,10 @@ function DropdownMenuTrigger({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Trigger>) {
   return (
-    <DropdownMenuPrimitive.Trigger data-slot="dropdown-menu-trigger" {...props} />
+    <DropdownMenuPrimitive.Trigger
+      data-slot="dropdown-menu-trigger"
+      {...props}
+    />
   );
 }
 

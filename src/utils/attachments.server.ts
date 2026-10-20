@@ -32,7 +32,7 @@ export { MAX_ATTACHMENT_BYTES };
  * Allow-list of mime types accepted on upload. Permissive on purpose — EPC
  * field uploads include phone photos (heic/heif), scanned drawings (pdf),
  * marked-up sketches (png/jpg), Excel takeoffs, and the odd Word memo. The
- * size cap is the real first line of defence.
+ * size cap is the real first line of defense.
  */
 export const ALLOWED_MIME_TYPES: ReadonlySet<string> = new Set([
   "image/jpeg",
@@ -148,7 +148,7 @@ export async function writeAttachmentFile(
  * store's `BLOB_READ_WRITE_TOKEN` (a plain `fetch` would 403 on a private
  * object). Called only from `downloadAttachment`, which gates on
  * `requireProjectAccess` first, so authorisation is enforced before the bytes
- * are read — the private object + unguessable URL are defence in depth.
+ * are read — the private object + unguessable URL are defense in depth.
  */
 export async function readAttachmentFile(storageKey: string): Promise<Buffer> {
   const result = await blobGet(storageKey, { access: "private" });

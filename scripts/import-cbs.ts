@@ -17,7 +17,7 @@
 // Material / Equipment / Other Code already has its typed companion in the
 // sheet — so the loader's own S/M generation is now a safety net rather than
 // the main event, and the report's "generated" counts are near zero. What the
-// loader still does to every row is normalise the four-segment summary codes
+// loader still does to every row is normalize the four-segment summary codes
 // to the "-0" backbone and strip the "(L)" / "(*)" suffix from the name; see
 // `prisma/cbs-workbook.ts`.
 //
@@ -87,7 +87,9 @@ async function main() {
   );
   if (dryRun) {
     if (toDelete.length) {
-      console.log(`Stale codes (first 20): ${toDelete.slice(0, 20).join(", ")}`);
+      console.log(
+        `Stale codes (first 20): ${toDelete.slice(0, 20).join(", ")}`,
+      );
     }
     if (toUpdate.length) {
       const sample = toUpdate
@@ -122,14 +124,19 @@ async function main() {
     const chunk = toUpdate.slice(i, i + CHUNK);
     await Promise.all(
       chunk.map((u) =>
-        prisma.cbsItem.update({ where: { costCode: u.costCode }, data: u.data }),
+        prisma.cbsItem.update({
+          where: { costCode: u.costCode },
+          data: u.data,
+        }),
       ),
     );
     console.log(
       `  updated ${Math.min(i + CHUNK, toUpdate.length)}/${toUpdate.length}…`,
     );
   }
-  console.log(`Updated ${toUpdate.length} changed CbsItems (${unchanged} unchanged).`);
+  console.log(
+    `Updated ${toUpdate.length} changed CbsItems (${unchanged} unchanged).`,
+  );
 
   const finalCount = await prisma.cbsItem.count();
   console.log(`\nFinal CbsItem count: ${finalCount}`);

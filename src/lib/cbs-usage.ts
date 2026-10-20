@@ -52,7 +52,7 @@ export type UsageModel = {
    * the row's own attributes — metallurgy, bore size, fabricate/erect — so a
    * piping row books to something like 604-MB-ST00-00-C that was never a
    * dictionary row. It matters here because those rows cannot be matched to a
-   * granted code, and a utilisation figure that ignored them would read far
+   * granted code, and a utilization figure that ignored them would read far
    * lower than the truth.
    */
   unknown: UsageItem[];

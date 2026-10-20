@@ -88,16 +88,16 @@ const SUMMARY_CODE_RE = /^[0-9A-Z]{3}-[0-9A-Z]{2}-[0-9A-Z]{4}-[0-9A-Z]{2}$/;
 
 /**
  * The workbook writes a summary row without a cost type and marks it "(*)" in
- * the name; everything downstream — the tree, the colour-by-level scheme, the
+ * the name; everything downstream — the tree, the color-by-level scheme, the
  * ancestor walk — is built on the five-segment form where "0" IS the summary
- * cost type. Normalising here keeps that single code shape, so nothing below
+ * cost type. Normalizing here keeps that single code shape, so nothing below
  * the loader has to learn a second one.
  */
 function normalizeDisplayCode(raw: string): string {
   return SUMMARY_CODE_RE.test(raw) ? `${raw}-${BACKBONE_COST_TYPE}` : raw;
 }
 
-/** The cost type a summary row carries once normalised. */
+/** The cost type a summary row carries once normalized. */
 const BACKBONE_COST_TYPE = "0";
 
 /**

@@ -122,7 +122,7 @@ export function fabricateErectCode(
  *   {m}{bore}{NN}{FB|ER}STL  the same, where the series only carries the
  *                            schedule-qualified rows. `645-LB-12FB-ST-L`,
  *                            "Field Fab Copper LB: 12" Sch Standard or less".
- *                            Copper, Brass, Aluminium and the high alloys have
+ *                            Copper, Brass, Aluminum and the high alloys have
  *                            no "…{FE}00…" rollup at all.
  *   {m}{bore}{NN}00STL       the nominal-size rollup. `610-LB-1200-ST-L`,
  *                            "Shop Fab Carbon Steel Large Bore 12"".
@@ -167,7 +167,9 @@ export function pipingCostCodes(
     // Work type is fused to a NOMINAL SIZE in the catalog; there is no
     // bore-level "…-00ER-…" rollup, so these exist only once the row has
     // resolved a size code.
-    ...(size && fe ? [`${m}${b}${size}${fe}00L`, `${m}${b}${size}${fe}STL`] : []),
+    ...(size && fe
+      ? [`${m}${b}${size}${fe}00L`, `${m}${b}${size}${fe}STL`]
+      : []),
     ...(size ? [`${m}${b}${size}00STL`, `${m}${b}${size}0000L`] : []),
     `${m}${b}0000${b}L`,
     `${m}${b}000000L`,

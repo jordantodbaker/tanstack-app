@@ -137,7 +137,7 @@ describe("buildCbsWorkbook", () => {
     );
   });
 
-  it("writes the header row in the scheme's header colour", async () => {
+  it("writes the header row in the scheme's header color", async () => {
     const { ws } = await roundTrip();
     const header = ws.getRow(CBS_SHEET_LAYOUT.header);
     expect(header.getCell(1).value).toBe("Display Code");
@@ -160,7 +160,7 @@ describe("buildCbsWorkbook", () => {
     expect(ws.properties.outlineProperties?.summaryBelow).toBe(false);
   });
 
-  it("fills each row from its CODE level, matching the page's colouring", async () => {
+  it("fills each row from its CODE level, matching the page's coloring", async () => {
     const { ws } = await roundTrip();
     for (const [i, row] of ROWS.entries()) {
       const cell = ws.getRow(FIRST_DATA_ROW + i).getCell(1);
@@ -199,7 +199,7 @@ describe("buildCbsWorkbook", () => {
       state: "frozen",
       ySplit: CBS_SHEET_LAYOUT.header,
     });
-    // exceljs normalises the range to A1 notation on the way back out.
+    // exceljs normalizes the range to A1 notation on the way back out.
     const lastCol = String.fromCharCode(64 + CBS_EXPORT_COLUMNS.length);
     const r = CBS_SHEET_LAYOUT.header;
     expect(ws.autoFilter).toBe(`A${r}:${lastCol}${r}`);

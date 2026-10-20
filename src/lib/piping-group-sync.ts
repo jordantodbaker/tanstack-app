@@ -29,7 +29,7 @@ export type PipingGroupSyncPlan = {
   changes: { classification: string; description: string }[];
 };
 
-/** Split one CSV line, honouring double-quoted fields. */
+/** Split one CSV line, honoring double-quoted fields. */
 export function parsePipingCsvLine(line: string): string[] {
   const out: string[] = [];
   let field = "";
@@ -69,7 +69,8 @@ export function parsePipingGroupCodes(
     const installCode = (cols[2] ?? "").trim();
     const shopCode = (cols[3] ?? "").trim();
     if (!classification || !installCode || !shopCode) continue;
-    if (!map.has(classification)) map.set(classification, { installCode, shopCode });
+    if (!map.has(classification))
+      map.set(classification, { installCode, shopCode });
   }
   return map;
 }

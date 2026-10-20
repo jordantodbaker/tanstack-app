@@ -450,7 +450,7 @@ describe("buildCbsTree", () => {
     const node = find(tree, "541-12-1050-00-L")!;
     expect(parentOf(tree, "541-12-1050-00-L")).toBe("541-12-0000-00-L");
     expect(node.depth).toBe(1);
-    expect(node.level).toBe(4); // colour still reflects the code depth
+    expect(node.level).toBe(4); // color still reflects the code depth
   });
 
   it("follows the Pipe Shop letter-coded lineage, ignoring trailing markers", () => {
@@ -997,7 +997,7 @@ describe("row-type filters", () => {
       material: true,
     });
     expect(nodes.map((n) => [n.item.name, n.depth])).toEqual([["Bolt-up", 0]]);
-    // `level` is the CODE's level and still drives the colour, so it does NOT
+    // `level` is the CODE's level and still drives the color, so it does NOT
     // move — a filter must not repaint the row.
     expect(nodes[0].level).toBe(2);
   });
@@ -1274,7 +1274,7 @@ describe("pruneCbsTree cost-type matching", () => {
   });
 
   it("defaults to the account-list reading", () => {
-    // Every caller that predates the distinction keeps its behaviour.
+    // Every caller that predates the distinction keeps its behavior.
     const out: string[] = [];
     const walk = (nodes: ReturnType<typeof buildCbsTree>) => {
       for (const n of nodes) {

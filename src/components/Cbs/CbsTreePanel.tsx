@@ -15,7 +15,7 @@ import {
 } from "~/config/cbs-level-colors";
 
 /**
- * The colour-by-level CBS tree shared by the Setup page (with a checkbox per
+ * The color-by-level CBS tree shared by the Setup page (with a checkbox per
  * row) and the CBS dictionary pages (with a detail panel). Rows are flattened to
  * the currently-visible set and virtualized, so "Expand all" over thousands
  * of nodes stays cheap and scroll/select/toggle never re-render the whole
@@ -148,9 +148,9 @@ const CbsRow = React.memo(function CbsRow({
 });
 
 /**
- * The per-level colour legend shown above a tree. Given `onExpandToLevel` the
+ * The per-level color legend shown above a tree. Given `onExpandToLevel` the
  * swatches become buttons that open the tree down to that level — so the key
- * to the colours is also how you get to them. `levelShown` marks the one in
+ * to the colors is also how you get to them. `levelShown` marks the one in
  * force, and is null once the expansion no longer stands at a single level.
  */
 export function CbsLevelLegend({
@@ -175,7 +175,7 @@ export function CbsLevelLegend({
           backgroundColor: c.fill,
           color: c.text,
           // The active outline has to read against every fill in the scheme,
-          // white and navy included, so it thickens rather than recolours.
+          // white and navy included, so it thickens rather than recolors.
           outline: active
             ? "2px solid rgba(15,23,42,0.85)"
             : "1px solid rgba(0,0,0,0.1)",

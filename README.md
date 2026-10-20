@@ -15,13 +15,13 @@ Navigation is split by working area, registered in
 route to its app, and the shell renders only that app's sidebar and header
 nav. `/` is a launcher with one card per app.
 
-| App | What it covers |
-|---|---|
-| **Field Estimate Form** | Per-discipline take-off sheets, crews and rates, then Summary / Basis / Validation. The only app with the discipline tree and the version picker. |
-| **Change Log** | Trends → PCOs → RFIs → Field Change Orders, with approval workflow, templates and print views. |
+| App                          | What it covers                                                                                                                                                                                  |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Field Estimate Form**      | Per-discipline take-off sheets, crews and rates, then Summary / Basis / Validation. The only app with the discipline tree and the version picker.                                               |
+| **Change Log**               | Trends → PCOs → RFIs → Field Change Orders, with approval workflow, templates and print views.                                                                                                  |
 | **Cost Breakdown Structure** | The project's cost code list, the whole CBS Code Book, the Core Code Roll-up, Code Usage (granted vs actually used) and CBS Health (the catalog's data-quality checks). Excel export from each. |
-| **Reporting** | Dashboard, cost periods, EVM, CVR templates. |
-| **Administration** | Projects, areas, subcontractors, labour rates, crew mixes, users, system settings. |
+| **Reporting**                | Dashboard, cost periods, EVM, CVR templates.                                                                                                                                                    |
+| **Administration**           | Projects, areas, subcontractors, labor rates, crew mixes, users, system settings.                                                                                                               |
 
 An app is a grouping of existing routes, **not** a URL prefix — the paths are
 unchanged, which is why the emailed "Open in app" links in
@@ -40,12 +40,12 @@ npm run dev          # http://localhost:3000
 You need a `.env` before `dev` will get past the first query. It is gitignored;
 ask whoever set the project up for the values.
 
-| Variable | Needed for |
-|---|---|
-| `DATABASE_URL` | Postgres (pooled connection string) |
-| `CLERK_SECRET_KEY` | Server-side auth |
+| Variable                     | Needed for                                           |
+| ---------------------------- | ---------------------------------------------------- |
+| `DATABASE_URL`               | Postgres (pooled connection string)                  |
+| `CLERK_SECRET_KEY`           | Server-side auth                                     |
 | `VITE_CLERK_PUBLISHABLE_KEY` | Client-side auth (build-time, baked into the bundle) |
-| `BLOB_READ_WRITE_TOKEN` | File attachments — read implicitly by `@vercel/blob` |
+| `BLOB_READ_WRITE_TOKEN`      | File attachments — read implicitly by `@vercel/blob` |
 
 Optional, each a no-op when unset: `SENTRY_DSN` / `VITE_SENTRY_DSN` (error
 tracking), `SENTRY_AUTH_TOKEN` + `SENTRY_ORG` + `SENTRY_PROJECT` (source-map
@@ -72,27 +72,27 @@ point it anywhere real.
 
 ## Commands
 
-| Command | What it does |
-|---|---|
-| `npm run dev` | Dev server on :3000 |
-| `npm run build` | Production build, then `tsc --noEmit` |
-| `npm run preview` / `npm start` | Serve the built bundle locally |
-| `npm test` | Unit + component suite (no database) |
-| `npm run test:watch` | The same suite, watching |
-| `npm run test:coverage` | Coverage report — useful for finding which logic is untested |
-| `npm run test:integration` | DB-backed suite — see [docs/integration-testing.md](docs/integration-testing.md) |
-| `npm run check:client-leak` | Fails if a client-reachable module pulls in Prisma. Run it in CI. |
-| `npm run cbs:repair` | Fix the defects a fresh copy of `CBS.xlsx` keeps arriving with — run **before** importing |
-| `npm run cbs:import` | Re-import `prisma/data/CBS.xlsx` into `CbsItem` |
-| `npm run cbs:rename` | Re-apply account renames the workbook doesn't carry yet |
-| `npm run piping:sync-codes` | Push piping metallurgy codes into `PipingGroup` |
-| `npm run seed-test` | Full demo dataset (destructive) |
+| Command                         | What it does                                                                              |
+| ------------------------------- | ----------------------------------------------------------------------------------------- |
+| `npm run dev`                   | Dev server on :3000                                                                       |
+| `npm run build`                 | Production build, then `tsc --noEmit`                                                     |
+| `npm run preview` / `npm start` | Serve the built bundle locally                                                            |
+| `npm test`                      | Unit + component suite (no database)                                                      |
+| `npm run test:watch`            | The same suite, watching                                                                  |
+| `npm run test:coverage`         | Coverage report — useful for finding which logic is untested                              |
+| `npm run test:integration`      | DB-backed suite — see [docs/integration-testing.md](docs/integration-testing.md)          |
+| `npm run check:client-leak`     | Fails if a client-reachable module pulls in Prisma. Run it in CI.                         |
+| `npm run cbs:repair`            | Fix the defects a fresh copy of `CBS.xlsx` keeps arriving with — run **before** importing |
+| `npm run cbs:import`            | Re-import `prisma/data/CBS.xlsx` into `CbsItem`                                           |
+| `npm run cbs:rename`            | Re-apply account renames the workbook doesn't carry yet                                   |
+| `npm run piping:sync-codes`     | Push piping metallurgy codes into `PipingGroup`                                           |
+| `npm run seed-test`             | Full demo dataset (destructive)                                                           |
 
 The CBS scripts run **in a specific order** after a new workbook lands; that
 sequence, and the hard-coded tables a CBS renumbering invalidates, are in
 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) §11a and
 [scripts/README.md](scripts/README.md). The one-off data migrations and
-`npm run backfill-numbers` are catalogued there too.
+`npm run backfill-numbers` are cataloged there too.
 
 ## Layout
 
@@ -107,7 +107,7 @@ src/lib/          Pure logic — no Prisma, no React Query. Most of the test sui
 src/components/   UI. Per-domain folders (Cbs/, Changelog/, Piping/, …) plus
                   shared primitives in ui/.
 src/config/       Data that drives the UI: the app registry, disciplines, CBS
-                  level colours, the in-app help guide.
+                  level colors, the in-app help guide.
 prisma/           Schema, seeds, and the CBS workbook loader + `data/CBS.xlsx`.
 scripts/          Maintenance jobs run against a database directly.
 ```
@@ -131,14 +131,14 @@ scripts/          Maintenance jobs run against a database directly.
 
 ## Further reading
 
-| Document | For |
-|---|---|
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Production brief: hosting, database, storage, auth, env vars, cron, security, first-deploy runbook, CBS update runbook |
-| [docs/STAGING_AND_PRODUCTION_DEPLOY.md](docs/STAGING_AND_PRODUCTION_DEPLOY.md) | The two-environment setup and what is set where |
-| [docs/user-guide.md](docs/user-guide.md) | End-user guide (also in-app) |
-| [docs/integration-testing.md](docs/integration-testing.md) | Running the DB-backed suite |
-| [docs/LIVING_BUDGET_PLAN.md](docs/LIVING_BUDGET_PLAN.md) | Design notes for the living-budget / CVR reconciliation work |
-| [scripts/README.md](scripts/README.md) | What each maintenance script does |
+| Document                                                                       | For                                                                                                                    |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)                                       | Production brief: hosting, database, storage, auth, env vars, cron, security, first-deploy runbook, CBS update runbook |
+| [docs/STAGING_AND_PRODUCTION_DEPLOY.md](docs/STAGING_AND_PRODUCTION_DEPLOY.md) | The two-environment setup and what is set where                                                                        |
+| [docs/user-guide.md](docs/user-guide.md)                                       | End-user guide (also in-app)                                                                                           |
+| [docs/integration-testing.md](docs/integration-testing.md)                     | Running the DB-backed suite                                                                                            |
+| [docs/LIVING_BUDGET_PLAN.md](docs/LIVING_BUDGET_PLAN.md)                       | Design notes for the living-budget / CVR reconciliation work                                                           |
+| [scripts/README.md](scripts/README.md)                                         | What each maintenance script does                                                                                      |
 
 ## Stack
 

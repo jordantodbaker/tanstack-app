@@ -20,7 +20,7 @@ import {
 export type CbsExportRow = {
   /** Tree depth, 0 for a root — Excel's row outline level. */
   outlineLevel: number;
-  /** Code level, which drives the fill colour (see `cbsColorForLevel`). */
+  /** Code level, which drives the fill color (see `cbsColorForLevel`). */
   level: number;
   displayCode: string;
   name: string;
@@ -31,7 +31,7 @@ export type CbsExportRow = {
   costTypes: Record<CbsCostTypeKey, string>;
   /**
    * True for an ancestor pulled in only so the hierarchy reads — not a code
-   * the project may use. Rendered muted on the page; italic + grey in Excel.
+   * the project may use. Rendered muted on the page; italic + gray in Excel.
    */
   context: boolean;
 };

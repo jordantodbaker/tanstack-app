@@ -1,6 +1,6 @@
 /**
  * The CBS hierarchy shared by the Setup page (allow-list editor) and the CBS
- * Sample page (colour-by-depth viewer). One builder so both pages agree on
+ * Sample page (color-by-depth viewer). One builder so both pages agree on
  * parent/child expansion.
  *
  * Ancestry comes from the display code `XXX-YY-ZZWW-VV-T`: the group root
@@ -76,7 +76,7 @@ export function buildCbsTree<T extends CbsTreeItem>(
 
     const node: Build = {
       depth: parent ? parent.depth + 1 : 0,
-      // Colour follows the nesting when a row sits under its own roll-up: the
+      // Color follows the nesting when a row sits under its own roll-up: the
       // variant reads one level in from the account it prices.
       level: ownRollUp ? ownRollUp.level + 1 : level,
       item,

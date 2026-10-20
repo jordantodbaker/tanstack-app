@@ -12,12 +12,16 @@ import type { CbsOption } from "./types";
 describe("takeOffCsvColumns", () => {
   it("leads with the paste columns in the same order (round-trip safe)", () => {
     expect(
-      takeOffCsvColumns.slice(0, TAKE_OFF_PASTE_COLUMNS.length).map((c) => c.header),
+      takeOffCsvColumns
+        .slice(0, TAKE_OFF_PASTE_COLUMNS.length)
+        .map((c) => c.header),
     ).toEqual([...TAKE_OFF_PASTE_COLUMNS]);
   });
 
   it("emits the Area label (importable) plus a raw Area ID reference column", () => {
-    const cols = makeTakeOffCsvColumns((id) => (id === "3" ? "A1 — Foundation" : id));
+    const cols = makeTakeOffCsvColumns((id) =>
+      id === "3" ? "A1 — Foundation" : id,
+    );
     const row = makeFefRow({ id: "601-C0-0000-00-M", area: "3" });
     const csv = rowsToCsv([row], cols);
     // "Area" column carries the label; "Area ID" carries the raw id.
@@ -118,7 +122,7 @@ describe("custom columns in the take-off CSV", () => {
     { field: "custom4", label: "Heat Number" },
   ];
 
-  it("appends one column per definition, labelled by the user", () => {
+  it("appends one column per definition, labeled by the user", () => {
     const cols = makeTakeOffCsvColumns(undefined, custom);
     expect(cols.slice(-2).map((c) => c.header)).toEqual([
       "Client Tag",

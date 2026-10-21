@@ -13,7 +13,6 @@ import {
 } from "~/utils/fcoTemplates";
 import { useIsAdmin } from "~/lib/use-current-user";
 import { invalidateAdminEntity } from "~/lib/admin-invalidations";
-import { useRecordRecentView } from "~/lib/use-record-recent-view";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -23,7 +22,7 @@ import {
   fromDateInputValue,
   toDateInputValue,
 } from "~/components/ui/form-helpers";
-import { useFormDialog } from "~/lib/use-form-dialog";
+import { useRecordDialogForm } from "~/lib/use-record-dialog-form";
 import { areasByProjectQueryOptions } from "~/utils/areas";
 import {
   FCO_ORIGIN_TYPES,
@@ -43,6 +42,7 @@ import {
   DeleteEntityButton,
   DialogFooterActions,
   DisciplineField,
+  EntityDialogHeader,
   PrintPdfLink,
   PromoteButton,
 } from "~/components/EntityDialog/EntityDialogActions";
@@ -144,7 +144,7 @@ type FcoDialogProps = {
 /**
  * Outer wrapper. Delegates dialog state + lazy-fetch boilerplate to
  * `EntityDialogShell`; `FcoDialogBody` only mounts once the full record is
- * ready, so its `useFormDialog` seeds the form with complete data on the
+ * ready, so its `useRecordDialogForm` seeds the form with complete data on the
  * first render (avoids a flicker where heavy text fields would be blank
  * for ~100ms before re-seeding from the network response).
  */
@@ -202,38 +202,24 @@ function FcoDialogBody({
     setForm,
     busy,
     setBusy,
+    error,
     update,
     handleSubmit,
     handleDelete,
-  } = useFormDialog<FcoItem, FormState>({
+  } = useRecordDialogForm<FcoItem, FormState>({
     initial,
     blank: blankForm,
     fromItem,
-    onSubmit: async (formState) => {
-      await onSubmit(formState);
-      closeDialog();
-    },
-    onDelete: onDelete
-      ? async (id) => {
-          await onDelete(id);
-          closeDialog();
-        }
-      : undefined,
+    onSubmit,
+    onDelete,
     deleteConfirm: (i) => `Delete FCO "${i.title}"? This cannot be undone.`,
+    closeDialog,
+    recent: (i) => ({
+      entityType: "FieldChangeOrder",
+      number: i.fcoNumber,
+      title: i.title,
+    }),
   });
-
-  // Record this open in the user's "Recently viewed".
-  useRecordRecentView(
-    initial
-      ? {
-          entityType: "FieldChangeOrder",
-          entityId: initial.id,
-          projectId: initial.projectId,
-          number: initial.fcoNumber,
-          title: initial.title,
-        }
-      : null,
-  );
 
   const isAdmin = useIsAdmin();
   const queryClient = useQueryClient();
@@ -359,44 +345,34 @@ function FcoDialogBody({
   return (
     <>
       <div className="space-y-4">
-          <div className="flex items-start justify-between gap-2 pr-8">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-800">
-                {initial ? "Edit Field Change Order" : "New Field Change Order"}
-              </h2>
-              <p className="text-xs text-slate-500">
-                Capture a change originating in the field — drawings, conditions,
-                cost impact, and CVR linkage
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {initial?.id && (
-                <PrintPdfLink href={`/fco-print/${initial.id}`} />
-              )}
-              {canPromote && (
-                <PromoteButton
-                  label="Promote to CVR"
-                  onClick={handlePromote}
-                  disabled={busy}
-                />
-              )}
-              {isAdmin && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSaveAsTemplate}
-                  disabled={busy || !form.title.trim()}
-                  title="Snapshot the current form as a new FCO template"
-                  className="text-violet-700 hover:bg-violet-50"
-                >
-                  Save as Template
-                </Button>
-              )}
-              {initial && onDelete && (
-                <DeleteEntityButton onClick={handleDelete} disabled={busy} />
-              )}
-            </div>
-          </div>
+          <EntityDialogHeader
+            title={initial ? "Edit Field Change Order" : "New Field Change Order"}
+            subtitle="Capture a change originating in the field — drawings, conditions, cost impact, and CVR linkage"
+          >
+            {initial?.id && <PrintPdfLink href={`/fco-print/${initial.id}`} />}
+            {canPromote && (
+              <PromoteButton
+                label="Promote to CVR"
+                onClick={handlePromote}
+                disabled={busy}
+              />
+            )}
+            {isAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSaveAsTemplate}
+                disabled={busy || !form.title.trim()}
+                title="Snapshot the current form as a new FCO template"
+                className="text-violet-700 hover:bg-violet-50"
+              >
+                Save as Template
+              </Button>
+            )}
+            {initial && onDelete && (
+              <DeleteEntityButton onClick={handleDelete} disabled={busy} />
+            )}
+          </EntityDialogHeader>
 
           {initial?.linkedCvrId && (
             <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-900 flex items-center gap-2">
@@ -752,6 +728,7 @@ function FcoDialogBody({
             disabled={busy || !form.title.trim()}
             submitLabel={initial ? "Save Changes" : "Create FCO"}
             onSubmit={handleSubmit}
+            error={error}
           />
       </div>
     </>

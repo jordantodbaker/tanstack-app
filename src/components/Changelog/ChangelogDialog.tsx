@@ -45,6 +45,7 @@ import {
   DeleteEntityButton,
   DialogFooterActions,
   DisciplineField,
+  EntityDialogHeader,
   PrintPdfLink,
 } from "~/components/EntityDialog/EntityDialogActions";
 import { CbsSelect } from "~/components/CbsSelect";
@@ -58,7 +59,7 @@ import {
   EntityAuxTabTriggers,
   EntityAuxTabPanels,
 } from "~/components/EntityDialog/EntityAuxTabs";
-import { useFormDialog } from "~/lib/use-form-dialog";
+import { useRecordDialogForm } from "~/lib/use-record-dialog-form";
 import { useSelectedProject } from "~/lib/selected-project";
 import { areasByProjectQueryOptions } from "~/utils/areas";
 import { TemplatePicker } from "~/components/EntityDialog/TemplatePicker";
@@ -70,7 +71,6 @@ import {
 } from "~/utils/cvrTemplates";
 import { useIsAdmin } from "~/lib/use-current-user";
 import { invalidateAdminEntity } from "~/lib/admin-invalidations";
-import { useRecordRecentView } from "~/lib/use-record-recent-view";
 
 type FormState = Omit<UpsertChangeLogInput, "projectId">;
 
@@ -199,44 +199,29 @@ function ChangelogDialogBody({
     setForm,
     busy,
     setBusy,
+    error,
     update,
     handleSubmit,
     handleDelete,
-  } = useFormDialog<ChangeLogDetail, FormState>({
+  } = useRecordDialogForm<ChangeLogDetail, FormState>({
     initial,
     // Create mode seeds from the blank form merged with any provided draft.
     blank: () => ({ ...blankForm(), ...draft }),
     fromItem,
-    onSubmit: async (formState) => {
-      await onSubmit(formState);
-      closeDialog();
-    },
-    onDelete: onDelete
-      ? async (id) => {
-          await onDelete(id);
-          closeDialog();
-        }
-      : undefined,
+    onSubmit,
+    onDelete,
     deleteConfirm: (i) =>
       `Delete change item "${i.title}"? This cannot be undone.`,
+    closeDialog,
+    recent: (i) => ({
+      entityType: "ChangeLog",
+      number: i.cvrNumber,
+      title: i.title,
+    }),
   });
 
   const isAdmin = useIsAdmin();
   const queryClient = useQueryClient();
-
-  // Record this open in the user's "Recently viewed" once the full record
-  // is in hand. No-op in create mode (no `initial`).
-  useRecordRecentView(
-    initial
-      ? {
-          entityType: "ChangeLog",
-          entityId: initial.id,
-          projectId: initial.projectId,
-          number: initial.cvrNumber,
-          title: initial.title,
-        }
-      : null,
-  );
 
   /** Fold a template's field set into the current draft. Status/dates and
    *  identity (id, cvrNumber) stay on whatever the user already entered —
@@ -314,9 +299,6 @@ function ChangelogDialogBody({
     ...areasByProjectQueryOptions(projectId),
     enabled: projectId !== null,
   });
-  // `busy` doesn't reset when the outer toggles open; that's fine because
-  // mutation completion already sets it back to false in useFormDialog.
-  void setBusy;
 
   // Cost buildup. With ≥1 line, `costImpact` is the sum of line totals and the
   // manual Cost Impact field goes read-only. Keep `form.costImpact` synced so
@@ -369,36 +351,28 @@ function ChangelogDialogBody({
   return (
     <>
       <div className="flex min-h-0 flex-1 flex-col gap-4">
-          <div className="flex items-start justify-between gap-2 pr-8 shrink-0">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-800">
-                {initial ? "Edit Change Item" : "New Change Item"}
-              </h2>
-              <p className="text-xs text-slate-500">
-                Track a CVR or scope change with cost, schedule, and CBS impact
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {initial?.id && (
-                <PrintPdfLink href={`/cvr-print/${initial.id}`} />
-              )}
-              {isAdmin && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSaveAsTemplate}
-                  disabled={busy || !form.title.trim()}
-                  title="Snapshot the current form as a new CVR template"
-                  className="text-violet-700 hover:bg-violet-50"
-                >
-                  Save as Template
-                </Button>
-              )}
-              {initial && onDelete && (
-                <DeleteEntityButton onClick={handleDelete} disabled={busy} />
-              )}
-            </div>
-          </div>
+          <EntityDialogHeader
+            title={initial ? "Edit Change Item" : "New Change Item"}
+            subtitle="Track a CVR or scope change with cost, schedule, and CBS impact"
+            className="shrink-0"
+          >
+            {initial?.id && <PrintPdfLink href={`/cvr-print/${initial.id}`} />}
+            {isAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSaveAsTemplate}
+                disabled={busy || !form.title.trim()}
+                title="Snapshot the current form as a new CVR template"
+                className="text-violet-700 hover:bg-violet-50"
+              >
+                Save as Template
+              </Button>
+            )}
+            {initial && onDelete && (
+              <DeleteEntityButton onClick={handleDelete} disabled={busy} />
+            )}
+          </EntityDialogHeader>
 
           <Tabs
             defaultValue="details"
@@ -681,6 +655,7 @@ function ChangelogDialogBody({
             disabled={busy || !form.title.trim()}
             submitLabel={initial ? "Save Changes" : "Create"}
             onSubmit={handleSubmit}
+            error={error}
             className="shrink-0"
           />
       </div>

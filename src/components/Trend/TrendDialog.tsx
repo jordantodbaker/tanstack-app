@@ -11,7 +11,7 @@ import {
   fromDateInputValue,
   toDateInputValue,
 } from "~/components/ui/form-helpers";
-import { useFormDialog } from "~/lib/use-form-dialog";
+import { useRecordDialogForm } from "~/lib/use-record-dialog-form";
 import { areasByProjectQueryOptions } from "~/utils/areas";
 import {
   TREND_PRIORITIES,
@@ -24,13 +24,13 @@ import {
 } from "~/utils/trends";
 import { TREND_TRANSITIONS } from "~/utils/workflow";
 import { useEntityWorkflow } from "~/lib/use-entity-workflow";
-import { useRecordRecentView } from "~/lib/use-record-recent-view";
 import { hasAtLeastRole } from "~/utils/users";
 import { WorkflowActions } from "~/components/WorkflowActions";
 import {
   DeleteEntityButton,
   DialogFooterActions,
   DisciplineField,
+  EntityDialogHeader,
   PromoteButton,
 } from "~/components/EntityDialog/EntityDialogActions";
 import { TREND_PRIORITY_LABELS } from "~/utils/trendLabels";
@@ -166,43 +166,22 @@ function TrendDialogBody({
   onPromote?: (id: number) => Promise<unknown>;
   closeDialog: () => void;
 }) {
-  const {
-    form,
-    busy,
-    setBusy,
-    update,
-    handleSubmit,
-    handleDelete,
-  } = useFormDialog<TrendItem, FormState>({
-    initial,
-    blank: blankForm,
-    fromItem,
-    onSubmit: async (formState) => {
-      await onSubmit(formState);
-      closeDialog();
-    },
-    onDelete: onDelete
-      ? async (id) => {
-          await onDelete(id);
-          closeDialog();
-        }
-      : undefined,
-    deleteConfirm: (i) =>
-      `Delete trend "${i.title}"? This cannot be undone.`,
-  });
-
-  // Record this open in the user's "Recently viewed".
-  useRecordRecentView(
-    initial
-      ? {
-          entityType: "Trend",
-          entityId: initial.id,
-          projectId: initial.projectId,
-          number: initial.trendNumber,
-          title: initial.title,
-        }
-      : null,
-  );
+  const { form, busy, setBusy, error, update, handleSubmit, handleDelete } =
+    useRecordDialogForm<TrendItem, FormState>({
+      initial,
+      blank: blankForm,
+      fromItem,
+      onSubmit,
+      onDelete,
+      deleteConfirm: (i) =>
+        `Delete trend "${i.title}"? This cannot be undone.`,
+      closeDialog,
+      recent: (i) => ({
+        entityType: "Trend",
+        number: i.trendNumber,
+        title: i.title,
+      }),
+    });
 
   const { currentUser, isOriginator, transitions, handlePromote } =
     useEntityWorkflow({
@@ -252,30 +231,27 @@ function TrendDialogBody({
   return (
     <>
       <div className="space-y-4">
-          <div className="flex items-start justify-between gap-2 pr-8">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-800">
-                {initial ? "Edit Trend" : "New Trend"}
-              </h2>
-              <p className="text-xs text-slate-500">
+          <EntityDialogHeader
+            title={initial ? "Edit Trend" : "New Trend"}
+            subtitle={
+              <>
                 Anticipated cost impact that hasn't been approved yet. Drives
                 the project's AFC (Anticipated Final Cost) at{" "}
                 <span className="font-mono">probability × likely cost</span>.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {canPromote && (
-                <PromoteButton
-                  label="Promote to CVR"
-                  onClick={handlePromote}
-                  disabled={busy}
-                />
-              )}
-              {initial && onDelete && (
-                <DeleteEntityButton onClick={handleDelete} disabled={busy} />
-              )}
-            </div>
-          </div>
+              </>
+            }
+          >
+            {canPromote && (
+              <PromoteButton
+                label="Promote to CVR"
+                onClick={handlePromote}
+                disabled={busy}
+              />
+            )}
+            {initial && onDelete && (
+              <DeleteEntityButton onClick={handleDelete} disabled={busy} />
+            )}
+          </EntityDialogHeader>
 
           {initial?.linkedCvrId && (
             <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
@@ -603,6 +579,7 @@ function TrendDialogBody({
             disabled={busy || projectId === null}
             submitLabel={initial ? "Save" : "Create"}
             onSubmit={() => handleSubmit()}
+            error={error}
           />
       </div>
     </>

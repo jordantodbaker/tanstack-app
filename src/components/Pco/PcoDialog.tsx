@@ -6,7 +6,7 @@ import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Labeled, NativeSelect } from "~/components/ui/form-helpers";
-import { useFormDialog } from "~/lib/use-form-dialog";
+import { useRecordDialogForm } from "~/lib/use-record-dialog-form";
 import {
   PCO_PRIORITIES,
   pcoEligibleCvrsQueryOptions,
@@ -18,11 +18,11 @@ import {
 } from "~/utils/pco";
 import { PCO_TRANSITIONS } from "~/utils/workflow";
 import { useEntityWorkflow } from "~/lib/use-entity-workflow";
-import { useRecordRecentView } from "~/lib/use-record-recent-view";
 import { WorkflowActions } from "~/components/WorkflowActions";
 import {
   DeleteEntityButton,
   DialogFooterActions,
+  EntityDialogHeader,
 } from "~/components/EntityDialog/EntityDialogActions";
 import { PCO_PRIORITY_LABELS } from "~/utils/pcoLabels";
 import { PcoStatusBadge } from "~/components/Pco/PcoBadges";
@@ -135,43 +135,18 @@ function PcoDialogBody({
   onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
   closeDialog: () => void;
 }) {
-  const {
-    form,
-    busy,
-    setBusy,
-    update,
-    handleSubmit,
-    handleDelete,
-  } = useFormDialog<PcoItem, FormState>({
-    initial,
-    blank: blankForm,
-    fromItem,
-    onSubmit: async (formState) => {
-      await onSubmit(formState);
-      closeDialog();
-    },
-    onDelete: onDelete
-      ? async (id) => {
-          await onDelete(id);
-          closeDialog();
-        }
-      : undefined,
-    deleteConfirm: (i) =>
-      `Delete PCO "${i.title}"? Linked CVRs will be detached (not deleted).`,
-  });
-
-  // Record this open in the user's "Recently viewed".
-  useRecordRecentView(
-    initial
-      ? {
-          entityType: "Pco",
-          entityId: initial.id,
-          projectId: initial.projectId,
-          number: initial.pcoNumber,
-          title: initial.title,
-        }
-      : null,
-  );
+  const { form, busy, setBusy, error, update, handleSubmit, handleDelete } =
+    useRecordDialogForm<PcoItem, FormState>({
+      initial,
+      blank: blankForm,
+      fromItem,
+      onSubmit,
+      onDelete,
+      deleteConfirm: (i) =>
+        `Delete PCO "${i.title}"? Linked CVRs will be detached (not deleted).`,
+      closeDialog,
+      recent: (i) => ({ entityType: "Pco", number: i.pcoNumber, title: i.title }),
+    });
 
   const { transitions } = useEntityWorkflow({
     transitionMap: PCO_TRANSITIONS,
@@ -210,23 +185,14 @@ function PcoDialogBody({
   return (
     <>
       <div className="space-y-4">
-          <div className="flex items-start justify-between gap-2 pr-8">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-800">
-                {initial ? "Edit PCO" : "New PCO"}
-              </h2>
-              <p className="text-xs text-slate-500">
-                Prime / Owner Change Order — what the EPC is billing the
-                owner for. Bundle one or more approved CVRs and track the
-                negotiation through to payment.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {initial && onDelete && (
-                <DeleteEntityButton onClick={handleDelete} disabled={busy} />
-              )}
-            </div>
-          </div>
+          <EntityDialogHeader
+            title={initial ? "Edit PCO" : "New PCO"}
+            subtitle="Prime / Owner Change Order — what the EPC is billing the owner for. Bundle one or more approved CVRs and track the negotiation through to payment."
+          >
+            {initial && onDelete && (
+              <DeleteEntityButton onClick={handleDelete} disabled={busy} />
+            )}
+          </EntityDialogHeader>
 
           <Tabs defaultValue="details" className="w-full">
             <TabsList>
@@ -593,6 +559,7 @@ function PcoDialogBody({
             disabled={busy || projectId === null}
             submitLabel={initial ? "Save" : "Create"}
             onSubmit={() => handleSubmit()}
+            error={error}
           />
       </div>
     </>

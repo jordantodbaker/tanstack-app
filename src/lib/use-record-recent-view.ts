@@ -9,7 +9,7 @@ import type { RecentEntityType } from "~/config/recent-entities";
 /**
  * Record "I opened this record" exactly once per mount of an entity dialog
  * body. Each of the five entity dialogs (Changelog / Fco / Rfi / Trend /
- * Pco) calls this with the slim list-item snapshot it already has — the
+ * Pco) calls this, through `useRecordDialogForm`, with the record it has — the
  * `EntityDialogShell` only mounts the body when the full record arrives,
  * so a single fire per dialog open is the right semantic.
  *

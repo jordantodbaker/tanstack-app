@@ -1,3 +1,4 @@
+import type * as React from "react";
 import { ArrowUpRight, Printer, Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { DialogClose } from "~/components/ui/dialog";
@@ -11,6 +12,35 @@ import { cn } from "~/lib/utils";
  * keeps the markup (and its class strings) in one place. They stay dumb — all
  * per-entity variation (href stem, promote label, submit predicate) is a prop.
  */
+
+/**
+ * The dialog's title and one-line description, with its header actions (Print,
+ * Promote, Delete, …) passed as children on the right. `pr-8` clears the
+ * dialog's own close button.
+ */
+export function EntityDialogHeader({
+  title,
+  subtitle,
+  className,
+  children,
+}: {
+  title: string;
+  subtitle: React.ReactNode;
+  className?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div
+      className={cn("flex items-start justify-between gap-2 pr-8", className)}
+    >
+      <div>
+        <h2 className="text-lg font-semibold text-slate-800">{title}</h2>
+        <p className="text-xs text-slate-500">{subtitle}</p>
+      </div>
+      <div className="flex items-center gap-2">{children}</div>
+    </div>
+  );
+}
 
 /** Header link that opens the entity's printable/PDF page in a new tab. */
 export function PrintPdfLink({ href }: { href: string }) {
@@ -104,12 +134,15 @@ export function DialogFooterActions({
   disabled,
   submitLabel,
   onSubmit,
+  error,
   className,
 }: {
   busy: boolean;
   disabled?: boolean;
   submitLabel: string;
   onSubmit: () => void;
+  /** Why the last save or delete failed, shown beside the buttons. */
+  error?: string | null;
   className?: string;
 }) {
   return (
@@ -119,6 +152,11 @@ export function DialogFooterActions({
         className,
       )}
     >
+      {error && (
+        <p role="alert" className="mr-auto text-sm text-red-600">
+          {error}
+        </p>
+      )}
       <DialogClose asChild>
         <Button variant="outline" type="button" disabled={busy}>
           Cancel

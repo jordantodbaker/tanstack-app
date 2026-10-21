@@ -12,7 +12,7 @@ import {
   fromDateInputValue,
   toDateInputValue,
 } from "~/components/ui/form-helpers";
-import { useFormDialog } from "~/lib/use-form-dialog";
+import { useRecordDialogForm } from "~/lib/use-record-dialog-form";
 import { areasByProjectQueryOptions } from "~/utils/areas";
 import {
   RFI_PRIORITIES,
@@ -24,12 +24,12 @@ import {
 } from "~/utils/rfis";
 import { RFI_TRANSITIONS } from "~/utils/workflow";
 import { useEntityWorkflow } from "~/lib/use-entity-workflow";
-import { useRecordRecentView } from "~/lib/use-record-recent-view";
 import { WorkflowActions } from "~/components/WorkflowActions";
 import {
   DeleteEntityButton,
   DialogFooterActions,
   DisciplineField,
+  EntityDialogHeader,
   PrintPdfLink,
   PromoteButton,
 } from "~/components/EntityDialog/EntityDialogActions";
@@ -118,7 +118,7 @@ type RfiDialogProps = {
 /**
  * Outer wrapper. Owns the Dialog open state and runs the lazy full-record
  * fetch in edit mode. Inner `RfiDialogBody` only mounts once the full data
- * is ready, so its `useFormDialog` seeds the form with complete heavy-text
+ * is ready, so its `useRecordDialogForm` seeds the form with complete heavy-text
  * fields on first render.
  */
 export function RfiDialog({
@@ -170,42 +170,22 @@ function RfiDialogBody({
   onPromote?: (id: number) => Promise<unknown>;
   closeDialog: () => void;
 }) {
-  const {
-    form,
-    busy,
-    setBusy,
-    update,
-    handleSubmit,
-    handleDelete,
-  } = useFormDialog<RfiItem, FormState>({
-    initial,
-    blank: blankForm,
-    fromItem,
-    onSubmit: async (formState) => {
-      await onSubmit(formState);
-      closeDialog();
-    },
-    onDelete: onDelete
-      ? async (id) => {
-          await onDelete(id);
-          closeDialog();
-        }
-      : undefined,
-    deleteConfirm: (i) => `Delete RFI "${i.subject}"? This cannot be undone.`,
-  });
-
-  // Record this open in the user's "Recently viewed".
-  useRecordRecentView(
-    initial
-      ? {
-          entityType: "Rfi",
-          entityId: initial.id,
-          projectId: initial.projectId,
-          number: initial.rfiNumber,
-          title: initial.subject,
-        }
-      : null,
-  );
+  const { form, busy, setBusy, error, update, handleSubmit, handleDelete } =
+    useRecordDialogForm<RfiItem, FormState>({
+      initial,
+      blank: blankForm,
+      fromItem,
+      onSubmit,
+      onDelete,
+      deleteConfirm: (i) =>
+        `Delete RFI "${i.subject}"? This cannot be undone.`,
+      closeDialog,
+      recent: (i) => ({
+        entityType: "Rfi",
+        number: i.rfiNumber,
+        title: i.subject,
+      }),
+    });
 
   const { transitions, handlePromote } = useEntityWorkflow({
     transitionMap: RFI_TRANSITIONS,
@@ -250,32 +230,22 @@ function RfiDialogBody({
   return (
     <>
       <div className="space-y-4">
-          <div className="flex items-start justify-between gap-2 pr-8">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-800">
-                {initial ? "Edit RFI" : "New RFI"}
-              </h2>
-              <p className="text-xs text-slate-500">
-                Question to the designer/engineer — drawings, specs, field
-                conditions. Promote to an FCO if the answer drives new scope.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {initial?.id && (
-                <PrintPdfLink href={`/rfi-print/${initial.id}`} />
-              )}
-              {canPromote && (
-                <PromoteButton
-                  label="Promote to FCO"
-                  onClick={handlePromote}
-                  disabled={busy}
-                />
-              )}
-              {initial && onDelete && (
-                <DeleteEntityButton onClick={handleDelete} disabled={busy} />
-              )}
-            </div>
-          </div>
+          <EntityDialogHeader
+            title={initial ? "Edit RFI" : "New RFI"}
+            subtitle="Question to the designer/engineer — drawings, specs, field conditions. Promote to an FCO if the answer drives new scope."
+          >
+            {initial?.id && <PrintPdfLink href={`/rfi-print/${initial.id}`} />}
+            {canPromote && (
+              <PromoteButton
+                label="Promote to FCO"
+                onClick={handlePromote}
+                disabled={busy}
+              />
+            )}
+            {initial && onDelete && (
+              <DeleteEntityButton onClick={handleDelete} disabled={busy} />
+            )}
+          </EntityDialogHeader>
 
           {initial && initial.linkedFcos.length > 0 && (
             <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-900">
@@ -530,6 +500,7 @@ function RfiDialogBody({
             disabled={busy || projectId === null}
             submitLabel={initial ? "Save" : "Create"}
             onSubmit={() => handleSubmit()}
+            error={error}
           />
       </div>
     </>

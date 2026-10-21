@@ -102,7 +102,7 @@ function costTypeParts(counts: Counts) {
   return parts;
 }
 
-/** Row-count pills + the per-level color legend. */
+/** Row-count pills, with the per-level color legend on its own line below. */
 function CountsLegend({
   counts,
   onExpandToLevel,
@@ -113,30 +113,34 @@ function CountsLegend({
   levelShown: number | null;
 }) {
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-2">
-      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-        {counts.total.toLocaleString()} row{counts.total === 1 ? "" : "s"}
-      </span>
-      <span
-        className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600"
-        aria-label="Rows by cost type"
-      >
-        {costTypeParts(counts).map((p, i) => (
-          <React.Fragment key={p.key}>
-            {i > 0 && " · "}
-            <span title={p.title}>
-              {p.n.toLocaleString()} {p.label}
-            </span>
-          </React.Fragment>
-        ))}
-      </span>
-      <span className="ml-1 text-xs text-slate-500">
-        Level colors (click to expand to a level):
-      </span>
-      <CbsLevelLegend
-        onExpandToLevel={onExpandToLevel}
-        levelShown={levelShown}
-      />
+    <div className="mb-3 flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+          {counts.total.toLocaleString()} row{counts.total === 1 ? "" : "s"}
+        </span>
+        <span
+          className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600"
+          aria-label="Rows by cost type"
+        >
+          {costTypeParts(counts).map((p, i) => (
+            <React.Fragment key={p.key}>
+              {i > 0 && " · "}
+              <span title={p.title}>
+                {p.n.toLocaleString()} {p.label}
+              </span>
+            </React.Fragment>
+          ))}
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-slate-500">
+          Level colors (click to expand to a level):
+        </span>
+        <CbsLevelLegend
+          onExpandToLevel={onExpandToLevel}
+          levelShown={levelShown}
+        />
+      </div>
     </div>
   );
 }

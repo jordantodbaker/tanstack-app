@@ -111,7 +111,9 @@ const CbsRow = React.memo(function CbsRow({
             e.stopPropagation();
             onToggle(node.pathKey);
           }}
-          className="grid size-4 shrink-0 place-items-center rounded hover:bg-black/10"
+          // 24px to tap, 16px of layout — the negative margin keeps rows
+          // aligned with the leaf rows' 16px placeholder.
+          className="-m-1 grid size-6 shrink-0 place-items-center rounded hover:bg-black/10"
         >
           <ChevronRight
             size={13}
@@ -202,7 +204,7 @@ export function CbsLevelLegend({
                 ? "Level 0 — collapse to the discipline roots"
                 : `Level ${lvl} — expand the tree to this level`
             }
-            className="cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-semibold transition-[filter] hover:brightness-90 focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:outline-none"
+            className="inline-flex min-h-6 min-w-6 cursor-pointer items-center justify-center rounded px-1.5 text-[10px] font-semibold transition-[filter] hover:brightness-90 focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:outline-none"
             style={style}
           >
             {label}

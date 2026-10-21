@@ -990,7 +990,10 @@ export function FefTableContent({
                             type="button"
                             onClick={() => onColSort(header.column.id)}
                             title="Sort by this column"
-                            className="ml-auto shrink-0 text-xs text-gray-400 hover:text-blue-700"
+                            aria-label="Sort by this column"
+                            // A 24px hit area around the glyph; the negative
+                            // margins keep the header row the height it was.
+                            className="ml-auto -my-1 -mr-1 inline-flex size-6 shrink-0 items-center justify-center rounded text-xs text-gray-400 hover:bg-slate-100 hover:text-blue-700"
                           >
                             {sortState?.colId === header.column.id
                               ? sortState.dir === "asc"

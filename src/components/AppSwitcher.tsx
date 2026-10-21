@@ -31,10 +31,13 @@ export function AppSwitcher({
         <button
           type="button"
           aria-label="Switch app"
-          className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+          className="flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
         >
           <LayoutGrid size={16} className="shrink-0 text-slate-400" />
-          <span className="max-w-40 truncate xl:max-w-none">
+          {/* Gives way first when the header runs out of room — on a phone,
+              "Cost Breakdown Structure" would otherwise push the account
+              controls off the screen. */}
+          <span className="min-w-0 max-w-40 truncate xl:max-w-none">
             {current?.label ?? "All apps"}
           </span>
           <ChevronDown size={13} className="shrink-0 text-slate-400" />

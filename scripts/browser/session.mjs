@@ -70,14 +70,23 @@ export async function openApp({ width = 1600, height = 1000 } = {}) {
   await setupClerkTestingToken({ page });
   await page.goto(BASE, { waitUntil: "domcontentloaded" });
 
-  // `email_code`, not `password`: this Clerk instance offers Google or an email
-  // code and has no password field, so the password strategy silently leaves
-  // you signed out. The account uses Clerk's `+clerk_test` convention, for
-  // which the helper supplies the fixed test code itself.
-  await clerk.signIn({
-    page,
-    signInParams: { strategy: "email_code", identifier: email },
-  });
+  // Which first factors the instance offers has changed before (email code
+  // only, then password only), so try each strategy there are credentials for
+  // — the same loop `shot.mjs` uses. The account uses Clerk's `+clerk_test`
+  // convention, for which the helper supplies the fixed email code itself.
+  const password = process.env.BROWSER_TEST_PASSWORD;
+  const strategies = [
+    ...(password ? [{ strategy: "password", identifier: email, password }] : []),
+    { strategy: "email_code", identifier: email },
+  ];
+  for (const signInParams of strategies) {
+    try {
+      await clerk.signIn({ page, signInParams });
+      if (await page.evaluate(() => Boolean(window.Clerk?.user))) break;
+    } catch {
+      // Not enabled on this instance; try the next one.
+    }
+  }
 
   // Assert it worked. `clerk.signIn` does NOT throw when the strategy is
   // unavailable — it leaves the session unset and the run then screenshots a

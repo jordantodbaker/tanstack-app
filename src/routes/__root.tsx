@@ -199,7 +199,7 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
             <button
               onClick={() => setMobileSidebarOpen(true)}
               aria-label="Open sidebar"
-              className="md:hidden flex h-9 w-9 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+              className="md:hidden flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
             >
               <Menu size={20} />
             </button>
@@ -227,7 +227,9 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
                   Change Log or Reporting implied it filtered them. */}
               {app?.versionScoped && <VersionSelect className="h-9 min-w-28" />}
             </div>
-            <AppSwitcher current={app} isAdmin={isAdmin} />
+            <div className="flex min-w-0 items-center">
+              <AppSwitcher current={app} isAdmin={isAdmin} />
+            </div>
             <div className="shrink-0">
               <GlobalSearch />
             </div>

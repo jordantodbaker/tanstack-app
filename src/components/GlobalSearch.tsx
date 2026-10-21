@@ -158,12 +158,14 @@ export function GlobalSearch() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="hidden sm:flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors"
+        // An icon below desktop width, where the header has no room for the
+        // full box — but still there, since phones have no keyboard shortcut.
+        className="flex h-9 w-9 lg:w-auto items-center justify-center gap-2 rounded-md border border-slate-200 bg-white lg:px-3 text-sm text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors"
         aria-label="Search"
       >
         <Search size={15} className="shrink-0" />
-        <span>Search…</span>
-        <kbd className="ml-2 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
+        <span className="hidden lg:inline">Search…</span>
+        <kbd className="ml-2 hidden lg:inline rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
           ⌘K
         </kbd>
       </button>

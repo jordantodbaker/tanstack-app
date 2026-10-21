@@ -637,8 +637,10 @@ export function DisciplineTabs({
             })}
             <CustomColumnsButton discipline={discipline} />
             <CustomColumnsUndoBar />
-            {/* Right-aligned cluster: mode/import/export actions + live totals. */}
-            <div className="ml-auto flex items-center gap-2">
+            {/* Right-aligned cluster: mode/import/export actions + live totals.
+                On a narrow screen it wraps whole buttons onto the next line
+                rather than squeezing each label onto three. */}
+            <div className="ml-auto flex flex-wrap items-center gap-2 whitespace-nowrap">
               <button
                 onClick={() => setUseCrewMix((v) => !v)}
                 className={

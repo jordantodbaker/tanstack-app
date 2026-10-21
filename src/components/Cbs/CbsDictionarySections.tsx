@@ -1,59 +1,38 @@
 import * as React from "react";
 import { ChevronRight } from "lucide-react";
 import type { CbsTreeRow } from "~/utils/cbs";
-import {
-  cbsIsActive,
-  cbsIsBackbone,
-  stripCostTypeSuffix,
-  type CbsBadge,
-  type CbsCostTypeKey,
-  type CbsCostTypeMatch,
-  type CbsTreeNode,
-} from "~/lib/cbs-tree";
+import { cbsIsActive } from "~/lib/cbs-tree";
 import type { CbsExportView } from "~/lib/cbs-export";
-import {
-  CbsDictionaryBrowser,
-  cbsFlagBadgesFor,
-} from "~/components/Cbs/CbsDictionaryBrowser";
+import { CbsDictionaryBrowser } from "~/components/Cbs/CbsDictionaryBrowser";
 
 /**
- * The whole catalog as two collapsible datasets: a Code Book of original rows
- * and the full dictionary including the generated S/M rows. Admin → Master
- * CBS; project-scoped pages render a single `CbsDictionaryBrowser` instead.
+ * The whole catalog as two collapsible datasets: the active Cost Accounts and
+ * the full dictionary with every status. Admin → Master CBS; project-scoped
+ * pages render a single `CbsDictionaryBrowser` instead.
  */
-
-type Node = CbsTreeNode;
 
 /** A collapsible section over one view of a dictionary. */
 function CbsSection({
   title,
   description,
   items,
-  badgesFor,
   sourceNote,
   emptyMessage,
   defaultOpen = false,
-  costTypeMatch,
-  showRowTypeCounts,
   exportView,
   focusCode = null,
+  statusFilter = false,
 }: {
   title: string;
   description: string;
   items: CbsTreeRow[];
-  badgesFor?: (
-    node: Node,
-    only: Record<CbsCostTypeKey, boolean>,
-  ) => readonly CbsBadge[];
   sourceNote: string;
   emptyMessage: string;
   defaultOpen?: boolean;
-  /** How this list reads a cost-type filter — see `CbsCostTypeMatch`. */
-  costTypeMatch?: CbsCostTypeMatch;
-  /** Off for the accounts list, where the breakdown is always "0 sub · 0 material". */
-  showRowTypeCounts?: boolean;
   exportView: CbsExportView;
   focusCode?: string | null;
+  /** Offer the Status filter — see `CbsDictionaryBrowser`. */
+  statusFilter?: boolean;
 }) {
   return (
     <CbsSectionShell
@@ -64,13 +43,11 @@ function CbsSection({
     >
       <CbsDictionaryBrowser
         items={items}
-        badgesFor={badgesFor}
         sourceNote={sourceNote}
         emptyMessage={emptyMessage}
-        costTypeMatch={costTypeMatch}
-        showRowTypeCounts={showRowTypeCounts}
         exportView={exportView}
         focusCode={focusCode}
+        statusFilter={statusFilter}
       />
     </CbsSectionShell>
   );
@@ -126,9 +103,9 @@ const MASTER_SOURCE_NOTE =
 const MASTER_EMPTY = "No CBS items in the catalog.";
 
 /**
- * The whole catalog as two collapsible datasets: a Code Book of original rows
- * and the full dictionary including the generated S/M rows. The Admin → Master
- * CBS page; project-scoped pages render a single `CbsDictionaryBrowser`.
+ * The whole catalog as two collapsible datasets: the active Cost Accounts and
+ * the full dictionary with every status. The Admin → Master CBS page;
+ * project-scoped pages render a single `CbsDictionaryBrowser`.
  */
 export function CbsDictionarySections({
   items,
@@ -138,24 +115,12 @@ export function CbsDictionarySections({
   /** A display code to open on arrival — the `?code=` deep link. */
   focusCode?: string | null;
 }) {
-  // One row per account: the "-0" backbone only. Its L / S / M / E / O
-  // variants are the same account priced a different way, and the badges
-  // already say which of them exist, so listing them again doubles the tree
-  // for no new information.
-  //
-  // Retired accounts are dropped too. This is the list people pick codes from,
-  // and the Dictionary below is the one place that still shows everything, so
-  // nothing becomes unfindable by being hidden here.
-  //
-  // Names lose their "(*)" marker here — every row in this list is an account
-  // row, and the badges say which cost types it carries. The Dictionary below
-  // keeps the marker, since there it is the only thing telling the lines of
-  // one account apart. The export follows what is shown.
+  // The same rows as the Dictionary below — every cost line, generated S / M
+  // rows included — minus anything Inactive or Retired. This is the list
+  // people pick codes from, and the Dictionary is the one place that still
+  // shows everything, so nothing becomes unfindable by being hidden here.
   const accounts = React.useMemo(
-    () =>
-      items
-        .filter((r) => cbsIsBackbone(r) && cbsIsActive(r.status))
-        .map((r) => ({ ...r, name: stripCostTypeSuffix(r.name) })),
+    () => items.filter((r) => cbsIsActive(r.status)),
     [items],
   );
 
@@ -174,26 +139,24 @@ export function CbsDictionarySections({
     <div className="flex flex-col gap-4">
       <CbsSection
         title="Cost Accounts"
-        description="One row per active account — the codes ending in 0. L / S / M / E / O mark which cost types that account carries. Retired codes are listed in the CBS Dictionary below."
+        description="Every active code, each cost type on its own line. Inactive and retired codes are listed in the CBS Dictionary below."
         items={accounts}
-        badgesFor={cbsFlagBadgesFor}
         sourceNote={MASTER_SOURCE_NOTE}
         emptyMessage={MASTER_EMPTY}
-        showRowTypeCounts={false}
         defaultOpen
         exportView="codeBook"
         focusCode={inAccounts ? focusCode : null}
       />
       <CbsSection
         title="CBS Dictionary"
-        description="Every row in the CBS, each cost type on its own line — the accounts above plus their L / S / M / E / O variants, and retired codes too."
+        description="Every row in the CBS, each cost type on its own line — active, inactive and retired, with a Status filter to narrow them."
         items={items}
         sourceNote={MASTER_SOURCE_NOTE}
         emptyMessage={MASTER_EMPTY}
         defaultOpen
-        costTypeMatch="code"
         exportView="dictionary"
         focusCode={inDictionary ? focusCode : null}
+        statusFilter
       />
     </div>
   );

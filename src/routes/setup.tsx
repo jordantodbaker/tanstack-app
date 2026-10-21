@@ -12,6 +12,7 @@ import { cbsCatalogQueryOptions } from "~/utils/cbs";
 import { currentUserQueryOptions, hasAtLeastRole } from "~/utils/users";
 import {
   buildCbsTree,
+  cbsClassificationOptions,
   cbsFilterIsEmpty,
   cbsIsActive,
   cbsNoCostTypes,
@@ -20,6 +21,7 @@ import {
   filterCbsTree,
   getNodeSelectionState,
   selectionStateFromCounts,
+  type CbsClassificationOption,
   type CbsCostTypeKey,
   type CbsRowFilter,
   type CbsTreeNode,
@@ -69,6 +71,10 @@ function SetupPage() {
     [catalog],
   );
   const tree = React.useMemo(() => buildCbsTree(items), [items]);
+  const classificationOptions = React.useMemo(
+    () => cbsClassificationOptions(items),
+    [items],
+  );
 
   return (
     <main className="p-4 max-w-7xl">
@@ -94,6 +100,7 @@ function SetupPage() {
           key={projectId}
           projectId={projectId}
           tree={tree}
+          classificationOptions={classificationOptions}
         />
       )}
     </main>
@@ -103,9 +110,11 @@ function SetupPage() {
 function CbsTreeEditorLoader({
   projectId,
   tree,
+  classificationOptions,
 }: {
   projectId: number;
   tree: CbsTreeNode[];
+  classificationOptions: CbsClassificationOption[];
 }) {
   const allowedQuery = useQuery(allowedFefCbsItemIdsQueryOptions(projectId));
   if (allowedQuery.isPending) {
@@ -120,6 +129,7 @@ function CbsTreeEditorLoader({
     <CbsTreeEditor
       projectId={projectId}
       tree={tree}
+      classificationOptions={classificationOptions}
       initialAllowedIds={allowedQuery.data ?? []}
     />
   );
@@ -128,10 +138,12 @@ function CbsTreeEditorLoader({
 function CbsTreeEditor({
   projectId,
   tree,
+  classificationOptions,
   initialAllowedIds,
 }: {
   projectId: number;
   tree: CbsTreeNode[];
+  classificationOptions: CbsClassificationOption[];
   initialAllowedIds: number[];
 }) {
   const [selectedIds, setSelectedIds] = React.useState<Set<number>>(
@@ -153,6 +165,7 @@ function CbsTreeEditor({
       setCostTypes((prev) => ({ ...prev, [key]: !prev[key] })),
     [],
   );
+  const [classifications, setClassifications] = React.useState<string[]>([]);
   const deferredSearch = React.useDeferredValue(search);
   const isFiltering = search !== deferredSearch;
 
@@ -188,10 +201,11 @@ function CbsTreeEditor({
     // one `pruneCbsTree` and the export both take.
     () => ({
       query: deferredSearch.trim().toLowerCase(),
+      classifications,
       ...costTypes,
       ...cbsNoStatuses(),
     }),
-    [deferredSearch, costTypes],
+    [deferredSearch, classifications, costTypes],
   );
   const isFiltered = !cbsFilterIsEmpty(filter);
   const filteredTree = React.useMemo(
@@ -275,6 +289,9 @@ function CbsTreeEditor({
         onCollapseAll={collapseAll}
         costTypes={costTypes}
         onToggleCostType={toggleCostType}
+        classifications={classifications}
+        onClassificationsChange={setClassifications}
+        classificationOptions={classificationOptions}
       >
         <span className="ml-auto text-sm text-slate-600">
           {totalSelected.toLocaleString()} selected

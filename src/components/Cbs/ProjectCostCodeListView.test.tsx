@@ -82,13 +82,13 @@ function item(
     // Active unless a case overrides it — the Code Book and the project list
     // hide anything that is not.
     status: "Active",
+    costClassification: null,
     ...over,
   };
 }
 
-// What the server returns: ORIGINAL rows only. `fetchProjectCostCodes`
-// filters out the generated S/M rows in SQL, so the page never sees them and
-// does no filtering of its own — the fixture mirrors that contract.
+// What the server returns: the project's granted, active rows. The page does
+// no filtering of its own — the fixture mirrors that contract.
 const FIXTURE: CbsTreeRow[] = [
   item("100-00-0000-00-0", "Civil", {
     subReporting: true,
@@ -98,6 +98,22 @@ const FIXTURE: CbsTreeRow[] = [
   item("101-00-0000-00-0", "Civil Shop Materials", { materialCode: true }),
   item("101-05-0000-00-0", "Earthwork & Trenching"),
   item("101-05-0500-00-0", "Topsoil", { uom: "CY" }),
+];
+
+// One account and its cost lines, as the workbook ships them: every line
+// carries the ACCOUNT's flags, so only a line's own code says what it is.
+const PIPE_FLAGS = { laborCode: true, subReporting: true, materialCode: true };
+const LINES: CbsTreeRow[] = [
+  item("600-00-0000-00-0", "Pipe (*)", PIPE_FLAGS),
+  item("600-00-0000-00-L", "Pipe Labor (L)", PIPE_FLAGS),
+  item("600-00-0000-00-S", "Pipe Subcontracts (S)", {
+    ...PIPE_FLAGS,
+    rowType: "SUB",
+  }),
+  item("600-00-0000-00-M", "Pipe Materials (M)", {
+    ...PIPE_FLAGS,
+    rowType: "MATERIAL",
+  }),
 ];
 
 // A project granted one leaf and none of its parents. The query pulls the
@@ -144,7 +160,7 @@ describe("ProjectCostCodeListView", () => {
   });
 
   it("renders every row the server returns, re-filtering nothing", () => {
-    // The ORIGINAL filter lives in the query now. Re-adding a client-side
+    // The grant and status filters live in the query. Re-adding a client-side
     // filter here would drop rows and break this count.
     renderView();
     fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
@@ -164,27 +180,47 @@ describe("ProjectCostCodeListView", () => {
     expect(screen.queryByText(/Loading CBS data/)).toBeNull();
   });
 
-  it("omits the row-type breakdown, which would always read zero", () => {
-    renderView();
-    expect(screen.queryByText(/original ·/)).toBeNull();
+  it("breaks the row count down by cost type", () => {
+    renderView(LINES);
+    expect(screen.getByText("4 rows")).toBeInTheDocument();
+    // By each code's own cost type — not by whether it was generated, so the
+    // workbook's own "-L" line counts as labor.
+    expect(screen.getByLabelText("Rows by cost type")).toHaveTextContent(
+      "1 rollups · 1 labor · 1 subcontracts · 1 materials · 0 equipment · 0 other",
+    );
   });
 
-  it("badges a code by its own Sub Code / Material Code", () => {
-    renderView();
-    const tree = screen.getByRole("tree");
-    const civil = within(tree)
-      .getByText("Civil")
-      .closest('[role="treeitem"]')! as HTMLElement;
-    expect(within(civil).getByTitle("Sub Code: YES")).toHaveTextContent("S");
-    expect(within(civil).getByTitle("Material Code: YES")).toHaveTextContent(
-      "M",
+  it("leaves ungranted parents out of the cost-type breakdown", () => {
+    renderView(CONTEXT_FIXTURE);
+    expect(screen.getByLabelText("Rows by cost type")).toHaveTextContent(
+      /^1 rollups · 0 labor/,
     );
+  });
 
+  it("lists each granted cost line on its own row", () => {
+    renderView(LINES);
     fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
-    const earthwork = within(tree)
-      .getByText("Earthwork & Trenching")
+    const tree = screen.getByRole("tree");
+    for (const name of LINES.map((r) => r.name)) {
+      expect(within(tree).getByText(name)).toBeInTheDocument();
+    }
+  });
+
+  it("badges a generated row by what it is, not by the account's flags", () => {
+    renderView(LINES);
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+    const tree = screen.getByRole("tree");
+    const sub = within(tree)
+      .getByText("Pipe Subcontracts (S)")
       .closest('[role="treeitem"]')! as HTMLElement;
-    expect(within(earthwork).queryByTitle(/Code: YES/)).toBeNull();
+    expect(within(sub).getByTitle("Generated sub-code row")).toHaveTextContent(
+      "S",
+    );
+    // The account row carries every flag, but its own line is the roll-up.
+    const account = within(tree)
+      .getByText("Pipe (*)")
+      .closest('[role="treeitem"]')! as HTMLElement;
+    expect(within(account).queryByTitle(/Code: YES/)).toBeNull();
   });
 
   it("colors the L0 discipline roots red", () => {
@@ -193,83 +229,94 @@ describe("ProjectCostCodeListView", () => {
     expect(row).toHaveStyle({ backgroundColor: "#C0504D" });
   });
 
-  describe("badges under a cost-type filter", () => {
-    // A row carrying several cost types shows them all until a filter is on.
-    // While one is, the other badges contradict the list: every row shown has
-    // earned its place on the filtered flag alone, so an L beside the M reads
-    // as though the row were Labor too.
-    const MULTI = [
-      item("601-10-0000-00-0", "Bolt-up", {
-        laborCode: true,
-        subReporting: true,
-        materialCode: true,
-      }),
-    ];
-
-    const badgesOn = (name: string) =>
-      Array.from(
-        within(screen.getByRole("tree"))
-          .getByText(name)
-          .closest('[role="treeitem"]')!
-          .querySelectorAll("[title$='YES']"),
-      ).map((el) => el.textContent);
-
+  /**
+   * The cost-type toggles, read the way the CBS Dictionary reads them: a row
+   * qualifies on its own cost type alone. Every line of an account carries the
+   * account's flags, so reading those would keep the "-S" line under a
+   * Materials filter.
+   */
+  describe("cost-type filters", () => {
+    const names = () =>
+      within(screen.getByRole("tree"))
+        .getAllByRole("treeitem")
+        .map((r) => r.textContent ?? "")
+        .join("|");
     const filterBy = (label: string) =>
       fireEvent.click(screen.getByRole("button", { name: label }));
 
-    it("shows every cost type the row carries when nothing is filtered", () => {
-      renderView(MULTI);
-      expect(badgesOn("Bolt-up")).toEqual(["L", "S", "M"]);
-    });
-
-    it("shows only the filtered cost type", () => {
-      renderView(MULTI);
+    it("keeps only the lines of the filtered cost type", () => {
+      renderView(LINES);
       filterBy("Materials");
-      expect(badgesOn("Bolt-up")).toEqual(["M"]);
+      expect(names()).toContain("Pipe Materials (M)");
+      expect(names()).not.toContain("Pipe Subcontracts (S)");
+      expect(names()).not.toContain("Pipe Labor (L)");
+      // Nor the roll-up, whose own cost type is 0 despite its flags.
+      expect(names()).not.toContain("Pipe (*)");
+      expect(screen.getByText("1 match")).toBeInTheDocument();
     });
 
-    it("shows only the filtered cost type for a different one", () => {
-      renderView(MULTI);
+    it("shows either kind when two are on", () => {
+      renderView(LINES);
       filterBy("Subcontracts");
-      expect(badgesOn("Bolt-up")).toEqual(["S"]);
-    });
-
-    it("shows both when two cost types are filtered on", () => {
-      // The badges follow the filter, not a single choice.
-      renderView(MULTI);
-      filterBy("Subcontracts");
-      filterBy("Materials");
-      expect(badgesOn("Bolt-up")).toEqual(["S", "M"]);
-    });
-
-    it("keeps the workbook's column order, not the click order", () => {
-      renderView(MULTI);
-      filterBy("Materials");
       filterBy("Labor");
-      expect(badgesOn("Bolt-up")).toEqual(["L", "M"]);
+      expect(names()).toContain("Pipe Subcontracts (S)");
+      expect(names()).toContain("Pipe Labor (L)");
+      expect(names()).not.toContain("Pipe Materials (M)");
+      expect(screen.getByText("2 matches")).toBeInTheDocument();
     });
 
-    it("restores the full set when the filter is cleared", () => {
-      renderView(MULTI);
-      filterBy("Materials");
-      expect(badgesOn("Bolt-up")).toEqual(["M"]);
-      filterBy("Materials");
-      expect(badgesOn("Bolt-up")).toEqual(["L", "S", "M"]);
+    it("ignores a flag set on a roll-up row", () => {
+      // FIXTURE has only "-0" rows, flagged Sub / Material / Labor. None of
+      // them is a subcontract LINE, so nothing survives.
+      renderView();
+      filterBy("Subcontracts");
+      expect(screen.getByText(/No rows match this filter/)).toBeInTheDocument();
     });
 
-    it("does not invent a badge the row does not carry", () => {
-      // Filtering on Equipment must not badge a row that has no equipment
-      // code — and that row should not survive the filter at all.
-      renderView(MULTI);
-      filterBy("Equipment");
-      // It drops out entirely rather than appearing with no badge, so there is
-      // no tree left to look in.
-      expect(screen.queryByText("Bolt-up")).toBeNull();
+    it("shows its pressed state and toggles back off", () => {
+      renderView(LINES);
+      const subs = screen.getByRole("button", { name: "Subcontracts" });
+      expect(subs).toHaveAttribute("aria-pressed", "false");
+      fireEvent.click(subs);
+      expect(subs).toHaveAttribute("aria-pressed", "true");
+      fireEvent.click(subs);
+      expect(subs).toHaveAttribute("aria-pressed", "false");
+      fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+      expect(names()).toContain("Pipe Materials (M)");
+    });
+
+    it("offers a button for every cost type, in the workbook's order", () => {
+      renderView();
+      const labels = [
+        "Labor",
+        "Subcontracts",
+        "Materials",
+        "Equipment",
+        "Other",
+      ];
+      for (const l of labels) {
+        expect(screen.getByRole("button", { name: l })).toBeInTheDocument();
+      }
+    });
+
+    it("narrows the search box rather than widening it", () => {
+      renderView(LINES);
+      fireEvent.change(screen.getByRole("searchbox"), {
+        target: { value: "Labor" },
+      });
+      filterBy("Materials");
+      // "Pipe Labor" matches the text but is not a material line.
+      expect(screen.getByText(/No rows match this filter/)).toBeInTheDocument();
+    });
+
+    it("offers no Status filter — the list is active-only", () => {
+      renderView(LINES);
       expect(
-        screen.getByText("No rows match this filter."),
-      ).toBeInTheDocument();
+        screen.queryByRole("group", { name: "Filter by status" }),
+      ).toBeNull();
     });
   });
+
   /**
    * Setup lets a user tick a leaf without its parent. Before the query pulled
    * ancestors in, such a leaf rendered at the top level — "Field Staff" beside
@@ -438,97 +485,85 @@ describe("ProjectCostCodeListView", () => {
     });
   });
 
-  /**
-   * The Subcontracts / Materials toggles. On this page only ORIGINAL rows are
-   * listed, so what they key off is each row's own Sub Code / Material Code —
-   * the same flags the S and M badges show.
-   */
-  describe("row-type filters", () => {
+  describe("cost classification filter", () => {
+    const CLASSIFIED: CbsTreeRow[] = [
+      item("600-00-0000-00-0", "Pipe (*)", { costClassification: null }),
+      item("600-00-0000-00-L", "Pipe Labor (L)", {
+        costClassification: "DIRECT LABOR",
+      }),
+      item("600-00-0000-00-M", "Pipe Materials (M)", {
+        costClassification: "MATERIALS",
+      }),
+    ];
+    const trigger = () =>
+      screen.getByRole("button", { name: /^Cost classification:/ });
+    /** Opens the picker and ticks each named box. */
+    const pick = (...labels: string[]) => {
+      fireEvent.click(trigger());
+      const group = screen.getByRole("group", {
+        name: "Filter by cost classification",
+      });
+      for (const l of labels) {
+        fireEvent.click(within(group).getByLabelText(l));
+      }
+    };
     const names = () =>
       within(screen.getByRole("tree"))
         .getAllByRole("treeitem")
         .map((r) => r.textContent ?? "")
         .join("|");
 
-    it("keeps subcontract codes and their ancestors", () => {
-      renderView();
-      fireEvent.click(screen.getByRole("button", { name: "Subcontracts" }));
-      // Civil is the only row in FIXTURE with Sub Code YES.
-      expect(names()).toContain("Civil");
-      expect(names()).not.toContain("Earthwork");
+    it("offers each classification on the list, with counts", () => {
+      renderView(CLASSIFIED);
+      expect(trigger()).toHaveTextContent("All classifications");
+      fireEvent.click(trigger());
+      const group = screen.getByRole("group", {
+        name: "Filter by cost classification",
+      });
+      expect(
+        within(group)
+          .getAllByRole("checkbox")
+          .map((c) => c.closest("label")!.textContent),
+      ).toEqual(["DIRECT LABOR1", "MATERIALS1", "(none)1"]);
+    });
+
+    it("keeps only the rows of the classification picked", () => {
+      renderView(CLASSIFIED);
+      pick("MATERIALS");
+      expect(trigger()).toHaveTextContent("MATERIALS");
+      expect(names()).toContain("Pipe Materials (M)");
+      expect(names()).not.toContain("Pipe Labor (L)");
+      expect(names()).not.toContain("Pipe (*)");
       expect(screen.getByText("1 match")).toBeInTheDocument();
     });
 
-    it("keeps material codes", () => {
-      renderView();
-      fireEvent.click(screen.getByRole("button", { name: "Materials" }));
-      // Civil and Civil Shop Materials both carry Material Code YES.
-      expect(names()).toContain("Civil Shop Materials");
-      expect(names()).not.toContain("Topsoil");
+    it("keeps rows of any of several classifications", () => {
+      renderView(CLASSIFIED);
+      pick("MATERIALS", "DIRECT LABOR");
+      expect(trigger()).toHaveTextContent("2 classifications");
+      expect(names()).toContain("Pipe Materials (M)");
+      expect(names()).toContain("Pipe Labor (L)");
+      expect(names()).not.toContain("Pipe (*)");
       expect(screen.getByText("2 matches")).toBeInTheDocument();
     });
 
-    it("shows its pressed state and toggles back off", () => {
-      renderView();
-      const subs = screen.getByRole("button", { name: "Subcontracts" });
-      expect(subs).toHaveAttribute("aria-pressed", "false");
-      fireEvent.click(subs);
-      expect(subs).toHaveAttribute("aria-pressed", "true");
-      fireEvent.click(subs);
-      expect(subs).toHaveAttribute("aria-pressed", "false");
+    it("clears back to every classification", () => {
+      renderView(CLASSIFIED);
+      pick("MATERIALS");
+      fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+      expect(trigger()).toHaveTextContent("All classifications");
       fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
-      expect(names()).toContain("Topsoil");
+      expect(names()).toContain("Pipe Labor (L)");
     });
 
-    it("offers a button for every cost type, in the workbook's order", () => {
-      renderView();
-      const labels = [
-        "Labor",
-        "Subcontracts",
-        "Materials",
-        "Equipment",
-        "Other",
-      ];
-      for (const l of labels) {
-        expect(screen.getByRole("button", { name: l })).toBeInTheDocument();
-      }
-    });
-
-    it("filters by the three new cost types too", () => {
-      renderView();
-      // FIXTURE's Civil row carries Labor; nothing carries Equipment.
-      fireEvent.click(screen.getByRole("button", { name: "Labor" }));
-      expect(names()).toContain("Civil");
-      expect(screen.getByText("1 match")).toBeInTheDocument();
-
-      fireEvent.click(screen.getByRole("button", { name: "Labor" }));
-      fireEvent.click(screen.getByRole("button", { name: "Equipment" }));
-      expect(screen.getByText(/No rows match this filter/)).toBeInTheDocument();
-    });
-
-    it("badges a row for each cost type it carries", () => {
-      renderView();
-      const tree = screen.getByRole("tree");
-      const civil = within(tree)
-        .getByText("Civil")
-        .closest('[role="treeitem"]')! as HTMLElement;
-      expect(within(civil).getByTitle("Labor Code: YES")).toHaveTextContent(
-        "L",
-      );
-      expect(within(civil).getByTitle("Sub Code: YES")).toHaveTextContent("S");
-      expect(within(civil).getByTitle("Material Code: YES")).toHaveTextContent(
-        "M",
-      );
-    });
-
-    it("narrows the search box rather than widening it", () => {
-      renderView();
-      fireEvent.change(screen.getByRole("searchbox"), {
-        target: { value: "Topsoil" },
+    it("sends the classifications with the export, in list order", async () => {
+      renderView(CLASSIFIED);
+      pick("MATERIALS", "DIRECT LABOR");
+      fireEvent.click(screen.getByRole("button", { name: /Export Excel/ }));
+      await vi.waitFor(() => expect(exportCall).toHaveBeenCalledTimes(1));
+      expect(exportCall.mock.calls[0][0].data).toMatchObject({
+        filter: { classifications: ["DIRECT LABOR", "MATERIALS"] },
       });
-      fireEvent.click(screen.getByRole("button", { name: "Subcontracts" }));
-      // Topsoil matches the text but carries no sub code.
-      expect(screen.getByText(/No rows match this filter/)).toBeInTheDocument();
     });
   });
 

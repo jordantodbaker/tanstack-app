@@ -223,6 +223,9 @@ export const cbsTreeRowSelect = {
   // hides everything that is not Active, the Dictionary lists the lot. It is
   // one of three repeated short strings, so it costs almost nothing gzipped.
   status: true,
+  // The workbook's Cost Classification — what the toolbar's classification
+  // dropdown filters on. ~15 repeated values, so cheap gzipped.
+  costClassification: true,
 } satisfies Prisma.CbsItemSelect;
 
 /** A CBS row exactly as it crosses the wire — no level segments. */

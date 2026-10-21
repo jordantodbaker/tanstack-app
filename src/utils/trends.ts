@@ -33,7 +33,7 @@ import {
   diffFields,
   recordUpdate,
 } from "./audit.server";
-import { createLinkedCvr } from "./promote.server";
+import { claimPromotion, createLinkedCvr } from "./promote.server";
 import { TREND_TRANSITIONS } from "./workflow";
 import { TREND_STATUS_LABELS } from "./trendLabels";
 
@@ -408,13 +408,20 @@ export const promoteTrendToCvr = createServerFn({ method: "POST" })
         notes: `Promoted from Trend ${trend.trendNumber || `#${trend.id}`}`,
         area: trend.locationArea,
       });
-      const updatedTrend = await tx.trend.update({
+      // Convert only if still unconverted — see `claimPromotion`.
+      await claimPromotion(
+        tx.trend.updateMany({
+          where: { id: trend.id, linkedCvrId: null, status: { not: "CONVERTED" } },
+          data: {
+            status: "CONVERTED",
+            linkedCvrId: cvr.id,
+            closedAt: new Date(),
+          },
+        }),
+        "This trend has already been promoted to a CVR.",
+      );
+      const updatedTrend = await tx.trend.findUniqueOrThrow({
         where: { id: trend.id },
-        data: {
-          status: "CONVERTED",
-          linkedCvrId: cvr.id,
-          closedAt: new Date(),
-        },
       });
       // Audit the trend's status flip on the Trend's own timeline so a
       // reviewer browsing the trend sees the conversion without opening the

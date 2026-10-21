@@ -389,8 +389,7 @@ describe("loadCbsWorkbook", () => {
       "012-05-0000-00-0",
       "012-05-1000-00-L",
     ]);
-    // Verbatim, marker included: the dictionary shows each line's cost type.
-    // Only the Cost Accounts list strips it, where badges say the same thing.
+    // Verbatim, marker included: the CBS views show each line's cost type.
     expect(items.map((i) => i.name)).toEqual(["Overhead (*)", "Executive (L)"]);
     // The normalized code drives the levels, so "0" is the summary's L6.
     expect(items[0]).toMatchObject({ l1: "012", l2: "05", l6: "0" });

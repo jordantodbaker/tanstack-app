@@ -43,9 +43,6 @@ export function flattenVisibleCbsNodes<T extends CbsTreeItem>(
   return out;
 }
 
-const defaultBadgesFor = (node: CbsTreeNode): readonly CbsBadge[] =>
-  cbsRowTypeBadges(node.item);
-
 /**
  * One flattened tree row. Memoized and fed only primitives + stable refs
  * (`isOpen`/`isSelected` booleans, a stable `color`, stable callbacks) so that
@@ -224,7 +221,6 @@ export function CbsTreePanel({
   onToggle,
   onSelect,
   renderLeading,
-  badgesFor = defaultBadgesFor,
   emptyMessage,
   scrollToKey = null,
   children,
@@ -238,10 +234,6 @@ export function CbsTreePanel({
   onToggle: (key: string) => void;
   onSelect?: (node: CbsTreeNode) => void;
   renderLeading?: (node: CbsTreeNode) => React.ReactNode;
-  /** Which markers a row shows. Defaults to the row-type badge (what a
-   *  generated row IS); the Original Codes view passes `cbsFlagBadges` instead,
-   *  because that section lists no generated rows. */
-  badgesFor?: (node: CbsTreeNode) => readonly CbsBadge[];
   emptyMessage: string;
   /**
    * Scroll this row into view once it is present. Set by a `?code=` deep
@@ -324,7 +316,7 @@ export function CbsTreePanel({
                     onSelect={onSelect}
                     color={cbsColorForLevel(node.level)}
                     leading={renderLeading?.(node)}
-                    badges={badgesFor(node)}
+                    badges={cbsRowTypeBadges(node.item)}
                   />
                 </div>
               );

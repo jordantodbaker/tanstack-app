@@ -95,17 +95,18 @@ describe("flattenCbsForExport", () => {
     expect(rows.at(-1)!.outlineLevel).toBe(3);
   });
 
-  it("honors the Subcontracts / Materials toggles", () => {
+  it("honors the cost-type toggles", () => {
     const tree = buildCbsTree([
       item("600-00-0000-00-0", { name: "Piping" }),
       item("601-00-0000-00-0", { name: "Spool", subReporting: true }),
-      item("601-05-0000-00-0", { name: "Bolt-up", materialCode: true }),
+      item("601-00-0000-00-S", { name: "Spool Subcontracts" }),
+      item("601-05-0000-00-M", { name: "Bolt-up", materialCode: true }),
     ]);
     const { nodes } = pruneCbsTree(tree, { ...NO_FILTER, sub: true });
-    // Only "Spool" carries a Sub Code. "Piping" is dropped despite being its
-    // parent, so the file matches the screen — see `strictCbsRows`.
+    // Only the "-S" line is a subcontract code. Its roll-ups are dropped, so
+    // the file matches the screen — see `strictCbsRows`.
     const rows = flattenCbsForExport(nodes);
-    expect(rows.map((r) => r.name)).toEqual(["Spool"]);
+    expect(rows.map((r) => r.name)).toEqual(["Spool Subcontracts"]);
     // Promoted to the top, so Excel groups it at the outermost level.
     expect(rows[0].outlineLevel).toBe(0);
   });

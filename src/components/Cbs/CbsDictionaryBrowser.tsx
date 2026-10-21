@@ -4,16 +4,14 @@ import type { CbsBrowserRow } from "~/utils/cbs";
 import {
   buildCbsTree,
   cbsAncestorCodes,
-  CBS_STATUSES,
+  CBS_COST_TYPES,
+  cbsClassificationOptions,
   cbsFilterIsEmpty,
-  cbsFlagBadges,
-  cbsHasStatus,
+  cbsIsBackbone,
   cbsNoCostTypes,
   cbsNoStatuses,
   pruneCbsTree,
-  type CbsBadge,
   type CbsCostTypeKey,
-  type CbsCostTypeMatch,
   type CbsRowFilter,
   type CbsStatusKey,
   type CbsTreeNode,
@@ -34,6 +32,11 @@ import { useCbsTreeExpansion } from "~/components/Cbs/useCbsTreeExpansion";
  * panel — the Project Cost Code List renders this directly, and
  * `CbsDictionarySections` stacks two of them for Admin → Master CBS.
  *
+ * Every view lists cost LINES — each L / S / M / E / O variant on its own row —
+ * so a cost-type filter reads a row's own code and nothing else (see
+ * `cbsIsCostType`), and the row-type badge marks generated rows.
+ * The views differ only in which rows they are handed.
+ *
  * Colors mirror the workbook's outline fills (see ~/config/cbs-level-colors);
  * the tree itself is the shared `CbsTreePanel`.
  */
@@ -42,48 +45,70 @@ import { useCbsTreeExpansion } from "~/components/Cbs/useCbsTreeExpansion";
 // column set is fetched per selected row.
 type Node = CbsTreeNode;
 
-/** For views that list only original rows: a badge reports what the row itself
- *  carries (its Sub Code / Material Code) rather than what it is. Narrowed to
- *  the cost types being filtered on, when any are. */
-export const cbsFlagBadgesFor = (
-  node: Node,
-  only?: Partial<Record<CbsCostTypeKey, boolean>>,
-): readonly CbsBadge[] => cbsFlagBadges(node.item, only);
-
+/**
+ * Rows per cost type — the code's last segment — so "N rows" can say what it
+ * is made of. `byCode` is keyed by the cost-type code ("L", "S", …); the "-0"
+ * account roll-ups are `accounts`, and any other trailing segment is counted
+ * under `unknown` so the parts still add up to the total.
+ */
 type Counts = {
   total: number;
-  original: number;
-  subRows: number;
-  materialRows: number;
+  accounts: number;
+  byCode: Record<string, number>;
+  unknown: number;
 };
 
+const COST_TYPE_CODES = new Set<string>(CBS_COST_TYPES.map((t) => t.code));
+
 function countRows(items: readonly CbsBrowserRow[]): Counts {
-  const c: Counts = { total: 0, original: 0, subRows: 0, materialRows: 0 };
+  const c: Counts = { total: 0, accounts: 0, byCode: {}, unknown: 0 };
   for (const i of items) {
     // Context rows are ancestors pulled in for shape only — not codes this
     // view is listing, so they don't belong in "N rows".
     if (i.context) continue;
     c.total++;
-    if (i.rowType === "SUB") c.subRows++;
-    else if (i.rowType === "MATERIAL") c.materialRows++;
-    else c.original++;
+    if (cbsIsBackbone(i)) c.accounts++;
+    else if (COST_TYPE_CODES.has(i.l6)) {
+      c.byCode[i.l6] = (c.byCode[i.l6] ?? 0) + 1;
+    } else c.unknown++;
   }
   return c;
 }
 
-/**
- * Row-count pills + the per-level color legend. The row-type breakdown is
- * only worth showing where generated rows can actually appear; a Code Book
- * view would just read "… · 0 sub · 0 material".
- */
+/** The breakdown pill's parts, in the workbook's column order. */
+function costTypeParts(counts: Counts) {
+  const parts = [
+    {
+      key: "account",
+      label: "rollups",
+      title: 'Roll-up rows — codes ending in "-0"',
+      n: counts.accounts,
+    },
+    ...CBS_COST_TYPES.map((t) => ({
+      key: t.key,
+      label: t.label.toLowerCase(),
+      title: `${t.label} codes — ending in "-${t.code}"`,
+      n: counts.byCode[t.code] ?? 0,
+    })),
+  ];
+  if (counts.unknown > 0) {
+    parts.push({
+      key: "unknown",
+      label: "other suffix",
+      title: "Codes whose last segment is not a known cost type",
+      n: counts.unknown,
+    });
+  }
+  return parts;
+}
+
+/** Row-count pills + the per-level color legend. */
 function CountsLegend({
   counts,
-  showRowTypes,
   onExpandToLevel,
   levelShown,
 }: {
   counts: Counts;
-  showRowTypes: boolean;
   onExpandToLevel: (level: number) => void;
   levelShown: number | null;
 }) {
@@ -92,13 +117,19 @@ function CountsLegend({
       <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
         {counts.total.toLocaleString()} row{counts.total === 1 ? "" : "s"}
       </span>
-      {showRowTypes && (
-        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
-          {counts.original.toLocaleString()} original ·{" "}
-          {counts.subRows.toLocaleString()} sub ·{" "}
-          {counts.materialRows.toLocaleString()} material
-        </span>
-      )}
+      <span
+        className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600"
+        aria-label="Rows by cost type"
+      >
+        {costTypeParts(counts).map((p, i) => (
+          <React.Fragment key={p.key}>
+            {i > 0 && " · "}
+            <span title={p.title}>
+              {p.n.toLocaleString()} {p.label}
+            </span>
+          </React.Fragment>
+        ))}
+      </span>
       <span className="ml-1 text-xs text-slate-500">
         Level colors (click to expand to a level):
       </span>
@@ -120,29 +151,23 @@ function CountsLegend({
  */
 export function CbsDictionaryBrowser({
   items,
-  badgesFor,
   sourceNote,
   emptyMessage,
-  costTypeMatch = "codeOrFlag",
-  showRowTypeCounts = true,
   exportView,
   focusCode = null,
+  statusFilter = false,
 }: {
   items: CbsBrowserRow[];
-  badgesFor?: (
-    node: Node,
-    /** The cost types currently filtered on, so a producer can narrow to them. */
-    only: Record<CbsCostTypeKey, boolean>,
-  ) => readonly CbsBadge[];
   sourceNote: string;
   emptyMessage: string;
   /**
-   * How this view reads a cost-type filter. The Dictionary lists one row per
-   * cost type, so a row qualifies on its own code alone; an account list has
-   * only "-0" rows and must read the flag columns. See `CbsCostTypeMatch`.
+   * Offer the Active / Inactive / Retired buttons. Only the CBS Dictionary
+   * does: Cost Accounts and the Project Cost Code List are active-only by
+   * construction. Shown whatever the data holds — a status with no codes
+   * right now simply filters to "No rows match", rather than the control
+   * vanishing whenever the workbook happens to carry a single status.
    */
-  costTypeMatch?: CbsCostTypeMatch;
-  showRowTypeCounts?: boolean;
+  statusFilter?: boolean;
   /** Which view to export as Excel. Omit to leave the button out. */
   exportView?: CbsExportView;
   /**
@@ -205,42 +230,24 @@ export function CbsDictionaryBrowser({
     [],
   );
 
-  // Which statuses this dataset actually contains. The Cost Accounts list and
-  // the Project Cost Code List are filtered to active rows before they reach
-  // this component, so every status button there would either do nothing
-  // (Active) or empty the tree (Inactive, Retired).
-  const statusAvailability = React.useMemo(
-    () =>
-      Object.fromEntries(
-        CBS_STATUSES.map((s) => [
-          s.key,
-          items.some((item) => cbsHasStatus(item, s.key)),
-        ]),
-      ) as Record<CbsStatusKey, boolean>,
+  const [classifications, setClassifications] = React.useState<string[]>([]);
+  const classificationOptions = React.useMemo(
+    () => cbsClassificationOptions(items),
     [items],
-  );
-  // The row appears only where it can tell rows apart — two or more statuses
-  // present. On a list that is all one status the filter is not a disabled
-  // control, it is a question with one answer, so it is not asked. Where it
-  // does appear, a status the data lacks stays visible but disabled, so the
-  // set of buttons does not shift about between views.
-  const canFilterByStatus =
-    CBS_STATUSES.filter((s) => statusAvailability[s.key]).length > 1;
-
-  // The tree panel asks for a row's badges and knows nothing about filters, so
-  // the filter is bound in here rather than threaded through it.
-  const badgesForRow = React.useMemo(
-    () => (badgesFor ? (node: Node) => badgesFor(node, costTypes) : undefined),
-    [badgesFor, costTypes],
   );
 
   const filter: CbsRowFilter = React.useMemo(
-    () => ({ query: query.trim().toLowerCase(), ...costTypes, ...statuses }),
-    [query, costTypes, statuses],
+    () => ({
+      query: query.trim().toLowerCase(),
+      classifications,
+      ...costTypes,
+      ...statuses,
+    }),
+    [query, classifications, costTypes, statuses],
   );
   const filtering = !cbsFilterIsEmpty(filter);
   const { nodes: visibleNodes, matches } = React.useMemo(
-    () => pruneCbsTree(nodes, filter, costTypeMatch),
+    () => pruneCbsTree(nodes, filter),
     [filter, nodes],
   );
 
@@ -257,7 +264,6 @@ export function CbsDictionaryBrowser({
     <div className="px-4 pb-4 md:px-5">
       <CountsLegend
         counts={counts}
-        showRowTypes={showRowTypeCounts}
         onExpandToLevel={expandToLevel}
         levelShown={levelShown}
       />
@@ -269,8 +275,10 @@ export function CbsDictionaryBrowser({
         costTypes={costTypes}
         onToggleCostType={toggleCostType}
         statuses={statuses}
-        onToggleStatus={canFilterByStatus ? toggleStatus : undefined}
-        statusAvailability={statusAvailability}
+        onToggleStatus={statusFilter ? toggleStatus : undefined}
+        classifications={classifications}
+        onClassificationsChange={setClassifications}
+        classificationOptions={classificationOptions}
       >
         {/* Offered only where there are any — the catalog views have none. */}
         {hasContext && (
@@ -303,7 +311,6 @@ export function CbsDictionaryBrowser({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_22rem]">
         <CbsTreePanel
-          badgesFor={badgesForRow}
           flat={flat}
           expanded={expanded}
           forceOpen={filtering}

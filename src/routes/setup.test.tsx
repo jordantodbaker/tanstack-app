@@ -92,6 +92,7 @@ function item(
     // Active unless a case overrides it — the Code Book and the project list
     // hide anything that is not.
     status: "Active",
+    costClassification: null,
   };
 }
 

@@ -150,9 +150,8 @@ const COST_TYPE_NAME_SUFFIX = /\s*\((?:\*|[A-Z])\)\s*$/;
  * A CBS name without its cost-type marker: "Executive (L)" → "Executive".
  *
  * Names are STORED with the marker, as the workbook writes them, so the
- * dictionary shows which cost type each line is. Strip it only where
- * something else already says so — the Cost Accounts badges — or where
- * comparing names, so "Civil (*)" and "Civil" are the same account.
+ * CBS views show which cost type each line is. Strip it only where comparing
+ * names, so "Civil (*)" and "Civil" are the same account.
  */
 export function stripCostTypeSuffix(name: string): string {
   return name.replace(COST_TYPE_NAME_SUFFIX, "").trim() || name.trim();

@@ -1,15 +1,111 @@
 import * as React from "react";
+import { ChevronDown } from "lucide-react";
 import { SearchBox } from "~/components/SearchBox";
 import { Button } from "~/components/ui/button";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
+import {
   CBS_COST_TYPES,
+  CBS_NO_CLASSIFICATION,
   CBS_STATUSES,
+  type CbsClassificationOption,
   type CbsCostTypeKey,
   type CbsStatusKey,
 } from "~/lib/cbs-tree";
 
+const classificationLabel = (value: string) =>
+  value === CBS_NO_CLASSIFICATION ? "(none)" : value;
+
 /**
- * Two rows for a CBS tree: the cost-type filters, then the search box with
+ * The Cost Classification multi-select: a button naming what is picked, and a
+ * checkbox list under it. A list rather than buttons: the workbook carries
+ * ~15 values, too many for a row of toggles.
+ */
+function ClassificationPicker({
+  selected,
+  options,
+  onChange,
+}: {
+  selected: readonly string[];
+  options: readonly CbsClassificationOption[];
+  onChange: (next: string[]) => void;
+}) {
+  const picked = new Set(selected);
+  const toggle = (value: string) =>
+    onChange(
+      // Kept in the list's order, not the click order, so the export's filter
+      // note reads the same however the boxes were ticked.
+      options
+        .map((o) => o.value)
+        .filter((v) => (v === value ? !picked.has(v) : picked.has(v))),
+    );
+  const summary =
+    selected.length === 0
+      ? "All classifications"
+      : selected.length === 1
+        ? classificationLabel(selected[0])
+        : `${selected.length} classifications`;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs text-slate-500">Cost classification:</span>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant={selected.length > 0 ? "default" : "outline"}
+            size="sm"
+            aria-label={`Cost classification: ${summary}`}
+          >
+            {summary}
+            <ChevronDown className="ml-1 size-3.5" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-80 p-1">
+          <div
+            role="group"
+            aria-label="Filter by cost classification"
+            className="max-h-80 overflow-auto"
+          >
+            {options.map((o) => (
+              <label
+                key={o.value}
+                className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-slate-100"
+              >
+                <input
+                  type="checkbox"
+                  aria-label={classificationLabel(o.value)}
+                  checked={picked.has(o.value)}
+                  onChange={() => toggle(o.value)}
+                />
+                <span className="truncate">{classificationLabel(o.value)}</span>
+                <span className="ml-auto text-xs text-slate-500 tabular-nums">
+                  {o.count.toLocaleString()}
+                </span>
+              </label>
+            ))}
+          </div>
+          <div className="flex justify-end border-t border-slate-100 p-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={selected.length === 0}
+              onClick={() => onChange([])}
+            >
+              Clear
+            </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
+/**
+ * Rows for a CBS tree: the cost-type, status and classification filters, then
+ * the search box with
  * Expand all / Collapse all and a trailing slot for page-specific controls
  * (the Excel export, a match count, a selected count, saving…). Shared by the
  * Setup editor and the CBS dictionary viewers.
@@ -28,7 +124,9 @@ export function CbsTreeToolbar({
   onToggleCostType,
   statuses,
   onToggleStatus,
-  statusAvailability,
+  classifications = [],
+  onClassificationsChange,
+  classificationOptions = [],
   children,
 }: {
   query: string;
@@ -43,11 +141,13 @@ export function CbsTreeToolbar({
   statuses?: Record<CbsStatusKey, boolean>;
   onToggleStatus?: (key: CbsStatusKey) => void;
   /**
-   * Statuses present in this dataset. A status nothing carries is shown
-   * disabled rather than hidden, so the row reads the same everywhere and a
-   * press that could only ever return nothing is not offered.
+   * The Cost Classifications picked, empty for all. Omit the handler to leave
+   * the picker out.
    */
-  statusAvailability?: Record<CbsStatusKey, boolean>;
+  classifications?: readonly string[];
+  onClassificationsChange?: (next: string[]) => void;
+  /** The classifications to offer — see `cbsClassificationOptions`. */
+  classificationOptions?: readonly CbsClassificationOption[];
   children?: React.ReactNode;
 }) {
   return (
@@ -68,7 +168,7 @@ export function CbsTreeToolbar({
                 size="sm"
                 onClick={() => onToggleCostType(t.key)}
                 aria-pressed={on}
-                title={`Show only ${t.label.toLowerCase()} codes — cost type ${t.code}, or ${t.column} YES`}
+                title={`Show only ${t.label.toLowerCase()} codes — those ending in -${t.code}`}
               >
                 {t.label}
               </Button>
@@ -85,26 +185,27 @@ export function CbsTreeToolbar({
           <span className="text-xs text-slate-500">Status:</span>
           {CBS_STATUSES.map((s) => {
             const on = statuses?.[s.key] ?? false;
-            const available = statusAvailability?.[s.key] ?? true;
             return (
               <Button
                 key={s.key}
                 variant={on ? "default" : "outline"}
                 size="sm"
-                disabled={!available}
                 onClick={() => onToggleStatus(s.key)}
                 aria-pressed={on}
-                title={
-                  available
-                    ? `Show only codes with Status ${s.label}${s.key === "active" ? " (a blank Status counts as Active)" : ""}`
-                    : `No ${s.label.toLowerCase()} codes in this view`
-                }
+                title={`Show only codes with Status ${s.label}${s.key === "active" ? " (a blank Status counts as Active)" : ""}`}
               >
                 {s.label}
               </Button>
             );
           })}
         </div>
+      )}
+      {onClassificationsChange && (
+        <ClassificationPicker
+          selected={classifications}
+          options={classificationOptions}
+          onChange={onClassificationsChange}
+        />
       )}
       <div className="flex flex-wrap items-center gap-2">
         <SearchBox

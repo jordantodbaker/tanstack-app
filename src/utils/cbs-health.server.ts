@@ -244,8 +244,8 @@ export async function buildCbsHealthReport(): Promise<HealthReport> {
     }),
   );
 
-  // 6. Priced rows with no "-0" account row above them. They vanish from any
-  //    view that lists one row per account.
+  // 6. Priced rows with no "-0" account row above them. They nest under the
+  //    nearest summary that does exist, with no account row of their own.
   const have = new Set(rows.map((r) => r.displayCode));
   const orphans = rows.filter(
     (r) =>
@@ -265,9 +265,9 @@ export async function buildCbsHealthReport(): Promise<HealthReport> {
       })),
       count: orphans.length,
       summary:
-        'These rows carry a cost type but the account they belong to has no "-0" row, so they are absent from the Cost Accounts list, which shows one row per account.',
+        'These rows carry a cost type but the account they belong to has no "-0" row, so in the CBS trees they hang from the nearest summary above rather than from an account row.',
       action:
-        "Expected for deliverable-style codes. Add the account row in CBS.xlsx if any of them should be pickable from the Cost Accounts list.",
+        "Expected for deliverable-style codes. Add the account row in CBS.xlsx if any of them should be grouped under an account of their own.",
       clear: 'Every priced row has its "-0" account row.',
     }),
   );

@@ -69,29 +69,25 @@ export type CbsCostType = (typeof CBS_COST_TYPES)[number];
 export type CbsCostTypeKey = CbsCostType["key"];
 
 /**
- * How a view reads "does this row carry cost type M?".
+ * Is `item` a line of this cost type — does its code end in that letter?
  *
- * `codeOrFlag` — the row IS an M code, or its Material Code column says YES.
- * Right for a list of ACCOUNTS: the Cost Accounts view shows only the "-0"
- * backbone rows, whose own cost type is 0, so the flag columns are the only
- * thing that can answer for them.
- *
- * `code` — the row's own cost type, and nothing else. Right for a list of COST
- * LINES: the CBS Dictionary puts every variant on its own row, and there the
- * flags belong to the account rather than the row. Reading them would keep an
- * account's "-S" row under a Materials filter, because the account does carry
- * a material code — just not on that line.
+ * What every tree's cost-type filter asks. Each tree lists cost LINES, one
+ * row per variant, and the flag columns belong to the ACCOUNT rather than the
+ * line: reading them would keep an account's "-S" row under a Materials
+ * filter, because the account does carry a material code — just not on that
+ * line.
  */
-export type CbsCostTypeMatch = "code" | "codeOrFlag";
+export function cbsIsCostType(item: CbsTreeItem, type: CbsCostType): boolean {
+  return item.l6 === type.code;
+}
 
-/** Does `item` carry this cost type? See {@link CbsCostTypeMatch}. */
-export function cbsHasCostType(
-  item: CbsTreeItem,
-  type: CbsCostType,
-  match: CbsCostTypeMatch = "codeOrFlag",
-): boolean {
-  if (item.l6 === type.code) return true;
-  return match === "codeOrFlag" && item[type.flag] === true;
+/**
+ * Does `item` carry this cost type — is it a line of that type, or does its
+ * flag column say YES? The export's per-type YES columns, which report what
+ * the workbook says the account has, not what the tree is filtered on.
+ */
+export function cbsHasCostType(item: CbsTreeItem, type: CbsCostType): boolean {
+  return cbsIsCostType(item, type) || item[type.flag] === true;
 }
 
 /**
@@ -114,11 +110,20 @@ export const CBS_STATUSES = [
 
 export type CbsStatusKey = (typeof CBS_STATUSES)[number]["key"];
 
-export type CbsRowFilter = { query: string } & Record<CbsCostTypeKey, boolean> &
+export type CbsRowFilter = {
+  query: string;
+  /**
+   * The Cost Classifications to show, each matched exactly against the
+   * trimmed cell; a row qualifies on any of them. Empty shows every
+   * classification, and `CBS_NO_CLASSIFICATION` stands for a blank cell.
+   */
+  classifications: readonly string[];
+} & Record<CbsCostTypeKey, boolean> &
   Record<CbsStatusKey, boolean>;
 
 export const CBS_FILTER_NONE: CbsRowFilter = {
   query: "",
+  classifications: [],
   ...(Object.fromEntries(CBS_COST_TYPES.map((t) => [t.key, false])) as Record<
     CbsCostTypeKey,
     boolean
@@ -202,12 +207,63 @@ export function cbsHasStatusFilter(filter: CbsRowFilter): boolean {
   return CBS_STATUSES.some((s) => filter[s.key]);
 }
 
+/** Whether any Cost Classification is picked. */
+export function cbsHasClassificationFilter(filter: CbsRowFilter): boolean {
+  return filter.classifications.length > 0;
+}
+
+/**
+ * The classification value standing for a blank cell — about 430 rows, the
+ * division roots among them, have none.
+ */
+export const CBS_NO_CLASSIFICATION = "";
+
+/**
+ * A row's Cost Classification as the filter reads it: the trimmed cell, or
+ * `CBS_NO_CLASSIFICATION` when blank. Not case-folded — the workbook's values
+ * are what the dropdown lists, so "INDIRECT" and "Indirects" stay apart until
+ * the workbook reconciles them.
+ */
+export function cbsClassificationOf(item: CbsTreeItem): string {
+  return item.costClassification?.trim() ?? CBS_NO_CLASSIFICATION;
+}
+
+/** One dropdown entry: a classification and how many rows carry it. */
+export type CbsClassificationOption = { value: string; count: number };
+
+/**
+ * The classifications present in `items`, for the dropdown — alphabetical,
+ * with the blank entry last. Built from the rows a view lists, so it never
+ * offers a value that could only filter to nothing. Context rows are skipped,
+ * as they are in the row counts.
+ */
+export function cbsClassificationOptions(
+  items: Iterable<CbsTreeItem>,
+): CbsClassificationOption[] {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    if (item.context) continue;
+    const value = cbsClassificationOf(item);
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return [...counts]
+    .map(([value, count]) => ({ value, count }))
+    .sort((a, b) =>
+      a.value === CBS_NO_CLASSIFICATION
+        ? 1
+        : b.value === CBS_NO_CLASSIFICATION
+          ? -1
+          : a.value.localeCompare(b.value, undefined, { sensitivity: "base" }),
+    );
+}
+
 /** Is this filter showing everything (so callers can skip the walk)? */
 export function cbsFilterIsEmpty(filter: CbsRowFilter): boolean {
   return (
     !filter.query &&
     !cbsHasCostTypeFilter(filter) &&
-    !cbsHasStatusFilter(filter)
+    !cbsHasStatusFilter(filter) &&
+    !cbsHasClassificationFilter(filter)
   );
 }
 

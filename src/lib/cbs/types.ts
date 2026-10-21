@@ -45,6 +45,8 @@ export type CbsTreeItem = {
   otherCode?: boolean | null;
   /** The workbook's "Status" cell — "Active", "Inactive", or blank. */
   status?: string | null;
+  /** The workbook's "Cost Classification" cell — "DIRECT LABOR", "INDIRECT", … */
+  costClassification?: string | null;
   /**
    * True for a row included only so the hierarchy reads correctly — an
    * ancestor of something the project HAS been granted, which it has not been

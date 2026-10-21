@@ -21,11 +21,9 @@ import {
   parseUpsertFco,
 } from "~/lib/validators";
 import {
-  assertProjectAccess,
   projectIdScopedHandler,
-  resolveCurrentUser,
+  requireProjectAccess,
 } from "./users.server";
-import { assertProjectUnchanged } from "./users";
 import {
   deleteProjectScopedRecord,
   transitionProjectScopedRecord,
@@ -35,7 +33,7 @@ import {
   diffFields,
   recordUpdate,
 } from "./audit.server";
-import { createLinkedCvr } from "./promote.server";
+import { claimPromotion, createLinkedCvr } from "./promote.server";
 import type { RiskLevel } from "./changelog";
 import { FCO_TRANSITIONS } from "./workflow";
 import { FCO_STATUS_LABELS } from "./fcoLogLabels";
@@ -459,14 +457,20 @@ export const deleteFco = createServerFn({ method: "POST" })
 export const promoteFcoToCvr = createServerFn({ method: "POST" })
   .inputValidator(parsePromoteFcoInput)
   .handler(async ({ data }): Promise<{ cvrId: number }> => {
-    const actor = await resolveCurrentUser();
-    if (!actor) throw new Error("Unauthorized: not signed in");
+    const fco = await prisma.fieldChangeOrder.findUniqueOrThrow({
+      where: { id: data.fcoId },
+    });
+    const actor = await requireProjectAccess(fco.projectId);
+    // The dialog hides Promote once an FCO is linked, but the server is the
+    // only place that can stop a double-click or a second open dialog.
+    if (fco.linkedCvrId !== null) {
+      throw new Error("This FCO has already been promoted to a CVR.");
+    }
+    if (fco.status === "VOID" || fco.status === "REJECTED") {
+      throw new Error(`Cannot promote a ${fco.status.toLowerCase()} FCO.`);
+    }
 
     return prisma.$transaction(async (tx) => {
-      const fco = await tx.fieldChangeOrder.findUniqueOrThrow({
-        where: { id: data.fcoId },
-      });
-      await assertProjectAccess(actor, fco.projectId);
       const cvr = await createLinkedCvr(tx, actor, fco.projectId, {
         title: fco.title,
         description:
@@ -488,9 +492,18 @@ export const promoteFcoToCvr = createServerFn({ method: "POST" })
         area: fco.locationArea,
       });
 
-      const updatedFco = await tx.fieldChangeOrder.update({
+      // Link only if still unlinked. Two promotes racing past the check above
+      // serialize on this row: the loser matches nothing and throws, which
+      // rolls back the CVR it just minted.
+      await claimPromotion(
+        tx.fieldChangeOrder.updateMany({
+          where: { id: fco.id, linkedCvrId: null },
+          data: { linkedCvrId: cvr.id, status: "LINKED_TO_CVR" },
+        }),
+        "This FCO has already been promoted to a CVR.",
+      );
+      const updatedFco = await tx.fieldChangeOrder.findUniqueOrThrow({
         where: { id: fco.id },
-        data: { linkedCvrId: cvr.id, status: "LINKED_TO_CVR" },
       });
       await recordUpdate(
         tx,

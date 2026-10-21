@@ -111,12 +111,30 @@ describe("projectCostCodeRows", () => {
     expect(findMany).toHaveBeenCalledTimes(1);
   });
 
-  it("asks only for this project's ORIGINAL rows", async () => {
+  it("asks for every row this project was granted, generated ones included", async () => {
+    // The list reads like the CBS Dictionary: each cost line on its own row,
+    // so a granted S / M twin is a code the project may use.
     findMany.mockResolvedValueOnce([]);
     await projectCostCodeRows(42);
     expect(findMany.mock.calls[0][0].where).toEqual({
-      rowType: "ORIGINAL",
       allowedInProjects: { some: { id: 42 } },
     });
+  });
+
+  it("keeps a granted generated row and looks up ancestors of any row type", async () => {
+    findMany
+      .mockResolvedValueOnce([
+        { ...row("100-10-0000-00-S", "Site Prep Subcontracts"), rowType: "SUB" },
+      ])
+      .mockResolvedValueOnce([]);
+
+    const rows = await projectCostCodeRows(7);
+    expect(rows.map((r) => r.name)).toEqual(["Site Prep Subcontracts"]);
+    // A typed line's ancestors include its parent's line of the same type,
+    // which may itself be generated — so the lookup is not limited to originals.
+    expect(findMany.mock.calls[1][0].where).toEqual({
+      displayCode: { in: ancestorsRequested() },
+    });
+    expect(ancestorsRequested()).toContain("100-00-0000-00-S");
   });
 });

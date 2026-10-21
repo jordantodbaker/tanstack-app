@@ -5,10 +5,9 @@ import { adminHandler, requireProjectAccess } from "./users.server";
 import {
   buildCbsTree,
   CBS_COST_TYPES,
+  CBS_NO_CLASSIFICATION,
   CBS_STATUSES,
   cbsIsActive,
-  cbsIsBackboneCode,
-  cbsAncestorCodes,
   cbsFilterIsEmpty,
   pruneCbsTree,
   withCbsLevels,
@@ -66,9 +65,12 @@ const ExportInput = z.object({
       active: z.boolean().default(false),
       inactive: z.boolean().default(false),
       retired: z.boolean().default(false),
+      /** The Cost Classifications picked; empty for all, "" for blank cells. */
+      classifications: z.array(z.string().max(200)).max(100).default([]),
     })
     .default({
       query: "",
+      classifications: [],
       labor: false,
       sub: false,
       material: false,
@@ -109,6 +111,15 @@ export function describeCbsFilter(filter: CbsRowFilter): string {
   else if (status.length > 1) {
     parts.push(`status ${status.slice(0, -1).join(", ")} or ${status.at(-1)}`);
   }
+  const classes = filter.classifications.map((c) =>
+    c === CBS_NO_CLASSIFICATION ? "none" : c,
+  );
+  if (classes.length === 1) parts.push(`cost classification ${classes[0]}`);
+  else if (classes.length > 1) {
+    parts.push(
+      `cost classification ${classes.slice(0, -1).join(", ")} or ${classes.at(-1)}`,
+    );
+  }
   return `Filtered: ${parts.join(", ")}`;
 }
 
@@ -122,6 +133,7 @@ async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
     // The page lower-cases and trims before filtering; match it exactly or a
     // search that showed rows on screen would export none.
     query: input.filter.query.trim().toLowerCase(),
+    classifications: input.filter.classifications,
     labor: input.filter.labor,
     sub: input.filter.sub,
     material: input.filter.material,
@@ -145,16 +157,13 @@ async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
       ? "Codes granted to this project on the Setup page — ungranted parents hidden"
       : "Codes granted to this project on the Setup page";
   } else {
-    // The Cost Accounts view lists one row per account — the "-0" backbone,
-    // and only while it is active — so the export has to apply the same two
-    // filters the page does, or the file stops matching the screen. The
-    // Dictionary deliberately keeps everything, retired rows included.
+    // The Cost Accounts view lists only active rows, so the export applies the
+    // same filter the page does, or the file stops matching the screen. The
+    // Dictionary deliberately keeps everything, inactive and retired included.
     const catalog = await cbsCatalogRows(false);
     rows =
       input.view === "codeBook"
-        ? catalog.filter(
-            (r) => cbsIsBackboneCode(r.displayCode) && cbsIsActive(r.status),
-          )
+        ? catalog.filter((r) => cbsIsActive(r.status))
         : catalog;
     // The catalog views ignore the allow-list, so the project below is there
     // for traceability — whose desk the file came from — not as a filter.
@@ -172,13 +181,9 @@ async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
         });
 
   const tree = buildCbsTree(rows.map(withCbsLevels));
-  // The Dictionary judges a row on its own cost type; the account views read
-  // the flag columns. Mirrored here or the file stops matching the screen.
-  const visible = pruneCbsTree(
-    tree,
-    filter,
-    input.view === "dictionary" ? "code" : "codeOrFlag",
-  ).nodes;
+  // Every view lists cost lines, so a row is judged on its own cost type —
+  // mirrored from the page, or the file stops matching the screen.
+  const visible = pruneCbsTree(tree, filter).nodes;
   const exportRows = flattenCbsForExport(visible);
 
   const buffer = await buildCbsWorkbook(exportRows, {

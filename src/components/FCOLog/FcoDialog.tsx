@@ -347,8 +347,14 @@ function FcoDialogBody({
     update(key, items);
   }
 
+  // Mirrors the server's refusals in `promoteFcoToCvr`.
   const canPromote =
-    initial && !initial.linkedCvrId && onPromote && projectId !== null;
+    initial &&
+    !initial.linkedCvrId &&
+    initial.status !== "VOID" &&
+    initial.status !== "REJECTED" &&
+    onPromote &&
+    projectId !== null;
 
   return (
     <>

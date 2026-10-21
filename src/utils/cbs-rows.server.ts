@@ -14,31 +14,25 @@ import { cbsTreeRowSelect, type CbsWireRow } from "./cbs";
 export type ProjectCostCodeRow = CbsWireRow & { context?: boolean };
 
 /**
- * The cost codes a project may use: the ORIGINAL rows granted on the Setup
- * page, plus the ancestor summaries needed for the hierarchy to read.
+ * The cost codes a project may use: every row granted on the Setup page —
+ * each cost line, generated S / M rows included, as the CBS Dictionary lists
+ * them — plus the ancestor summaries needed for the hierarchy to read.
  *
  * Without the ancestors a child whose parent is ungranted has nothing to hang
  * from and renders as a top-level orphan — "Field Staff" beside the
  * disciplines rather than under "Field Indirects". They come back flagged
  * `context: true`: shown muted, excluded from counts, and not usable as codes.
- *
- * Generated S/M rows are excluded here rather than in the browser. The page
- * has never shown them (an original's own S / M badge says whether it carries
- * them), and they were ~19% of the rows shipped.
  */
 export async function projectCostCodeRows(
   projectId: number,
 ): Promise<ProjectCostCodeRow[]> {
   const all = await prisma.cbsItem.findMany({
-    where: {
-      rowType: "ORIGINAL",
-      allowedInProjects: { some: { id: projectId } },
-    },
+    where: { allowedInProjects: { some: { id: projectId } } },
     orderBy: { id: "asc" },
     select: cbsTreeRowSelect,
   });
-  // Retired accounts are not offered, even where a project was granted one
-  // before it was retired. Filtered here in JS rather than in the `where` so
+  // Only Active codes are offered — not Inactive or Retired ones, even where a
+  // project was granted one before its status changed. Filtered here in JS rather than in the `where` so
   // the rule — blank Status counts as active — stays in one place and reads
   // the same for every caller; see `cbsIsActive`.
   const granted = all.filter((row) => cbsIsActive(row.status));
@@ -54,7 +48,9 @@ export async function projectCostCodeRows(
   if (wanted.size === 0) return granted;
 
   const ancestors = await prisma.cbsItem.findMany({
-    where: { rowType: "ORIGINAL", displayCode: { in: [...wanted] } },
+    // Any row type: a typed line's ancestors include its parent's line of the
+    // same type ("…-S" under "…-S"), which may be a generated row.
+    where: { displayCode: { in: [...wanted] } },
     orderBy: { id: "asc" },
     select: cbsTreeRowSelect,
   });

@@ -11,12 +11,13 @@ import {
   CBS_COST_TYPES,
   CBS_STATUSES,
   cbsFilterIsEmpty,
-  cbsHasCostType,
+  cbsIsCostType,
   cbsHasCostTypeFilter,
   cbsHasStatus,
   cbsHasStatusFilter,
+  cbsHasClassificationFilter,
+  cbsClassificationOf,
   cbsQueryTokens,
-  type CbsCostTypeMatch,
   type CbsRowFilter,
 } from "./filter";
 
@@ -30,33 +31,31 @@ type CbsCriteria = {
   filter: CbsRowFilter;
   /** The query, pre-split — computed once rather than per row. */
   tokens: string[];
-  costTypeMatch: CbsCostTypeMatch;
 };
 
-/** The criteria for a view that reads cost types the default way. */
-function criteriaFor(
-  filter: CbsRowFilter,
-  costTypeMatch: CbsCostTypeMatch = "codeOrFlag",
-): CbsCriteria {
-  return { filter, tokens: cbsQueryTokens(filter.query), costTypeMatch };
+function criteriaFor(filter: CbsRowFilter): CbsCriteria {
+  return { filter, tokens: cbsQueryTokens(filter.query) };
 }
 
 function rowMatches<T extends CbsTreeItem>(
   node: CbsTreeNode<T>,
-  { filter, tokens, costTypeMatch }: CbsCriteria,
+  { filter, tokens }: CbsCriteria,
 ): boolean {
   if (tokens.some((t) => !node.searchHaystack.includes(t))) return false;
   const types = CBS_COST_TYPES.filter((t) => filter[t.key]);
-  if (
-    types.length > 0 &&
-    !types.some((t) => cbsHasCostType(node.item, t, costTypeMatch))
-  ) {
+  if (types.length > 0 && !types.some((t) => cbsIsCostType(node.item, t))) {
     return false;
   }
   const statuses = CBS_STATUSES.filter((s) => filter[s.key]);
   if (
     statuses.length > 0 &&
     !statuses.some((s) => cbsHasStatus(node.item, s.key))
+  ) {
+    return false;
+  }
+  if (
+    filter.classifications.length > 0 &&
+    !filter.classifications.includes(cbsClassificationOf(node.item))
   ) {
     return false;
   }
@@ -112,24 +111,20 @@ export function filterCbsTree<T extends CbsTreeItem>(
   filter: CbsRowFilter,
 ): CbsTreeNode<T>[] {
   if (cbsFilterIsEmpty(filter)) return nodes;
-  const typeFiltered = filter.sub || filter.material;
+  const typeFiltered =
+    cbsHasCostTypeFilter(filter) || cbsHasClassificationFilter(filter);
   return searchCbsTree(nodes, criteriaFor(filter), !typeFiltered);
 }
 
-/**
- * Strict filter for the viewers: keeps only nodes that match `filter`
- * themselves plus their ancestors (a matching parent does NOT keep its
- * non-matching children), and counts the matches.
- */
 /**
  * Keeps only rows that match, lifting the survivors into the place of any
  * ancestor that didn't.
  *
  * `searchCbsTree` keeps a non-matching parent whenever a descendant matches, so
  * the hierarchy still reads top-down. Under a cost-type filter that misleads:
- * the kept parent carries no badge for the cost type being filtered on, so the
- * list answers "which codes are Labor codes?" with rows that are not. Here a
- * row earns its place on its own flags and nothing else, and a match orphaned
+ * the kept parent is not of the cost type being filtered on, so the list
+ * answers "which codes are Labor codes?" with rows that are not. Here a row
+ * earns its place on its own code and nothing else, and a match orphaned
  * by a dropped ancestor is promoted rather than lost.
  *
  * `depth` is re-assigned on the way down, since it drives indentation and the
@@ -162,19 +157,19 @@ function strictCbsRows<T extends CbsTreeItem>(
 export function pruneCbsTree<T extends CbsTreeItem>(
   nodes: CbsTreeNode<T>[],
   filter: CbsRowFilter,
-  /** See {@link CbsCostTypeMatch}. Defaults to the account-list reading. */
-  costTypeMatch: CbsCostTypeMatch = "codeOrFlag",
 ): { nodes: CbsTreeNode<T>[]; matches: number } {
   if (cbsFilterIsEmpty(filter)) return { nodes, matches: 0 };
   let matches = 0;
   const onMatch = () => matches++;
-  // A cost-type or status filter is read as a report — "show me the Labor
-  // codes", "show me the inactive ones" — so only rows that qualify survive. A
-  // bare text search still keeps ancestors: there, knowing WHERE a hit sits is
-  // most of the answer.
-  const criteria = criteriaFor(filter, costTypeMatch);
+  // A cost-type, status or classification filter is read as a report — "show
+  // me the Labor codes", "show me the inactive ones", "show me the INDIRECT
+  // ones" — so only rows that qualify survive. A bare text search still keeps
+  // ancestors: there, knowing WHERE a hit sits is most of the answer.
+  const criteria = criteriaFor(filter);
   const kept =
-    cbsHasCostTypeFilter(filter) || cbsHasStatusFilter(filter)
+    cbsHasCostTypeFilter(filter) ||
+    cbsHasStatusFilter(filter) ||
+    cbsHasClassificationFilter(filter)
       ? strictCbsRows(nodes, criteria, 0, onMatch)
       : searchCbsTree(nodes, criteria, false, onMatch);
   return { nodes: kept, matches };

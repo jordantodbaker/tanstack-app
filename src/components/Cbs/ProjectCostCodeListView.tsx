@@ -4,18 +4,14 @@ import { projectCostCodesQueryOptions } from "~/utils/cbs";
 import {
   CbsDictionaryBrowser,
   CbsDictionaryStatus,
-  cbsFlagBadgesFor,
 } from "~/components/Cbs/CbsDictionaryBrowser";
 
 /**
  * Project Cost Code List — the cost codes available on the selected project.
  *
- * One list, of the ORIGINAL Master CBS rows the project has been granted (what
- * was the "CBS Code Book" section, now "Original Codes"). The generated S/M
- * rows are deliberately
- * not listed: an original row's own S / M badge already says whether it carries
- * a sub code or a material code. Admin → Master CBS still shows both views
- * over the whole catalog.
+ * One list, read the way the CBS Dictionary reads: every cost line the project
+ * has been granted on its own row, generated S / M rows included, and active
+ * codes only. Admin → Master CBS shows the same views over the whole catalog.
  *
  * The browser itself is shared with that page — see `CbsDictionaryBrowser`;
  * this page only scopes the rows to one project.
@@ -31,7 +27,7 @@ function ProjectCostCodes({
   projectId: number;
   focusCode: string | null;
 }) {
-  // Already filtered to original rows server-side.
+  // Already filtered to granted, active rows server-side.
   const query = useQuery(projectCostCodesQueryOptions(projectId));
 
   if (query.isPending || query.isError) {
@@ -47,10 +43,8 @@ function ProjectCostCodes({
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white pt-4 shadow-sm">
       <CbsDictionaryBrowser
         items={query.data}
-        badgesFor={cbsFlagBadgesFor}
         sourceNote={SOURCE_NOTE}
         emptyMessage="No cost codes selected for this project."
-        showRowTypeCounts={false}
         exportView="projectCostCodes"
         focusCode={focusCode}
       />
@@ -74,13 +68,11 @@ export function ProjectCostCodeListView({
         </h1>
         <p className="mt-1 max-w-3xl text-sm text-slate-500">
           The cost codes available on this project — the CBS rows selected on
-          the Setup page — as a color-coded, collapsible hierarchy.{" "}
-          <strong>L</strong>, <strong>S</strong>, <strong>M</strong>,{" "}
-          <strong>E</strong> and <strong>O</strong> mark a code's own Labor,
-          Sub, Material, Equipment and Other Code. Grayed-out rows are parent
-          summaries the project wasn't given, shown so the codes under them nest
-          correctly. Retired codes are not listed — see the CBS Dictionary for
-          those. Colors and grouping mirror the source workbook.
+          the Setup page — as a color-coded, collapsible hierarchy, each cost
+          type on its own line. Grayed-out rows are parent summaries the project
+          wasn't given, shown so the codes under them nest correctly. Only
+          active codes are listed — see the CBS Dictionary for inactive and
+          retired ones. Colors and grouping mirror the source workbook.
         </p>
       </header>
 

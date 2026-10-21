@@ -47,6 +47,7 @@ export {
   CBS_STATUSES,
   CBS_FILTER_NONE,
   cbsHasCostType,
+  cbsIsCostType,
   cbsIsBackbone,
   cbsIsBackboneCode,
   cbsIsActive,
@@ -55,17 +56,21 @@ export {
   cbsNoStatuses,
   cbsHasCostTypeFilter,
   cbsHasStatusFilter,
+  cbsHasClassificationFilter,
+  CBS_NO_CLASSIFICATION,
+  cbsClassificationOf,
+  cbsClassificationOptions,
   cbsFilterIsEmpty,
   cbsQueryTokens,
+  type CbsClassificationOption,
   type CbsCostType,
   type CbsCostTypeKey,
-  type CbsCostTypeMatch,
   type CbsRowFilter,
   type CbsStatusKey,
 } from "./cbs/filter";
 
 export { filterCbsTree, pruneCbsTree } from "./cbs/prune";
 
-export { cbsRowTypeBadges, cbsFlagBadges, type CbsBadge } from "./cbs/badges";
+export { cbsRowTypeBadges, type CbsBadge } from "./cbs/badges";
 
 export { collectKeysToLevel, collectExpandableKeys } from "./cbs/expansion";

@@ -65,6 +65,7 @@ function item(
     // Active unless a case overrides it — the Code Book and the project list
     // hide anything that is not.
     status: "Active",
+    costClassification: null,
     ...over,
   };
 }
@@ -96,13 +97,13 @@ function renderPage() {
 }
 
 describe("CBS Code Book", () => {
-  it("lists one row per account, not its cost-type variants", () => {
-    // The L / S / M / E / O rows are the same account priced differently; the
-    // badges say which exist, so repeating them would double the tree.
+  it("lists every cost line in Cost Accounts, as the dictionary does", () => {
     renderPage();
+    // The S row hangs under its account, so open the branch before looking.
+    fireEvent.click(screen.getAllByRole("button", { name: "Expand all" })[0]);
     const [accounts] = screen.getAllByRole("tree");
     expect(within(accounts).getByText("Civil")).toBeInTheDocument();
-    expect(within(accounts).queryByText("Civil Subcontracts")).toBeNull();
+    expect(within(accounts).getByText("Civil Subcontracts")).toBeInTheDocument();
   });
 
   it("still lists every cost type in the dictionary section", () => {
@@ -127,35 +128,36 @@ describe("CBS Code Book", () => {
     expect(screen.getAllByText("Pipe Shop").length).toBeGreaterThan(0);
   });
 
-  it("splits originals from the full dictionary, as the Code Book split does", () => {
+  it("differs from the full dictionary only by status", () => {
     renderPage();
-    // Cost Accounts: Civil, Pipe Shop and the blank-Status account — the "-S"
-    // twin and the Inactive row are both out. The Dictionary has all five.
+    // Cost Accounts: everything but the Inactive row — the generated "-S" twin
+    // and the blank-Status account included. The Dictionary has all five.
     expect(
       screen.getByRole("button", { name: /^Cost Accounts/ }),
-    ).toHaveTextContent("3 rows");
+    ).toHaveTextContent("4 rows");
     expect(
       screen.getByRole("button", { name: /^CBS Dictionary/ }),
     ).toHaveTextContent("5 rows");
+  });
 
-    // The generated twin hangs under its root, so open both sections fully.
+  it("badges a generated row by its row type in both sections", () => {
+    renderPage();
     for (const btn of screen.getAllByRole("button", { name: "Expand all" })) {
       fireEvent.click(btn);
     }
-    const [codeBook, dictionary] = screen.getAllByRole("tree");
-    expect(within(codeBook).queryByText("Civil Subcontracts")).toBeNull();
-    expect(
-      within(dictionary).getByText("Civil Subcontracts"),
-    ).toBeInTheDocument();
-  });
-
-  it("badges Code Book rows by their own flags", () => {
-    renderPage();
-    const codeBook = screen.getAllByRole("tree")[0];
-    const civil = within(codeBook)
-      .getByText("Civil")
-      .closest('[role="treeitem"]')! as HTMLElement;
-    expect(within(civil).getByTitle("Sub Code: YES")).toHaveTextContent("S");
+    for (const tree of screen.getAllByRole("tree")) {
+      const sub = within(tree)
+        .getByText("Civil Subcontracts")
+        .closest('[role="treeitem"]')! as HTMLElement;
+      expect(within(sub).getByTitle("Generated sub-code row")).toHaveTextContent(
+        "S",
+      );
+      // The account row is an original: no flag badges any more.
+      const civil = within(tree)
+        .getByText("Civil")
+        .closest('[role="treeitem"]')! as HTMLElement;
+      expect(within(civil).queryByTitle(/Code: YES/)).toBeNull();
+    }
   });
 
   it("offers no Status filter on the Cost Accounts list", () => {
@@ -176,10 +178,34 @@ describe("CBS Code Book", () => {
     ).toBeTruthy();
   });
 
-  it("shows names without their cost-type marker only on Cost Accounts", () => {
+  it("always offers Active, Inactive and Retired on the Dictionary", () => {
+    // Even when the catalog holds one status — as the live CBS does — the
+    // filter must not vanish, and no button is disabled.
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    qc.setQueryData(cbsCatalogQueryOptions().queryKey, [
+      item("100-00-0000-00-0", "Civil"),
+      item("100-10-0000-00-0", "Civil Site Work", { status: null }),
+    ]);
+    render(
+      <QueryClientProvider client={qc}>
+        <AdminMasterCbsPage />
+      </QueryClientProvider>,
+    );
+    const group = screen.getByRole("group", { name: "Filter by status" });
+    for (const label of ["Active", "Inactive", "Retired"]) {
+      expect(within(group).getByRole("button", { name: label })).toBeEnabled();
+    }
+    // A status nothing carries filters to an empty result, not an error.
+    fireEvent.click(within(group).getByRole("button", { name: "Retired" }));
+    expect(screen.getByText("No rows match this filter.")).toBeInTheDocument();
+  });
+
+  it("keeps each name's cost-type marker in both sections", () => {
     // Names are stored as the workbook writes them, "(*)" / "(S)" and all.
-    // Cost Accounts has badges for the cost type, so it drops the marker; the
-    // Dictionary keeps it, since there it tells an account's lines apart.
+    // Both sections list every cost line, and the marker is what tells an
+    // account's lines apart.
     const qc = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
@@ -196,8 +222,8 @@ describe("CBS Code Book", () => {
       fireEvent.click(btn);
     }
     const [accounts, dictionary] = screen.getAllByRole("tree");
-    expect(within(accounts).getByText("Civil")).toBeInTheDocument();
-    expect(within(accounts).queryByText("Civil (*)")).toBeNull();
+    expect(within(accounts).getByText("Civil (*)")).toBeInTheDocument();
+    expect(within(accounts).getByText("Civil (S)")).toBeInTheDocument();
     expect(within(dictionary).getByText("Civil (*)")).toBeInTheDocument();
     expect(within(dictionary).getByText("Civil (S)")).toBeInTheDocument();
   });
@@ -263,7 +289,7 @@ describe("CBS Code Book", () => {
 });
 
 /**
- * A cost-type filter means different things on the two lists.
+ * A cost-type filter reads a row's own cost type on both lists.
  *
  * CBS.xlsx ships pre-expanded: an account's S and M rows are separate rows
  * that all carry the account's flag columns. So on a list of cost lines the
@@ -316,15 +342,15 @@ describe("cost-type filter across the two lists", () => {
     expect(within(tree).queryByText("Welding Materials")).toBeNull();
   });
 
-  it("keeps reading the flag columns on the Cost Accounts list", () => {
-    // Its rows are all "-0", so their own cost type can never match a filter
-    // and the flags are the only thing that can answer for them. Were this
-    // list to change with the Dictionary, Materials would empty it.
+  it("reads a row's own cost type on the Cost Accounts list too", () => {
+    // It lists cost lines like the Dictionary, so the account's flags must not
+    // keep its "-S" line — or its "-0" roll-up — under a Materials filter.
     renderWith(MIXED);
     filterAccountsBy("Materials");
-    expect(
-      within(screen.getAllByRole("tree")[0]).getByText("Welding"),
-    ).toBeInTheDocument();
+    const tree = screen.getAllByRole("tree")[0];
+    expect(within(tree).getByText("Welding Materials")).toBeInTheDocument();
+    expect(within(tree).queryByText("Welding Subcontracts")).toBeNull();
+    expect(within(tree).queryByText("Welding")).toBeNull();
   });
 
   it("filters the two lists independently", () => {

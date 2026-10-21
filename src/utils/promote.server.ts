@@ -15,6 +15,20 @@ export type LinkedCvrFields = Omit<
 >;
 
 /**
+ * Settle a race between two promotes of the same record. The caller passes
+ * an `updateMany` that links the source only `where` it is still unlinked;
+ * Postgres serializes the two updates on the row, so the second one matches
+ * nothing. Throwing then rolls back the whole transaction — the CVR the loser
+ * minted included — instead of leaving an orphan CVR and an overwritten link.
+ */
+export async function claimPromotion(
+  update: Promise<{ count: number }>,
+  alreadyPromoted: string,
+): Promise<void> {
+  if ((await update).count === 0) throw new Error(alreadyPromoted);
+}
+
+/**
  * Mint a new CVR (ChangeLog) inside an existing transaction and audit its
  * creation. Shared by the promote-to-CVR flows — FCO→CVR (`promoteFcoToCvr`)
  * and Trend→CVR (`promoteTrendToCvr`): both allocate a project CVR number,

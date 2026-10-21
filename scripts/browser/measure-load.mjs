@@ -34,6 +34,16 @@ const useNav = process.argv.includes("--nav");
 const app = await openApp();
 const { page, goto, consoleErrors } = app;
 
+// Project-scoped pages show "choose a project" without one. `PROJECT_ID=1`
+// selects it the way the header picker does (localStorage + cookie for SSR).
+if (process.env.PROJECT_ID) {
+  const id = process.env.PROJECT_ID;
+  await page.evaluate((v) => localStorage.setItem("selectedProjectId", v), id);
+  await page
+    .context()
+    .addCookies([{ name: "selectedProjectId", value: id, url: page.url() }]);
+}
+
 let calls = [];
 // Keyed on the Request OBJECT, not the URL: the module id is base64 inside the
 // path, so URL substring matching cannot pair a response with its request.

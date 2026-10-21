@@ -514,8 +514,10 @@ model FefRow {
   custom9  String @default("")
   custom10 String @default("")
 
+  // Also serves every read keyed on (versionId, discipline, section) — those
+  // columns lead it. A separate index on just those three used to exist; it
+  // answered no query this one can't, and every autosave paid to maintain both.
   @@unique([versionId, discipline, section, position])
-  @@index([versionId, discipline, section])
   // Code Usage counts rows per code across every version of a project
   // (`fetchProjectCodeUsage`) — the one FefRow read keyed on the project rather
   // than a version. Without this it is a sequential scan of every estimate.

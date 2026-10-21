@@ -7,12 +7,12 @@ import {
   type ProjectFefRowTotals,
 } from "../lib/project-totals";
 import {
-  FEF_DATA_COLUMNS,
   FEF_ROW_STRING_FIELDS,
   isTotalCostComputable,
 } from "../lib/fef-helpers";
 import { qk } from "../lib/query-keys";
 import { parseIdScalar } from "../lib/validators";
+import type { Prisma } from "../generated/prisma/client";
 
 export type { ProjectFefRowTotals } from "../lib/project-totals";
 
@@ -36,17 +36,53 @@ const EMPTY_TOTALS: ProjectFefRowTotals = {
 };
 
 /**
- * Columns the aggregator reads, derived from `FEF_DATA_COLUMNS` (cbsCode plus
- * every free-text field) rather than listed by hand. The Take Off invalid check
- * treats *any* non-empty field as "the user started this row", so a field
- * missing here silently under-counts — which is exactly what happened while
- * this was a hand-maintained list and the FefRow shape kept growing.
+ * The columns the SUMS read: the bucketing keys and the four numbers. Every
+ * other free-text column matters only to the Take Off invalid count, which
+ * `loadInvalidByDiscipline` answers in SQL instead — so this read is ~8 of the
+ * ~60 FefRow columns, and it is the one Summary / Validation / Snapshots
+ * refetch after every autosave.
  */
-const TOTALS_SELECT = Object.fromEntries([
-  ["discipline", true],
-  ["section", true],
-  ...FEF_DATA_COLUMNS.map((c) => [c, true]),
-]) as Record<"discipline" | "section" | (typeof FEF_DATA_COLUMNS)[number], true>;
+const TOTALS_SELECT = {
+  discipline: true,
+  section: true,
+  cbsCode: true,
+  area: true,
+  quantity: true,
+  laborHours: true,
+  laborRate: true,
+  materialCost: true,
+} satisfies Prisma.FefRowSelect;
+
+/**
+ * Take Off rows per discipline that the user started but whose Total Cost
+ * can't be computed — `isTakeOffRowInvalid`, split in two:
+ *   1. SQL `WHERE` keeps only TAKE_OFF rows the user has touched (cbsCode or
+ *      any free-text field non-empty), so empty template rows never load.
+ *   2. JS checks the "not computable" half on just the two inputs it reads.
+ * Module-private for the same client-stripping reason as `loadProjectTotals`.
+ */
+async function loadInvalidByDiscipline(
+  versionId: number,
+): Promise<Record<string, number>> {
+  const rows = await prisma.fefRow.findMany({
+    where: {
+      versionId,
+      section: "TAKE_OFF",
+      OR: [
+        { cbsCode: { not: "" } },
+        ...FEF_ROW_STRING_FIELDS.map((f) => ({ [f]: { not: "" } })),
+      ],
+    },
+    select: { discipline: true, laborHours: true, laborRate: true },
+  });
+  const out: Record<string, number> = {};
+  for (const r of rows) {
+    if (!isTotalCostComputable(r.laborHours, r.laborRate) && r.discipline) {
+      out[r.discipline] = (out[r.discipline] ?? 0) + 1;
+    }
+  }
+  return out;
+}
 
 /**
  * Plain (no-auth) loader: every FefRow for the project → aggregated totals.
@@ -59,11 +95,13 @@ const TOTALS_SELECT = Object.fromEntries([
 async function loadProjectTotals(
   versionId: number,
 ): Promise<ProjectFefRowTotals> {
-  const rows = await prisma.fefRow.findMany({
-    where: { versionId },
-    select: TOTALS_SELECT,
-  });
-  return accumulateProjectTotals(rows);
+  const [rows, invalidByDiscipline] = await Promise.all([
+    prisma.fefRow.findMany({ where: { versionId }, select: TOTALS_SELECT }),
+    loadInvalidByDiscipline(versionId),
+  ]);
+  // The slim rows can't tell a started row from an empty one, so the
+  // accumulator's own invalid count would under-count; the SQL one replaces it.
+  return { ...accumulateProjectTotals(rows), invalidByDiscipline };
 }
 
 export const fetchProjectFefRowTotals = createServerFn({ method: "GET" })
@@ -102,29 +140,7 @@ export const fetchInvalidByDiscipline = createServerFn({ method: "GET" })
   .inputValidator(parseIdScalar)
   .handler(async ({ data: versionId }): Promise<Record<string, number>> => {
     await requireVersionAccess(versionId);
-    const rows = await prisma.fefRow.findMany({
-      where: {
-        versionId,
-        section: "TAKE_OFF",
-        // "touched" — kept in sync with the OR-shaped predicate in
-        // `fef-helpers.ts:isTakeOffRowInvalid`. Both the cbsCode column and
-        // any of the 19 free-text fields being non-empty counts as touched.
-        OR: [
-          { cbsCode: { not: "" } },
-          ...FEF_ROW_STRING_FIELDS.map((f) => ({ [f]: { not: "" } })),
-        ],
-      },
-      select: { discipline: true, laborHours: true, laborRate: true },
-    });
-    const out: Record<string, number> = {};
-    for (const r of rows) {
-      // The SQL WHERE above covers the "user started this row" half of
-      // `isTakeOffRowInvalid`; this is the "Total Cost isn't computable" half.
-      if (!isTotalCostComputable(r.laborHours, r.laborRate) && r.discipline) {
-        out[r.discipline] = (out[r.discipline] ?? 0) + 1;
-      }
-    }
-    return out;
+    return loadInvalidByDiscipline(versionId);
   });
 
 export const invalidByDisciplineQueryOptions = (versionId: number | null) =>

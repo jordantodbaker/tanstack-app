@@ -101,6 +101,30 @@ const FEF_CONFLICT_UPDATE_SQL = Prisma.raw(
   ].join(", "),
 );
 
+/**
+ * The `DO UPDATE … WHERE` guard: rewrite a row only if one of its data columns
+ * actually changed. Autosave sends the whole section, so without this a
+ * one-cell edit on a 400-row sheet rewrote all 400 rows — 400 dead tuples for
+ * vacuum, 400 index updates, and an `updatedAt` that claimed every row had
+ * just been edited. `IS DISTINCT FROM` treats NULL = NULL, unlike `<>`.
+ */
+const FEF_ROW_CHANGED_SQL = Prisma.raw(
+  `(${FEF_DATA_COLUMNS.map((c) => `"FefRow"."${c}"`).join(", ")}) ` +
+    `IS DISTINCT FROM ` +
+    `(${FEF_DATA_COLUMNS.map((c) => `EXCLUDED."${c}"`).join(", ")})`,
+);
+
+/**
+ * Rows per INSERT. Postgres caps one statement at 65,535 bind parameters, and
+ * each row binds its five identity columns plus every data column — so one
+ * statement for the whole section would fail outright somewhere past ~1,100
+ * rows. Derived from the column count so custom-column slots can't push a
+ * batch over; the margin keeps each statement a modest size as well.
+ */
+export const FEF_UPSERT_BATCH_ROWS = Math.floor(
+  30_000 / (5 + FEF_DATA_COLUMNS.length),
+);
+
 /** A row ready to write, keyed exactly like the INSERT column order. */
 type FefWriteRow = {
   projectId: number;
@@ -283,12 +307,17 @@ export const saveFefRows = createServerFn({ method: "POST" })
         const values = persistable.map(fefValuesTuple);
 
         const saved = await prisma.$transaction(async (tx) => {
-          await tx.$executeRaw`
-            INSERT INTO "FefRow" (${FEF_INSERT_COLUMN_SQL})
-            VALUES ${Prisma.join(values)}
-            ON CONFLICT ("versionId", "discipline", "section", "position")
-            DO UPDATE SET ${FEF_CONFLICT_UPDATE_SQL}
-          `;
+          // Batched to stay under the bind-parameter cap; all batches share
+          // the transaction, so a save still lands whole or not at all.
+          for (let i = 0; i < values.length; i += FEF_UPSERT_BATCH_ROWS) {
+            await tx.$executeRaw`
+              INSERT INTO "FefRow" (${FEF_INSERT_COLUMN_SQL})
+              VALUES ${Prisma.join(values.slice(i, i + FEF_UPSERT_BATCH_ROWS))}
+              ON CONFLICT ("versionId", "discipline", "section", "position")
+              DO UPDATE SET ${FEF_CONFLICT_UPDATE_SQL}
+              WHERE ${FEF_ROW_CHANGED_SQL}
+            `;
+          }
           await tx.$executeRaw`
             DELETE FROM "FefRow"
             WHERE "versionId" = ${versionId}

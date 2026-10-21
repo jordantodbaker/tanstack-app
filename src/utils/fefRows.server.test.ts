@@ -76,7 +76,7 @@ vi.mock("~/lib/logger", () => ({
   createDebug: () => vi.fn(),
 }));
 
-import { saveFefRows } from "./fefRows";
+import { FEF_UPSERT_BATCH_ROWS, saveFefRows } from "./fefRows";
 
 const BASE = {
   versionId: 1,
@@ -274,6 +274,41 @@ describe("the write transaction", () => {
     expect(insertSql).toContain("ON CONFLICT");
     const deleteSql = executeRaw.mock.calls[1][0].join("");
     expect(deleteSql).toContain("DELETE FROM");
+  });
+
+  it("rewrites a row only when one of its data columns changed", async () => {
+    // Autosave sends the whole section; unchanged rows must not be rewritten.
+    await save([filled("611-A", "pump")]);
+    const insertSql = executeRaw.mock.calls[0][0].join("");
+    expect(insertSql).toMatch(/DO UPDATE SET[\s\S]*WHERE/);
+    const guard = JSON.stringify(executeRaw.mock.calls[0].slice(1));
+    expect(guard).toContain("IS DISTINCT FROM");
+    // Every data column takes part, custom slots included.
+    expect(guard).toContain('\\"FefRow\\".\\"description\\"');
+    expect(guard).toContain('EXCLUDED.\\"custom10\\"');
+  });
+
+  it("splits a large section into batches inside the one transaction", async () => {
+    // Past the bind-parameter cap a single INSERT would fail outright.
+    const rows = Array.from({ length: FEF_UPSERT_BATCH_ROWS * 2 + 1 }, (_, i) =>
+      filled(`611-${i}`, `row ${i}`),
+    );
+    await save(rows);
+    expect(transaction).toHaveBeenCalledTimes(1);
+    // Three INSERT batches, then the trailing DELETE.
+    expect(executeRaw).toHaveBeenCalledTimes(4);
+    const sqlOf = (n: number) => executeRaw.mock.calls[n][0].join("");
+    expect(sqlOf(0)).toContain("INSERT INTO");
+    expect(sqlOf(2)).toContain("INSERT INTO");
+    expect(sqlOf(3)).toContain("DELETE FROM");
+    // The DELETE still trims past the FULL row count, not one batch's.
+    const del = executeRaw.mock.calls[3];
+    expect(del[del.length - 1]).toBe(rows.length);
+  });
+
+  it("keeps a typical sheet to one INSERT", () => {
+    // The largest real sheet is ~400 rows; batching should not split it.
+    expect(FEF_UPSERT_BATCH_ROWS).toBeGreaterThanOrEqual(400);
   });
 
   it("re-reads the saved rows in position order", async () => {

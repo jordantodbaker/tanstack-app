@@ -190,6 +190,22 @@ describe("ProjectCostCodeListView", () => {
     );
   });
 
+  it("counts a code with an unknown last segment, so the parts add up", () => {
+    // "-D" is not a cost type; without its own part the breakdown would sum
+    // to less than the row count beside it.
+    renderView([...LINES, item("600-00-0000-00-D", "Pipe Deliverable")]);
+    expect(screen.getByText("5 rows")).toBeInTheDocument();
+    const breakdown = screen.getByLabelText("Rows by cost type");
+    expect(breakdown).toHaveTextContent(/· 1 other suffix$/);
+  });
+
+  it("shows no 'other suffix' part when every code is a known type", () => {
+    renderView(LINES);
+    expect(screen.getByLabelText("Rows by cost type")).not.toHaveTextContent(
+      "suffix",
+    );
+  });
+
   it("leaves ungranted parents out of the cost-type breakdown", () => {
     renderView(CONTEXT_FIXTURE);
     expect(screen.getByLabelText("Rows by cost type")).toHaveTextContent(

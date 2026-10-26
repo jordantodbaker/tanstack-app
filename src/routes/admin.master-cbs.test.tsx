@@ -353,6 +353,31 @@ describe("cost-type filter across the two lists", () => {
     expect(within(tree).queryByText("Welding")).toBeNull();
   });
 
+  it("narrows Cost Accounts by Cost Classification, leaving the Dictionary alone", () => {
+    renderWith(
+      MIXED.map((r) => ({
+        ...r,
+        costClassification: r.displayCode.endsWith("-M")
+          ? "MATERIALS"
+          : "INDIRECT",
+      })),
+    );
+    const [accountsPicker] = screen.getAllByRole("button", {
+      name: /^Cost classification:/,
+    });
+    fireEvent.click(accountsPicker);
+    fireEvent.click(
+      within(
+        screen.getByRole("group", { name: "Filter by cost classification" }),
+      ).getByLabelText("MATERIALS"),
+    );
+    const [accounts, dictionary] = screen.getAllByRole("tree");
+    expect(within(accounts).getByText("Welding Materials")).toBeInTheDocument();
+    expect(within(accounts).queryByText("Welding Subcontracts")).toBeNull();
+    // The Dictionary has its own picker, untouched.
+    expect(within(dictionary).getByText("Welding")).toBeInTheDocument();
+  });
+
   it("filters the two lists independently", () => {
     renderWith(MIXED);
     filterDictionaryBy("Materials");

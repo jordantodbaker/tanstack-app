@@ -145,11 +145,11 @@ function detail(
   };
 }
 
-function renderSetup(allowedIds: number[]) {
+function renderSetup(allowedIds: number[], catalog: CbsTreeRow[] = CATALOG) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  qc.setQueryData(cbsCatalogQueryOptions().queryKey, CATALOG);
+  qc.setQueryData(cbsCatalogQueryOptions().queryKey, catalog);
   qc.setQueryData(allowedFefCbsItemIdsQueryOptions(1).queryKey, allowedIds);
-  for (const row of CATALOG) {
+  for (const row of catalog) {
     qc.setQueryData(
       cbsItemDetailQueryOptions(row.id).queryKey,
       detail(row, { costCenter: "2010", description: `About ${row.name}.` }),
@@ -325,5 +325,97 @@ describe("Setup page", () => {
     expect(
       screen.getByText(/Select a row to see its full CBS detail/),
     ).toBeInTheDocument();
+  });
+});
+
+/**
+ * The filters above the Setup tree. Setup lists cost lines like the CBS
+ * views, so a cost type is read off each line's own code — an account's
+ * flags say what it CARRIES, not what a line IS — and the Cost
+ * Classification picker narrows to the classifications ticked.
+ */
+describe("Setup filters", () => {
+  const classified = (
+    displayCode: string,
+    name: string,
+    costClassification: string | null,
+    over: Partial<CbsTreeRow> = {},
+  ): CbsTreeRow => ({
+    ...item(displayCode, name),
+    costClassification,
+    // Every line carries the account's flags, as the workbook ships them.
+    subReporting: true,
+    materialCode: true,
+    ...over,
+  });
+  const WELDING = [
+    classified("600-00-0000-00-0", "Piping", "INDIRECT"),
+    classified("601-00-0000-00-0", "Welding", "INDIRECT"),
+    classified("601-00-0000-00-L", "Welding Labor", "DIRECT LABOR"),
+    classified("601-00-0000-00-S", "Welding Subs", "DIRECT SUBCONTRACTS"),
+    classified("601-00-0000-00-M", "Welding Materials", "MATERIALS"),
+  ];
+  const shown = () =>
+    within(screen.getByRole("tree"))
+      .getAllByRole("treeitem")
+      .map((r) => r.textContent ?? "")
+      .join("|");
+
+  it("filters cost types by each line's own code, not the account's flags", () => {
+    renderSetup([], WELDING);
+    fireEvent.click(screen.getByRole("button", { name: "Materials" }));
+    expect(shown()).toContain("Welding Materials");
+    // Carries Material Code YES, but is the subcontract line.
+    expect(shown()).not.toContain("Welding Subs");
+    expect(shown()).not.toContain("Welding Labor");
+  });
+
+  it("offers the Cost Classification picker with the catalog's values", () => {
+    renderSetup([], WELDING);
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Cost classification:/ }),
+    );
+    const group = screen.getByRole("group", {
+      name: "Filter by cost classification",
+    });
+    for (const value of [
+      "DIRECT LABOR",
+      "DIRECT SUBCONTRACTS",
+      "INDIRECT",
+      "MATERIALS",
+    ]) {
+      expect(within(group).getByLabelText(value)).toBeInTheDocument();
+    }
+  });
+
+  it("narrows the tree to the classifications ticked", () => {
+    renderSetup([], WELDING);
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Cost classification:/ }),
+    );
+    const group = screen.getByRole("group", {
+      name: "Filter by cost classification",
+    });
+    fireEvent.click(within(group).getByLabelText("MATERIALS"));
+    fireEvent.click(within(group).getByLabelText("DIRECT LABOR"));
+    expect(shown()).toContain("Welding Materials");
+    expect(shown()).toContain("Welding Labor");
+    expect(shown()).not.toContain("Welding Subs");
+  });
+
+  it("still grants a row picked out by a filter", async () => {
+    // Filtering changes what is shown, not what a tick does.
+    renderSetup([], WELDING);
+    fireEvent.click(screen.getByRole("button", { name: "Materials" }));
+    fireEvent.click(checkbox("Welding Materials"));
+    await waitFor(() =>
+      expect(updateAllowedFefCbsItems).toHaveBeenCalledWith({
+        data: {
+          projectId: 1,
+          addIds: [WELDING[4].id],
+          removeIds: [],
+        },
+      }),
+    );
   });
 });

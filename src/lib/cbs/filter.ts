@@ -358,26 +358,115 @@ export function cbsMatchesValueFilter(
 }
 
 /**
+ * The text a search matches against, lower-cased. The code appears twice:
+ * once as written and once with the dashes stripped, because cost codes
+ * travel without them (the workbook's Cost Code column, exports, anything
+ * pasted out of Excel) and "60420" should find 604-20-0000-00-0. UOM is in so
+ * "tn" finds the tonnage codes.
+ */
+export function cbsSearchHaystack(item: CbsTreeItem): string {
+  return [
+    item.displayCode,
+    item.displayCode.replace(/-/g, ""),
+    item.name,
+    item.accountDescription,
+    item.uom,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+/**
+ * A filter, prepared for judging rows: everything derived from it ONCE rather
+ * than per row. The catalog views hold ~14,000 rows and re-filter on every
+ * keystroke, so a per-row `CBS_COST_TYPES.filter(...)` or
+ * `array.includes(...)` is the difference between instant and noticeable.
+ *
+ * The text, the type toggles and the status toggles each narrow the others:
+ * "pumps" with Subcontracts and Inactive on means retired subcontract rows
+ * mentioning pumps. Within a group the toggles widen each other, since asking
+ * for two is asking for either.
+ */
+export type CbsCriteria = {
+  /** The query, pre-split. */
+  tokens: string[];
+  /** The cost types pressed; empty means any. */
+  types: readonly CbsCostType[];
+  /** The statuses pressed; empty means any. */
+  statuses: readonly CbsStatusKey[];
+  rowType: CbsRowTypeFilter;
+  /** The value pickers in force, each with its ticked values as a Set. */
+  pickers: readonly { picker: CbsValueFilter; values: ReadonlySet<string> }[];
+};
+
+export function cbsCriteriaFor(filter: CbsRowFilter): CbsCriteria {
+  return {
+    tokens: cbsQueryTokens(filter.query),
+    types: CBS_COST_TYPES.filter((t) => filter[t.key]),
+    statuses: CBS_STATUSES.filter((s) => filter[s.key]).map((s) => s.key),
+    rowType: filter.rowType,
+    pickers: CBS_VALUE_FILTERS.filter((p) =>
+      cbsValueFilterInForce(filter, p),
+    ).map((picker) => ({ picker, values: new Set(filter[picker.key]) })),
+  };
+}
+
+/** Does this row pass every criterion? `haystack` is `cbsSearchHaystack(item)`. */
+export function cbsItemMatches(
+  item: CbsTreeItem,
+  haystack: string,
+  { tokens, types, statuses, rowType, pickers }: CbsCriteria,
+): boolean {
+  if (tokens.some((t) => !haystack.includes(t))) return false;
+  if (types.length > 0 && !types.some((t) => cbsIsCostType(item, t))) {
+    return false;
+  }
+  if (statuses.length > 0 && !statuses.some((s) => cbsHasStatus(item, s))) {
+    return false;
+  }
+  if (!cbsMatchesRowType(item, rowType)) return false;
+  for (const { picker, values } of pickers) {
+    // Rows a picker does not apply to pass — a Labor line beside the
+    // Materials lines is not judged on its Material Type.
+    if (picker.appliesTo && !picker.appliesTo(item)) continue;
+    if (!values.has(picker.valueOf(item))) return false;
+  }
+  return true;
+}
+
+/**
  * Every picker's option list for one view, from the rows it lists —
  * alphabetical, with the blank entry last — so a picker never offers a value
  * that could only filter to nothing. Context rows are skipped, as they are in
- * the row counts. One pass over the rows for all the pickers: the catalog
- * views hold ~14,000 of them.
+ * the row counts.
+ *
+ * With `filter`, the counts are faceted: each picker counts only the rows
+ * every OTHER filter leaves, so a count reads as "ticking this shows N rows".
+ * The picker's own ticks are left out so its list stays steady while picking
+ * from it, and a value with no rows left still appears, at 0, so a tick can
+ * always be undone. One pass over the rows for all the pickers.
  */
 export function cbsValueFilterOptions(
   items: Iterable<CbsTreeItem>,
+  filter?: CbsRowFilter,
 ): Record<CbsValueFilterKey, CbsValueOption[]> {
   const counts = new Map<CbsValueFilterKey, Map<string, number>>(
     CBS_VALUE_FILTERS.map((v) => [v.key, new Map()]),
   );
+  const facets = filter
+    ? CBS_VALUE_FILTERS.map((p) => cbsCriteriaFor({ ...filter, [p.key]: [] }))
+    : null;
   for (const item of items) {
     if (item.context) continue;
-    for (const picker of CBS_VALUE_FILTERS) {
-      if (picker.appliesTo && !picker.appliesTo(item)) continue;
+    const haystack = facets ? cbsSearchHaystack(item) : "";
+    CBS_VALUE_FILTERS.forEach((picker, i) => {
+      if (picker.appliesTo && !picker.appliesTo(item)) return;
       const tally = counts.get(picker.key)!;
       const value = picker.valueOf(item);
-      tally.set(value, (tally.get(value) ?? 0) + 1);
-    }
+      const counted = !facets || cbsItemMatches(item, haystack, facets[i]);
+      tally.set(value, (tally.get(value) ?? 0) + (counted ? 1 : 0));
+    });
   }
   const sorted = (tally: Map<string, number>): CbsValueOption[] =>
     [...tally]
@@ -430,6 +519,56 @@ export function cbsFilterIsEmpty(filter: CbsRowFilter): boolean {
     !cbsHasRowTypeFilter(filter) &&
     !cbsHasValueFilter(filter)
   );
+}
+
+/** "A", "A or B", "A, B or C" — a blank cell reads as "none". */
+function orList(values: readonly string[]): string {
+  const named = values.map((v) => (v === CBS_BLANK_VALUE ? "none" : v));
+  return named.length === 1
+    ? named[0]
+    : `${named.slice(0, -1).join(", ")} or ${named.at(-1)}`;
+}
+
+/**
+ * The filters in force, as one clause: 'matching “pipe”, labor or materials
+ * codes, status active, cost classification INDIRECT'. "" when nothing is
+ * filtered. Shown in the toolbar while filtering, and on the Excel export's
+ * subtitle (see `describeCbsFilter`), so the two always agree.
+ */
+export function cbsFilterSummary(filter: CbsRowFilter): string {
+  if (cbsFilterIsEmpty(filter)) return "";
+  const parts: string[] = [];
+  if (filter.query) parts.push(`matching “${filter.query}”`);
+  const on = CBS_COST_TYPES.filter((t) => filter[t.key]).map((t) =>
+    t.label.toLowerCase(),
+  );
+  if (on.length === 1) parts.push(`${on[0]} codes`);
+  else if (on.length > 1) {
+    parts.push(`${on.slice(0, -1).join(", ")} or ${on.at(-1)} codes`);
+  }
+  // The pickers that belong to a cost type read best right after the types.
+  const owned = (byType: boolean) =>
+    CBS_VALUE_FILTERS.filter(
+      (v) =>
+        !!v.requiresCostType === byType && cbsValueFilterInForce(filter, v),
+    ).map((v) => `${v.note} ${orList(filter[v.key])}`);
+  parts.push(...owned(true));
+  if (filter.rowType !== "all") parts.push(`${filter.rowType} rows only`);
+  const status = CBS_STATUSES.filter((s) => filter[s.key]).map((s) =>
+    s.label.toLowerCase(),
+  );
+  if (status.length === 1) parts.push(`status ${status[0]}`);
+  else if (status.length > 1) {
+    parts.push(`status ${status.slice(0, -1).join(", ")} or ${status.at(-1)}`);
+  }
+  parts.push(...owned(false));
+  return parts.join(", ");
+}
+
+/** The summary as the Excel export prints it; "" when nothing is filtered. */
+export function describeCbsFilter(filter: CbsRowFilter): string {
+  const summary = cbsFilterSummary(filter);
+  return summary ? `Filtered: ${summary}` : "";
 }
 
 /**

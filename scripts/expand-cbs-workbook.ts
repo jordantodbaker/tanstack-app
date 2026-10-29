@@ -6,7 +6,8 @@
 // and `cbs:import` all expect the expanded dictionary the sheet used to ship
 // as: a "-0" roll-up row per account plus one typed row per YES flag, each
 // with its own code, G/L, name marker and description. This script produces
-// that file. The rules live in `src/lib/cbs-workbook-expand.ts`.
+// that file. The rules live in `src/lib/cbs-workbook-expand.ts`; the Excel
+// around them in `prisma/cbs-expand.ts`.
 //
 //   npm run cbs:expand                 read CBS.master.xlsx, write CBS.xlsx
 //   npm run cbs:expand -- --dry-run    print the plan, write nothing
@@ -16,23 +17,9 @@
 // own output is safe. The output is wholly regenerated: fix the MASTER, never
 // the expanded file, or the fix is gone on the next run. Run it before
 // `cbs:import`.
-import ExcelJS from "exceljs";
-import { existsSync, statSync } from "node:fs";
-import {
-  CBS_MASTER_PATH,
-  CBS_WORKBOOK_PATH,
-  openCbsSheet,
-  plainCellValue,
-} from "../prisma/cbs-sheet";
-import {
-  COST_TYPE_RULES,
-  planCbsWorkbookExpansion,
-  type CellValue,
-  type MasterRow,
-} from "../src/lib/cbs-workbook-expand";
-
-/** The sheet name the loader looks for first after "CBS". */
-const OUTPUT_SHEET = "CBS Expanded";
+import { CBS_MASTER_PATH, CBS_WORKBOOK_PATH } from "../prisma/cbs-sheet";
+import { CBS_EXPANDED_SHEET, expandCbsWorkbook } from "../prisma/cbs-expand";
+import { COST_TYPE_RULES } from "../src/lib/cbs-workbook-expand";
 
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
@@ -43,60 +30,12 @@ const option = (flag: string, fallback: string): string => {
 const inPath = option("--in", CBS_MASTER_PATH);
 const outPath = option("--out", CBS_WORKBOOK_PATH);
 
-async function readMaster(path: string) {
-  const sheet = await openCbsSheet(path);
-  const { ws, headerRow } = sheet;
-  // Headers in column order; a blank header cell is skipped.
-  const columns = Object.entries(sheet.column).sort((a, b) => a[1] - b[1]);
-  const headers = columns.map(([h]) => h);
-  const rows: MasterRow[] = [];
-  for (let r = headerRow + 1; r <= ws.rowCount; r++) {
-    const row = ws.getRow(r);
-    const cells: Record<string, CellValue> = {};
-    for (const [h, n] of columns) {
-      cells[h] = plainCellValue(row.getCell(n).value);
-    }
-    rows.push({ row: r, cells });
-  }
-  const widths = columns.map(([, n]) => ws.getColumn(n).width);
-  return { sheet: ws.name, headers, rows, widths };
-}
-
-async function writeExpanded(
-  path: string,
-  headers: string[],
-  rows: Record<string, CellValue>[],
-  widths: (number | undefined)[],
-) {
-  const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet(OUTPUT_SHEET, {
-    views: [{ state: "frozen", ySplit: 1 }],
-  });
-  ws.columns = headers.map((header, i) => ({
-    header,
-    key: header,
-    width: widths[i] ?? (header.length > 12 ? 18 : 12),
-  }));
-  ws.getRow(1).font = { bold: true };
-  for (const r of rows) {
-    ws.addRow(headers.map((h) => (r[h] === null ? undefined : r[h])));
-  }
-  ws.autoFilter = {
-    from: { row: 1, column: 1 },
-    to: { row: 1, column: headers.length },
-  };
-  await wb.xlsx.writeFile(path);
-  return statSync(path).size;
-}
-
 async function main() {
-  if (!existsSync(inPath)) {
-    throw new Error(
-      `${inPath}: not found. The condensed master belongs there (or pass --in <path>).`,
-    );
-  }
-  const master = await readMaster(inPath);
-  const plan = planCbsWorkbookExpansion(master.headers, master.rows);
+  const { master, plan, bytes } = await expandCbsWorkbook({
+    inPath,
+    outPath,
+    write: !dryRun,
+  });
 
   console.log(
     `${inPath} [${master.sheet}]: ${plan.stats.masterRows.toLocaleString()} master rows`,
@@ -130,15 +69,8 @@ async function main() {
     console.log(`\n--dry-run: ${outPath} not written.`);
     return;
   }
-
-  const bytes = await writeExpanded(
-    outPath,
-    plan.headers,
-    plan.rows.map((r) => r.cells),
-    master.widths,
-  );
   console.log(
-    `\nwrote ${outPath} [${OUTPUT_SHEET}]: ${plan.stats.total.toLocaleString()} rows, ${bytes.toLocaleString()} bytes`,
+    `\nwrote ${outPath} [${CBS_EXPANDED_SHEET}]: ${plan.stats.total.toLocaleString()} rows, ${(bytes ?? 0).toLocaleString()} bytes`,
   );
   console.log("\nNext: npm run cbs:import -- --dry-run");
 }

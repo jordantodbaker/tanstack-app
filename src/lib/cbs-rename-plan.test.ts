@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   cbsDisplayDescription,
+  cbsMasterCodeOf,
   planCbsRenames,
   type CbsRename,
   type CbsRenameRow,
@@ -122,7 +123,13 @@ describe("planCbsRenames", () => {
 
   it("matches on display code, not on position", () => {
     const outcomes = planCbsRenames(
-      [rename({ displayCode: "600-00-0000-00-0", from: "Pipe Shop", to: "Piping" })],
+      [
+        rename({
+          displayCode: "600-00-0000-00-0",
+          from: "Pipe Shop",
+          to: "Piping",
+        }),
+      ],
       [
         { id: 1, displayCode: "300-00-0000-00-0", name: "Pipe Shop" },
         { id: 2, displayCode: "600-00-0000-00-0", name: "Pipe Shop" },
@@ -141,6 +148,26 @@ describe("planCbsRenames", () => {
 
   it("plans nothing for an empty rename table", () => {
     expect(planCbsRenames([], [row()])).toEqual([]);
+  });
+});
+
+describe("cbsMasterCodeOf", () => {
+  it("drops the -0 segment to reach the account's row in the master", () => {
+    expect(cbsMasterCodeOf("300-00-0000-00-0")).toBe("300-00-0000-00");
+    expect(cbsMasterCodeOf("032-05-1000-00-0")).toBe("032-05-1000-00");
+    expect(cbsMasterCodeOf(" 610-lb-1200-st-0 ")).toBe("610-LB-1200-ST");
+  });
+
+  it("resolves nothing for a typed line — the master has no row for it", () => {
+    expect(cbsMasterCodeOf("300-00-0000-00-L")).toBeNull();
+    expect(cbsMasterCodeOf("300-00-0000-00-S")).toBeNull();
+  });
+
+  it("resolves nothing for a code that is not an expanded one", () => {
+    // Already a master code, or malformed: refusing beats guessing a row.
+    expect(cbsMasterCodeOf("300-00-0000-00")).toBeNull();
+    expect(cbsMasterCodeOf("300-00-0000-00-0-0")).toBeNull();
+    expect(cbsMasterCodeOf("")).toBeNull();
   });
 });
 

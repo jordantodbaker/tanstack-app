@@ -4,13 +4,8 @@ import { prisma } from "../server/db";
 import { adminHandler, requireProjectAccess } from "./users.server";
 import {
   buildCbsTree,
-  CBS_COST_TYPES,
-  CBS_NO_CLASSIFICATION,
-  CBS_STATUSES,
   cbsIsActive,
-  cbsFilterIsEmpty,
-  CBS_VALUE_FILTERS,
-  cbsValueFilterInForce,
+  describeCbsFilter,
   pruneCbsTree,
   withCbsLevels,
   type CbsRowFilter,
@@ -105,44 +100,11 @@ export type CbsExportResult = {
   rowCount: number;
 };
 
-/** A one-line description of the filters, for the sheet's subtitle. */
-export function describeCbsFilter(filter: CbsRowFilter): string {
-  if (cbsFilterIsEmpty(filter)) return "";
-  const parts: string[] = [];
-  if (filter.query) parts.push(`matching “${filter.query}”`);
-  const on = CBS_COST_TYPES.filter((t) => filter[t.key]).map((t) =>
-    t.label.toLowerCase(),
-  );
-  if (on.length === 1) parts.push(`${on[0]} codes`);
-  else if (on.length > 1) {
-    parts.push(`${on.slice(0, -1).join(", ")} or ${on.at(-1)} codes`);
-  }
-  // The pickers that belong to a cost type read best right after the types.
-  const owned = (byType: boolean) =>
-    CBS_VALUE_FILTERS.filter(
-      (v) =>
-        !!v.requiresCostType === byType && cbsValueFilterInForce(filter, v),
-    ).map((v) => `${v.note} ${orList(filter[v.key])}`);
-  parts.push(...owned(true));
-  if (filter.rowType !== "all") parts.push(`${filter.rowType} rows only`);
-  const status = CBS_STATUSES.filter((s) => filter[s.key]).map((s) =>
-    s.label.toLowerCase(),
-  );
-  if (status.length === 1) parts.push(`status ${status[0]}`);
-  else if (status.length > 1) {
-    parts.push(`status ${status.slice(0, -1).join(", ")} or ${status.at(-1)}`);
-  }
-  parts.push(...owned(false));
-  return `Filtered: ${parts.join(", ")}`;
-}
-
-/** "A", "A or B", "A, B or C" — a blank cell reads as "none". */
-function orList(values: readonly string[]): string {
-  const named = values.map((v) => (v === CBS_NO_CLASSIFICATION ? "none" : v));
-  return named.length === 1
-    ? named[0]
-    : `${named.slice(0, -1).join(", ")} or ${named.at(-1)}`;
-}
+/**
+ * The sheet's subtitle names the filters in force, in the toolbar's own words
+ * (`cbsFilterSummary`), so the file says what the screen said.
+ */
+export { describeCbsFilter };
 
 /**
  * The rows, scope label and guard differ per view; everything downstream of

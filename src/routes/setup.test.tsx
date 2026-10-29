@@ -367,15 +367,14 @@ describe("Setup filters", () => {
     expect(shown()).not.toContain("Welding Labor");
   });
 
-  it("offers the Material type picker once Materials is pressed, like the other trees", () => {
+  it("enables the Material type picker once Materials is pressed, like the other trees", () => {
     renderSetup([], WELDING);
-    expect(
-      screen.queryByRole("button", { name: /^Material type:/ }),
-    ).toBeNull();
+    const picker = () =>
+      screen.getByRole("button", { name: /^Material type:/ });
+    expect(picker()).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Materials" }));
-    expect(
-      screen.getByRole("button", { name: /^Material type:/ }),
-    ).toHaveTextContent("All material types");
+    expect(picker()).toBeEnabled();
+    expect(picker()).toHaveTextContent("All material types");
   });
 
   it("offers the Cost Classification picker with the catalog's values", () => {

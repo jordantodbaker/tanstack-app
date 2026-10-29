@@ -69,8 +69,9 @@ const INDIRECTS = [
 // accounts of L1 032, under the 030 Special Project Costs division (they were
 // L1 013 "Project Costs" until 2026-10-29), and sum at that level + their
 // children (via the `byL1L2` bucket, keyed by the de-dashed 5-char L1+L2
-// prefix).
-const SUMMARY_ADMIN_HOME_OFFICE: {
+// prefix). Exported for `summary-rows-cbs.test.ts`, which checks every key
+// against the workbook.
+export const SUMMARY_ADMIN_HOME_OFFICE: {
   label: string;
   uom: string;
   /** Sum the whole L1 division (3-char). */
@@ -91,14 +92,25 @@ const SUMMARY_ADMIN_HOME_OFFICE: {
 // Engineering discipline. Values are summarized from the Engineering Field
 // Estimate by L1 bucket (`…ByL1`), the same way the Disciplines section rolls
 // up by digit. `020` is the section parent itself, so it isn't a row.
-const SUMMARY_ENGINEERING: { label: string; uom: string; l1: string }[] = [
-  { label: "Engineering Support", uom: "HR", l1: "022" },
-  { label: "Engineering (Combined / Cross Phase)", uom: "HR", l1: "023" },
-  { label: "Concept Design / Feasibility (Class 5-4)", uom: "HR", l1: "024" },
-  { label: "Preliminary Design - FEED (Class 4-3)", uom: "HR", l1: "025" },
-  { label: "Detailed Engineering (Class 2-1)", uom: "HR", l1: "026" },
-  { label: "Construction Support", uom: "HR", l1: "027" },
-  { label: "Commissioning & Startup Support", uom: "HR", l1: "028" },
+//
+// Labels are the accounts' own CBS names, and `summary-rows-cbs.test.ts`
+// holds them to that: the 2026-10-29 workbook had made 022 "Combined Phase"
+// while this table still called it "Engineering Support", and dropped 023.
+export const SUMMARY_ENGINEERING: {
+  label: string;
+  uom: string;
+  l1: string;
+}[] = [
+  { label: "Combined Phase (Preliminary & Detailed)", uom: "HR", l1: "022" },
+  { label: "Concept Design", uom: "HR", l1: "024" },
+  { label: "Preliminary Design – FEED (Class 4–3)", uom: "HR", l1: "025" },
+  { label: "Detailed Design (Class 2-1)", uom: "HR", l1: "026" },
+  { label: "Engineering Construction Support", uom: "HR", l1: "027" },
+  {
+    label: "Engineering Commissioning & Startup Support",
+    uom: "HR",
+    l1: "028",
+  },
 ];
 
 const TIC_BEFORE_CONTINGENCY = ["Bond", "Insurance", "B&O Tax", "Contingency"];

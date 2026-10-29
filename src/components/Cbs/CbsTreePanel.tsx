@@ -1,7 +1,12 @@
 import * as React from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronRight } from "lucide-react";
-import { type CbsTreeItem, type CbsTreeNode } from "~/lib/cbs-tree";
+import {
+  CBS_COST_TYPES,
+  cbsIsBackbone,
+  type CbsTreeItem,
+  type CbsTreeNode,
+} from "~/lib/cbs-tree";
 import {
   CBS_HEADER_COLOR,
   CBS_LEGEND_LEVELS,
@@ -118,6 +123,7 @@ const CbsRow = React.memo(function CbsRow({
       <span className="shrink-0 font-mono text-xs tabular-nums opacity-80">
         {item.displayCode}
       </span>
+      <CostTypeChip item={item} />
       <span className="truncate font-medium">{label}</span>
       {item.uom && (
         <span className="ml-auto shrink-0 font-mono text-[11px] opacity-70">
@@ -197,6 +203,37 @@ export function CbsLevelLegend({
   );
 }
 
+/** Light chips that read on every level fill, one hue per cost type. */
+const COST_TYPE_CHIP: Record<string, string> = {
+  L: "border-sky-300 bg-sky-100 text-sky-900",
+  S: "border-violet-300 bg-violet-100 text-violet-900",
+  M: "border-amber-300 bg-amber-100 text-amber-900",
+  E: "border-emerald-300 bg-emerald-100 text-emerald-900",
+  O: "border-slate-300 bg-slate-100 text-slate-800",
+  R: "border-teal-300 bg-teal-100 text-teal-900",
+};
+
+/**
+ * The cost-type letter beside a typed line's code — the same letter the code
+ * ends in, read off the code rather than stored, so it is never stale. The
+ * "-0" roll-up row carries none: it is the account itself.
+ */
+function CostTypeChip({ item }: { item: CbsTreeItem }) {
+  if (cbsIsBackbone(item)) return null;
+  const code = item.l6;
+  const type = CBS_COST_TYPES.find((t) => t.code === code);
+  return (
+    <span
+      title={
+        type ? `${type.label.replace(/s$/, "")} line` : `Cost type ${code}`
+      }
+      className={`shrink-0 rounded border px-1 text-[10px] leading-4 font-semibold ${COST_TYPE_CHIP[code] ?? "border-slate-300 bg-slate-100 text-slate-800"}`}
+    >
+      {code}
+    </span>
+  );
+}
+
 export function CbsTreePanel({
   flat,
   expanded,
@@ -206,6 +243,7 @@ export function CbsTreePanel({
   onSelect,
   renderLeading,
   emptyMessage,
+  emptyAction,
   scrollToKey = null,
   children,
 }: {
@@ -219,6 +257,8 @@ export function CbsTreePanel({
   onSelect?: (node: CbsTreeNode) => void;
   renderLeading?: (node: CbsTreeNode) => React.ReactNode;
   emptyMessage: string;
+  /** Shown under the empty message — a Clear filters button, typically. */
+  emptyAction?: React.ReactNode;
   /**
    * Scroll this row into view once it is present. Set by a `?code=` deep
    * link: the row is virtualised, so it does not exist in the DOM to scroll
@@ -262,7 +302,10 @@ export function CbsTreePanel({
       </div>
       {children}
       {flat.length === 0 ? (
-        <p className="p-6 text-center text-sm text-slate-500">{emptyMessage}</p>
+        <div className="flex flex-col items-center gap-2 p-6 text-center text-sm text-slate-500">
+          <p>{emptyMessage}</p>
+          {emptyAction}
+        </div>
       ) : (
         <div
           ref={scrollRef}

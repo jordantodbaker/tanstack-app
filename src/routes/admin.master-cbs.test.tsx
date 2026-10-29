@@ -434,27 +434,30 @@ describe("Dictionary-only filters", () => {
     expect(within(dictionaryTree()).queryByText("Welding Labor")).toBeNull();
   });
 
-  it("offers Material Type in either section once its Materials is pressed", () => {
+  it("offers Material Type in either section, enabled once its Materials is pressed", () => {
     renderRows();
-    expect(
-      screen.queryByRole("button", { name: /^Material type:/ }),
-    ).toBeNull();
+    const pickers = () =>
+      screen.getAllByRole("button", { name: /^Material type:/ });
+    // Present but greyed out, so the toolbar keeps its shape.
+    expect(pickers()).toHaveLength(2);
+    expect(pickers()[0]).toBeDisabled();
+    expect(pickers()[1]).toBeDisabled();
     // Each section's picker follows its own Materials button.
     fireEvent.click(screen.getAllByRole("button", { name: "Materials" })[0]);
-    expect(
-      screen.getAllByRole("button", { name: /^Material type:/ }),
-    ).toHaveLength(1);
+    expect(pickers()[0]).toBeEnabled();
+    expect(pickers()[1]).toBeDisabled();
 
     pressDictionary("Materials");
-    const pickers = screen.getAllByRole("button", { name: /^Material type:/ });
-    expect(pickers).toHaveLength(2);
-    expect(pickers[1]).toHaveTextContent("All material types");
+    expect(pickers()[1]).toBeEnabled();
+    expect(pickers()[1]).toHaveTextContent("All material types");
   });
 
   it("narrows the Materials lines to the material types picked", () => {
     renderRows();
     pressDictionary("Materials");
-    fireEvent.click(screen.getByRole("button", { name: /^Material type:/ }));
+    fireEvent.click(
+      screen.getAllByRole("button", { name: /^Material type:/ })[1],
+    );
     const group = screen.getByRole("group", {
       name: "Filter by material type",
     });
@@ -465,24 +468,23 @@ describe("Dictionary-only filters", () => {
     expect(within(dictionaryTree()).queryByText("Welding Tagged")).toBeNull();
   });
 
-  it("drops the picker and its pick when Materials is turned off", () => {
+  it("disables the picker and drops its pick when Materials is turned off", () => {
     renderRows();
+    const picker = () =>
+      screen.getAllByRole("button", { name: /^Material type:/ })[1];
     pressDictionary("Materials");
-    fireEvent.click(screen.getByRole("button", { name: /^Material type:/ }));
+    fireEvent.click(picker());
     fireEvent.click(
       within(
         screen.getByRole("group", { name: "Filter by material type" }),
       ).getByLabelText("Bulks"),
     );
     pressDictionary("Materials");
-    expect(
-      screen.queryByRole("button", { name: /^Material type:/ }),
-    ).toBeNull();
+    expect(picker()).toBeDisabled();
     // On again: starts from all material types, not the old pick.
     pressDictionary("Materials");
-    expect(
-      screen.getByRole("button", { name: /^Material type:/ }),
-    ).toHaveTextContent("All material types");
+    expect(picker()).toBeEnabled();
+    expect(picker()).toHaveTextContent("All material types");
     expect(
       within(dictionaryTree()).getByText("Welding Tagged"),
     ).toBeInTheDocument();

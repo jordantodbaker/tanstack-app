@@ -34,6 +34,7 @@ import { CBS_MASTER_PATH } from "../prisma/cbs-sheet";
 import { costTypeSuffixOf, stripCostTypeSuffix } from "../src/lib/cbs-tree";
 import {
   cbsDisplayDescription,
+  cbsMasterCodeOf,
   planCbsRenames,
   type CbsRename,
 } from "../src/lib/cbs-rename-plan";
@@ -80,18 +81,6 @@ type WorkbookName = {
 };
 
 /**
- * The master's code for an account: its "-0" roll-up code without the
- * cost-type segment. A rename names the account's own row, so only those
- * resolve; a typed line has no row of its own in the master.
- */
-function masterCodeOf(displayCode: string): string | null {
-  const m = /^([0-9A-Z]{3}-[0-9A-Z]{2}-[0-9A-Z]{4}-[0-9A-Z]{2})-0$/.exec(
-    displayCode,
-  );
-  return m ? m[1] : null;
-}
-
-/**
  * Finds the Name cell for each display code in the master.
  *
  * Headers are located by label rather than by a fixed column, and the sheet by
@@ -107,7 +96,7 @@ async function resolveWorkbookNames(
 
   const wanted = new Map<string, string>();
   for (const code of displayCodes) {
-    const master = masterCodeOf(code);
+    const master = cbsMasterCodeOf(code);
     if (master) wanted.set(master, code);
   }
   sheet.ws.eachRow((row, r) => {

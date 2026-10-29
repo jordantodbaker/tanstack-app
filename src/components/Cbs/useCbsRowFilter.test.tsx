@@ -59,6 +59,30 @@ describe("useCbsRowFilter", () => {
     });
   });
 
+  it("facets the counts on the other filters in force", () => {
+    const { result } = renderHook(() => useCbsRowFilter({ items: ITEMS }));
+    act(() => result.current.controls.onToggleCostType!("labor"));
+    expect(result.current.controls.valueOptions).toEqual({
+      // Only the Labor line is left for the other pickers to count.
+      disciplines: [{ value: "Piping", count: 1 }],
+      classifications: [
+        { value: "INDIRECT", count: 0 },
+        { value: "MATERIALS", count: 1 },
+      ],
+      // The Materials line is a Materials line, so Labor leaves none.
+      materialTypes: [{ value: "Bulks", count: 0 }],
+    });
+    // A picker's own ticks do not shrink its own list.
+    act(() => result.current.controls.onToggleCostType!("labor"));
+    act(() =>
+      result.current.controls.onValueChange!("classifications", ["INDIRECT"]),
+    );
+    expect(result.current.controls.valueOptions!.classifications).toEqual([
+      { value: "INDIRECT", count: 1 },
+      { value: "MATERIALS", count: 2 },
+    ]);
+  });
+
   it("hands out only the controls the page offers", () => {
     const bare = renderHook(() => useCbsRowFilter({ items: ITEMS })).result
       .current.controls;
@@ -138,6 +162,30 @@ describe("useCbsRowFilter", () => {
     );
     act(() => result.current.controls.onToggleCostType!("labor"));
     expect(result.current.filter.materialTypes).toEqual(["Bulks"]);
+  });
+
+  it("clears every filter at once and hands out the filter it applied", () => {
+    const { result } = renderHook(() =>
+      useCbsRowFilter({
+        items: ITEMS,
+        statusFilter: true,
+        rowTypeFilter: true,
+      }),
+    );
+    act(() => result.current.controls.onQueryChange("pipe"));
+    act(() => result.current.controls.onToggleCostType!("material"));
+    act(() =>
+      result.current.controls.onValueChange!("materialTypes", ["Bulks"]),
+    );
+    act(() => result.current.controls.onToggleStatus!("inactive"));
+    act(() => result.current.controls.onRowTypeChange!("original"));
+    expect(result.current.controls.filter).toBe(result.current.filter);
+    expect(result.current.filtering).toBe(true);
+
+    act(() => result.current.controls.onClearFilters!());
+    expect(result.current.filter).toEqual(CBS_FILTER_NONE);
+    expect(result.current.controls.query).toBe("");
+    expect(result.current.filtering).toBe(false);
   });
 
   it("filters on the search text once a deferred search catches up", () => {

@@ -160,6 +160,14 @@ changes are applied by running `npx prisma db push` against the production
 `DATABASE_URL`. There is no down-migration path; schema changes are
 forward-only.
 
+> **Pending on production (2026-10-29):** the next push drops
+> `CbsItem.rowType` and `CbsItem.generatedFrom` and the `CbsRowType` enum.
+> They were removed from the schema when the loader stopped generating S/M
+> twins (§11a), then re-added on the production database by hand so the build
+> still deployed at the time kept working. Every row holds the default, so
+> the data-loss prompt is safe to accept — but push only together with, or
+> after, a deploy of code that no longer selects them.
+
 ### Notes
 
 - The connection string must point at the pooler endpoint, not the direct

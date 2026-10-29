@@ -66,10 +66,6 @@ export function useCbsRowFilter({
       setValues((prev) => ({ ...prev, [key]: next })),
     [],
   );
-  const valueOptions = React.useMemo(
-    () => cbsValueFilterOptions(items),
-    [items],
-  );
 
   const [costTypes, setCostTypes] = React.useState(cbsNoCostTypes);
   const toggleCostType = React.useCallback((key: CbsCostTypeKey) => {
@@ -93,6 +89,13 @@ export function useCbsRowFilter({
     [],
   );
   const [rowType, setRowType] = React.useState<CbsRowTypeFilter>("all");
+  const clearFilters = React.useCallback(() => {
+    setQuery("");
+    setValues(cbsNoValues());
+    setCostTypes(cbsNoCostTypes());
+    setStatuses(cbsNoStatuses());
+    setRowType("all");
+  }, []);
 
   const filter: CbsRowFilter = React.useMemo(
     () => ({
@@ -103,6 +106,12 @@ export function useCbsRowFilter({
       ...statuses,
     }),
     [appliedQuery, rowType, values, costTypes, statuses],
+  );
+  // Faceted: each picker's counts are what the OTHER filters leave, so they
+  // follow every change — see `cbsValueFilterOptions`.
+  const valueOptions = React.useMemo(
+    () => cbsValueFilterOptions(items, filter),
+    [items, filter],
   );
 
   return {
@@ -121,6 +130,8 @@ export function useCbsRowFilter({
       onToggleStatus: statusFilter ? toggleStatus : undefined,
       rowType,
       onRowTypeChange: rowTypeFilter ? setRowType : undefined,
+      filter,
+      onClearFilters: clearFilters,
     },
   };
 }

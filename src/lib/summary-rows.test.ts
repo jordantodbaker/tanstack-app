@@ -105,10 +105,10 @@ describe("buildSummaryRows — Craft Support Labor override", () => {
 describe("buildSummaryRows — L1 / L1L2 sections", () => {
   it("rolls an Engineering row up from its L1 bucket", () => {
     const t = emptyTotals();
-    t.laborByL1["026"] = 800; // Detailed Engineering (Class 2-1)
+    t.laborByL1["026"] = 800; // Detailed Design (Class 2-1)
     const { engineering } = buildSummaryRows(t);
     const row = engineering.find((r) =>
-      r.description.startsWith("Detailed Engineering"),
+      r.description.startsWith("Detailed Design"),
     );
     expect(row?.totalLabor).toBe(formatMoney(800));
   });

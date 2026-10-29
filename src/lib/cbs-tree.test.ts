@@ -1348,6 +1348,21 @@ describe("discipline filter", () => {
     ]);
   });
 
+  it("counts, given the filter, only the rows the other filters leave", () => {
+    expect(
+      cbsValueFilterOptions(ROWS, { ...CBS_FILTER_NONE, labor: true })
+        .disciplines,
+    ).toEqual([
+      { value: "Civil", count: 1 },
+      { value: "Piping", count: 0 },
+      { value: CBS_BLANK_VALUE, count: 0 },
+    ]);
+    // A picker's own ticks are left out, so its list is steady while picking.
+    expect(cbsValueFilterOptions(ROWS, by("Piping")).disciplines).toEqual(
+      cbsValueFilterOptions(ROWS).disciplines,
+    );
+  });
+
   it("is empty until a discipline is picked", () => {
     expect(cbsFilterIsEmpty(by())).toBe(true);
     expect(cbsFilterIsEmpty(by("Civil"))).toBe(false);

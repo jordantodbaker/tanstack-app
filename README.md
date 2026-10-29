@@ -72,21 +72,21 @@ point it anywhere real.
 
 ## Commands
 
-| Command                         | What it does                                                                              |
-| ------------------------------- | ----------------------------------------------------------------------------------------- |
-| `npm run dev`                   | Dev server on :3000                                                                       |
-| `npm run build`                 | Production build, then `tsc --noEmit`                                                     |
-| `npm run preview` / `npm start` | Serve the built bundle locally                                                            |
-| `npm test`                      | Unit + component suite (no database)                                                      |
-| `npm run test:watch`            | The same suite, watching                                                                  |
-| `npm run test:coverage`         | Coverage report — useful for finding which logic is untested                              |
-| `npm run test:integration`      | DB-backed suite — see [docs/integration-testing.md](docs/integration-testing.md)          |
-| `npm run check:client-leak`     | Fails if a client-reachable module pulls in Prisma. Run it in CI.                         |
-| `npm run cbs:repair`            | Fix the defects a fresh copy of `CBS.xlsx` keeps arriving with — run **before** importing |
-| `npm run cbs:import`            | Re-import `prisma/data/CBS.xlsx` into `CbsItem`                                           |
-| `npm run cbs:rename`            | Re-apply account renames the workbook doesn't carry yet                                   |
-| `npm run piping:sync-codes`     | Push piping metallurgy codes into `PipingGroup`                                           |
-| `npm run seed-test`             | Full demo dataset (destructive)                                                           |
+| Command                         | What it does                                                                     |
+| ------------------------------- | -------------------------------------------------------------------------------- |
+| `npm run dev`                   | Dev server on :3000                                                              |
+| `npm run build`                 | Production build, then `tsc --noEmit`                                            |
+| `npm run preview` / `npm start` | Serve the built bundle locally                                                   |
+| `npm test`                      | Unit + component suite (no database)                                             |
+| `npm run test:watch`            | The same suite, watching                                                         |
+| `npm run test:coverage`         | Coverage report — useful for finding which logic is untested                     |
+| `npm run test:integration`      | DB-backed suite — see [docs/integration-testing.md](docs/integration-testing.md) |
+| `npm run check:client-leak`     | Fails if a client-reachable module pulls in Prisma. Run it in CI.                |
+| `npm run cbs:expand`            | Expand `prisma/data/CBS.master.xlsx` into `CBS.xlsx` — run **before** importing  |
+| `npm run cbs:import`            | Re-import `prisma/data/CBS.xlsx` into `CbsItem`                                  |
+| `npm run cbs:rename`            | Re-apply account renames the workbook doesn't carry yet                          |
+| `npm run piping:sync-codes`     | Push piping metallurgy codes into `PipingGroup`                                  |
+| `npm run seed-test`             | Full demo dataset (destructive)                                                  |
 
 The CBS scripts run **in a specific order** after a new workbook lands; that
 sequence, and the hard-coded tables a CBS renumbering invalidates, are in

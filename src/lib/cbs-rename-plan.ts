@@ -26,7 +26,13 @@ export type CbsRenameRow = { id: number; displayCode: string; name: string };
 
 export type CbsRenameOutcome =
   /** Stored name matches `from` — rename it. */
-  | { kind: "rename"; displayCode: string; id: number; from: string; to: string }
+  | {
+      kind: "rename";
+      displayCode: string;
+      id: number;
+      from: string;
+      to: string;
+    }
   /** Already renamed; re-running is a no-op. */
   | { kind: "current"; displayCode: string; name: string }
   /** Stored name is neither `from` nor `to` — refuse, don't overwrite. */
@@ -73,7 +79,24 @@ export function planCbsRenames(
   });
 }
 
+/**
+ * The condensed master's code for an account: its "-0" roll-up code without
+ * the cost-type segment ("300-00-0000-00-0" → "300-00-0000-00"). A rename
+ * names the account's own row, and the master has one row per account, so
+ * only "-0" codes resolve; a typed line ("…-L") has no row of its own there
+ * and comes back null.
+ */
+export function cbsMasterCodeOf(displayCode: string): string | null {
+  const m = /^([0-9A-Z]{3}-[0-9A-Z]{2}-[0-9A-Z]{4}-[0-9A-Z]{2})-0$/.exec(
+    displayCode.trim().toUpperCase(),
+  );
+  return m ? m[1] : null;
+}
+
 /** The display description a renamed row should carry. */
-export function cbsDisplayDescription(displayCode: string, name: string): string {
+export function cbsDisplayDescription(
+  displayCode: string,
+  name: string,
+): string {
   return `${displayCode}:  ${name}`;
 }

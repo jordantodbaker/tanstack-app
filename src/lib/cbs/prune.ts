@@ -8,80 +8,24 @@
  */
 import { type CbsTreeItem, type CbsTreeNode } from "./types";
 import {
-  CBS_COST_TYPES,
-  CBS_STATUSES,
-  CBS_VALUE_FILTERS,
+  cbsCriteriaFor,
   cbsFilterIsEmpty,
-  cbsIsCostType,
   cbsHasCostTypeFilter,
-  cbsHasStatus,
   cbsHasStatusFilter,
   cbsHasRowTypeFilter,
   cbsHasValueFilter,
-  cbsMatchesRowType,
-  cbsQueryTokens,
-  cbsValueFilterInForce,
-  type CbsCostType,
+  cbsItemMatches,
+  type CbsCriteria,
   type CbsRowFilter,
-  type CbsStatusKey,
-  type CbsValueFilter,
 } from "./filter";
 
-/**
- * The text, the type toggles and the status toggles each narrow the others:
- * "pumps" with Subcontracts and Inactive on means retired subcontract rows
- * mentioning pumps. Within a group the toggles widen each other, since asking
- * for two is asking for either.
- *
- * Everything here is derived from the filter ONCE per walk, not per row: the
- * catalog views hold ~14,000 rows and re-filter on every keystroke, so a
- * per-row `CBS_COST_TYPES.filter(...)` or `array.includes(...)` is the
- * difference between instant and noticeable.
- */
-type CbsCriteria = {
-  /** The query, pre-split. */
-  tokens: string[];
-  /** The cost types pressed; empty means any. */
-  types: readonly CbsCostType[];
-  /** The statuses pressed; empty means any. */
-  statuses: readonly CbsStatusKey[];
-  rowType: CbsRowFilter["rowType"];
-  /** The value pickers in force, each with its ticked values as a Set. */
-  pickers: readonly { picker: CbsValueFilter; values: ReadonlySet<string> }[];
-};
-
-function criteriaFor(filter: CbsRowFilter): CbsCriteria {
-  return {
-    tokens: cbsQueryTokens(filter.query),
-    types: CBS_COST_TYPES.filter((t) => filter[t.key]),
-    statuses: CBS_STATUSES.filter((s) => filter[s.key]).map((s) => s.key),
-    rowType: filter.rowType,
-    pickers: CBS_VALUE_FILTERS.filter((p) =>
-      cbsValueFilterInForce(filter, p),
-    ).map((picker) => ({ picker, values: new Set(filter[picker.key]) })),
-  };
-}
+const criteriaFor = cbsCriteriaFor;
 
 function rowMatches<T extends CbsTreeItem>(
   node: CbsTreeNode<T>,
-  { tokens, types, statuses, rowType, pickers }: CbsCriteria,
+  criteria: CbsCriteria,
 ): boolean {
-  const { item } = node;
-  if (tokens.some((t) => !node.searchHaystack.includes(t))) return false;
-  if (types.length > 0 && !types.some((t) => cbsIsCostType(item, t))) {
-    return false;
-  }
-  if (statuses.length > 0 && !statuses.some((s) => cbsHasStatus(item, s))) {
-    return false;
-  }
-  if (!cbsMatchesRowType(item, rowType)) return false;
-  for (const { picker, values } of pickers) {
-    // Rows a picker does not apply to pass — a Labor line beside the
-    // Materials lines is not judged on its Material Type.
-    if (picker.appliesTo && !picker.appliesTo(item)) continue;
-    if (!values.has(picker.valueOf(item))) return false;
-  }
-  return true;
+  return cbsItemMatches(node.item, node.searchHaystack, criteria);
 }
 
 /**

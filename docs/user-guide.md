@@ -183,8 +183,16 @@ Cost = Total Cost**.
 
 Three pages show the CBS as a color-coded, collapsible hierarchy: **Setup**,
 the **Project Cost Code List**, and the administrators' **CBS Code Book**. They
-differ in what they list and what you can do there, but the controls are the
-same on all three, so they are described once here.
+differ in what they list and what you can do there, but the tree and its
+toolbar are the same on all three, so they are described once here.
+
+Every one of them lists **cost lines**: an account's own **-0** roll-up row
+and, beneath it, one row per cost type the account carries — **L** labor,
+**S** subcontract, **M** material, **E** equipment, **O** other, **R** rental —
+each with its own code. The letter at the end of a row's code is its cost type,
+and a small colored **chip** beside the code repeats it so the tree scans at a
+glance; the roll-up row has no chip. Names keep the marker the workbook writes
+("Executive (L)", "Piping (*)").
 
 **Level colors.** The tree is colored by code level, the way the source
 workbook colors it. The **L0–L5 swatches** under "Level colors" are buttons:
@@ -193,60 +201,70 @@ to the discipline roots, **L5** is the same as **Expand all**. The swatch in
 force is outlined, and the outline clears once you open or close a row
 yourself.
 
+**The toolbar** has two rows. The first holds everything that decides which
+rows exist: the **Discipline** picker, the **cost-type** buttons, the
+**Material type** and **Cost classification** pickers, and — on the CBS
+Dictionary only — **Status** and **Row type**. The second holds the search box,
+**Expand all** / **Collapse all** and the page's own controls (the Excel
+export, the match count). While anything is filtering, the second row also
+names the filters in force, in the same words the Excel export prints in its
+subtitle, and offers **Clear filters**, which resets the search and every
+filter at once. The same button appears under the empty message when a filter
+leaves nothing to show.
+
 **Search** matches the code, the name, the account description and the unit.
 Terms are order-free and all required, so "rental pipe" finds "Pipe Shop Third
 Party Rental", and a code typed without its dashes ("60420") finds its row —
 useful when pasting from the workbook's **Cost Code** column or from Excel. A
 plain text search keeps the parents of a hit, because knowing where a hit sits
-is most of the answer.
+is most of the answer. The catalog views hold some 14,000 rows, so the tree
+follows the box on a slight delay and shows a small "Filtering…" mask while it
+catches up.
 
-**Cost types** — **Labor**, **Subcontracts**, **Materials**, **Equipment** and
-**Other** — narrow the tree to one kind of code. The buttons widen each other,
-so turning two on shows either kind, and they narrow the search rather than
-widening it: "pumps" with **Subcontracts** on means subcontract rows mentioning
-pumps.
+**Cost types** — **Labor**, **Subcontracts**, **Materials**, **Equipment**,
+**Other** and **Rental** — narrow the tree to one kind of code. A row qualifies
+on **its own cost type alone**, the last segment of its code: filter on
+**Materials** and you get the codes ending in **M** — not the **S** row of an
+account that happens to carry a material code, and not the **0** roll-up above
+them. The buttons widen each other, so turning two on shows either kind, and
+they narrow the search rather than widening it: "pumps" with **Subcontracts**
+on means subcontract rows mentioning pumps.
 
-What counts as "that kind of code" depends on what the page lists, and the
-difference is worth knowing:
+Every filter other than a bare text search is **strict**: only rows that
+qualify survive, and a parent that does not is dropped with its matching
+children lifted into its place. A parent kept only to hold children would read
+as a code that is not of that kind.
 
-- A page listing **accounts** — Setup, the Project Cost Code List, and the Code
-  Book's **Cost Accounts** — counts a row if its own cost type is the matching
-  letter **or** its corresponding column (**Labor Code**, **Sub Code**,
-  **Material Code**, **Equipment Code**, **Other Code**) is YES. Those pages
-  are built around codes ending in **0**, whose own cost type can never match,
-  so the columns are what answer for them.
-- A page listing **cost lines** — the Code Book's **CBS Dictionary** — counts a
-  row on **its own cost type and nothing else**. Filter on **Materials** there
-  and you get the codes ending in **M**: not the **S** row of an account that
-  happens to carry a material code, and not the **0** roll-up above them.
+**Pickers.** Three multi-select pickers narrow the tree by a workbook column.
+Each lists the values present on the page's rows with a count beside each, and
+**(none)** stands for a blank cell; tick several to see rows of any of them,
+and **Clear** inside the picker goes back to all. The counts are faceted: each
+is how many rows ticking that value would show given the other filters in
+force, so they move as you filter, and a value with nothing left shows **0**
+rather than vanishing, so a tick can always be undone.
 
-So the same button asks "which accounts have material?" on one page and "which
-codes _are_ material?" on the other.
+- **Discipline** — the workbook's Discipline column (Civil, Piping, Home Office
+  & Administration, …). It sits first because the other filters are usually
+  asked within one discipline.
+- **Material type** — Tagged, Bulk, Consumable, … over the **Materials** lines
+  only. It is greyed out until **Materials** is pressed, since it narrows those
+  lines and nothing else; it leaves any other cost type you have on alone, and
+  clears when Materials is turned off.
+- **Cost classification** — DIRECT LABOR, INDIRECT, MATERIALS, ….
 
-A cost-type filter is **strict** everywhere: only rows carrying that type
-survive, and a parent that does not carry it is dropped with its matching
-children lifted into its place. That is deliberate — a parent kept only to hold
-children would show no badge and would read as a code that is not of that kind.
-
-**Badges under a filter.** Where a page shows the **L / S / M / E / O** badges,
-a cost-type filter narrows them to the types you selected. Filter on
-**Materials** and a row carrying both labor and material shows just **M**; turn
-**Subcontracts** on as well and it shows **S M**. Every row on screen has
-already earned its place on the filtered type, so the other letters only invite
-reading the row as something it is not here for. Clear the filter and the full
-set comes back.
-
-**Status** — **Active**, **Inactive**, **Retired** — narrows the tree the same
-strict way the cost types do. A blank Status counts as **Active**: roughly 190
-live accounts have never had the cell filled in, section summaries among them,
-so treating blanks as retired would hide their children's parents. The row of
-buttons appears only where a list actually holds more than one status, which is
-why Setup and **Cost Accounts** don't show it — both are active-only, and a
-filter with one option is just noise.
+**Status** and **Row type** belong to the **CBS Dictionary** alone — the one
+view that lists inactive and generated rows as a matter of course. **Status** —
+**Active**, **Inactive**, **Retired** — narrows the same strict way. A blank
+Status counts as **Active**: roughly 190 live accounts have never had the cell
+filled in, section summaries among them, so treating blanks as retired would
+hide their children's parents. **Row type** — **All**, **Original**,
+**Generated** — reads the workbook's **Original Row** column: TRUE for an
+account's own **-0** row, FALSE for a cost-type line generated from it.
 
 **Selecting a row** opens its full detail in the panel on the right: unit, cost
-code, account, cost classification, discipline, description, and the **Row** and
-**Expanded Row** it occupies in the source workbook.
+code, account, cost classification, discipline, description, and the
+**Original Row** and **Expanded Row** it occupies in the source workbook. The
+panel's header says whether the row is **Original** or **Generated**.
 
 **Linking to one code.** All of these pages accept a `?code=` link — for example
 `/project-cost-codes?code=052-15-0500-00-L`. Opening it expands the tree down to
@@ -256,9 +274,9 @@ describing where to find it. An unknown code is ignored and the page opens
 normally.
 
 **Export Excel** downloads what you are looking at — the rows left by the search
-box and the filter buttons, and nothing else. The sheet opens with a labeled
-block giving the **project number** and **project title**, what the rows cover,
-the filter applied, the code count and the export date; the project number is in
+box and the filters, and nothing else. The sheet opens with a labeled block
+giving the **project number** and **project title**, what the rows cover, the
+filter applied, the code count and the export date; the project number is in
 the filename too, so forwarded files can be told apart. The file keeps the level
 colors and turns the hierarchy into Excel's own row grouping, so the ± controls
 in the margin collapse it the way the page does. Collapsing branches on screen
@@ -275,14 +293,15 @@ Setup is the first link in the **Cost Breakdown Structure** app, above the
 applies to the **selected project**, so check the project in the header before
 granting anything.
 
-The tree is the full CBS Dictionary. **Ticking a parent allows everything
-beneath it**; a half-filled box means only some of its children are allowed.
-Clicking a row only opens its detail — ticking its checkbox is what changes the
-allow-list.
-
-Setup lists **active codes only**; a retired code cannot be granted. Rows badged
-**S** or **M** are the generated subcontract and material versions of the row
-above them — allow those too if the project will book cost against them.
+The tree is the full CBS, **active codes only** — a retired code cannot be
+granted — with the same filters as the other pages apart from Status and Row
+type. **Ticking a parent allows everything beneath it**; a half-filled box means
+only some of its children are allowed. Clicking a row only opens its detail —
+ticking its checkbox is what changes the allow-list. Rows whose code ends in
+**S** or **M** are the subcontract and material lines of the account above
+them — allow those too if the project will book cost against them. Filtering
+changes what is shown, not what a tick does: a row picked out by a filter is
+granted like any other.
 
 > **Saving:** edits autosave as you go (debounced). No "Save" button to hunt
 > for.
@@ -297,17 +316,16 @@ A read-only list of the cost codes available on the selected project — exactly
 what an admin allowed in **Setup**. Nothing on this page changes the estimate or
 the allow-list.
 
-Only the **original** CBS rows are listed. **S** means a code's own **Sub Code**
-is YES, **M** means its **Material Code** is YES, and a code carrying both shows
-both. The generated subcontract and material rows are not listed here, since
-those badges already tell you which codes have them; administrators can see both
-views over the whole CBS under **Cost Breakdown Structure → CBS Code Book**.
+Every cost line the project has been granted is listed, each cost type on its
+own row, generated subcontract and material rows included. Only **Active**
+codes are listed — inactive and retired ones are in the CBS Dictionary
+(**Cost Breakdown Structure → CBS Code Book**, administrators only).
 
 Grayed-out, italic rows are **parent summaries the project wasn't granted**,
 shown only so the codes beneath them sit in the right place in the hierarchy.
-They carry no badges, aren't counted in the row count, and don't appear in the
-Field Estimate Form's code pickers — they are not codes you can use. To make one
-usable, tick it in **Setup**.
+They aren't counted in the row count or the pickers' counts, and don't appear
+in the Field Estimate Form's code pickers — they are not codes you can use. To
+make one usable, tick it in **Setup**.
 
 **Hide ungranted parents** drops those rows and lifts their granted children up
 to the nearest parent the project does hold, leaving only codes that can
@@ -319,17 +337,16 @@ and says so on its Scope line.
 
 The whole catalog, no project allow-list applied, in two sections:
 
-- **Cost Accounts** — one row per account: the codes ending in **0**, and
-  **active ones only**. The **L / S / M / E / O** badges say which cost types
-  that account carries, so its priced variants need no separate rows.
-- **CBS Dictionary** — every row, each cost type on its own line, including
-  retired codes. This is the one view that hides nothing, so a code you cannot
-  find anywhere else is findable here. It carries no cost-type badges: each
-  row's own code already ends in its cost type, so a badge would only repeat it.
+- **Cost Accounts** — every **active** cost line, each cost type on its own
+  row. It is the list to pick codes from.
+- **CBS Dictionary** — every row, each cost type on its own line, **Active**,
+  **Inactive** and **Retired** alike, with the **Status** and **Row type**
+  filters to narrow them. This is the one view that hides nothing, so a code you
+  cannot find anywhere else is findable here.
 
-These two sections are the pair whose cost-type filters behave differently —
-accounts versus cost lines, as described under **Working with the CBS tree**
-above. Each section's **Export Excel** follows its own section's rule.
+Both sections filter the way every other CBS tree does; the Dictionary simply
+adds Status and Row type. Each section's **Export Excel** follows its own
+section's rule.
 
 On an export from either section the project number is recorded for traceability
 only: both lists ignore the allow-list, as the Scope line says.

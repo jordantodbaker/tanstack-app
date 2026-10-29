@@ -21,6 +21,7 @@ import type { CbsExportView } from "~/lib/cbs-export";
 import { useCbsTreeExpansion } from "~/components/Cbs/useCbsTreeExpansion";
 import { useCbsRowFilter } from "~/components/Cbs/useCbsRowFilter";
 import { LoadMask } from "~/components/LoadMask";
+import { Button } from "~/components/ui/button";
 
 /**
  * One CBS dataset as a searchable, color-by-level hierarchy with a detail
@@ -294,6 +295,17 @@ export function CbsDictionaryBrowser({
           onToggle={toggle}
           onSelect={setSelected}
           emptyMessage={filtering ? "No rows match this filter." : emptyMessage}
+          emptyAction={
+            filtering && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={controls.onClearFilters}
+              >
+                Clear filters
+              </Button>
+            )
+          }
         >
           {searchPending && <LoadMask label="Filtering…" size="sm" rounded />}
         </CbsTreePanel>

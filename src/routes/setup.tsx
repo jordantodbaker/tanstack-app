@@ -29,6 +29,7 @@ import { CbsTreeToolbar } from "~/components/Cbs/CbsTreeToolbar";
 import { useCbsTreeExpansion } from "~/components/Cbs/useCbsTreeExpansion";
 import { useCbsRowFilter } from "~/components/Cbs/useCbsRowFilter";
 import { Checkbox } from "~/components/ui/checkbox";
+import { Button } from "~/components/ui/button";
 import { ProjectSelect } from "~/components/ProjectSelect";
 import { useSelectedProject } from "~/lib/selected-project";
 import { logger } from "~/lib/logger";
@@ -297,6 +298,17 @@ function CbsTreeEditor({
           onSelect={setSelected}
           renderLeading={renderCheckbox}
           emptyMessage="No matches."
+          emptyAction={
+            isFiltered && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={controls.onClearFilters}
+              >
+                Clear filters
+              </Button>
+            )
+          }
         >
           {isFiltering && <LoadMask label="Filtering…" size="sm" rounded />}
         </CbsTreePanel>

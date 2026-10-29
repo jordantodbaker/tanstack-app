@@ -13,6 +13,9 @@ import {
   CBS_ROW_TYPE_FILTERS,
   CBS_STATUSES,
   CBS_VALUE_FILTERS,
+  cbsFilterIsEmpty,
+  cbsFilterSummary,
+  type CbsRowFilter,
   type CbsRowTypeFilter,
   type CbsValueFilter,
   type CbsValueFilterKey,
@@ -36,6 +39,8 @@ function ValuePicker({
   selected,
   options,
   onChange,
+  disabled = false,
+  disabledHint,
 }: {
   /** "Cost classification" — the caption, and the picker's accessible name. */
   label: string;
@@ -44,6 +49,13 @@ function ValuePicker({
   selected: readonly string[];
   options: readonly CbsValueOption[];
   onChange: (next: string[]) => void;
+  /**
+   * Greyed out rather than hidden, so the toolbar keeps its shape and the
+   * picker is discoverable before the cost type it belongs to is pressed.
+   */
+  disabled?: boolean;
+  /** Why it is disabled — the button's tooltip. */
+  disabledHint?: string;
 }) {
   const picked = new Set(selected);
   const toggle = (value: string) =>
@@ -70,6 +82,8 @@ function ValuePicker({
             variant={selected.length > 0 ? "default" : "outline"}
             size="sm"
             aria-label={`${label}: ${summary}`}
+            disabled={disabled}
+            title={disabled ? disabledHint : undefined}
           >
             {summary}
             <ChevronDown className="ml-1 size-3.5" />
@@ -153,9 +167,51 @@ function RowTypeToggle({
   );
 }
 
+/** A labeled row of on/off buttons — the cost types, the statuses. */
+function ToggleGroup<K extends string>({
+  label,
+  ariaLabel,
+  options,
+  on,
+  onToggle,
+  title,
+}: {
+  label: string;
+  ariaLabel: string;
+  options: readonly { key: K; label: string }[];
+  on?: Record<K, boolean>;
+  onToggle: (key: K) => void;
+  title: (key: K) => string;
+}) {
+  return (
+    <div
+      className="flex flex-wrap items-center gap-2"
+      role="group"
+      aria-label={ariaLabel}
+    >
+      <span className="text-xs text-slate-500">{label}</span>
+      {options.map((o) => {
+        const pressed = on?.[o.key] ?? false;
+        return (
+          <Button
+            key={o.key}
+            variant={pressed ? "default" : "outline"}
+            size="sm"
+            onClick={() => onToggle(o.key)}
+            aria-pressed={pressed}
+            title={title(o.key)}
+          >
+            {o.label}
+          </Button>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
  * The filter half of the toolbar's props — the search box and every filter
- * row. `useCbsRowFilter` returns exactly this, so a page spreads it in.
+ * control. `useCbsRowFilter` returns exactly this, so a page spreads it in.
  */
 export type CbsTreeFilterControls = {
   query: string;
@@ -178,18 +234,23 @@ export type CbsTreeFilterControls = {
   /** All / Original / Generated. Omit the handler to leave the row out. */
   rowType?: CbsRowTypeFilter;
   onRowTypeChange?: (next: CbsRowTypeFilter) => void;
+  /**
+   * The whole filter as applied, for the "what is narrowing this tree" line
+   * and the Clear filters button. Omit either to leave them out.
+   */
+  filter?: CbsRowFilter;
+  onClearFilters?: () => void;
 };
 
 /**
- * Rows for a CBS tree: the value pickers around the cost-type buttons, then
- * Status and Row Type where a page offers them, then the search box with
- * Expand all / Collapse all and a trailing slot for page-specific controls
- * (the Excel export, a match count, a selected count, saving…). Shared by the
- * Setup editor and the CBS dictionary viewers.
- *
- * The filters get a row of their own, under the level-color legend, because
- * sharing one line with the search box put five toggles that change WHICH
- * rows exist beside the controls that only change how they are shown.
+ * Two rows for a CBS tree. First, everything that decides WHICH rows exist:
+ * the value pickers around the cost-type buttons, then Status and Row Type
+ * where a page offers them. Second, the controls that only change how the
+ * rows are shown — the search box, Expand all / Collapse all, a trailing slot
+ * for page-specific controls (the Excel export, a match count, a selected
+ * count, saving…) — and, while anything is active, a line saying what the
+ * filters are and a Clear filters button. Shared by the Setup editor and the
+ * CBS dictionary viewers.
  */
 export function CbsTreeToolbar({
   query,
@@ -206,6 +267,8 @@ export function CbsTreeToolbar({
   valueOptions,
   rowType = "all",
   onRowTypeChange,
+  filter,
+  onClearFilters,
   children,
 }: CbsTreeFilterControls & {
   placeholder?: string;
@@ -213,80 +276,69 @@ export function CbsTreeToolbar({
   onCollapseAll: () => void;
   children?: React.ReactNode;
 }) {
-  // A picker that belongs to a cost type (Material Type to Materials) appears
-  // only while that type is on, and only narrows that type's lines.
+  // A picker that belongs to a cost type (Material Type to Materials) is
+  // greyed out until that type is on, and only narrows that type's lines.
   const pickers = (placement: CbsValueFilter["placement"]) =>
     onValueChange &&
-    CBS_VALUE_FILTERS.filter(
-      (v) =>
-        v.placement === placement &&
-        (!v.requiresCostType || costTypes?.[v.requiresCostType]),
-    ).map((v) => (
-      <ValuePicker
-        key={v.key}
-        label={v.label}
-        plural={v.plural}
-        selected={values?.[v.key] ?? []}
-        options={valueOptions?.[v.key] ?? []}
-        onChange={(next) => onValueChange(v.key, next)}
-      />
-    ));
+    CBS_VALUE_FILTERS.filter((v) => v.placement === placement).map((v) => {
+      const owner = v.requiresCostType
+        ? CBS_COST_TYPES.find((t) => t.key === v.requiresCostType)
+        : undefined;
+      const off = !!owner && !costTypes?.[owner.key];
+      return (
+        <ValuePicker
+          key={v.key}
+          label={v.label}
+          plural={v.plural}
+          selected={values?.[v.key] ?? []}
+          options={valueOptions?.[v.key] ?? []}
+          onChange={(next) => onValueChange(v.key, next)}
+          disabled={off}
+          disabledHint={
+            owner
+              ? `Press ${owner.label} to narrow its lines by ${v.label.toLowerCase()}`
+              : undefined
+          }
+        />
+      );
+    });
+
+  const active = filter !== undefined && !cbsFilterIsEmpty(filter);
 
   return (
     <div className="mb-3 flex flex-col gap-2">
-      {pickers("before-cost-types")}
-      {onToggleCostType && (
-        <div
-          className="flex flex-wrap items-center gap-2"
-          role="group"
-          aria-label="Filter by cost type"
-        >
-          <span className="text-xs text-slate-500">Cost types:</span>
-          {CBS_COST_TYPES.map((t) => {
-            const on = costTypes?.[t.key] ?? false;
-            return (
-              <Button
-                key={t.key}
-                variant={on ? "default" : "outline"}
-                size="sm"
-                onClick={() => onToggleCostType(t.key)}
-                aria-pressed={on}
-                title={`Show only ${t.label.toLowerCase()} codes — those ending in -${t.code}`}
-              >
-                {t.label}
-              </Button>
-            );
-          })}
-        </div>
-      )}
-      {pickers("after-cost-types")}
-      {onToggleStatus && (
-        <div
-          className="flex flex-wrap items-center gap-2"
-          role="group"
-          aria-label="Filter by status"
-        >
-          <span className="text-xs text-slate-500">Status:</span>
-          {CBS_STATUSES.map((s) => {
-            const on = statuses?.[s.key] ?? false;
-            return (
-              <Button
-                key={s.key}
-                variant={on ? "default" : "outline"}
-                size="sm"
-                onClick={() => onToggleStatus(s.key)}
-                aria-pressed={on}
-                title={`Show only codes with Status ${s.label}${s.key === "active" ? " (a blank Status counts as Active)" : ""}`}
-              >
-                {s.label}
-              </Button>
-            );
-          })}
-        </div>
-      )}
-      {onRowTypeChange && (
-        <RowTypeToggle value={rowType} onChange={onRowTypeChange} />
-      )}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        {pickers("before-cost-types")}
+        {onToggleCostType && (
+          <ToggleGroup
+            label="Cost types:"
+            ariaLabel="Filter by cost type"
+            options={CBS_COST_TYPES}
+            on={costTypes}
+            onToggle={onToggleCostType}
+            title={(key) => {
+              const t = CBS_COST_TYPES.find((c) => c.key === key)!;
+              return `Show only ${t.label.toLowerCase()} codes — those ending in -${t.code}`;
+            }}
+          />
+        )}
+        {pickers("after-cost-types")}
+        {onToggleStatus && (
+          <ToggleGroup
+            label="Status:"
+            ariaLabel="Filter by status"
+            options={CBS_STATUSES}
+            on={statuses}
+            onToggle={onToggleStatus}
+            title={(key) =>
+              `Show only codes with Status ${CBS_STATUSES.find((s) => s.key === key)!.label}${key === "active" ? " (a blank Status counts as Active)" : ""}`
+            }
+          />
+        )}
+        {onRowTypeChange && (
+          <RowTypeToggle value={rowType} onChange={onRowTypeChange} />
+        )}
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         <SearchBox
           value={query}
@@ -302,6 +354,21 @@ export function CbsTreeToolbar({
           Collapse all
         </Button>
         {children}
+        {active && (
+          <>
+            <span
+              className="text-xs text-slate-500"
+              data-testid="cbs-filter-summary"
+            >
+              {cbsFilterSummary(filter)}
+            </span>
+            {onClearFilters && (
+              <Button variant="ghost" size="sm" onClick={onClearFilters}>
+                Clear filters
+              </Button>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

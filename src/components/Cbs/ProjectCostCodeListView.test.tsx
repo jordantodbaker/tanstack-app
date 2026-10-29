@@ -627,21 +627,98 @@ describe("ProjectCostCodeListView", () => {
     });
   });
 
-  it("offers the Material type picker once Materials is pressed", () => {
+  it("names the filters in force and clears them all at once", async () => {
+    renderView(LINES);
+    expect(screen.queryByTestId("cbs-filter-summary")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Clear filters" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Labor" }));
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "pipe" },
+    });
+    await vi.waitFor(() =>
+      expect(screen.getByTestId("cbs-filter-summary")).toHaveTextContent(
+        "matching “pipe”, labor codes",
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(screen.queryByTestId("cbs-filter-summary")).toBeNull();
+    expect(screen.getByRole("searchbox")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Labor" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
+  it("offers Clear filters from the empty state when a filter leaves nothing", async () => {
+    renderView(LINES);
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "nothing-matches-this" },
+    });
+    expect(
+      await screen.findByText("No rows match this filter."),
+    ).toBeInTheDocument();
+    // One in the toolbar, one under the empty message.
+    const clears = screen.getAllByRole("button", { name: "Clear filters" });
+    expect(clears).toHaveLength(2);
+    fireEvent.click(clears[1]);
+    expect(screen.queryByText("No rows match this filter.")).toBeNull();
+    expect(screen.getByRole("tree")).toBeInTheDocument();
+  });
+
+  it("enables the Material type picker once Materials is pressed", () => {
     renderView([
       item("600-00-0000-00-0", "Pipe (*)"),
       item("600-00-0000-00-M", "Pipe Materials (M)", { materialType: "Bulks" }),
     ]);
-    expect(
-      screen.queryByRole("button", { name: /^Material type:/ }),
-    ).toBeNull();
+    const picker = () =>
+      screen.getByRole("button", { name: /^Material type:/ });
+    expect(picker()).toBeDisabled();
+    expect(picker()).toHaveAttribute(
+      "title",
+      "Press Materials to narrow its lines by material type",
+    );
     fireEvent.click(screen.getByRole("button", { name: "Materials" }));
-    fireEvent.click(screen.getByRole("button", { name: /^Material type:/ }));
+    expect(picker()).toBeEnabled();
+    fireEvent.click(picker());
     expect(
       within(
         screen.getByRole("group", { name: "Filter by material type" }),
       ).getByLabelText("Bulks"),
     ).toBeInTheDocument();
+  });
+
+  it("marks each typed line with its cost-type letter, read off the code", () => {
+    renderView(LINES);
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+    const tree = screen.getByRole("tree");
+    const row = (name: string) =>
+      within(tree).getByText(name).closest('[role="treeitem"]')! as HTMLElement;
+    expect(
+      within(row("Pipe Labor (L)")).getByTitle("Labor line"),
+    ).toHaveTextContent("L");
+    expect(
+      within(row("Pipe Subcontracts (S)")).getByTitle("Subcontract line"),
+    ).toHaveTextContent("S");
+    expect(
+      within(row("Pipe Materials (M)")).getByTitle("Material line"),
+    ).toHaveTextContent("M");
+    // The roll-up row is the account itself: no chip.
+    expect(within(row("Pipe (*)")).queryByTitle(/ line$/)).toBeNull();
+  });
+
+  it("counts, in each picker, the rows the other filters leave", () => {
+    renderView(LINES);
+    fireEvent.click(screen.getByRole("button", { name: "Labor" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Discipline:/ }));
+    const group = screen.getByRole("group", { name: "Filter by discipline" });
+    // LINES carry no discipline: one blank entry, counting only the Labor line.
+    expect(
+      within(group)
+        .getAllByRole("checkbox")
+        .map((c) => c.closest("label")!.textContent),
+    ).toEqual(["(none)1"]);
   });
 
   it("filters by search query", async () => {

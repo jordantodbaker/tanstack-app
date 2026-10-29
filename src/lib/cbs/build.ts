@@ -19,6 +19,7 @@
  */
 import { BACKBONE_TYPE, type CbsTreeItem, type CbsTreeNode } from "./types";
 import { costType, lineage, sortCbsItems } from "./codes";
+import { cbsSearchHaystack } from "./filter";
 
 export function buildCbsTree<T extends CbsTreeItem>(
   items: readonly T[],
@@ -108,20 +109,7 @@ export function buildCbsTree<T extends CbsTreeItem>(
       item: node.item,
       children,
       descendantItemIds,
-      // The code appears twice: once as written and once with the dashes
-      // stripped, because cost codes travel without them (the workbook's Cost
-      // Code column, exports, anything pasted out of Excel) and "60420" should
-      // find 604-20-0000-00-0. UOM is in so "tn" finds the tonnage codes.
-      searchHaystack: [
-        node.item.displayCode,
-        node.item.displayCode.replace(/-/g, ""),
-        node.item.name,
-        node.item.accountDescription,
-        node.item.uom,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase(),
+      searchHaystack: cbsSearchHaystack(node.item),
     };
   }
 

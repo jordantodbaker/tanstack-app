@@ -19,9 +19,12 @@ import {
   cbsHasRowTypeFilter,
   cbsHasValueFilter,
   cbsMatchesRowType,
-  cbsMatchesValueFilter,
   cbsQueryTokens,
+  cbsValueFilterInForce,
+  type CbsCostType,
   type CbsRowFilter,
+  type CbsStatusKey,
+  type CbsValueFilter,
 } from "./filter";
 
 /**
@@ -29,36 +32,54 @@ import {
  * "pumps" with Subcontracts and Inactive on means retired subcontract rows
  * mentioning pumps. Within a group the toggles widen each other, since asking
  * for two is asking for either.
+ *
+ * Everything here is derived from the filter ONCE per walk, not per row: the
+ * catalog views hold ~14,000 rows and re-filter on every keystroke, so a
+ * per-row `CBS_COST_TYPES.filter(...)` or `array.includes(...)` is the
+ * difference between instant and noticeable.
  */
 type CbsCriteria = {
-  filter: CbsRowFilter;
-  /** The query, pre-split — computed once rather than per row. */
+  /** The query, pre-split. */
   tokens: string[];
+  /** The cost types pressed; empty means any. */
+  types: readonly CbsCostType[];
+  /** The statuses pressed; empty means any. */
+  statuses: readonly CbsStatusKey[];
+  rowType: CbsRowFilter["rowType"];
+  /** The value pickers in force, each with its ticked values as a Set. */
+  pickers: readonly { picker: CbsValueFilter; values: ReadonlySet<string> }[];
 };
 
 function criteriaFor(filter: CbsRowFilter): CbsCriteria {
-  return { filter, tokens: cbsQueryTokens(filter.query) };
+  return {
+    tokens: cbsQueryTokens(filter.query),
+    types: CBS_COST_TYPES.filter((t) => filter[t.key]),
+    statuses: CBS_STATUSES.filter((s) => filter[s.key]).map((s) => s.key),
+    rowType: filter.rowType,
+    pickers: CBS_VALUE_FILTERS.filter((p) =>
+      cbsValueFilterInForce(filter, p),
+    ).map((picker) => ({ picker, values: new Set(filter[picker.key]) })),
+  };
 }
 
 function rowMatches<T extends CbsTreeItem>(
   node: CbsTreeNode<T>,
-  { filter, tokens }: CbsCriteria,
+  { tokens, types, statuses, rowType, pickers }: CbsCriteria,
 ): boolean {
+  const { item } = node;
   if (tokens.some((t) => !node.searchHaystack.includes(t))) return false;
-  const types = CBS_COST_TYPES.filter((t) => filter[t.key]);
-  if (types.length > 0 && !types.some((t) => cbsIsCostType(node.item, t))) {
+  if (types.length > 0 && !types.some((t) => cbsIsCostType(item, t))) {
     return false;
   }
-  const statuses = CBS_STATUSES.filter((s) => filter[s.key]);
-  if (
-    statuses.length > 0 &&
-    !statuses.some((s) => cbsHasStatus(node.item, s.key))
-  ) {
+  if (statuses.length > 0 && !statuses.some((s) => cbsHasStatus(item, s))) {
     return false;
   }
-  if (!cbsMatchesRowType(node.item, filter.rowType)) return false;
-  for (const picker of CBS_VALUE_FILTERS) {
-    if (!cbsMatchesValueFilter(node.item, filter, picker)) return false;
+  if (!cbsMatchesRowType(item, rowType)) return false;
+  for (const { picker, values } of pickers) {
+    // Rows a picker does not apply to pass — a Labor line beside the
+    // Materials lines is not judged on its Material Type.
+    if (picker.appliesTo && !picker.appliesTo(item)) continue;
+    if (!values.has(picker.valueOf(item))) return false;
   }
   return true;
 }
@@ -176,8 +197,9 @@ export function pruneCbsTree<T extends CbsTreeItem>(
   const onMatch = () => matches++;
   // A cost-type, status, row-type or value-picker filter is read as a report
   // — "show me the Labor codes", "show me the inactive ones", "show me the
-  // INDIRECT ones" — so only rows that qualify survive. A bare text search still keeps
-  // ancestors: there, knowing WHERE a hit sits is most of the answer.
+  // INDIRECT ones" — so only rows that qualify survive. A bare text search
+  // still keeps ancestors: there, knowing WHERE a hit sits is most of the
+  // answer.
   const criteria = criteriaFor(filter);
   const kept = isStrictFilter(filter)
     ? strictCbsRows(nodes, criteria, 0, onMatch)

@@ -20,6 +20,7 @@ import { ExportCbsXlsxButton } from "~/components/Cbs/ExportCbsXlsxButton";
 import type { CbsExportView } from "~/lib/cbs-export";
 import { useCbsTreeExpansion } from "~/components/Cbs/useCbsTreeExpansion";
 import { useCbsRowFilter } from "~/components/Cbs/useCbsRowFilter";
+import { LoadMask } from "~/components/LoadMask";
 
 /**
  * One CBS dataset as a searchable, color-by-level hierarchy with a detail
@@ -220,10 +221,13 @@ export function CbsDictionaryBrowser({
   // Every tree offers the same filters, Status and Row Type apart: those two
   // belong to the Dictionary, the one view that lists inactive and generated
   // rows as a matter of course.
-  const { filter, filtering, controls } = useCbsRowFilter({
+  // The search filters a deferred copy of the text, as Setup does: the
+  // catalog views re-prune ~14,000 rows per keystroke otherwise.
+  const { filter, filtering, searchPending, controls } = useCbsRowFilter({
     items,
     statusFilter,
     rowTypeFilter,
+    deferQuery: true,
   });
   const { nodes: visibleNodes, matches } = React.useMemo(
     () => pruneCbsTree(nodes, filter),
@@ -290,7 +294,9 @@ export function CbsDictionaryBrowser({
           onToggle={toggle}
           onSelect={setSelected}
           emptyMessage={filtering ? "No rows match this filter." : emptyMessage}
-        />
+        >
+          {searchPending && <LoadMask label="Filtering…" size="sm" rounded />}
+        </CbsTreePanel>
 
         <CbsDetailPanel selected={selected} onClose={() => setSelected(null)} />
       </div>

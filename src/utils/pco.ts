@@ -123,39 +123,22 @@ export type PcoItem = PcoListItem & {
 };
 
 type PcoScalarRow = Awaited<ReturnType<typeof prisma.pco.findMany>>[number];
-type PcoWithLinks = PcoScalarRow & { linkedCvrs: PcoLinkedCvrSummary[] };
+type PcoWithLinks = Awaited<
+  ReturnType<typeof prisma.pco.findMany<{ include: typeof linkedCvrsInclude }>>
+>[number];
 
-const linkedCvrsInclude = {
-  linkedCvrs: {
-    select: {
-      id: true,
-      cvrNumber: true,
-      title: true,
-      status: true,
-      costImpact: true,
-    },
-  },
+/** One linked CVR as the PCO pages show it — `PcoLinkedCvrSummary`. */
+const linkedCvrSummarySelect = {
+  id: true,
+  cvrNumber: true,
+  title: true,
+  status: true,
+  costImpact: true,
 } as const;
 
-const toItem = (r: PcoWithLinks): PcoItem => {
-  const { linkedCvrs, ...rest } = r;
-  return {
-    ...rest,
-    status: rest.status as PcoStatus,
-    priority: rest.priority as PcoPriority,
-    ...serializeDateFields(rest, {
-      iso: ["createdAt", "updatedAt"],
-      nullable: [
-        "submittedAt",
-        "approvedAt",
-        "invoicedAt",
-        "paidAt",
-        "closedAt",
-      ],
-    }),
-    linkedCvrs,
-  };
-};
+const linkedCvrsInclude = {
+  linkedCvrs: { select: linkedCvrSummarySelect },
+} as const;
 
 /**
  * Prisma `select` for the slim list shape — keep in sync with `PcoListItem`.
@@ -183,15 +166,7 @@ const LIST_SELECT = {
   createdById: true,
   createdAt: true,
   updatedAt: true,
-  linkedCvrs: {
-    select: {
-      id: true,
-      cvrNumber: true,
-      title: true,
-      status: true,
-      costImpact: true,
-    },
-  },
+  ...linkedCvrsInclude,
 } as const;
 
 type PcoListRow = Awaited<
@@ -217,6 +192,14 @@ const toListItem = (r: PcoListRow): PcoListItem => {
     linkedCvrs,
   };
 };
+
+/** The list shape plus the long-text fields the list leaves out. */
+const toItem = (r: PcoWithLinks): PcoItem => ({
+  ...toListItem(r),
+  description: r.description,
+  reasonNarrative: r.reasonNarrative,
+  notes: r.notes,
+});
 
 export const fetchPcoList = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
@@ -300,13 +283,7 @@ export const fetchPcoEligibleCvrs = createServerFn({ method: "GET" })
               : []),
           ],
         },
-        select: {
-          id: true,
-          cvrNumber: true,
-          title: true,
-          status: true,
-          costImpact: true,
-        },
+        select: linkedCvrSummarySelect,
         orderBy: { requestedAt: "desc" },
       });
       return rows.map((r) => ({ ...r, status: r.status as string }));

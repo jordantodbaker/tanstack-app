@@ -17,6 +17,7 @@ import {
   ROLE_LABELS,
   type AdminUser,
 } from "~/utils/users";
+import { formatShortDate } from "~/lib/dates";
 
 // Admin role gate lives on the parent `/admin` layout route.
 export const Route = createFileRoute("/admin/users")({
@@ -102,7 +103,7 @@ function UserRow({
             )}
           </Td>
           <Td className="align-top text-slate-500">
-            {new Date(user.createdAt).toLocaleDateString()}
+            {formatShortDate(user.createdAt)}
           </Td>
         </tr>
       }

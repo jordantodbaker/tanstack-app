@@ -17,10 +17,10 @@ import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
+  DateInput,
   Labeled,
   NativeSelect,
-  fromDateInputValue,
-  toDateInputValue,
+  NumberInput,
 } from "~/components/ui/form-helpers";
 import { useRecordDialogForm } from "~/lib/use-record-dialog-form";
 import { areasByProjectQueryOptions } from "~/utils/areas";
@@ -601,23 +601,17 @@ function FcoDialogBody({
           {/* Impact */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Labeled label="Estimated Cost Impact ($)">
-              <Input
-                type="number"
+              <NumberInput
                 step="0.01"
                 value={form.estimatedCost}
-                onChange={(e) =>
-                  update("estimatedCost", parseFloat(e.target.value) || 0)
-                }
+                onChange={(n) => update("estimatedCost", n)}
               />
             </Labeled>
             <Labeled label="Estimated Labor Hours">
-              <Input
-                type="number"
+              <NumberInput
                 step="0.1"
                 value={form.estimatedHours}
-                onChange={(e) =>
-                  update("estimatedHours", parseFloat(e.target.value) || 0)
-                }
+                onChange={(n) => update("estimatedHours", n)}
               />
             </Labeled>
           </div>
@@ -625,34 +619,24 @@ function FcoDialogBody({
           {/* Dates */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Labeled label="Initiated Date">
-              <Input
-                type="date"
-                value={toDateInputValue(form.initiatedAt)}
-                onChange={(e) =>
-                  update(
-                    "initiatedAt",
-                    fromDateInputValue(e.target.value) ??
-                      new Date().toISOString(),
-                  )
+              <DateInput
+                value={form.initiatedAt}
+                // Required: a cleared box falls back to today.
+                onChange={(iso) =>
+                  update("initiatedAt", iso ?? new Date().toISOString())
                 }
               />
             </Labeled>
             <Labeled label="Needed By">
-              <Input
-                type="date"
-                value={toDateInputValue(form.neededBy)}
-                onChange={(e) =>
-                  update("neededBy", fromDateInputValue(e.target.value))
-                }
+              <DateInput
+                value={form.neededBy}
+                onChange={(iso) => update("neededBy", iso)}
               />
             </Labeled>
             <Labeled label="Closed Date">
-              <Input
-                type="date"
-                value={toDateInputValue(form.closedAt)}
-                onChange={(e) =>
-                  update("closedAt", fromDateInputValue(e.target.value))
-                }
+              <DateInput
+                value={form.closedAt}
+                onChange={(iso) => update("closedAt", iso)}
               />
             </Labeled>
           </div>

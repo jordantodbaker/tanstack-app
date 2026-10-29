@@ -147,6 +147,69 @@ describe("workbook row numbers", () => {
   });
 });
 
+/**
+ * The current workbook reuses the "Original Row" header for a TRUE / FALSE
+ * flag — TRUE on an original row, FALSE on a generated cost-type line —
+ * written as real Excel booleans.
+ */
+describe("the Original Row flag", () => {
+  async function write(path: string, rows: (string | boolean)[][]) {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Expanded CBS");
+    ws.addRow(["Name", "Display Code", "UOM", "Original Row"]);
+    for (const row of rows) ws.addRow(row);
+    await wb.xlsx.writeFile(path);
+  }
+
+  it("reads TRUE as original and FALSE as generated", async () => {
+    const path = join(dir, "original-flag.xlsx");
+    await write(path, [
+      ["Spool (*)", "601-05-0000-00-0", "LS", true],
+      ["Spool (L)", "601-05-0000-00-L", "HR", false],
+    ]);
+    const { items } = await loadCbsWorkbook(path);
+    const byCode = Object.fromEntries(items.map((i) => [i.displayCode, i]));
+    expect(byCode["601-05-0000-00-0"].isOriginal).toBe(true);
+    expect(byCode["601-05-0000-00-L"].isOriginal).toBe(false);
+    // The header no longer holds a row number, so there is none to keep.
+    expect(byCode["601-05-0000-00-0"].originalRow).toBeNull();
+  });
+
+  it("accepts the flag typed as text too", async () => {
+    const path = join(dir, "original-flag-text.xlsx");
+    await write(path, [
+      ["Spool (*)", "601-05-0000-00-0", "LS", "TRUE"],
+      ["Spool (L)", "601-05-0000-00-L", "HR", "false"],
+    ]);
+    const { items } = await loadCbsWorkbook(path);
+    expect(items.map((i) => i.isOriginal)).toEqual([true, false]);
+  });
+
+  it("reads the Rental Code column, and leaves it unset when absent", async () => {
+    const path = join(dir, "rental-flag.xlsx");
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Expanded CBS");
+    ws.addRow(["Name", "Display Code", "UOM", "Rental Code"]);
+    ws.addRow(["Crane (*)", "601-05-0000-00-0", "LS", "YES"]);
+    ws.addRow(["Crane (R)", "601-05-0000-00-R", "DAY", "NO"]);
+    await wb.xlsx.writeFile(path);
+    const { items } = await loadCbsWorkbook(path);
+    expect(items.map((i) => i.rentalCode)).toEqual([true, false]);
+
+    // An older workbook with no Rental Code column.
+    const older = join(dir, "no-rental.xlsx");
+    await write(older, [["Spool", "601-05-0000-00-0", "LS", true]]);
+    expect((await loadCbsWorkbook(older)).items[0].rentalCode).toBeNull();
+  });
+
+  it("leaves the flag unset when the column holds an older row number", async () => {
+    const path = join(dir, "original-flag-number.xlsx");
+    await write(path, [["Spool", "601-05-0000-00-0", "LS", "41"]]);
+    const { items } = await loadCbsWorkbook(path);
+    expect(items[0]).toMatchObject({ originalRow: 41, isOriginal: null });
+  });
+});
+
 describe("loadCbsWorkbookCached", () => {
   const HEADER = [
     "L1",

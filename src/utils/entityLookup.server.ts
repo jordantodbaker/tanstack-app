@@ -5,15 +5,15 @@ import { prisma } from "../server/db";
  * polymorphic child (Attachment, Comment, future others) given its
  * `(entityType, entityId)` pair.
  *
- * Why this exists: `attachments.ts:assertEntityInProject` and
- * `comments.ts:readParentRecord` independently maintained their own
+ * Why this exists: attachments and comments once each maintained their own
  * entity-type switches and drifted apart — attachments only handled
  * ChangeLog/FCO and silently fell through to the FieldChangeOrder table
  * for RFI/Trend/PCO ids (so cross-table-ID collisions could "pass" the
  * project-membership check). Comments handled ChangeLog/FCO/RFI but
  * defaulted to the RFI table for Trend/PCO.
  *
- * Both call sites now go through `lookupParentRecord`, which default-DENIES
+ * Every caller now goes through `lookupParentRecord` (or
+ * `assertParentInProject` over it), which default-DENIES
  * any unknown entity type. Adding a new pollable entity (the next RFI/PCO/
  * Trend-shaped record) requires exactly one switch arm here, and the
  * downstream callers get correct behavior for free.
@@ -53,10 +53,9 @@ export type ParentRecord = {
  * Looks up the parent record. Throws when the entity type isn't recognized
  * (default-deny) and when no record exists with that id.
  *
- * Callers that need to assert "the parent is in `claimedProjectId`" should
- * compare the returned `projectId` themselves. Centralizing that comparison
- * here would be too restrictive — `downloadAttachment` etc. don't take a
- * claimed projectId, they derive it.
+ * Callers checking a project the client claimed use `assertParentInProject`.
+ * The comparison is not built in here because some callers —
+ * `downloadAttachment` etc. — don't take a claimed projectId; they derive it.
  */
 export async function lookupParentRecord(
   entityType: string,
@@ -155,4 +154,38 @@ export async function lookupParentRecord(
       // which could "pass" an existence check against the wrong table.
       throw new Error(`Unknown parent entity type: ${entityType}.`);
   }
+}
+
+/**
+ * Throws "<what> does not belong to this project." unless `row` was found and
+ * sits in `projectId`. For input that names a record by id — a linked RFI, a
+ * source version — so tampered ids can't reach across projects.
+ */
+export function assertSameProject(
+  row: { projectId: number } | null,
+  projectId: number,
+  what: string,
+): void {
+  if (!row || row.projectId !== projectId) {
+    throw new Error(`${what} does not belong to this project.`);
+  }
+}
+
+/**
+ * `lookupParentRecord`, then the check that the parent is in the project the
+ * caller claimed. Returns the parent for callers that need its title or
+ * originator.
+ */
+export async function assertParentInProject(
+  entityType: string,
+  entityId: number,
+  projectId: number,
+): Promise<ParentRecord> {
+  const parent = await lookupParentRecord(entityType, entityId);
+  if (parent.projectId !== projectId) {
+    throw new Error(
+      `${entityType} #${entityId} does not belong to this project.`,
+    );
+  }
+  return parent;
 }

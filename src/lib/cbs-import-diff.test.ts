@@ -18,11 +18,13 @@ function row(over: Partial<CbsDictionaryRow> = {}): CbsDictionaryRow {
     // Where the row sits in the workbook; traced through, never keyed on.
     originalRow: null,
     expandedRow: null,
+    isOriginal: null,
     subReporting: false,
     materialCode: true,
     laborCode: true,
     equipmentCode: false,
     otherCode: null,
+    rentalCode: null,
     materialType: "Bulks",
     costCenter: "2010",
     costClassification: "DIRECT",
@@ -120,5 +122,11 @@ describe("cbsBulkUpdateSql", () => {
 
   it("casts the row type to its enum", () => {
     expect(sql).toContain(`"rowType" = v."rowType"::"CbsRowType"`);
+  });
+
+  it("writes the Original Row flag as a boolean", () => {
+    // Read from the JSON as a boolean, so TRUE / FALSE land as such.
+    expect(sql).toContain(`"isOriginal" = v."isOriginal"`);
+    expect(sql).toMatch(/"isOriginal" boolean/);
   });
 });

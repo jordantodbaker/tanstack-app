@@ -41,10 +41,15 @@ const DETAIL_FIELDS: {
   { label: "Cost Code", get: (i) => i.costCode },
   { label: "Description", get: (i) => i.description },
   { label: "Notes", get: (i) => i.notes },
-  // Where the row sits in the source workbook. A generated cost-type twin
-  // shares its Original Row with the account it came from, which is how you
-  // tell at a glance that it was expanded rather than typed.
-  { label: "Original Row", get: (i) => i.originalRow?.toString() },
+  // The workbook's own TRUE / FALSE: an original row, or a cost-type line
+  // generated from one. Blank for rows imported before the column existed.
+  {
+    label: "Original Row",
+    get: (i) => (i.isOriginal == null ? null : i.isOriginal ? "TRUE" : "FALSE"),
+  },
+  // Where the row sat in an older workbook, whose "Original Row" header held
+  // a line number instead; a generated twin shared its account's.
+  { label: "Original Row #", get: (i) => i.originalRow?.toString() },
   { label: "Expanded Row", get: (i) => i.expandedRow?.toString() },
   { label: "Generated From", get: (i) => i.generatedFrom },
   { label: "Row Type", get: (i) => rowTypeLabel(i.rowType) },

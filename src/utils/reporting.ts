@@ -60,6 +60,7 @@ import {
   type BudgetReconciliationRow,
 } from "~/lib/budget-reconciliation";
 import { CVR_OPEN_STATUSES } from "./changelog";
+import { assertSameProject } from "./entityLookup.server";
 import {
   trendForecastContribution,
   TREND_ACTIVE_STATUSES,
@@ -542,9 +543,7 @@ export const createReportingPeriod = createServerFn({ method: "POST" })
       where: { id: data.baselineSnapshotId },
       select: { projectId: true, label: true },
     });
-    if (snap.projectId !== data.projectId) {
-      throw new Error("Baseline snapshot does not belong to this project.");
-    }
+    assertSameProject(snap, data.projectId, "Baseline snapshot");
     const created = await prisma.reportingPeriod.create({
       data: {
         projectId: data.projectId,

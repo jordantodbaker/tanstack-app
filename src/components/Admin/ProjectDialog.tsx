@@ -19,9 +19,8 @@ import {
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import {
+  DateInput,
   Labeled,
-  fromDateInputValue,
-  toDateInputValue,
 } from "~/components/ui/form-helpers";
 import { SearchableMultiSelect } from "~/components/SearchableMultiSelect";
 import type { SearchableSelectOption } from "~/components/SearchableSelect";
@@ -269,24 +268,18 @@ export function ProjectDialog({
               label="Start date"
               help="Optional. Used as the start of the time-linear PV curve in EVM reporting."
             >
-              <Input
-                type="date"
-                value={toDateInputValue(form.startDate)}
-                onChange={(e) =>
-                  update("startDate", fromDateInputValue(e.target.value))
-                }
+              <DateInput
+                value={form.startDate}
+                onChange={(iso) => update("startDate", iso)}
               />
             </Labeled>
             <Labeled
               label="End date"
               help="Optional. End of the PV curve. Without both dates, EVM falls back to manual PV per period."
             >
-              <Input
-                type="date"
-                value={toDateInputValue(form.endDate)}
-                onChange={(e) =>
-                  update("endDate", fromDateInputValue(e.target.value))
-                }
+              <DateInput
+                value={form.endDate}
+                onChange={(iso) => update("endDate", iso)}
               />
             </Labeled>
           </div>

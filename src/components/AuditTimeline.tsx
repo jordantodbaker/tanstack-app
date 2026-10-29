@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { auditEventsQueryOptions, type AuditEventItem } from "~/utils/audit";
 import { QueryError } from "~/components/ui/list-page";
+import { formatDateTime } from "~/lib/dates";
 
 /** "estimatedCost" → "Estimated cost" — good enough for audit field labels. */
 function humanizeField(field: string): string {
@@ -70,7 +71,7 @@ function AuditRow({ event }: { event: AuditEventItem }) {
         </div>
       )}
       <div className="text-xs text-slate-400">
-        {event.actorEmail} · {new Date(event.createdAt).toLocaleString()}
+        {event.actorEmail} · {formatDateTime(event.createdAt)}
       </div>
     </li>
   );

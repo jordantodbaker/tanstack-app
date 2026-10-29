@@ -61,21 +61,29 @@ const ExportInput = z.object({
       material: z.boolean().default(false),
       equipment: z.boolean().default(false),
       other: z.boolean().default(false),
+      rental: z.boolean().default(false),
       // One per CBS_STATUSES entry, same reasoning as the cost types above.
       active: z.boolean().default(false),
       inactive: z.boolean().default(false),
       retired: z.boolean().default(false),
       /** The Cost Classifications picked; empty for all, "" for blank cells. */
       classifications: z.array(z.string().max(200)).max(100).default([]),
+      /** All / Original / Generated — the Dictionary's Row Type choice. */
+      rowType: z.enum(["all", "original", "generated"]).default("all"),
+      /** The Material Types picked; read only while `material` is on. */
+      materialTypes: z.array(z.string().max(200)).max(100).default([]),
     })
     .default({
       query: "",
       classifications: [],
+      rowType: "all",
+      materialTypes: [],
       labor: false,
       sub: false,
       material: false,
       equipment: false,
       other: false,
+      rental: false,
       active: false,
       inactive: false,
       retired: false,
@@ -104,6 +112,10 @@ export function describeCbsFilter(filter: CbsRowFilter): string {
   else if (on.length > 1) {
     parts.push(`${on.slice(0, -1).join(", ")} or ${on.at(-1)} codes`);
   }
+  if (filter.material && filter.materialTypes.length > 0) {
+    parts.push(`material type ${orList(filter.materialTypes)}`);
+  }
+  if (filter.rowType !== "all") parts.push(`${filter.rowType} rows only`);
   const status = CBS_STATUSES.filter((s) => filter[s.key]).map((s) =>
     s.label.toLowerCase(),
   );
@@ -111,16 +123,18 @@ export function describeCbsFilter(filter: CbsRowFilter): string {
   else if (status.length > 1) {
     parts.push(`status ${status.slice(0, -1).join(", ")} or ${status.at(-1)}`);
   }
-  const classes = filter.classifications.map((c) =>
-    c === CBS_NO_CLASSIFICATION ? "none" : c,
-  );
-  if (classes.length === 1) parts.push(`cost classification ${classes[0]}`);
-  else if (classes.length > 1) {
-    parts.push(
-      `cost classification ${classes.slice(0, -1).join(", ")} or ${classes.at(-1)}`,
-    );
+  if (filter.classifications.length > 0) {
+    parts.push(`cost classification ${orList(filter.classifications)}`);
   }
   return `Filtered: ${parts.join(", ")}`;
+}
+
+/** "A", "A or B", "A, B or C" — a blank cell reads as "none". */
+function orList(values: readonly string[]): string {
+  const named = values.map((v) => (v === CBS_NO_CLASSIFICATION ? "none" : v));
+  return named.length === 1
+    ? named[0]
+    : `${named.slice(0, -1).join(", ")} or ${named.at(-1)}`;
 }
 
 /**
@@ -134,11 +148,14 @@ async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
     // search that showed rows on screen would export none.
     query: input.filter.query.trim().toLowerCase(),
     classifications: input.filter.classifications,
+    rowType: input.filter.rowType,
+    materialTypes: input.filter.materialTypes,
     labor: input.filter.labor,
     sub: input.filter.sub,
     material: input.filter.material,
     equipment: input.filter.equipment,
     other: input.filter.other,
+    rental: input.filter.rental,
     active: input.filter.active,
     inactive: input.filter.inactive,
     retired: input.filter.retired,

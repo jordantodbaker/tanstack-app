@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "../server/db";
 import { qk } from "~/lib/query-keys";
 import { Id, ProjectId } from "~/lib/validators";
-import { hasAtLeastRole, type CurrentUser } from "./users";
+import { assertRole, type CurrentUser } from "./users";
 import { requireProjectAccess } from "./users.server";
 import { recordCreate, recordDelete, recordUpdate } from "./audit.server";
 import {
@@ -100,11 +100,7 @@ const byDisplayOrder = [{ position: "asc" }, { id: "asc" }] as const;
 
 /** Defining columns changes the sheet for everyone on the project. */
 function assertMayDefine(actor: CurrentUser): void {
-  if (!hasAtLeastRole(actor.role, "APPROVER")) {
-    throw new Error(
-      "Forbidden: adding or removing take-off columns requires APPROVER privilege",
-    );
-  }
+  assertRole(actor, "APPROVER", "adding or removing take-off columns");
 }
 
 /** Reads the definition, then authorizes against ITS project — never a

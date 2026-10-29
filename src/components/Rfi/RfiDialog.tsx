@@ -7,10 +7,9 @@ import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
+  DateInput,
   Labeled,
   NativeSelect,
-  fromDateInputValue,
-  toDateInputValue,
 } from "~/components/ui/form-helpers";
 import { useRecordDialogForm } from "~/lib/use-record-dialog-form";
 import { areasByProjectQueryOptions } from "~/utils/areas";
@@ -322,12 +321,9 @@ function RfiDialogBody({
                   onChange={(v) => update("discipline", v)}
                 />
                 <Labeled label="Due date">
-                  <Input
-                    type="date"
-                    value={toDateInputValue(form.dueDate)}
-                    onChange={(e) =>
-                      update("dueDate", fromDateInputValue(e.target.value))
-                    }
+                  <DateInput
+                    value={form.dueDate}
+                    onChange={(iso) => update("dueDate", iso)}
                   />
                 </Labeled>
               </div>

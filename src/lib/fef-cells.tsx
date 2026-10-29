@@ -1,7 +1,7 @@
 import React from "react";
 import { useReactTable } from "@tanstack/react-table";
 import { Trash2, ChevronDown } from "lucide-react";
-import type { CbsOption, FefRow } from "~/lib/types";
+import type { FefRow } from "~/lib/types";
 import {
   SearchableSelect,
   type SearchableSelectOption,
@@ -33,7 +33,7 @@ export const editableCellClass =
 
 /** Read-only presentation for a display-until-edit cell — same box metrics as
  *  `editableCellClass` so switching to the input doesn't shift layout. */
-export const displayEditCellClass =
+const displayEditCellClass =
   "w-full bg-white border border-transparent px-2 py-1 text-sm rounded cursor-text truncate hover:border-slate-200 focus:border-blue-400 focus:outline-none";
 
 // Radix Select forbids an item value of "", so the placeholder/clear row uses
@@ -343,7 +343,7 @@ export function TextCell({
  * committed value via `onCommit`. Kept generic so cells with custom commit
  * logic (e.g. the steel dimensions that recompute Quantity) can reuse it.
  */
-export function DisplayEditControl({
+function DisplayEditControl({
   value,
   onCommit,
 }: {
@@ -770,7 +770,7 @@ export function AreaSelectCell({ getValue, row, column, table }: CellProps) {
  * A fixed vocabulary rather than free text: it drives how the line is reported,
  * and "tagged"/"Tagged "/"TAG" would fragment that.
  */
-export const MATERIAL_TYPE_OPTIONS = [
+const MATERIAL_TYPE_OPTIONS = [
   { value: "Bulk", label: "Bulk" },
   { value: "Tagged", label: "Tagged" },
 ] as const;
@@ -794,128 +794,5 @@ export function MaterialTypeSelectCell({ getValue, row, column, table }: CellPro
         table.options.meta?.updateData?.(row.index, column.id, v)
       }
     />
-  );
-}
-
-type PaginatableTable = {
-  firstPage: () => void;
-  previousPage: () => void;
-  nextPage: () => void;
-  lastPage: () => void;
-  getCanPreviousPage: () => boolean;
-  getCanNextPage: () => boolean;
-  getPageCount: () => number;
-  getState: () => { pagination: { pageIndex: number } };
-  getFilteredRowModel: () => { rows: unknown[] };
-};
-
-export function TablePagination({
-  table,
-  totalCount,
-}: {
-  table: PaginatableTable;
-  totalCount?: number;
-}) {
-  const rowCount = totalCount ?? table.getFilteredRowModel().rows.length;
-  return (
-    <div className="flex items-center justify-between mt-3 text-sm text-gray-600">
-      <div className="flex items-center gap-2">
-        <button
-          className="px-2 py-1 border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-100"
-          onClick={() => table.firstPage()}
-          disabled={!table.getCanPreviousPage()}
-        >
-          {"<<"}
-        </button>
-        <button
-          className="px-2 py-1 border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-100"
-          onClick={() => table.previousPage()}
-          disabled={!table.getCanPreviousPage()}
-        >
-          {"<"}
-        </button>
-        <button
-          className="px-2 py-1 border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-100"
-          onClick={() => table.nextPage()}
-          disabled={!table.getCanNextPage()}
-        >
-          {">"}
-        </button>
-        <button
-          className="px-2 py-1 border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-100"
-          onClick={() => table.lastPage()}
-          disabled={!table.getCanNextPage()}
-        >
-          {">>"}
-        </button>
-      </div>
-      <span>
-        Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()} &mdash; {rowCount} rows
-      </span>
-    </div>
-  );
-}
-
-export function ColumnFilter({
-  column,
-  data,
-}: {
-  column: {
-    id: string;
-    getFilterValue: () => unknown;
-    setFilterValue: (v: unknown) => void;
-  };
-  data: FefRow[];
-}) {
-  const value = (column.getFilterValue() ?? "") as string;
-  const [activated, setActivated] = React.useState(false);
-
-  // Cheap gate that preserves the old "no values → render nothing" behavior:
-  // `.some` short-circuits at the first defined value, so it's O(1) for real
-  // data columns and only scans fully for the few display columns that have
-  // none. This is the only work done per edit for an un-opened filter.
-  const hasValues = React.useMemo(
-    () => data.some((row) => row[column.id as keyof FefRow] !== undefined),
-    [data, column.id],
-  );
-
-  // The expensive part — distinct values + Set + sort over the whole array — is
-  // deferred until the user shows intent to use this filter (hover or focus).
-  // Otherwise ~40 header filters would each rebuild this on every commit/paste,
-  // for dropdowns that are rarely opened. `null` = not built yet.
-  const options = React.useMemo(() => {
-    if (!activated) return null;
-    return Array.from(
-      new Set(
-        data
-          .map((row) => row[column.id as keyof FefRow])
-          .filter((v): v is string => v !== undefined),
-      ),
-    ).sort();
-  }, [activated, data, column.id]);
-
-  if (!hasValues) return null;
-
-  const activate = () => setActivated(true);
-
-  return (
-    <select
-      className="mt-1 w-full border border-gray-300 px-1 py-0.5 text-xs font-normal rounded focus:border-blue-400 focus:outline-none bg-white"
-      value={value}
-      onMouseEnter={activate}
-      onFocus={activate}
-      onChange={(e) => column.setFilterValue(e.target.value || undefined)}
-    >
-      <option value="">All</option>
-      {/* Keep the active selection selectable before the options materialize. */}
-      {value !== "" && !(options ?? []).includes(value) && (
-        <option value={value}>{value}</option>
-      )}
-      {(options ?? []).map((opt) => (
-        <option key={opt} value={opt}>
-          {opt}
-        </option>
-      ))}
-    </select>
   );
 }

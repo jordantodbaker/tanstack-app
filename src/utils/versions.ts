@@ -11,6 +11,7 @@ import {
 } from "./users.server";
 import { allocateEntityNumberValue } from "./entityNumbers.server";
 import { ensureProjectHasVersion } from "./versions.server";
+import { assertSameProject } from "./entityLookup.server";
 import { FEF_DATA_COLUMNS } from "~/lib/fef-helpers";
 import { ProjectId, VersionId, parseProjectIdInput } from "~/lib/validators";
 
@@ -119,9 +120,7 @@ export const createVersion = createServerFn({ method: "POST" })
         where: { id: data.sourceVersionId },
         select: { projectId: true },
       });
-      if (!src || src.projectId !== data.projectId) {
-        throw new Error("Source version does not belong to this project.");
-      }
+      assertSameProject(src, data.projectId, "Source version");
     }
     const created = await prisma.$transaction(async (tx) => {
       const { value } = await allocateEntityNumberValue(

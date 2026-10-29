@@ -165,23 +165,11 @@ type Row = FcoScalarRow & {
   linkedRfi: { id: number; rfiNumber: string; subject: string } | null;
 };
 
-const toItem = (r: Row): FcoItem => {
-  const { linkedCvr, linkedRfi, ...rest } = r;
-  return {
-    ...rest,
-    status: rest.status as FcoStatus,
-    originType: rest.originType as FcoOriginType,
-    priority: rest.priority as FcoPriority,
-    ...serializeDateFields(rest, {
-      iso: ["initiatedAt", "createdAt", "updatedAt"],
-      nullable: ["neededBy", "closedAt"],
-    }),
-    linkedCvrNumber: linkedCvr?.cvrNumber ?? null,
-    linkedCvrTitle: linkedCvr?.title ?? null,
-    linkedRfiNumber: linkedRfi?.rfiNumber ?? null,
-    linkedRfiSubject: linkedRfi?.subject ?? null,
-  };
-};
+/** The linked CVR and RFI, as every FCO read pulls them in. */
+const linkedRelationsInclude = {
+  linkedCvr: { select: { id: true, cvrNumber: true, title: true } },
+  linkedRfi: { select: { id: true, rfiNumber: true, subject: true } },
+} as const;
 
 /**
  * Prisma `select` for the slim list shape — keep in sync with `FcoListItem`.
@@ -209,9 +197,8 @@ const LIST_SELECT = {
   neededBy: true,
   closedAt: true,
   linkedCvrId: true,
-  linkedCvr: { select: { id: true, cvrNumber: true, title: true } },
   linkedRfiId: true,
-  linkedRfi: { select: { id: true, rfiNumber: true, subject: true } },
+  ...linkedRelationsInclude,
   createdById: true,
   createdAt: true,
   updatedAt: true,
@@ -241,6 +228,16 @@ const toListItem = (r: FcoListRow): FcoListItem => {
   };
 };
 
+/** The list shape plus the long-text fields the list leaves out. */
+const toItem = (r: Row): FcoItem => ({
+  ...toListItem(r),
+  description: r.description,
+  reasonNarrative: r.reasonNarrative,
+  resolution: r.resolution,
+  notes: r.notes,
+  photosUrl: r.photosUrl,
+});
+
 export const fetchFcoList = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
   .handler(({ data }): Promise<FcoListItem[]> =>
@@ -260,10 +257,7 @@ export const fetchFcoListFull = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)
   .handler(({ data }): Promise<FcoItem[]> =>
     fetchProjectScopedList(prisma.fieldChangeOrder, data, {
-      include: {
-        linkedCvr: { select: { id: true, cvrNumber: true, title: true } },
-        linkedRfi: { select: { id: true, rfiNumber: true, subject: true } },
-      },
+      include: linkedRelationsInclude,
       orderBy: [{ initiatedAt: "desc" }],
       map: toItem,
     }),
@@ -286,10 +280,7 @@ export const fetchFco = createServerFn({ method: "GET" })
   .inputValidator(parseIdScalar)
   .handler(({ data }): Promise<FcoItem> =>
     fetchRecordById(prisma.fieldChangeOrder, data, {
-      include: {
-        linkedCvr: { select: { id: true, cvrNumber: true, title: true } },
-        linkedRfi: { select: { id: true, rfiNumber: true, subject: true } },
-      },
+      include: linkedRelationsInclude,
       map: toItem,
     }),
   );
@@ -361,11 +352,6 @@ const FCO_AUDIT_FIELDS = [
   "closedAt",
   "linkedCvrId",
 ] as const satisfies readonly (keyof FcoScalarRow)[];
-
-const linkedRelationsInclude = {
-  linkedCvr: { select: { id: true, cvrNumber: true, title: true } },
-  linkedRfi: { select: { id: true, rfiNumber: true, subject: true } },
-} as const;
 
 export const upsertFco = createServerFn({ method: "POST" })
   .inputValidator(parseUpsertFco)

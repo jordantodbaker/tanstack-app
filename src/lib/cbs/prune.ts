@@ -17,6 +17,10 @@ import {
   cbsHasStatusFilter,
   cbsHasClassificationFilter,
   cbsClassificationOf,
+  cbsHasRowTypeFilter,
+  cbsHasMaterialTypeFilter,
+  cbsMatchesRowType,
+  cbsMatchesMaterialType,
   cbsQueryTokens,
   type CbsRowFilter,
 } from "./filter";
@@ -59,7 +63,24 @@ function rowMatches<T extends CbsTreeItem>(
   ) {
     return false;
   }
+  if (!cbsMatchesRowType(node.item, filter.rowType)) return false;
+  if (!cbsMatchesMaterialType(node.item, filter)) return false;
   return true;
+}
+
+/**
+ * Whether any filter that is read as a report is on — the ones that keep only
+ * qualifying rows rather than keeping ancestors for context. Everything but a
+ * bare text search.
+ */
+function isStrictFilter(filter: CbsRowFilter): boolean {
+  return (
+    cbsHasCostTypeFilter(filter) ||
+    cbsHasStatusFilter(filter) ||
+    cbsHasClassificationFilter(filter) ||
+    cbsHasRowTypeFilter(filter) ||
+    cbsHasMaterialTypeFilter(filter)
+  );
 }
 
 /**
@@ -111,9 +132,7 @@ export function filterCbsTree<T extends CbsTreeItem>(
   filter: CbsRowFilter,
 ): CbsTreeNode<T>[] {
   if (cbsFilterIsEmpty(filter)) return nodes;
-  const typeFiltered =
-    cbsHasCostTypeFilter(filter) || cbsHasClassificationFilter(filter);
-  return searchCbsTree(nodes, criteriaFor(filter), !typeFiltered);
+  return searchCbsTree(nodes, criteriaFor(filter), !isStrictFilter(filter));
 }
 
 /**
@@ -167,9 +186,7 @@ export function pruneCbsTree<T extends CbsTreeItem>(
   // ancestors: there, knowing WHERE a hit sits is most of the answer.
   const criteria = criteriaFor(filter);
   const kept =
-    cbsHasCostTypeFilter(filter) ||
-    cbsHasStatusFilter(filter) ||
-    cbsHasClassificationFilter(filter)
+    isStrictFilter(filter)
       ? strictCbsRows(nodes, criteria, 0, onMatch)
       : searchCbsTree(nodes, criteria, false, onMatch);
   return { nodes: kept, matches };

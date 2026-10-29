@@ -218,6 +218,7 @@ export const cbsTreeRowSelect = {
   laborCode: true,
   equipmentCode: true,
   otherCode: true,
+  rentalCode: true,
   // The workbook's Status column. On the wire because the Code Book and the
   // Dictionary are built from ONE query and disagree about it: the Code Book
   // hides everything that is not Active, the Dictionary lists the lot. It is
@@ -226,6 +227,10 @@ export const cbsTreeRowSelect = {
   // The workbook's Cost Classification — what the toolbar's classification
   // dropdown filters on. ~15 repeated values, so cheap gzipped.
   costClassification: true,
+  // The Dictionary's Material Type picker. A handful of repeated values.
+  materialType: true,
+  // The Dictionary's Row Type filter — the workbook's "Original Row" flag.
+  isOriginal: true,
 } satisfies Prisma.CbsItemSelect;
 
 /** A CBS row exactly as it crosses the wire — no level segments. */
@@ -328,6 +333,7 @@ export const fetchCbsItemDetail = createServerFn({ method: "GET" })
         notes: true,
         originalRow: true,
         expandedRow: true,
+        isOriginal: true,
       },
     }),
   );

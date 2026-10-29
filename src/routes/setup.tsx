@@ -13,17 +13,12 @@ import { currentUserQueryOptions, hasAtLeastRole } from "~/utils/users";
 import {
   buildCbsTree,
   cbsClassificationOptions,
-  cbsFilterIsEmpty,
   cbsIsActive,
-  cbsNoCostTypes,
-  cbsNoStatuses,
   computeCbsSelectionCounts,
   filterCbsTree,
   getNodeSelectionState,
   selectionStateFromCounts,
-  type CbsClassificationOption,
-  type CbsCostTypeKey,
-  type CbsRowFilter,
+  type CbsValueOption,
   type CbsTreeNode,
 } from "~/lib/cbs-tree";
 import {
@@ -34,6 +29,7 @@ import {
 import { CbsDetailPanel } from "~/components/Cbs/CbsDetailPanel";
 import { CbsTreeToolbar } from "~/components/Cbs/CbsTreeToolbar";
 import { useCbsTreeExpansion } from "~/components/Cbs/useCbsTreeExpansion";
+import { useCbsRowFilter } from "~/components/Cbs/useCbsRowFilter";
 import { Checkbox } from "~/components/ui/checkbox";
 import { ProjectSelect } from "~/components/ProjectSelect";
 import { useSelectedProject } from "~/lib/selected-project";
@@ -114,7 +110,7 @@ function CbsTreeEditorLoader({
 }: {
   projectId: number;
   tree: CbsTreeNode[];
-  classificationOptions: CbsClassificationOption[];
+  classificationOptions: CbsValueOption[];
 }) {
   const allowedQuery = useQuery(allowedFefCbsItemIdsQueryOptions(projectId));
   if (allowedQuery.isPending) {
@@ -143,7 +139,7 @@ function CbsTreeEditor({
 }: {
   projectId: number;
   tree: CbsTreeNode[];
-  classificationOptions: CbsClassificationOption[];
+  classificationOptions: CbsValueOption[];
   initialAllowedIds: number[];
 }) {
   const [selectedIds, setSelectedIds] = React.useState<Set<number>>(
@@ -158,16 +154,15 @@ function CbsTreeEditor({
     levelShown,
   } = useCbsTreeExpansion(tree);
   const [selected, setSelected] = React.useState<CbsTreeNode | null>(null);
-  const [search, setSearch] = React.useState("");
-  const [costTypes, setCostTypes] = React.useState(cbsNoCostTypes);
-  const toggleCostType = React.useCallback(
-    (key: CbsCostTypeKey) =>
-      setCostTypes((prev) => ({ ...prev, [key]: !prev[key] })),
-    [],
-  );
-  const [classifications, setClassifications] = React.useState<string[]>([]);
-  const deferredSearch = React.useDeferredValue(search);
-  const isFiltering = search !== deferredSearch;
+  // No Status row: Setup grants codes rather than reporting on them, and its
+  // tree is active-only already. Row Type and Material Type are the
+  // Dictionary's own filters.
+  const {
+    filter,
+    filtering: isFiltered,
+    searchPending: isFiltering,
+    controls,
+  } = useCbsRowFilter({ classificationOptions, deferQuery: true });
 
   const queryClient = useQueryClient();
   const mutation = useMutation({
@@ -195,19 +190,6 @@ function CbsTreeEditor({
     },
   });
 
-  const filter: CbsRowFilter = React.useMemo(
-    // Statuses all off: Setup grants codes rather than reporting on them, and
-    // it does not render the status row. Present so the filter shape is the
-    // one `pruneCbsTree` and the export both take.
-    () => ({
-      query: deferredSearch.trim().toLowerCase(),
-      classifications,
-      ...costTypes,
-      ...cbsNoStatuses(),
-    }),
-    [deferredSearch, classifications, costTypes],
-  );
-  const isFiltered = !cbsFilterIsEmpty(filter);
   const filteredTree = React.useMemo(
     () => filterCbsTree(tree, filter),
     [tree, filter],
@@ -282,16 +264,10 @@ function CbsTreeEditor({
   return (
     <div className="space-y-3">
       <CbsTreeToolbar
-        query={search}
-        onQueryChange={setSearch}
+        {...controls}
         placeholder="Search by code, name, or description…"
         onExpandAll={expandAll}
         onCollapseAll={collapseAll}
-        costTypes={costTypes}
-        onToggleCostType={toggleCostType}
-        classifications={classifications}
-        onClassificationsChange={setClassifications}
-        classificationOptions={classificationOptions}
       >
         <span className="ml-auto text-sm text-slate-600">
           {totalSelected.toLocaleString()} selected

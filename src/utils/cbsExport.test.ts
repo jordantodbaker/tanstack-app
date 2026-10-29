@@ -196,6 +196,60 @@ describe("filters reach the file", () => {
     expect(written().names).not.toContain("Welding Labor (L)");
   });
 
+  it("filters on Rental like any other cost type", async () => {
+    catalogRows.mockResolvedValue([
+      ...CATALOG,
+      wire("601-00-0000-00-R", "Welding Rental (R)", { ...FLAGS, rentalCode: true }),
+    ]);
+    await exportCbsCatalog({
+      data: { view: "dictionary", projectId: null, filter: filter({ rental: true }) },
+    });
+    expect(written().names).toEqual(["Welding Rental (R)"]);
+    expect(written().meta.filterNote).toBe("Filtered: rental codes");
+  });
+
+  it("carries the Dictionary's Row Type into the file", async () => {
+    catalogRows.mockResolvedValue([
+      ...CATALOG,
+      wire("601-20-0000-00-S", "Generated Subs (S)", { rowType: "SUB" }),
+    ]);
+    await exportCbsCatalog({
+      data: { view: "dictionary", projectId: null, filter: filter({ rowType: "generated" }) },
+    });
+    expect(written().names).toEqual(["Generated Subs (S)"]);
+    expect(written().meta.filterNote).toBe("Filtered: generated rows only");
+  });
+
+  it("carries the Material Type pick into the file while Materials is on", async () => {
+    catalogRows.mockResolvedValue([
+      wire("601-00-0000-00-M", "Tagged Pipe (M)", { materialType: "Tagged" }),
+      wire("601-05-0000-00-M", "Bulk Bolts (M)", { materialType: "Bulks" }),
+    ]);
+    await exportCbsCatalog({
+      data: {
+        view: "dictionary",
+        projectId: null,
+        filter: filter({ material: true, materialTypes: ["Bulks"] }),
+      },
+    });
+    expect(written().names).toEqual(["Bulk Bolts (M)"]);
+    expect(written().meta.filterNote).toBe(
+      "Filtered: materials codes, material type Bulks",
+    );
+  });
+
+  it("ignores a Material Type pick sent without Materials", async () => {
+    await exportCbsCatalog({
+      data: {
+        view: "dictionary",
+        projectId: null,
+        filter: filter({ materialTypes: ["Bulks"] }),
+      },
+    });
+    expect(written().names).toHaveLength(CATALOG.length);
+    expect(written().meta.filterNote).toBe("");
+  });
+
   it("defaults to no filter when the client sends none", async () => {
     await exportCbsCatalog({ data: { view: "dictionary", projectId: null } });
     expect(written().meta.filterNote).toBe("");

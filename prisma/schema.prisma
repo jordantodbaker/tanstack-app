@@ -1367,12 +1367,14 @@ model CbsItem {
   subReporting       Boolean?
   /// The workbook's "Material Code" flag (YES = a material twin is generated).
   materialCode       Boolean?
-  /// The workbook's "Labor Code" / "Equipment Code" / "Other Code" flags — the
-  /// same shape as the two above: YES means a companion row of that cost type
-  /// exists for this account. Nullable because the column may be blank.
+  /// The workbook's "Labor Code" / "Equipment Code" / "Other Code" / "Rental
+  /// Code" flags — the same shape as the two above: YES means a companion row
+  /// of that cost type exists for this account. Nullable because the column
+  /// may be blank (and is absent from workbooks that predate Rental).
   laborCode          Boolean?
   equipmentCode      Boolean?
   otherCode          Boolean?
+  rentalCode         Boolean?
   materialType       String?
   costCenter         String?
   costClassification String?
@@ -1389,6 +1391,13 @@ model CbsItem {
   /// no db push.
   originalRow        Int?       @map("masterCbsRow")
   expandedRow        Int?
+  /// The workbook's "Original Row" TRUE / FALSE: TRUE for a row as the CBS
+  /// defines it (the "-0" account rows), FALSE for a cost-type line generated
+  /// from one. The Dictionary's Row Type filter reads it. Null for rows
+  /// imported from a workbook that predates the column — those fall back to
+  /// `rowType`. (Before this the same header held a row number; that number
+  /// lives on in `originalRow` for rows imported from such a workbook.)
+  isOriginal         Boolean?
   costCode           String     @unique
   description        String?
   displayDescription String?

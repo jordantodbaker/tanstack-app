@@ -8,6 +8,7 @@ import {
   requireProjectAccess,
   requireRecordAccess,
 } from "./users.server";
+import { assertSameProject } from "./entityLookup.server";
 import {
   accumulateProjectTotals,
   type ProjectFefRowTotals,
@@ -126,9 +127,7 @@ export const createSnapshot = createServerFn({ method: "POST" })
       where: { id: data.versionId },
       select: { projectId: true },
     });
-    if (!version || version.projectId !== data.projectId) {
-      throw new Error("Version does not belong to this project.");
-    }
+    assertSameProject(version, data.projectId, "Version");
     const [rows, basis] = await Promise.all([
       prisma.fefRow.findMany({
         where: { versionId: data.versionId },

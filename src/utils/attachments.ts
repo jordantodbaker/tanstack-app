@@ -33,7 +33,7 @@ import {
   validateUpload,
   writeAttachmentFile,
 } from "./attachments.server";
-import { lookupParentRecord } from "./entityLookup.server";
+import { assertParentInProject } from "./entityLookup.server";
 
 /**
  * Upload size cap, in bytes. Defined here (client-safe module) rather than in
@@ -99,31 +99,6 @@ const toItem = (r: AttachmentRow): AttachmentItem => ({
   createdAt: r.createdAt.toISOString(),
 });
 
-/**
- * Confirms the (entityType, entityId) refers to a real record in the claimed
- * project. Prevents an attacker who has access to project A from attaching
- * to a record that actually belongs to project B.
- *
- * Delegates the entity-type → table mapping to the shared
- * `lookupParentRecord` registry so adding a new attachable entity type
- * doesn't require touching this file — and so unknown entity types fail
- * closed (the previous in-place switch silently fell through to the
- * FieldChangeOrder table for RFI/Trend/PCO ids, which could "pass" if a
- * FieldChangeOrder with that id happened to exist in the claimed project).
- */
-async function assertEntityInProject(
-  entityType: AttachmentEntityType,
-  entityId: number,
-  projectId: number,
-): Promise<void> {
-  const parent = await lookupParentRecord(entityType, entityId);
-  if (parent.projectId !== projectId) {
-    throw new Error(
-      `${entityType} #${entityId} does not belong to this project.`,
-    );
-  }
-}
-
 export const fetchAttachments = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => AttachmentsInputSchema.parse(input))
   .handler(
@@ -179,7 +154,9 @@ export const uploadAttachment = createServerFn({ method: "POST" })
       throw new Error(`Unknown entity type: ${data.entityType}.`);
     }
     const actor = await requireProjectAccess(data.projectId);
-    await assertEntityInProject(data.entityType, data.entityId, data.projectId);
+    // A real record in the claimed project — someone with access to project
+    // A can't attach to a record that belongs to project B.
+    await assertParentInProject(data.entityType, data.entityId, data.projectId);
 
     const buf = Buffer.from(data.base64, "base64");
     const sizeBytes = buf.length;

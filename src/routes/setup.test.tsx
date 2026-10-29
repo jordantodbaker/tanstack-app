@@ -89,10 +89,13 @@ function item(
     laborCode: null,
     equipmentCode: null,
     otherCode: null,
+    rentalCode: null,
     // Active unless a case overrides it — the Code Book and the project list
     // hide anything that is not.
     status: "Active",
     costClassification: null,
+    materialType: null,
+    isOriginal: null,
   };
 }
 
@@ -128,6 +131,7 @@ function detail(
     subReporting: null,
     materialCode: null,
     materialType: null,
+    isOriginal: null,
     costCenter: null,
     costClassification: null,
     status: "Active",

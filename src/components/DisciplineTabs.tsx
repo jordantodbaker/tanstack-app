@@ -51,7 +51,7 @@ import { splitRowsByDiscipline } from "~/lib/take-off-paste";
 import { computeTakeOffTotals } from "~/lib/take-off-totals";
 import { makeTakeOffCsvColumns, takeOffRowsForExport } from "~/lib/take-off-csv";
 import { rowsToCsv, downloadCsv, todayStamp } from "~/lib/csv-export";
-import { formatCurrency } from "~/lib/formatting";
+import { formatCurrency, formatNumber } from "~/lib/formatting";
 import { appendTakeOffRows } from "~/utils/fefRows";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { customFieldDefsQueryOptions } from "~/utils/customFields";
@@ -118,7 +118,7 @@ function useEnsureTrailingBlankRows(
   }, [data, setData, minTrailing, minTotal]);
 }
 
-export type DisciplineTabsProps = {
+type DisciplineTabsProps = {
   /** When provided, renders a `<main>` wrapper with an `<h1>` header. */
   title?: string;
   icon?: React.ElementType;
@@ -675,9 +675,7 @@ export function DisciplineTabs({
                 <span className="text-slate-300">·</span>
                 <span>
                   <span className="font-semibold text-slate-800">
-                    {takeOffTotals.laborHours.toLocaleString(undefined, {
-                      maximumFractionDigits: 1,
-                    })}
+                    {formatNumber(takeOffTotals.laborHours, 1)}
                   </span>{" "}
                   hrs
                 </span>

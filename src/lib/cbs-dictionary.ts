@@ -35,6 +35,7 @@ export type CbsDictionaryRow = {
   laborCode: boolean | null;
   equipmentCode: boolean | null;
   otherCode: boolean | null;
+  rentalCode: boolean | null;
   materialType: string | null;
   costCenter: string | null;
   costClassification: string | null;
@@ -57,6 +58,11 @@ export type CbsDictionaryRow = {
   originalRow: number | null;
   /** This row's line in the CBS Expanded sheet. */
   expandedRow: number | null;
+  /**
+   * The workbook's "Original Row" flag: TRUE for an original row, FALSE for a
+   * generated cost-type line; null when the workbook predates the column.
+   */
+  isOriginal: boolean | null;
 };
 
 const SUB_GL = "5200";
@@ -96,6 +102,8 @@ function generateTwin(
     displayDescription: `${displayCode}:  ${name}`,
     rowType: type === "S" ? "SUB" : "MATERIAL",
     generatedFrom: original.displayCode,
+    // Generated here rather than in the workbook, but generated all the same.
+    isOriginal: false,
   };
 }
 

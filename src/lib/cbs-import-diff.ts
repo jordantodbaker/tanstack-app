@@ -22,6 +22,7 @@ export const CBS_IMPORT_FIELDS = [
   "laborCode",
   "equipmentCode",
   "otherCode",
+  "rentalCode",
   "materialType",
   "costCenter",
   "costClassification",
@@ -41,6 +42,7 @@ export const CBS_IMPORT_FIELDS = [
   "generatedFrom",
   "originalRow",
   "expandedRow",
+  "isOriginal",
 ] as const satisfies readonly (keyof CbsDictionaryRow)[];
 
 export type CbsImportField = (typeof CBS_IMPORT_FIELDS)[number];
@@ -72,6 +74,7 @@ const SQL_TYPE: Record<CbsImportField, string> = {
   laborCode: "boolean",
   equipmentCode: "boolean",
   otherCode: "boolean",
+  rentalCode: "boolean",
   materialType: "text",
   costCenter: "text",
   costClassification: "text",
@@ -92,6 +95,7 @@ const SQL_TYPE: Record<CbsImportField, string> = {
   generatedFrom: "text",
   originalRow: "integer",
   expandedRow: "integer",
+  isOriginal: "boolean",
 };
 
 /** Fields whose database column has a different name (`@map` in the schema). */

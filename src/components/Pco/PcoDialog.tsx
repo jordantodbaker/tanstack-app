@@ -5,7 +5,11 @@ import { EntityDialogShell } from "~/components/EntityDialog/EntityDialogShell";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { Checkbox } from "~/components/ui/checkbox";
-import { Labeled, NativeSelect } from "~/components/ui/form-helpers";
+import {
+  Labeled,
+  NativeSelect,
+  NumberInput,
+} from "~/components/ui/form-helpers";
 import { useRecordDialogForm } from "~/lib/use-record-dialog-form";
 import {
   PCO_PRIORITIES,
@@ -37,6 +41,7 @@ import {
   EntityAuxTabTriggers,
   EntityAuxTabPanels,
 } from "~/components/EntityDialog/EntityAuxTabs";
+import { formatShortDate } from "~/lib/dates";
 
 type FormState = Omit<UpsertPcoInput, "projectId">;
 
@@ -257,16 +262,11 @@ function PcoDialogBody({
                   />
                 </Labeled>
                 <Labeled label="Schedule extension (days)">
-                  <Input
-                    type="number"
+                  <NumberInput
                     step={1}
                     value={form.scheduleDaysImpact}
-                    onChange={(e) =>
-                      update(
-                        "scheduleDaysImpact",
-                        parseInt(e.target.value, 10) || 0,
-                      )
-                    }
+                    integer
+                    onChange={(n) => update("scheduleDaysImpact", n)}
                   />
                 </Labeled>
                 <Labeled label="Initiated by">
@@ -299,32 +299,20 @@ function PcoDialogBody({
                     label="Requested amount"
                     help="What the EPC is asking the owner to pay."
                   >
-                    <Input
-                      type="number"
+                    <NumberInput
                       step={100}
                       value={form.requestedAmount}
-                      onChange={(e) =>
-                        update(
-                          "requestedAmount",
-                          parseFloat(e.target.value) || 0,
-                        )
-                      }
+                      onChange={(n) => update("requestedAmount", n)}
                     />
                   </Labeled>
                   <Labeled
                     label="Approved amount"
                     help="What the owner agreed to. Defaults to requested when first approved."
                   >
-                    <Input
-                      type="number"
+                    <NumberInput
                       step={100}
                       value={form.approvedAmount}
-                      onChange={(e) =>
-                        update(
-                          "approvedAmount",
-                          parseFloat(e.target.value) || 0,
-                        )
-                      }
+                      onChange={(n) => update("approvedAmount", n)}
                     />
                   </Labeled>
                   <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
@@ -438,7 +426,7 @@ function PcoDialogBody({
                         </p>
                         <p className="text-sm text-slate-700">
                           {initial.invoicedAt
-                            ? new Date(initial.invoicedAt).toLocaleDateString()
+                            ? formatShortDate(initial.invoicedAt)
                             : "—"}
                         </p>
                       </div>
@@ -448,7 +436,7 @@ function PcoDialogBody({
                         </p>
                         <p className="text-sm text-slate-700">
                           {initial.paidAt
-                            ? new Date(initial.paidAt).toLocaleDateString()
+                            ? formatShortDate(initial.paidAt)
                             : "—"}
                         </p>
                       </div>

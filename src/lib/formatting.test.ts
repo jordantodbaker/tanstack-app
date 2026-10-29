@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   cvTone,
+  formatNumber,
+  formatPercent,
+  formatShare,
+  formatSignedPercent,
   formatCompact,
   formatCurrency,
   formatMoney,
@@ -156,5 +160,32 @@ describe("indexTone", () => {
   it("returns 'slate' for NaN / Infinity", () => {
     expect(indexTone(Number.NaN)).toBe("slate");
     expect(indexTone(Number.POSITIVE_INFINITY)).toBe("slate");
+  });
+});
+
+describe("formatNumber", () => {
+  it("groups thousands and caps the decimals", () => {
+    expect(formatNumber(1234.56, 1)).toBe("1,234.6");
+    expect(formatNumber(1234.56)).toBe("1,235");
+    expect(formatNumber(2.5, 2)).toBe("2.5");
+  });
+});
+
+describe("percent formatters", () => {
+  it("formatPercent fixes the decimals and adds the sign", () => {
+    expect(formatPercent(12.345)).toBe("12.3%");
+    expect(formatPercent(12.345, 0)).toBe("12%");
+    expect(formatPercent(Number.NaN)).toBe("—");
+  });
+
+  it("formatSignedPercent marks zero and up with +", () => {
+    expect(formatSignedPercent(4)).toBe("+4.0%");
+    expect(formatSignedPercent(0)).toBe("+0.0%");
+    expect(formatSignedPercent(-4)).toBe("-4.0%");
+  });
+
+  it("formatShare is the part over the whole, 0% of nothing", () => {
+    expect(formatShare(1, 4)).toBe("25.0%");
+    expect(formatShare(5, 0)).toBe("0.0%");
   });
 });

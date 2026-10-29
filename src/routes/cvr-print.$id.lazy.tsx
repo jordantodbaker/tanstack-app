@@ -12,11 +12,11 @@ import {
   Section,
   KvGrid,
   SignatureBlock,
-  formatDate,
 } from "~/components/PrintablePageShell";
 import { formatCurrency } from "~/lib/formatting";
 import { CVR_COST_TYPE_LABELS, lineItemTotal } from "~/utils/cvrLineItems";
 import { disciplineById } from "~/config/disciplines";
+import { formatDate } from "~/lib/dates";
 
 export const Route = createLazyFileRoute("/cvr-print/$id")({
   component: PrintableCvrPage,

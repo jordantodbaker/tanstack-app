@@ -5,7 +5,7 @@ import { prisma } from "../server/db";
 import { qk } from "~/lib/query-keys";
 import { ProjectId, VersionId } from "~/lib/validators";
 import {
-  hasAtLeastRole,
+  assertRole,
   type CurrentUser,
 } from "./users";
 import { requireProjectAccess, requireAdmin } from "./users.server";
@@ -42,9 +42,7 @@ export type FreezeResult = {
 
 /** Freezing changes what every estimate in scope prices at — APPROVER+. */
 function assertMayFreeze(actor: CurrentUser): void {
-  if (!hasAtLeastRole(actor.role, "APPROVER")) {
-    throw new Error("Forbidden: freezing rates requires APPROVER privilege");
-  }
+  assertRole(actor, "APPROVER", "freezing rates");
 }
 
 /** The global rate book as id-keyed rows. */

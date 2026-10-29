@@ -129,6 +129,7 @@ describe("flattenCbsForExport", () => {
       material: "YES",
       equipment: "",
       other: "",
+      rental: "",
     });
     expect(Object.values(rows[1].costTypes).join("")).toBe("");
   });

@@ -10,7 +10,11 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
-import { Labeled, NativeSelect } from "~/components/ui/form-helpers";
+import {
+  Labeled,
+  NativeSelect,
+  NumberInput,
+} from "~/components/ui/form-helpers";
 import { useFormDialog } from "~/lib/use-form-dialog";
 import { CbsMultiSelect } from "~/components/CbsMultiSelect";
 import { DISCIPLINE_FILTER_OPTIONS } from "~/config/disciplines";
@@ -246,36 +250,25 @@ export function CvrTemplateDialog({
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <Labeled label="Cost Impact ($)">
-                <Input
-                  type="number"
+                <NumberInput
                   step="0.01"
                   value={form.costImpact}
-                  onChange={(e) =>
-                    update("costImpact", parseFloat(e.target.value) || 0)
-                  }
+                  onChange={(n) => update("costImpact", n)}
                 />
               </Labeled>
               <Labeled label="Schedule Days Impact">
-                <Input
-                  type="number"
+                <NumberInput
                   step="1"
                   value={form.scheduleDaysImpact}
-                  onChange={(e) =>
-                    update(
-                      "scheduleDaysImpact",
-                      parseInt(e.target.value, 10) || 0,
-                    )
-                  }
+                  integer
+                  onChange={(n) => update("scheduleDaysImpact", n)}
                 />
               </Labeled>
               <Labeled label="Labor Hours Impact">
-                <Input
-                  type="number"
+                <NumberInput
                   step="0.1"
                   value={form.laborHoursImpact}
-                  onChange={(e) =>
-                    update("laborHoursImpact", parseFloat(e.target.value) || 0)
-                  }
+                  onChange={(n) => update("laborHoursImpact", n)}
                 />
               </Labeled>
             </div>

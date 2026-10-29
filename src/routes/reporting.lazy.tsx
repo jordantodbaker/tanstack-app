@@ -5,48 +5,27 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { LineChart, Plus, Trash2 } from "lucide-react";
+import { LineChart, Trash2 } from "lucide-react";
 import { qk } from "~/lib/query-keys";
 import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
-import { Textarea } from "~/components/ui/textarea";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogTrigger,
-} from "~/components/ui/dialog";
-import {
-  Labeled,
-  NativeSelect,
-  fromDateInputValue,
-  toDateInputValue,
-} from "~/components/ui/form-helpers";
 import { useSelectedProject } from "~/lib/selected-project";
 import {
-  createReportingPeriod,
   deleteReportingPeriod,
-  evmTimeSeriesQueryOptions,
   periodWithEvmQueryOptions,
   reportingPeriodsQueryOptions,
-  upsertMeasurement,
-  type PeriodBucketRow,
   type PeriodWithEvm,
 } from "~/utils/reporting";
 import { EvmSCurve } from "~/components/EvmSCurve";
-import { snapshotsQueryOptions } from "~/utils/snapshots";
-import { useCurrentUser, useIsAdmin } from "~/lib/use-current-user";
-import {
-  cvTone,
-  formatCurrency,
-  formatRatio,
-  formatSignedCurrency,
-  indexTone,
-  type SemanticTone,
-} from "~/lib/formatting";
+import { useIsAdmin } from "~/lib/use-current-user";
 import { TableEmptyState } from "~/components/ui/list-page";
 import { SelectProjectBanner } from "~/components/SelectProjectBanner";
-import type { EvmMetrics } from "~/lib/evm";
+import { formatShortDate } from "~/lib/dates";
+import {
+  EvmGlossary,
+  EvmTable,
+  ProjectTotalRow,
+} from "~/components/Reporting/EvmPeriodTable";
+import { NewPeriodDialog } from "~/components/Reporting/NewPeriodDialog";
 
 export const Route = createLazyFileRoute("/reporting")({
   component: ReportingPage,
@@ -146,138 +125,13 @@ function PeriodPicker({
           >
             <div className="font-medium">{p.label}</div>
             <div className="text-xs text-slate-500">
-              {new Date(p.dataDate).toLocaleDateString()} ·{" "}
+              {formatShortDate(p.dataDate)} ·{" "}
               {p.baselineLabel} · {p.measurementCount} measurements
             </div>
           </button>
         );
       })}
     </div>
-  );
-}
-
-function NewPeriodDialog({ projectId }: { projectId: number }) {
-  const [open, setOpen] = React.useState(false);
-  const [label, setLabel] = React.useState("");
-  const [dataDate, setDataDate] = React.useState(toDateInputValue(new Date().toISOString()));
-  const [snapshotId, setSnapshotId] = React.useState<string>("");
-  const queryClient = useQueryClient();
-  const { data: snapshots = [] } = useQuery({
-    ...snapshotsQueryOptions(projectId),
-    enabled: open,
-  });
-
-  // Default the snapshot select to the latest one once the list arrives.
-  React.useEffect(() => {
-    if (open && snapshotId === "" && snapshots.length > 0) {
-      setSnapshotId(String(snapshots[0].id));
-    }
-  }, [open, snapshots, snapshotId]);
-
-  const create = useMutation({
-    mutationFn: () => {
-      const iso = fromDateInputValue(dataDate);
-      if (!iso) throw new Error("Pick a data date.");
-      if (!snapshotId) throw new Error("Pick a baseline snapshot.");
-      return createReportingPeriod({
-        data: {
-          projectId,
-          label: label.trim(),
-          dataDate: iso,
-          baselineSnapshotId: Number(snapshotId),
-        },
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: qk.reporting.periods(projectId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: qk.reporting.evmTimeSeries(projectId),
-      });
-      setOpen(false);
-      setLabel("");
-      setDataDate(toDateInputValue(new Date().toISOString()));
-    },
-  });
-
-  const canSubmit = label.trim() !== "" && dataDate !== "" && snapshotId !== "";
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm">
-          <Plus className="size-3.5 mr-1" />
-          New Period
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
-        <div className="space-y-4">
-          <div className="pr-8">
-            <h2 className="text-lg font-semibold text-slate-800">
-              New Reporting Period
-            </h2>
-            <p className="text-xs text-slate-500">
-              Locks a baseline snapshot to a data date so EVM math stays
-              consistent across this period's measurements.
-            </p>
-          </div>
-          <Labeled label="Label" help='e.g. "April 2026" or "WE 2026-04-15"'>
-            <Input
-              autoFocus
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="April 2026"
-              maxLength={120}
-            />
-          </Labeled>
-          <Labeled label="Data date">
-            <Input
-              type="date"
-              value={dataDate}
-              onChange={(e) => setDataDate(e.target.value)}
-            />
-          </Labeled>
-          <Labeled label="Baseline snapshot">
-            {snapshots.length === 0 ? (
-              <p className="text-xs text-slate-500">
-                No snapshots on this project yet. Create one from the Summary
-                page first.
-              </p>
-            ) : (
-              <NativeSelect
-                value={snapshotId}
-                onChange={setSnapshotId}
-                options={snapshots.map((s) => ({
-                  value: String(s.id),
-                  label: `${s.label} (${new Date(s.createdAt).toLocaleDateString()})`,
-                }))}
-              />
-            )}
-          </Labeled>
-          {create.isError && (
-            <p className="text-xs text-red-600">
-              {create.error instanceof Error
-                ? create.error.message
-                : "Could not create period."}
-            </p>
-          )}
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
-            <DialogClose asChild>
-              <Button variant="outline" disabled={create.isPending}>
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button
-              onClick={() => create.mutate()}
-              disabled={!canSubmit || create.isPending || snapshots.length === 0}
-            >
-              {create.isPending ? "Saving…" : "Create"}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -304,7 +158,7 @@ function PeriodDetail({ periodId }: { periodId: number }) {
             {period.label}
           </h2>
           <p className="text-xs text-slate-500">
-            Data date {new Date(period.dataDate).toLocaleDateString()} ·
+            Data date {formatShortDate(period.dataDate)} ·
             baseline {period.baselineLabel}
             {(!period.projectStartDate || !period.projectEndDate) && (
               <span className="text-amber-700">
@@ -326,7 +180,6 @@ function PeriodDetail({ periodId }: { periodId: number }) {
 
 function DeletePeriodButton({ period }: { period: PeriodWithEvm }) {
   const queryClient = useQueryClient();
-  const { data: currentUser } = useCurrentUser();
   const isAdmin = useIsAdmin();
   const remove = useMutation({
     mutationFn: () => deleteReportingPeriod({ data: { id: period.id } }),
@@ -367,339 +220,4 @@ function DeletePeriodButton({ period }: { period: PeriodWithEvm }) {
       Delete
     </Button>
   );
-}
-
-/**
- * Collapsible EVM glossary rendered above the bucket table. Replaces the
- * `title=` tooltips that were on % Comp / Pending / AFC / VAFC headers —
- * those don't surface on touch devices, so on mobile users had no way to
- * learn what the acronyms meant. Native `<details>` for zero JS + keyboard
- * accessibility.
- */
-function EvmGlossary() {
-  const terms: Array<[string, string]> = [
-    ["BAC", "Budget at Completion — original baseline cost"],
-    ["CVR Rev", "CVR-driven revisions to the baseline"],
-    ["Curr. Budget", "Current Budget = BAC + CVR Rev"],
-    ["% Comp", "Percent complete entered for this bucket this period"],
-    ["EV", "Earned Value = % Comp × Current Budget"],
-    ["AC", "Actual Cost spent through the data date"],
-    ["PV", "Planned Value — what we'd expect to have earned by now"],
-    ["CV", "Cost Variance = EV − AC (negative is over budget)"],
-    ["SV", "Schedule Variance = EV − PV (negative is behind schedule)"],
-    ["CPI", "Cost Performance Index = EV ÷ AC (≥ 1.0 on budget)"],
-    ["SPI", "Schedule Performance Index = EV ÷ PV (≥ 1.0 on schedule)"],
-    ["EAC", "Estimate at Completion = AC + (Curr. Budget − EV) ÷ CPI"],
-    ["Pending", "Probability-weighted forecast from pending Trend records"],
-    ["AFC", "Anticipated Final Cost = EAC + Pending Trend forecast"],
-    ["VAC", "Variance at Completion = Curr. Budget − EAC"],
-    [
-      "VAFC",
-      "Variance at completion against AFC (after probability-weighted pending changes)",
-    ],
-  ];
-  return (
-    <details className="rounded-md border border-slate-200 bg-slate-50 text-sm">
-      <summary className="cursor-pointer px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 select-none">
-        Column definitions
-      </summary>
-      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 px-3 pb-3 text-xs">
-        {terms.map(([k, v]) => (
-          <div key={k} className="flex gap-2">
-            <dt className="font-semibold text-slate-700 shrink-0 w-20 sm:w-24">
-              {k}
-            </dt>
-            <dd className="text-slate-600">{v}</dd>
-          </div>
-        ))}
-      </dl>
-    </details>
-  );
-}
-
-function EvmTable({ period }: { period: PeriodWithEvm }) {
-  if (period.buckets.length === 0) {
-    return (
-      <p className="text-sm text-slate-500">
-        No buckets to report on. The baseline snapshot has no direct costs and
-        no CVRs are attributed to any bucket yet.
-      </p>
-    );
-  }
-  return (
-    <div className="overflow-x-auto rounded border border-slate-200">
-      <table className="w-full min-w-5xl border-collapse text-sm">
-        <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-          <tr>
-            <th className="px-2 py-1 text-left">Bucket</th>
-            <th className="px-2 py-1 text-right">BAC</th>
-            <th className="px-2 py-1 text-right">CVR Rev</th>
-            <th className="px-2 py-1 text-right">Curr. Budget</th>
-            <th className="px-2 py-1 text-right">% Comp</th>
-            <th className="px-2 py-1 text-right">EV</th>
-            <th className="px-2 py-1 text-right">AC</th>
-            <th className="px-2 py-1 text-right">PV</th>
-            <th className="px-2 py-1 text-right">CV</th>
-            <th className="px-2 py-1 text-right">SV</th>
-            <th className="px-2 py-1 text-right">CPI</th>
-            <th className="px-2 py-1 text-right">SPI</th>
-            <th className="px-2 py-1 text-right">EAC</th>
-            <th className="px-2 py-1 text-right">Pending</th>
-            <th className="px-2 py-1 text-right">AFC</th>
-            <th className="px-2 py-1 text-right">VAC</th>
-            <th className="px-2 py-1 text-right">VAFC</th>
-            <th className="px-2 py-1 text-left">Notes</th>
-          </tr>
-        </thead>
-        <tbody>
-          {period.buckets.map((b) => (
-            <BucketRow
-              key={b.bucket}
-              periodId={period.id}
-              projectId={period.projectId}
-              row={b}
-            />
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function BucketRow({
-  periodId,
-  projectId,
-  row,
-}: {
-  periodId: number;
-  projectId: number;
-  row: PeriodBucketRow;
-}) {
-  const queryClient = useQueryClient();
-  // Local input state so users can type freely; commits on blur. Initialized
-  // from the loaded row; `key={periodId}` in the parent ensures these reset
-  // when switching periods.
-  const [pctStr, setPctStr] = React.useState(String(row.percentComplete * 100));
-  const [acStr, setAcStr] = React.useState(String(row.actualCost));
-  const [notes, setNotes] = React.useState(row.notes);
-  // Keep local state in sync if the row is invalidated and refetched.
-  React.useEffect(() => {
-    setPctStr(String(row.percentComplete * 100));
-    setAcStr(String(row.actualCost));
-    setNotes(row.notes);
-  }, [row.percentComplete, row.actualCost, row.notes]);
-
-  const save = useMutation({
-    mutationFn: (patch: {
-      percentComplete?: number;
-      actualCost?: number;
-      notes?: string;
-    }) =>
-      upsertMeasurement({
-        data: {
-          periodId,
-          bucket: row.bucket,
-          percentComplete: patch.percentComplete ?? row.percentComplete,
-          actualCost: patch.actualCost ?? row.actualCost,
-          actualHours: row.actualHours,
-          plannedValueOverride: null,
-          notes: patch.notes ?? row.notes,
-        },
-      }),
-    onSuccess: () => {
-      // Scope every invalidation to this project. The previous unscoped
-      // `["reportingPeriods"]` and `["latestPeriodWithEvm"]` keys would
-      // refetch every project the signed-in user had open in any tab on
-      // every cell save — same shape as the setup.ts over-invalidation bug.
-      queryClient.invalidateQueries({
-        queryKey: qk.reporting.periodWithEvm(periodId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: qk.reporting.periods(projectId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: qk.reporting.latestPeriodWithEvm(projectId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: qk.reporting.evmTimeSeries(projectId),
-      });
-    },
-  });
-
-  const m = row.metrics;
-  return (
-    <tr className="border-t border-slate-100">
-      <td className="px-2 py-1 font-medium text-slate-700">
-        {row.disciplineLabel || row.bucket}
-      </td>
-      <td className="px-2 py-1 text-right tabular-nums">
-        {formatCurrency(m.bac)}
-      </td>
-      <td className="px-2 py-1 text-right tabular-nums">
-        {m.currentBudget - m.bac !== 0
-          ? formatSignedCurrency(m.currentBudget - m.bac)
-          : "—"}
-      </td>
-      <td className="px-2 py-1 text-right tabular-nums">
-        {formatCurrency(m.currentBudget)}
-      </td>
-      <td className="px-2 py-1 text-right">
-        <input
-          type="number"
-          min="0"
-          max="100"
-          step="0.1"
-          value={pctStr}
-          onChange={(e) => setPctStr(e.target.value)}
-          onBlur={() => {
-            const pct = parseFloat(pctStr);
-            if (!Number.isFinite(pct)) return;
-            save.mutate({ percentComplete: pct / 100 });
-          }}
-          className="w-20 rounded border border-slate-200 px-2 py-1 text-right text-sm"
-        />
-      </td>
-      <td className="px-2 py-1 text-right tabular-nums">{formatCurrency(m.ev)}</td>
-      <td className="px-2 py-1 text-right">
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          value={acStr}
-          onChange={(e) => setAcStr(e.target.value)}
-          onBlur={() => {
-            const ac = parseFloat(acStr);
-            if (!Number.isFinite(ac)) return;
-            save.mutate({ actualCost: ac });
-          }}
-          className="w-28 rounded border border-slate-200 px-2 py-1 text-right text-sm"
-        />
-      </td>
-      <td className="px-2 py-1 text-right tabular-nums" title={`PV source: ${row.pvSource}`}>
-        {row.pvSource === "none" ? "—" : formatCurrency(m.pv)}
-      </td>
-      <td className={`px-2 py-1 text-right tabular-nums ${toneClassCV(m.cv)}`}>
-        {formatSignedCurrency(m.cv)}
-      </td>
-      <td className={`px-2 py-1 text-right tabular-nums ${toneClassCV(m.sv)}`}>
-        {row.pvSource === "none" ? "—" : formatSignedCurrency(m.sv)}
-      </td>
-      <td className={`px-2 py-1 text-right tabular-nums ${toneClassIndex(m.cpi)}`}>
-        {formatRatio(m.cpi)}
-      </td>
-      <td className={`px-2 py-1 text-right tabular-nums ${toneClassIndex(m.spi)}`}>
-        {row.pvSource === "none" ? "—" : formatRatio(m.spi)}
-      </td>
-      <td className="px-2 py-1 text-right tabular-nums">{formatCurrency(m.eac)}</td>
-      <td
-        className={`px-2 py-1 text-right tabular-nums ${m.pendingTrend > 0 ? "text-amber-700" : "text-slate-400"}`}
-      >
-        {m.pendingTrend > 0 ? formatCurrency(m.pendingTrend) : "—"}
-      </td>
-      <td className="px-2 py-1 text-right tabular-nums font-medium">
-        {formatCurrency(m.afc)}
-      </td>
-      <td className={`px-2 py-1 text-right tabular-nums ${toneClassCV(m.vac)}`}>
-        {formatSignedCurrency(m.vac)}
-      </td>
-      <td
-        className={`px-2 py-1 text-right tabular-nums ${toneClassCV(m.vafc)}`}
-      >
-        {formatSignedCurrency(m.vafc)}
-      </td>
-      <td className="px-2 py-1">
-        <Textarea
-          rows={1}
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          onBlur={() => {
-            if (notes !== row.notes) save.mutate({ notes });
-          }}
-          className="text-xs min-h-0 h-7 py-1"
-        />
-      </td>
-    </tr>
-  );
-}
-
-function ProjectTotalRow({ total }: { total: EvmMetrics }) {
-  return (
-    <div className="rounded-md border border-slate-300 bg-slate-50 p-3">
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
-        Project total
-      </div>
-      <div className="grid grid-cols-2 md:grid-cols-7 gap-3 text-sm">
-        <Stat label="BAC" value={formatCurrency(total.bac)} />
-        <Stat label="Curr. Budget" value={formatCurrency(total.currentBudget)} />
-        <Stat label="EV" value={formatCurrency(total.ev)} />
-        <Stat label="AC" value={formatCurrency(total.ac)} />
-        <Stat label="CPI" value={formatRatio(total.cpi)} tone={indexTone(total.cpi)} />
-        <Stat label="SPI" value={formatRatio(total.spi)} tone={indexTone(total.spi)} />
-        <Stat label="EAC" value={formatCurrency(total.eac)} />
-      </div>
-      {/* AFC row — separate because it carries different load (it's the
-          published forecast PMs hand to owners, not an EVM internal). */}
-      <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-3 text-sm border-t border-slate-200 pt-3">
-        <Stat
-          label="Pending trend (P×likely)"
-          value={formatCurrency(total.pendingTrend)}
-          tone={total.pendingTrend > 0 ? "red" : "slate"}
-        />
-        <Stat
-          label="AFC"
-          value={formatCurrency(total.afc)}
-          tone={total.pendingTrend > 0 ? "red" : "slate"}
-        />
-        <Stat
-          label="VAFC"
-          value={formatSignedCurrency(total.vafc)}
-          tone={cvTone(total.vafc)}
-        />
-      </div>
-      <div className="mt-2 text-xs text-slate-500">
-        VAC{" "}
-        <span className={`font-semibold ${toneClassCV(total.vac)}`}>
-          {formatSignedCurrency(total.vac)}
-        </span>
-        {" · "}CV{" "}
-        <span className={toneClassCV(total.cv)}>{formatSignedCurrency(total.cv)}</span>
-        {" · "}SV{" "}
-        <span className={toneClassCV(total.sv)}>{formatSignedCurrency(total.sv)}</span>
-      </div>
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  tone = "slate",
-}: {
-  label: string;
-  value: string;
-  tone?: SemanticTone;
-}) {
-  return (
-    <div>
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className={`tabular-nums font-semibold ${TONE[tone]}`}>{value}</p>
-    </div>
-  );
-}
-
-// CSS map for the semantic tones from `~/lib/formatting`. Kept local rather
-// than shared because the project total card wants "bold" slate (slate-800);
-// other surfaces (e.g. the snapshot variance row) use slate-500 for the same
-// semantic tone — same decision, different shade.
-const TONE: Record<SemanticTone, string> = {
-  slate: "text-slate-800",
-  green: "text-emerald-700",
-  red: "text-red-700",
-};
-
-function toneClassCV(n: number): string {
-  return TONE[cvTone(n)];
-}
-function toneClassIndex(n: number | null): string {
-  return TONE[indexTone(n)];
 }

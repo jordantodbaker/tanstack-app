@@ -9,7 +9,7 @@ import {
   requireProjectAccess,
   resolveCurrentUser,
 } from "./users.server";
-import { lookupParentRecord } from "./entityLookup.server";
+import { assertParentInProject } from "./entityLookup.server";
 import {
   parseRecordRecentView,
   parseUpdateDashboardPrefs,
@@ -306,12 +306,7 @@ export const recordRecentView = createServerFn({ method: "POST" })
     // Confirm the entity lives in the claimed project. `lookupParentRecord`
     // default-DENIES unknown entity types via the same registry attachments
     // + comments use.
-    const parent = await lookupParentRecord(data.entityType, data.entityId);
-    if (parent.projectId !== data.projectId) {
-      throw new Error(
-        `${data.entityType} #${data.entityId} does not belong to this project.`,
-      );
-    }
+    await assertParentInProject(data.entityType, data.entityId, data.projectId);
 
     const existing = await prisma.userPreference.findUnique({
       where: { userId: actor.id },

@@ -43,10 +43,19 @@ export type CbsTreeItem = {
   equipmentCode?: boolean | null;
   /** The workbook's "Other Code" flag. */
   otherCode?: boolean | null;
+  /** The workbook's "Rental Code" flag. */
+  rentalCode?: boolean | null;
   /** The workbook's "Status" cell — "Active", "Inactive", or blank. */
   status?: string | null;
   /** The workbook's "Cost Classification" cell — "DIRECT LABOR", "INDIRECT", … */
   costClassification?: string | null;
+  /** The workbook's "Material Type" cell — "Tagged", "Bulks", … */
+  materialType?: string | null;
+  /**
+   * The workbook's "Original Row" flag: true for an original row, false for a
+   * generated cost-type line, null for rows imported before the column.
+   */
+  isOriginal?: boolean | null;
   /**
    * True for a row included only so the hierarchy reads correctly — an
    * ancestor of something the project HAS been granted, which it has not been

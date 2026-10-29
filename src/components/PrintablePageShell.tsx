@@ -4,6 +4,7 @@ import { ArrowLeft, Printer } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { QueryError } from "~/components/ui/list-page";
 import type { ProjectOption } from "~/utils/projects";
+import { formatDate, formatDateTime } from "~/lib/dates";
 
 /**
  * Loading / error / invalid-id gate shared by the printable routes. Each print
@@ -64,7 +65,7 @@ export function PrintRecordGuard<T>({
  * `children` and stays in each route file, since each record has its own
  * section layout.
  *
- * Sibling exports (`Section`, `KvGrid`, `SignatureBlock`, `formatDate`) are
+ * Sibling exports (`Section`, `KvGrid`, `SignatureBlock`; `formatDate` is in ~/lib/dates) are
  * the small presentation helpers each print page used to duplicate.
  */
 
@@ -163,7 +164,7 @@ export function PrintablePageShell({
 
         <footer className="mt-8 pt-3 border-t border-slate-200 text-[10px] text-slate-400 flex justify-between">
           <span>
-            Generated {new Date().toLocaleString()} · {footerKind} id{" "}
+            Generated {formatDateTime(new Date().toISOString())} · {footerKind} id{" "}
             {footerId}
           </span>
           <span>Page 1</span>
@@ -240,14 +241,3 @@ export function SignatureBlock({
   );
 }
 
-/** "2026-05-21T..." → "May 21, 2026". Null/invalid → "—". */
-export function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}

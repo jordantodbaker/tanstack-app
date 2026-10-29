@@ -38,6 +38,33 @@ export function formatSignedCurrency(n: number): string {
 }
 
 /**
+ * A plain quantity — hours, headcount, a grid statistic — with thousands
+ * separators and at most `maxDigits` decimals: 1234.56 → "1,234.6" at 1.
+ */
+export function formatNumber(n: number, maxDigits = 0): string {
+  return n.toLocaleString("en-US", { maximumFractionDigits: maxDigits });
+}
+
+/**
+ * A value that is already a percentage: 12.345 → "12.3%". Non-finite → "—".
+ */
+export function formatPercent(pct: number, digits = 1): string {
+  if (!Number.isFinite(pct)) return "—";
+  return `${pct.toFixed(digits)}%`;
+}
+
+/** As `formatPercent`, with "+" on zero and up: "+12.3%", "-4.0%". */
+export function formatSignedPercent(pct: number, digits = 1): string {
+  if (!Number.isFinite(pct)) return "—";
+  return `${pct >= 0 ? "+" : ""}${formatPercent(pct, digits)}`;
+}
+
+/** `part` as a share of `whole`: "25.0%"; "0.0%" when the whole is 0. */
+export function formatShare(part: number, whole: number, digits = 1): string {
+  return formatPercent(whole > 0 ? (part / whole) * 100 : 0, digits);
+}
+
+/**
  * Performance index / ratio formatter. Returns "—" for nulls and non-finite
  * values (typically when a divisor is zero, e.g. CPI when AC = 0).
  */

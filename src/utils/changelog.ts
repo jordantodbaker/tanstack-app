@@ -166,17 +166,6 @@ type ChangeLogRow = Awaited<
   ReturnType<typeof prisma.changeLog.findMany>
 >[number];
 
-const toItem = (r: ChangeLogRow): ChangeLogItem => ({
-  ...r,
-  status: r.status as ChangeStatus,
-  type: r.type as ChangeType,
-  riskLevel: r.riskLevel as RiskLevel,
-  ...serializeDateFields(r, {
-    iso: ["requestedAt", "createdAt", "updatedAt"],
-    nullable: ["dueDate", "approvedAt"],
-  }),
-});
-
 /**
  * Prisma `select` for the slim list shape — keep in sync with
  * `ChangeLogListItem`. Omits `description`, `notes`, `reasonCode` (heavy
@@ -219,6 +208,14 @@ const toListItem = (r: ChangeLogListRow): ChangeLogListItem => ({
     iso: ["requestedAt", "createdAt", "updatedAt"],
     nullable: ["dueDate", "approvedAt"],
   }),
+});
+
+/** The list shape plus the long-text fields the list leaves out. */
+const toItem = (r: ChangeLogRow): ChangeLogItem => ({
+  ...toListItem(r),
+  description: r.description,
+  notes: r.notes,
+  reasonCode: r.reasonCode,
 });
 
 export const fetchChangeLogList = createServerFn({ method: "GET" })

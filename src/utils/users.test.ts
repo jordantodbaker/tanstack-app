@@ -3,6 +3,7 @@ import {
   ROLE_LABELS,
   ROLE_RANK,
   assertProjectUnchanged,
+  assertRole,
   hasAtLeastRole,
   type UserRole,
 } from "./users";
@@ -87,5 +88,20 @@ describe("assertProjectUnchanged", () => {
     expect(() => assertProjectUnchanged("PCO", 1, 2)).toThrow(
       "Cannot move this PCO to a different project.",
     );
+  });
+});
+
+describe("assertRole", () => {
+  it("lets the role and anything above it through", () => {
+    expect(() => assertRole({ role: "APPROVER" }, "APPROVER", "x")).not.toThrow();
+    expect(() =>
+      assertRole({ role: "ADMINISTRATOR" }, "APPROVER", "x"),
+    ).not.toThrow();
+  });
+
+  it("names the action and the role it needs", () => {
+    expect(() =>
+      assertRole({ role: "USER" }, "APPROVER", "freezing rates"),
+    ).toThrow("Forbidden: freezing rates requires APPROVER privilege");
   });
 });

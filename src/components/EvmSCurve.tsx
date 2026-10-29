@@ -10,9 +10,9 @@ import { QueryError } from "~/components/ui/list-page";
 
 /**
  * EVM S-curve: plots project-total PV, EV, and AC across reporting-period
- * data dates. Pure SVG, no chart library — matches the existing DonutChart
- * pattern in validation.tsx. Empty state for projects with <2 periods, since
- * "trend" needs at least two points.
+ * data dates. Pure SVG, no chart library — the same approach as
+ * components/charts/DonutChart.tsx. Empty state for projects with <2
+ * periods, since "trend" needs at least two points.
  */
 export function EvmSCurve() {
   const { projectId } = useSelectedProject();

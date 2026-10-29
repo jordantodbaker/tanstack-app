@@ -16,7 +16,7 @@ import { BACKBONE_TYPE, type CbsTreeItem } from "./types";
  * the dictionary generates — or its matching workbook column says YES, meaning
  * a companion of that type exists for it. The badges and the toolbar's filter
  * buttons both ask exactly that question, so they read from this one table
- * rather than repeating the rule five times.
+ * rather than repeating the rule once per type.
  *
  * Order is the workbook's own column order, and it is the order the badges and
  * the buttons appear in.
@@ -56,6 +56,13 @@ export const CBS_COST_TYPES = [
     flag: "otherCode",
     label: "Other",
     column: "Other Code",
+  },
+  {
+    key: "rental",
+    code: "R",
+    flag: "rentalCode",
+    label: "Rental",
+    column: "Rental Code",
   },
 ] as const satisfies readonly {
   key: string;
@@ -118,12 +125,35 @@ export type CbsRowFilter = {
    * classification, and `CBS_NO_CLASSIFICATION` stands for a blank cell.
    */
   classifications: readonly string[];
+  /** Whether a row came from the workbook or was generated — see `CBS_ROW_TYPE_FILTERS`. */
+  rowType: CbsRowTypeFilter;
+  /**
+   * The Material Types to show among the Materials ("-M") lines, matched like
+   * `classifications`. Applies only while the Materials cost type is on, and
+   * only to M lines — a Labor line shown beside them is not judged on it.
+   */
+  materialTypes: readonly string[];
 } & Record<CbsCostTypeKey, boolean> &
   Record<CbsStatusKey, boolean>;
+
+/**
+ * The Row Type choice: every row, only the original rows, or only the
+ * cost-type lines generated from them — per the workbook's "Original Row"
+ * column (see `cbsIsGenerated`).
+ */
+export const CBS_ROW_TYPE_FILTERS = [
+  { key: "all", label: "All" },
+  { key: "original", label: "Original" },
+  { key: "generated", label: "Generated" },
+] as const satisfies readonly { key: string; label: string }[];
+
+export type CbsRowTypeFilter = (typeof CBS_ROW_TYPE_FILTERS)[number]["key"];
 
 export const CBS_FILTER_NONE: CbsRowFilter = {
   query: "",
   classifications: [],
+  rowType: "all",
+  materialTypes: [],
   ...(Object.fromEntries(CBS_COST_TYPES.map((t) => [t.key, false])) as Record<
     CbsCostTypeKey,
     boolean
@@ -228,33 +258,111 @@ export function cbsClassificationOf(item: CbsTreeItem): string {
   return item.costClassification?.trim() ?? CBS_NO_CLASSIFICATION;
 }
 
-/** One dropdown entry: a classification and how many rows carry it. */
-export type CbsClassificationOption = { value: string; count: number };
+/** One picker entry: a value and how many rows carry it. */
+export type CbsValueOption = { value: string; count: number };
+
+/** The blank-cell entry; shared by every free-text picker. */
+export const CBS_BLANK_VALUE = CBS_NO_CLASSIFICATION;
 
 /**
- * The classifications present in `items`, for the dropdown — alphabetical,
- * with the blank entry last. Built from the rows a view lists, so it never
- * offers a value that could only filter to nothing. Context rows are skipped,
- * as they are in the row counts.
+ * The values of one free-text column present in `items`, for a picker —
+ * alphabetical, with the blank entry last. Built from the rows a view lists,
+ * so it never offers a value that could only filter to nothing. Context rows
+ * are skipped, as they are in the row counts.
  */
-export function cbsClassificationOptions(
+function cbsValueOptions(
   items: Iterable<CbsTreeItem>,
-): CbsClassificationOption[] {
+  valueOf: (item: CbsTreeItem) => string,
+  include: (item: CbsTreeItem) => boolean = () => true,
+): CbsValueOption[] {
   const counts = new Map<string, number>();
   for (const item of items) {
-    if (item.context) continue;
-    const value = cbsClassificationOf(item);
+    if (item.context || !include(item)) continue;
+    const value = valueOf(item);
     counts.set(value, (counts.get(value) ?? 0) + 1);
   }
   return [...counts]
     .map(([value, count]) => ({ value, count }))
     .sort((a, b) =>
-      a.value === CBS_NO_CLASSIFICATION
+      a.value === CBS_BLANK_VALUE
         ? 1
-        : b.value === CBS_NO_CLASSIFICATION
+        : b.value === CBS_BLANK_VALUE
           ? -1
           : a.value.localeCompare(b.value, undefined, { sensitivity: "base" }),
     );
+}
+
+/** The Cost Classifications present in `items` — see `cbsValueOptions`. */
+export function cbsClassificationOptions(
+  items: Iterable<CbsTreeItem>,
+): CbsValueOption[] {
+  return cbsValueOptions(items, cbsClassificationOf);
+}
+
+/**
+ * Was this row generated rather than original? The workbook says so in its
+ * "Original Row" column (`isOriginal`); a row imported before that column
+ * existed falls back to `rowType`, where only the dictionary's own S / M twins
+ * read as generated.
+ */
+export function cbsIsGenerated(item: CbsTreeItem): boolean {
+  if (item.isOriginal != null) return !item.isOriginal;
+  return item.rowType !== "ORIGINAL";
+}
+
+/** Does this row pass the Row Type choice? */
+export function cbsMatchesRowType(
+  item: CbsTreeItem,
+  rowType: CbsRowTypeFilter,
+): boolean {
+  if (rowType === "all") return true;
+  return rowType === "generated" ? cbsIsGenerated(item) : !cbsIsGenerated(item);
+}
+
+/** Whether the Row Type choice narrows anything. */
+export function cbsHasRowTypeFilter(filter: CbsRowFilter): boolean {
+  return filter.rowType !== "all";
+}
+
+/**
+ * A row's Material Type as the filter reads it: the trimmed cell, or the
+ * blank entry. Exact, like classifications — the workbook's "Consumable" and
+ * "Consumables" stay apart until it reconciles them.
+ */
+export function cbsMaterialTypeOf(item: CbsTreeItem): string {
+  return item.materialType?.trim() ?? CBS_BLANK_VALUE;
+}
+
+const MATERIALS = CBS_COST_TYPES.find((t) => t.key === "material")!;
+
+/** The Material Types on the Materials ("-M") lines in `items`. */
+export function cbsMaterialTypeOptions(
+  items: Iterable<CbsTreeItem>,
+): CbsValueOption[] {
+  return cbsValueOptions(items, cbsMaterialTypeOf, (i) =>
+    cbsIsCostType(i, MATERIALS),
+  );
+}
+
+/**
+ * Whether the Material Type picker narrows anything: it is only in force
+ * while Materials is on, so a stale pick can't hide rows after it is off.
+ */
+export function cbsHasMaterialTypeFilter(filter: CbsRowFilter): boolean {
+  return filter.material && filter.materialTypes.length > 0;
+}
+
+/**
+ * Does this row pass the Material Type picker? Only M lines are judged on it,
+ * so pressing Labor as well keeps every Labor line.
+ */
+export function cbsMatchesMaterialType(
+  item: CbsTreeItem,
+  filter: CbsRowFilter,
+): boolean {
+  if (!cbsHasMaterialTypeFilter(filter)) return true;
+  if (!cbsIsCostType(item, MATERIALS)) return true;
+  return filter.materialTypes.includes(cbsMaterialTypeOf(item));
 }
 
 /** Is this filter showing everything (so callers can skip the walk)? */
@@ -263,7 +371,9 @@ export function cbsFilterIsEmpty(filter: CbsRowFilter): boolean {
     !filter.query &&
     !cbsHasCostTypeFilter(filter) &&
     !cbsHasStatusFilter(filter) &&
-    !cbsHasClassificationFilter(filter)
+    !cbsHasClassificationFilter(filter) &&
+    !cbsHasRowTypeFilter(filter) &&
+    !cbsHasMaterialTypeFilter(filter)
   );
 }
 

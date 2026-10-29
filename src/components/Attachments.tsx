@@ -13,6 +13,7 @@ import {
   type AttachmentEntityType,
   type AttachmentItem,
 } from "~/utils/attachments";
+import { formatDateTime } from "~/lib/dates";
 
 /**
  * Attachments panel — used inside the CVR and FCO dialogs. Lists existing
@@ -226,7 +227,7 @@ function AttachmentRow({
         </div>
         <div className="text-xs text-slate-500">
           {formatBytes(item.sizeBytes)} · {item.uploadedByEmail} ·{" "}
-          {new Date(item.createdAt).toLocaleString()}
+          {formatDateTime(item.createdAt)}
         </div>
       </div>
       <Button

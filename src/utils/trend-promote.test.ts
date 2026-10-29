@@ -138,7 +138,7 @@ describe("promoteTrendToCvr", () => {
 
   it("refuses a plain USER — Approver or higher only", async () => {
     requireProjectAccessFn.mockResolvedValue({ ...approver, role: "USER" });
-    await expect(promote()).rejects.toThrow(/Approver role/);
+    await expect(promote()).rejects.toThrow(/requires APPROVER/);
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 

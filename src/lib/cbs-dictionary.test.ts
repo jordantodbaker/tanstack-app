@@ -25,11 +25,13 @@ function original(
     // Where the row sits in the workbook; traced through, never keyed on.
     originalRow: null,
     expandedRow: null,
+    isOriginal: null,
     subReporting: flags.sub ?? false,
     materialCode: flags.material ?? false,
     laborCode: flags.labor ?? false,
     equipmentCode: flags.equipment ?? false,
     otherCode: flags.other ?? false,
+    rentalCode: null,
     materialType: null,
     costCenter: null,
     costClassification: null,

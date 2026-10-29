@@ -327,6 +327,7 @@ export async function loadCbsWorkbook(
       laborCode: toBool(text("Labor Code")),
       equipmentCode: toBool(text("Equipment Code")),
       otherCode: toBool(text("Other Code")),
+      rentalCode: toBool(text("Rental Code")),
       materialType: or("Material Type"),
       costCenter: or("Cost Center"),
       costClassification: or("Cost Classification"),
@@ -346,12 +347,17 @@ export async function loadCbsWorkbook(
       rowType: "ORIGINAL",
       generatedFrom: null,
       // "Original Row" was "Master Row" and before that "Master CBS Row"; read
-      // any of them so an older copy of the workbook still traces.
+      // any of them so an older copy of the workbook still traces. The current
+      // workbook reuses the header for a TRUE / FALSE flag instead (below), so
+      // `number` finds nothing there and this is null.
       originalRow:
         number("Original Row") ??
         number("Master Row") ??
         number("Master CBS Row"),
       expandedRow: number("Expanded Row"),
+      // TRUE for an original row, FALSE for a generated cost-type line. Null
+      // when the column holds a row number (an older workbook) or is absent.
+      isOriginal: toBool(text("Original Row")),
     };
 
     const prior = byCode.get(displayCode);

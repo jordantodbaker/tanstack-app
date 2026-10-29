@@ -23,7 +23,8 @@ import {
 import {
   requireProjectAccess,
 } from "./users.server";
-import { hasAtLeastRole } from "./users";
+import { assertRole } from "./users";
+import { assertSameProject } from "./entityLookup.server";
 import {
   deleteProjectScopedRecord,
   transitionProjectScopedRecord,
@@ -102,16 +103,6 @@ export type TrendItem = TrendListItem & {
 
 type TrendScalarRow = Awaited<ReturnType<typeof prisma.trend.findMany>>[number];
 
-const toItem = (r: TrendScalarRow): TrendItem => ({
-  ...r,
-  status: r.status as TrendStatus,
-  priority: r.priority as TrendPriority,
-  ...serializeDateFields(r, {
-    iso: ["identifiedAt", "createdAt", "updatedAt"],
-    nullable: ["neededBy", "closedAt"],
-  }),
-});
-
 /**
  * Prisma `select` for the slim list shape — keep in sync with `TrendListItem`.
  */
@@ -154,6 +145,14 @@ const toListItem = (r: TrendListRow): TrendListItem => ({
     iso: ["identifiedAt", "createdAt", "updatedAt"],
     nullable: ["neededBy", "closedAt"],
   }),
+});
+
+/** The list shape plus the long-text fields the list leaves out. */
+const toItem = (r: TrendScalarRow): TrendItem => ({
+  ...toListItem(r),
+  description: r.description,
+  reasonNarrative: r.reasonNarrative,
+  notes: r.notes,
 });
 
 export const fetchTrendList = createServerFn({ method: "GET" })
@@ -277,18 +276,14 @@ export const upsertTrend = createServerFn({ method: "POST" })
             where: { id: data.linkedRfiId },
             select: { projectId: true },
           });
-          if (!rfi || rfi.projectId !== data.projectId) {
-            throw new Error("Linked RFI does not belong to this project.");
-          }
+          assertSameProject(rfi, data.projectId, "Linked RFI");
         }
         if (data.linkedFcoId !== null) {
           const fco = await tx.fieldChangeOrder.findUnique({
             where: { id: data.linkedFcoId },
             select: { projectId: true },
           });
-          if (!fco || fco.projectId !== data.projectId) {
-            throw new Error("Linked FCO does not belong to this project.");
-          }
+          assertSameProject(fco, data.projectId, "Linked FCO");
         }
       },
       // `status` and `linkedCvrId` are intentionally omitted: status moves
@@ -370,9 +365,7 @@ export const promoteTrendToCvr = createServerFn({ method: "POST" })
       where: { id: data.trendId },
     });
     const actor = await requireProjectAccess(trend.projectId);
-    if (!hasAtLeastRole(actor.role, "APPROVER")) {
-      throw new Error("Approver role or higher required to promote a trend.");
-    }
+    assertRole(actor, "APPROVER", "promoting a trend");
     if (trend.status === "CONVERTED") {
       throw new Error("This trend has already been promoted to a CVR.");
     }

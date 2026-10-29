@@ -42,6 +42,7 @@ describeIntegration("integration: CBS bulk update", () => {
       laborCode: true,
       equipmentCode: null,
       otherCode: null,
+      rentalCode: null,
       materialType: null,
       costCenter: null,
       costClassification: null,
@@ -62,6 +63,7 @@ describeIntegration("integration: CBS bulk update", () => {
       generatedFrom: null,
       originalRow: 10,
       expandedRow: 20,
+      isOriginal: true,
       ...over,
     };
     return r;

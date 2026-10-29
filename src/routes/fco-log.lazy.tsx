@@ -50,6 +50,7 @@ import { fcoCsvColumns } from "~/utils/fcoLogCsv";
 import { ExportCsvButton } from "~/components/ExportCsvButton";
 import { formatAreaLabel } from "~/utils/areaLabels";
 import { FCO_TRANSITIONS } from "~/utils/workflow";
+import { formatShortDate } from "~/lib/dates";
 
 export const Route = createLazyFileRoute("/fco-log")({
   component: FcoLogPage,
@@ -190,7 +191,7 @@ function FcoLogPage() {
       cellClassName: "align-top text-xs text-slate-500",
       cell: (item) => (
         <>
-          <div>{new Date(item.initiatedAt).toLocaleDateString()}</div>
+          <div>{formatShortDate(item.initiatedAt)}</div>
           {item.initiatedBy && (
             <div className="text-slate-400">by {item.initiatedBy}</div>
           )}

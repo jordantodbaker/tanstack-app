@@ -19,6 +19,7 @@ import type {
   CrewMixAdminItem,
   UpsertCrewMixInput,
 } from "~/utils/crewMixes";
+import { formatCurrency } from "~/lib/formatting";
 
 // Counts are edited as strings so a half-typed value doesn't snap to NaN;
 // parsed back on submit. `roleId` of 0 means "not chosen yet".
@@ -232,7 +233,7 @@ export function CrewMixDialog({
                 <span className="font-semibold text-slate-800">
                   {form.schedule === "" || avgRate === 0
                     ? "—"
-                    : `$${avgRate.toFixed(2)}`}
+                    : formatCurrency(avgRate)}
                 </span>
               </span>
             </div>
@@ -300,7 +301,7 @@ export function CrewMixDialog({
                             {form.schedule === "" || m.roleId === 0
                               ? "—"
                               : rate !== undefined
-                                ? `$${rate.toFixed(2)}`
+                                ? formatCurrency(rate)
                                 : "no rate"}
                           </td>
                           <td className="px-3 py-1.5 border-b border-slate-100 text-center">

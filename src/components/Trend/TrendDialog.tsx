@@ -6,10 +6,10 @@ import { CbsMultiSelect } from "~/components/CbsMultiSelect";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import {
+  DateInput,
   Labeled,
   NativeSelect,
-  fromDateInputValue,
-  toDateInputValue,
+  NumberInput,
 } from "~/components/ui/form-helpers";
 import { useRecordDialogForm } from "~/lib/use-record-dialog-form";
 import { areasByProjectQueryOptions } from "~/utils/areas";
@@ -323,12 +323,9 @@ function TrendDialogBody({
                   onChange={(v) => update("discipline", v)}
                 />
                 <Labeled label="Needed by">
-                  <Input
-                    type="date"
-                    value={toDateInputValue(form.neededBy)}
-                    onChange={(e) =>
-                      update("neededBy", fromDateInputValue(e.target.value))
-                    }
+                  <DateInput
+                    value={form.neededBy}
+                    onChange={(iso) => update("neededBy", iso)}
                   />
                 </Labeled>
               </div>
@@ -373,51 +370,37 @@ function TrendDialogBody({
                     />
                   </Labeled>
                   <Labeled label="Cost — likely" help="Drives AFC math.">
-                    <Input
-                      type="number"
+                    <NumberInput
                       min={0}
                       step={100}
                       value={form.costLikely}
-                      onChange={(e) =>
-                        update("costLikely", parseFloat(e.target.value) || 0)
-                      }
+                      onChange={(n) => update("costLikely", n)}
                     />
                   </Labeled>
                   <Labeled label="Cost — low" help="Best case. Display only.">
-                    <Input
-                      type="number"
+                    <NumberInput
                       min={0}
                       step={100}
                       value={form.costLow}
-                      onChange={(e) =>
-                        update("costLow", parseFloat(e.target.value) || 0)
-                      }
+                      onChange={(n) => update("costLow", n)}
                     />
                   </Labeled>
                   <Labeled label="Cost — high" help="Worst case. Display only.">
-                    <Input
-                      type="number"
+                    <NumberInput
                       min={0}
                       step={100}
                       value={form.costHigh}
-                      onChange={(e) =>
-                        update("costHigh", parseFloat(e.target.value) || 0)
-                      }
+                      onChange={(n) => update("costHigh", n)}
                     />
                   </Labeled>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
                   <Labeled label="Schedule impact (days)">
-                    <Input
-                      type="number"
+                    <NumberInput
                       step={1}
                       value={form.scheduleDaysImpact}
-                      onChange={(e) =>
-                        update(
-                          "scheduleDaysImpact",
-                          parseInt(e.target.value, 10) || 0,
-                        )
-                      }
+                      integer
+                      onChange={(n) => update("scheduleDaysImpact", n)}
                     />
                   </Labeled>
                   <div className="md:col-span-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
@@ -474,13 +457,10 @@ function TrendDialogBody({
                     />
                   </Labeled>
                   <Labeled label="Identified at">
-                    <Input
-                      type="date"
-                      value={toDateInputValue(form.identifiedAt)}
-                      onChange={(e) => {
-                        const iso = fromDateInputValue(e.target.value);
-                        if (iso) update("identifiedAt", iso);
-                      }}
+                    <DateInput
+                      value={form.identifiedAt}
+                      // Required: clearing the box keeps the date it had.
+                      onChange={(iso) => iso && update("identifiedAt", iso)}
                     />
                   </Labeled>
                 </div>

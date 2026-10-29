@@ -48,6 +48,7 @@ import { disciplineById } from "~/config/disciplines";
 import { formatAreaLabel } from "~/utils/areaLabels";
 import { formatMoney } from "~/lib/formatting";
 import { TREND_TRANSITIONS } from "~/utils/workflow";
+import { formatShortDate } from "~/lib/dates";
 
 export const Route = createLazyFileRoute("/trends")({
   component: TrendLogPage,
@@ -179,7 +180,7 @@ function TrendLogPage() {
       header: "Needed by",
       cellClassName: "align-top text-xs text-slate-500",
       cell: (item) =>
-        item.neededBy ? new Date(item.neededBy).toLocaleDateString() : "—",
+        formatShortDate(item.neededBy),
     },
   ];
 

@@ -6,14 +6,9 @@ import {
   cbsAncestorCodes,
   CBS_COST_TYPES,
   cbsClassificationOptions,
-  cbsFilterIsEmpty,
   cbsIsBackbone,
-  cbsNoCostTypes,
-  cbsNoStatuses,
+  cbsMaterialTypeOptions,
   pruneCbsTree,
-  type CbsCostTypeKey,
-  type CbsRowFilter,
-  type CbsStatusKey,
   type CbsTreeNode,
 } from "~/lib/cbs-tree";
 import {
@@ -26,13 +21,14 @@ import { CbsTreeToolbar } from "~/components/Cbs/CbsTreeToolbar";
 import { ExportCbsXlsxButton } from "~/components/Cbs/ExportCbsXlsxButton";
 import type { CbsExportView } from "~/lib/cbs-export";
 import { useCbsTreeExpansion } from "~/components/Cbs/useCbsTreeExpansion";
+import { useCbsRowFilter } from "~/components/Cbs/useCbsRowFilter";
 
 /**
  * One CBS dataset as a searchable, color-by-level hierarchy with a detail
  * panel — the Project Cost Code List renders this directly, and
  * `CbsDictionarySections` stacks two of them for Admin → Master CBS.
  *
- * Every view lists cost LINES — each L / S / M / E / O variant on its own row —
+ * Every view lists cost LINES — each L / S / M / E / O / R variant on its own row —
  * so a cost-type filter reads a row's own code and nothing else (see
  * `cbsIsCostType`), and the row-type badge marks generated rows.
  * The views differ only in which rows they are handed.
@@ -160,6 +156,8 @@ export function CbsDictionaryBrowser({
   exportView,
   focusCode = null,
   statusFilter = false,
+  rowTypeFilter = false,
+  materialTypeFilter = false,
 }: {
   items: CbsBrowserRow[];
   sourceNote: string;
@@ -172,6 +170,13 @@ export function CbsDictionaryBrowser({
    * vanishing whenever the workbook happens to carry a single status.
    */
   statusFilter?: boolean;
+  /** Offer All / Original / Generated. The CBS Dictionary only. */
+  rowTypeFilter?: boolean;
+  /**
+   * Offer the Material Type picker while Materials is on. The CBS Dictionary
+   * only.
+   */
+  materialTypeFilter?: boolean;
   /** Which view to export as Excel. Omit to leave the button out. */
   exportView?: CbsExportView;
   /**
@@ -220,36 +225,20 @@ export function CbsDictionaryBrowser({
     };
     setSelected(find(nodes));
   }, [focusCode, nodes, reveal]);
-  const [query, setQuery] = React.useState("");
-  const [costTypes, setCostTypes] = React.useState(cbsNoCostTypes);
-  const toggleCostType = React.useCallback(
-    (key: CbsCostTypeKey) =>
-      setCostTypes((prev) => ({ ...prev, [key]: !prev[key] })),
-    [],
-  );
-  const [statuses, setStatuses] = React.useState(cbsNoStatuses);
-  const toggleStatus = React.useCallback(
-    (key: CbsStatusKey) =>
-      setStatuses((prev) => ({ ...prev, [key]: !prev[key] })),
-    [],
-  );
-
-  const [classifications, setClassifications] = React.useState<string[]>([]);
   const classificationOptions = React.useMemo(
     () => cbsClassificationOptions(items),
     [items],
   );
-
-  const filter: CbsRowFilter = React.useMemo(
-    () => ({
-      query: query.trim().toLowerCase(),
-      classifications,
-      ...costTypes,
-      ...statuses,
-    }),
-    [query, classifications, costTypes, statuses],
+  const materialTypeOptions = React.useMemo(
+    () => (materialTypeFilter ? cbsMaterialTypeOptions(items) : undefined),
+    [items, materialTypeFilter],
   );
-  const filtering = !cbsFilterIsEmpty(filter);
+  const { filter, filtering, controls } = useCbsRowFilter({
+    classificationOptions,
+    materialTypeOptions,
+    statusFilter,
+    rowTypeFilter,
+  });
   const { nodes: visibleNodes, matches } = React.useMemo(
     () => pruneCbsTree(nodes, filter),
     [filter, nodes],
@@ -272,17 +261,9 @@ export function CbsDictionaryBrowser({
         levelShown={levelShown}
       />
       <CbsTreeToolbar
-        query={query}
-        onQueryChange={setQuery}
+        {...controls}
         onExpandAll={expandAll}
         onCollapseAll={collapseAll}
-        costTypes={costTypes}
-        onToggleCostType={toggleCostType}
-        statuses={statuses}
-        onToggleStatus={statusFilter ? toggleStatus : undefined}
-        classifications={classifications}
-        onClassificationsChange={setClassifications}
-        classificationOptions={classificationOptions}
       >
         {/* Offered only where there are any — the catalog views have none. */}
         {hasContext && (

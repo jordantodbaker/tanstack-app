@@ -7,10 +7,10 @@ import { CbsMultiSelect } from "~/components/CbsMultiSelect";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import {
+  DateInput,
   Labeled,
   NativeSelect,
-  fromDateInputValue,
-  toDateInputValue,
+  NumberInput,
 } from "~/components/ui/form-helpers";
 import {
   CHANGE_TYPES,
@@ -530,37 +530,26 @@ function ChangelogDialogBody({
                   title="Edit the Cost Buildup tab to change this."
                 />
               ) : (
-                <Input
-                  type="number"
+                <NumberInput
                   step="0.01"
                   value={form.costImpact}
-                  onChange={(e) =>
-                    update("costImpact", parseFloat(e.target.value) || 0)
-                  }
+                  onChange={(n) => update("costImpact", n)}
                 />
               )}
             </Labeled>
             <Labeled label="Schedule Impact (days)">
-              <Input
-                type="number"
+              <NumberInput
                 step="1"
                 value={form.scheduleDaysImpact}
-                onChange={(e) =>
-                  update(
-                    "scheduleDaysImpact",
-                    parseInt(e.target.value, 10) || 0,
-                  )
-                }
+                integer
+                onChange={(n) => update("scheduleDaysImpact", n)}
               />
             </Labeled>
             <Labeled label="Labor Hours Impact">
-              <Input
-                type="number"
+              <NumberInput
                 step="0.1"
                 value={form.laborHoursImpact}
-                onChange={(e) =>
-                  update("laborHoursImpact", parseFloat(e.target.value) || 0)
-                }
+                onChange={(n) => update("laborHoursImpact", n)}
               />
             </Labeled>
           </div>
@@ -591,34 +580,24 @@ function ChangelogDialogBody({
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Labeled label="Requested Date">
-              <Input
-                type="date"
-                value={toDateInputValue(form.requestedAt)}
-                onChange={(e) =>
-                  update(
-                    "requestedAt",
-                    fromDateInputValue(e.target.value) ??
-                      new Date().toISOString(),
-                  )
+              <DateInput
+                value={form.requestedAt}
+                // Required: a cleared box falls back to today.
+                onChange={(iso) =>
+                  update("requestedAt", iso ?? new Date().toISOString())
                 }
               />
             </Labeled>
             <Labeled label="Due Date">
-              <Input
-                type="date"
-                value={toDateInputValue(form.dueDate)}
-                onChange={(e) =>
-                  update("dueDate", fromDateInputValue(e.target.value))
-                }
+              <DateInput
+                value={form.dueDate}
+                onChange={(iso) => update("dueDate", iso)}
               />
             </Labeled>
             <Labeled label="Approved Date">
-              <Input
-                type="date"
-                value={toDateInputValue(form.approvedAt)}
-                onChange={(e) =>
-                  update("approvedAt", fromDateInputValue(e.target.value))
-                }
+              <DateInput
+                value={form.approvedAt}
+                onChange={(iso) => update("approvedAt", iso)}
               />
             </Labeled>
           </div>
@@ -741,16 +720,11 @@ function CostBuildupEditor({
                     />
                   </td>
                   <td className="px-2 py-1.5">
-                    <Input
-                      type="number"
+                    <NumberInput
                       step="any"
                       className="text-right"
                       value={li.quantity}
-                      onChange={(e) =>
-                        onUpdate(i, {
-                          quantity: parseFloat(e.target.value) || 0,
-                        })
-                      }
+                      onChange={(n) => onUpdate(i, { quantity: n })}
                     />
                   </td>
                   <td className="px-2 py-1.5">
@@ -761,16 +735,11 @@ function CostBuildupEditor({
                     />
                   </td>
                   <td className="px-2 py-1.5">
-                    <Input
-                      type="number"
+                    <NumberInput
                       step="any"
                       className="text-right"
                       value={li.unitRate}
-                      onChange={(e) =>
-                        onUpdate(i, {
-                          unitRate: parseFloat(e.target.value) || 0,
-                        })
-                      }
+                      onChange={(n) => onUpdate(i, { unitRate: n })}
                     />
                   </td>
                   <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">

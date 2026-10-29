@@ -12,6 +12,7 @@ import {
   type BasisManpower,
   type BasisMilestone,
 } from "~/utils/basisInputs";
+import { formatNumber } from "~/lib/formatting";
 
 export const Route = createFileRoute("/basis")({
   component: BasisPage,
@@ -90,7 +91,7 @@ function totalHeadcount(row: BasisManpower): number | null {
 }
 
 function formatHeadcount(value: number): string {
-  return value.toLocaleString(undefined, { maximumFractionDigits: 1 });
+  return formatNumber(value, 1);
 }
 
 function ManpowerTable({

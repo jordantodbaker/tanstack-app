@@ -46,6 +46,7 @@ import { formatAreaLabel } from "~/utils/areaLabels";
 import { rfiCsvColumns } from "~/utils/rfisCsv";
 import { ExportCsvButton } from "~/components/ExportCsvButton";
 import { RFI_TRANSITIONS } from "~/utils/workflow";
+import { formatShortDate } from "~/lib/dates";
 
 export const Route = createLazyFileRoute("/rfis")({
   component: RfiLogPage,
@@ -152,14 +153,14 @@ function RfiLogPage() {
       header: "Due",
       cellClassName: "align-top text-xs text-slate-500",
       cell: (item) =>
-        item.dueDate ? new Date(item.dueDate).toLocaleDateString() : "—",
+        formatShortDate(item.dueDate),
     },
     {
       header: "Initiated",
       cellClassName: "align-top text-xs text-slate-500",
       cell: (item) => (
         <>
-          <div>{new Date(item.initiatedAt).toLocaleDateString()}</div>
+          <div>{formatShortDate(item.initiatedAt)}</div>
           {item.initiatedBy && (
             <div className="text-slate-400">by {item.initiatedBy}</div>
           )}

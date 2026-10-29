@@ -8,6 +8,8 @@ import {
   cbsAncestorCodes,
   CBS_NO_CLASSIFICATION,
   cbsClassificationOptions,
+  cbsMaterialTypeOptions,
+  CBS_BLANK_VALUE,
   cbsFilterIsEmpty,
   CBS_COST_TYPES,
   cbsHasCostType,
@@ -820,13 +822,14 @@ describe("status filter", () => {
 });
 
 describe("cbsHasCostType", () => {
-  it("covers the five workbook cost types, in column order", () => {
+  it("covers the six workbook cost types, in column order", () => {
     expect(CBS_COST_TYPES.map((t) => t.code)).toEqual([
       "L",
       "S",
       "M",
       "E",
       "O",
+      "R",
     ]);
     expect(CBS_COST_TYPES.map((t) => t.flag)).toEqual([
       "laborCode",
@@ -834,7 +837,14 @@ describe("cbsHasCostType", () => {
       "materialCode",
       "equipmentCode",
       "otherCode",
+      "rentalCode",
     ]);
+    // Each reads its own workbook column.
+    expect(CBS_COST_TYPES.find((t) => t.code === "R")).toMatchObject({
+      key: "rental",
+      label: "Rental",
+      column: "Rental Code",
+    });
   });
 
   it("matches a row by its own cost type", () => {
@@ -1333,5 +1343,78 @@ describe("cost classification filter", () => {
     const kept = names(filterCbsTree(buildCbsTree(ROWS), by("INDIRECT")));
     expect(kept).toContain("Site");
     expect(kept).not.toContain("Site Labor");
+  });
+});
+
+describe("row type and material type filters", () => {
+  const M = (code: string, name: string, materialType: string | null) =>
+    item(code, { name, materialType });
+  const ROWS = [
+    item("601-00-0000-00-0", { name: "Welding", materialType: "Tagged" }),
+    item("601-00-0000-00-L", { name: "Welding Labor", materialType: "Tagged" }),
+    M("601-00-0000-00-M", "Welding Tagged", "Tagged"),
+    M("601-05-0000-00-M", "Bolts Bulk", "Bulks"),
+    M("601-10-0000-00-M", "Unknown Material", null),
+    item("601-15-0000-00-S", { name: "Generated Subs", rowType: "SUB" }),
+  ];
+  const names = (nodes: CbsTreeNode[]): string[] =>
+    nodes.flatMap((n) => [n.item.name, ...names(n.children)]);
+  const kept = (over: Partial<CbsRowFilter>) =>
+    names(pruneCbsTree(buildCbsTree(ROWS), { ...CBS_FILTER_NONE, ...over }).nodes);
+
+  it("Row Type picks out generated rows, or only the originals", () => {
+    expect(kept({ rowType: "generated" })).toEqual(["Generated Subs"]);
+    expect(kept({ rowType: "original" })).not.toContain("Generated Subs");
+    expect(cbsFilterIsEmpty({ ...CBS_FILTER_NONE, rowType: "all" })).toBe(true);
+    expect(cbsFilterIsEmpty({ ...CBS_FILTER_NONE, rowType: "original" })).toBe(false);
+  });
+
+  it("reads the workbook's Original Row flag before the row type", () => {
+    const flagged = [
+      item("602-00-0000-00-0", { name: "Account", isOriginal: true }),
+      item("602-00-0000-00-L", { name: "Account Labor", isOriginal: false }),
+      // Imported before the column: falls back to the row type.
+      item("602-05-0000-00-S", { name: "Old Twin", rowType: "SUB", isOriginal: null }),
+      item("602-10-0000-00-0", { name: "Old Account", isOriginal: null }),
+    ];
+    const keep = (rowType: CbsRowFilter["rowType"]) =>
+      names(
+        pruneCbsTree(buildCbsTree(flagged), { ...CBS_FILTER_NONE, rowType }).nodes,
+      );
+    expect(keep("generated").sort()).toEqual(["Account Labor", "Old Twin"]);
+    expect(keep("original").sort()).toEqual(["Account", "Old Account"]);
+  });
+
+  it("offers only the Material Types found on Materials lines", () => {
+    // The account and its Labor line carry "Tagged" too, but are not counted.
+    expect(cbsMaterialTypeOptions(ROWS)).toEqual([
+      { value: "Bulks", count: 1 },
+      { value: "Tagged", count: 1 },
+      { value: CBS_BLANK_VALUE, count: 1 },
+    ]);
+  });
+
+  it("narrows the Materials lines to the types picked", () => {
+    expect(kept({ material: true, materialTypes: ["Bulks"] })).toEqual([
+      "Bolts Bulk",
+    ]);
+    expect(kept({ material: true, materialTypes: [CBS_BLANK_VALUE] })).toEqual([
+      "Unknown Material",
+    ]);
+  });
+
+  it("leaves other cost types alone when Labor is on too", () => {
+    const shown = kept({ material: true, labor: true, materialTypes: ["Bulks"] });
+    expect(shown).toContain("Bolts Bulk");
+    expect(shown).toContain("Welding Labor");
+    expect(shown).not.toContain("Welding Tagged");
+  });
+
+  it("is ignored while Materials is off", () => {
+    // A stale pick must not hide rows once its cost type is turned off.
+    expect(cbsFilterIsEmpty({ ...CBS_FILTER_NONE, materialTypes: ["Bulks"] })).toBe(
+      true,
+    );
+    expect(kept({ labor: true, materialTypes: ["Bulks"] })).toEqual(["Welding Labor"]);
   });
 });

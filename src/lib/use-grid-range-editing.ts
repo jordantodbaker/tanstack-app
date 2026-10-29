@@ -26,6 +26,7 @@ import {
   type FrozenColumn,
   type ServerPagination,
 } from "./fef-table-types";
+import { formatNumber } from "~/lib/formatting";
 
 /**
  * All Excel-style range-editing state and behavior for the FEF grid: cell
@@ -555,8 +556,7 @@ export function useGridRangeEditing({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [enableRangeEditing, selection, data, colKey, writeCtx],
   );
-  const fmtStat = (n: number) =>
-    n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  const fmtStat = (n: number) => formatNumber(n, 2);
 
   // Context-menu actions. They read the live selection through `latest` so the
   // async paste path isn't stale, and each closes the menu.

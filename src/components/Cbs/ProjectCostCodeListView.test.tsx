@@ -79,10 +79,13 @@ function item(
     laborCode: null,
     equipmentCode: null,
     otherCode: null,
+    rentalCode: null,
     // Active unless a case overrides it — the Code Book and the project list
     // hide anything that is not.
     status: "Active",
     costClassification: null,
+    materialType: null,
+    isOriginal: null,
     ...over,
   };
 }
@@ -186,7 +189,7 @@ describe("ProjectCostCodeListView", () => {
     // By each code's own cost type — not by whether it was generated, so the
     // workbook's own "-L" line counts as labor.
     expect(screen.getByLabelText("Rows by cost type")).toHaveTextContent(
-      "1 rollups · 1 labor · 1 subcontracts · 1 materials · 0 equipment · 0 other",
+      "1 rollups · 1 labor · 1 subcontracts · 1 materials · 0 equipment · 0 other · 0 rental",
     );
   });
 
@@ -309,10 +312,29 @@ describe("ProjectCostCodeListView", () => {
         "Materials",
         "Equipment",
         "Other",
+        "Rental",
       ];
       for (const l of labels) {
         expect(screen.getByRole("button", { name: l })).toBeInTheDocument();
       }
+    });
+
+    it("filters to Rental lines — the codes ending in -R", () => {
+      renderView([
+        ...LINES,
+        item("600-00-0000-00-R", "Pipe Rental (R)", { rentalCode: true }),
+      ]);
+      filterBy("Rental");
+      expect(names()).toContain("Pipe Rental (R)");
+      expect(names()).not.toContain("Pipe Labor (L)");
+      expect(screen.getByText("1 match")).toBeInTheDocument();
+    });
+
+    it("counts Rental lines as a cost type, not an unknown suffix", () => {
+      renderView([...LINES, item("600-00-0000-00-R", "Pipe Rental (R)")]);
+      const breakdown = screen.getByLabelText("Rows by cost type");
+      expect(breakdown).toHaveTextContent(/1 rental$/);
+      expect(breakdown).not.toHaveTextContent("suffix");
     });
 
     it("narrows the search box rather than widening it", () => {

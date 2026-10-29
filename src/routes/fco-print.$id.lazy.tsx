@@ -15,10 +15,10 @@ import {
   Section,
   KvGrid,
   SignatureBlock,
-  formatDate,
 } from "~/components/PrintablePageShell";
 import { formatCurrency } from "~/lib/formatting";
 import { disciplineById } from "~/config/disciplines";
+import { formatDate } from "~/lib/dates";
 
 export const Route = createLazyFileRoute("/fco-print/$id")({
   component: PrintableFcoPage,

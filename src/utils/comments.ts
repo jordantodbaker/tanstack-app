@@ -9,7 +9,7 @@ import {
   flushNotificationEmails,
   type PendingNotificationEmail,
 } from "./notification-email.server";
-import { lookupParentRecord } from "./entityLookup.server";
+import { assertParentInProject } from "./entityLookup.server";
 import { Id, ProjectId } from "~/lib/validators";
 
 const CommentsInputSchema = z.object({
@@ -77,24 +77,6 @@ const toItem = (r: CommentRow): CommentItem => ({
  *  short enough to keep one comment from becoming a wall of text. */
 export const MAX_COMMENT_LENGTH = 5000;
 
-/**
- * Looks up the parent record's projectId + originator + human-readable title.
- * Used by `postComment` to (a) confirm the entity belongs to the claimed
- * project and (b) populate the notification's `originatorId` + `title`.
- *
- * Delegates to the shared `lookupParentRecord` registry so all polymorphic
- * children (comments, attachments, future) use one source of truth — the
- * previous in-place switch handled ChangeLog/FCO/RFI explicitly and silently
- * fell through to the RFI table for Trend/PCO ids, which could mis-attribute
- * a comment if a real RFI with the same id existed.
- */
-async function readParentRecord(
-  entityType: CommentEntityType,
-  entityId: number,
-) {
-  return lookupParentRecord(entityType, entityId);
-}
-
 export const fetchComments = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => CommentsInputSchema.parse(input))
   .handler(
@@ -158,12 +140,11 @@ export const postComment = createServerFn({ method: "POST" })
       );
     }
 
-    const parent = await readParentRecord(data.entityType, data.entityId);
-    if (parent.projectId !== data.projectId) {
-      throw new Error(
-        `${data.entityType} #${data.entityId} does not belong to this project.`,
-      );
-    }
+    const parent = await assertParentInProject(
+      data.entityType,
+      data.entityId,
+      data.projectId,
+    );
 
     const pendingEmails: PendingNotificationEmail[] = [];
     const row = await prisma.$transaction(async (tx) => {

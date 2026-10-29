@@ -95,23 +95,9 @@ const linkedFcosInclude = {
 } as const;
 
 type RfiScalarRow = Awaited<ReturnType<typeof prisma.rfi.findMany>>[number];
-type RfiWithLinks = RfiScalarRow & {
-  linkedFcos: { id: number; fcoNumber: string; title: string; status: string }[];
-};
-
-const toItem = (r: RfiWithLinks): RfiItem => {
-  const { linkedFcos, ...rest } = r;
-  return {
-    ...rest,
-    status: rest.status as RfiStatus,
-    priority: rest.priority as RfiPriority,
-    ...serializeDateFields(rest, {
-      iso: ["initiatedAt", "createdAt", "updatedAt"],
-      nullable: ["dueDate", "answeredAt", "closedAt"],
-    }),
-    linkedFcos,
-  };
-};
+type RfiWithLinks = Awaited<
+  ReturnType<typeof prisma.rfi.findMany<{ include: typeof linkedFcosInclude }>>
+>[number];
 
 /**
  * Prisma `select` for the slim list shape — keep in sync with `RfiListItem`.
@@ -141,9 +127,7 @@ const LIST_SELECT = {
   createdById: true,
   createdAt: true,
   updatedAt: true,
-  linkedFcos: {
-    select: { id: true, fcoNumber: true, title: true, status: true },
-  },
+  ...linkedFcosInclude,
 } as const;
 
 type RfiListRow = Awaited<
@@ -163,6 +147,13 @@ const toListItem = (r: RfiListRow): RfiListItem => {
     linkedFcos,
   };
 };
+
+/** The list shape plus the two long-text fields the list leaves out. */
+const toItem = (r: RfiWithLinks): RfiItem => ({
+  ...toListItem(r),
+  question: r.question,
+  response: r.response,
+});
 
 export const fetchRfiList = createServerFn({ method: "GET" })
   .inputValidator(parseProjectIdInput)

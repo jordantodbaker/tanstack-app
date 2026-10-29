@@ -5,6 +5,7 @@ import { useSelectedProject } from "~/lib/selected-project";
 import { latestPeriodWithEvmQueryOptions } from "~/utils/reporting";
 import { formatCurrency } from "~/lib/formatting";
 import { QueryError } from "~/components/ui/list-page";
+import { formatShortDate } from "~/lib/dates";
 
 /**
  * Dashboard EVM card. Shows the headline numbers from the latest reporting
@@ -68,7 +69,7 @@ export function EvmDashboardCard() {
             Earned Value — {period.label}
           </h3>
           <p className="text-xs text-slate-500">
-            Data date {new Date(period.dataDate).toLocaleDateString()} ·
+            Data date {formatShortDate(period.dataDate)} ·
             baseline {period.baselineLabel}
           </p>
         </div>

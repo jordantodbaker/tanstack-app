@@ -38,6 +38,20 @@ export function hasAtLeastRole(role: UserRole, minimum: UserRole): boolean {
 }
 
 /**
+ * Throws "Forbidden: <action> requires <ROLE> privilege" unless `actor` holds
+ * at least `minimum`. `action` reads as a gerund: "freezing rates".
+ */
+export function assertRole(
+  actor: { role: UserRole },
+  minimum: UserRole,
+  action: string,
+): void {
+  if (!hasAtLeastRole(actor.role, minimum)) {
+    throw new Error(`Forbidden: ${action} requires ${minimum} privilege`);
+  }
+}
+
+/**
  * Guards the update branch of a project-scoped upsert against a cross-project
  * move. The generic upsert may edit a record in place but must never relocate
  * it to a different project — callers verify access to the *existing* project

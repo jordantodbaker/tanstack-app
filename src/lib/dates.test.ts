@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isPast } from "./dates";
+import {
+  formatDate,
+  formatDateTime,
+  formatShortDate,
+  isPast,
+} from "./dates";
 
 describe("isPast", () => {
   const now = new Date("2026-08-13T09:30:00Z");
@@ -20,5 +25,30 @@ describe("isPast", () => {
 
   it("returns false for a future date", () => {
     expect(isPast("2026-08-14T00:00:00", now)).toBe(false);
+  });
+});
+
+describe("date display", () => {
+  // Local time, so the expected day does not depend on the test machine's zone.
+  const iso = new Date(2026, 4, 21, 15, 30).toISOString();
+
+  it("formatDate spells the month", () => {
+    expect(formatDate(iso)).toBe("May 21, 2026");
+  });
+
+  it("formatShortDate is numeric month/day/year", () => {
+    expect(formatShortDate(iso)).toBe("5/21/2026");
+  });
+
+  it("formatDateTime adds the time of day", () => {
+    expect(formatDateTime(iso)).toBe("5/21/2026, 3:30:00 PM");
+  });
+
+  it("shows a dash for a missing or unparseable date", () => {
+    for (const f of [formatDate, formatShortDate, formatDateTime]) {
+      expect(f(null)).toBe("—");
+      expect(f("")).toBe("—");
+      expect(f("not a date")).toBe("—");
+    }
   });
 });

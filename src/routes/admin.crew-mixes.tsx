@@ -18,6 +18,7 @@ import {
 import { rolesAdminQueryOptions } from "~/utils/roles";
 import { schedulesQueryOptions } from "~/utils/schedules";
 import { crewMixAverageRate, type RoleRateRow } from "~/lib/crew-mix-rate";
+import { formatCurrency } from "~/lib/formatting";
 
 // Admin role gate lives on the parent `/admin` layout route.
 export const Route = createFileRoute("/admin/crew-mixes")({
@@ -130,7 +131,7 @@ function CrewMixRow({
             )}
           </Td>
           <Td className="align-top text-slate-700">
-            {mix.schedule === "" || avg === 0 ? "—" : `$${avg.toFixed(2)}`}
+            {mix.schedule === "" || avg === 0 ? "—" : formatCurrency(avg)}
           </Td>
         </tr>
       }

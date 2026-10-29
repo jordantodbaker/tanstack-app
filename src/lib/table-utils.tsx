@@ -19,15 +19,14 @@ import {
   setMaterialsSectionRows,
 } from "./materialsStore";
 import { createDebug } from "./logger";
-// Cell editors, CellSelect, ColumnFilter/pagination, and their helpers live in
-// `fef-cells`; re-exported here so existing `~/lib/table-utils` imports still
-// resolve (this module is the public entry point for the FEF table).
-import {
-  ColumnFilter,
-  TablePagination,
-  TAKE_OFF_INITIAL_ROWS,
-} from "./fef-cells";
+// Cell editors, CellSelect and their helpers live in `fef-cells`, and the
+// pager and column filter in `table-controls`; both are re-exported here so
+// existing `~/lib/table-utils` imports still resolve (this module is the
+// public entry point for the FEF table).
+import { TAKE_OFF_INITIAL_ROWS } from "./fef-cells";
+import { ColumnFilter, TablePagination } from "./table-controls";
 export * from "./fef-cells";
+export * from "./table-controls";
 // The shared type surface and the range-editing hook live in their own
 // modules; both are re-exported here so `~/lib/table-utils` stays the public
 // entry point for the FEF table and existing imports keep resolving.

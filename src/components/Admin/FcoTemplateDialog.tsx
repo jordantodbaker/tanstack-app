@@ -10,7 +10,11 @@ import {
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { Checkbox } from "~/components/ui/checkbox";
-import { Labeled, NativeSelect } from "~/components/ui/form-helpers";
+import {
+  Labeled,
+  NativeSelect,
+  NumberInput,
+} from "~/components/ui/form-helpers";
 import { useFormDialog } from "~/lib/use-form-dialog";
 import { CbsMultiSelect } from "~/components/CbsMultiSelect";
 import { DISCIPLINE_FILTER_OPTIONS } from "~/config/disciplines";
@@ -295,23 +299,17 @@ export function FcoTemplateDialog({
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <Labeled label="Estimated Cost ($)">
-                <Input
-                  type="number"
+                <NumberInput
                   step="0.01"
                   value={form.estimatedCost}
-                  onChange={(e) =>
-                    update("estimatedCost", parseFloat(e.target.value) || 0)
-                  }
+                  onChange={(n) => update("estimatedCost", n)}
                 />
               </Labeled>
               <Labeled label="Estimated Hours">
-                <Input
-                  type="number"
+                <NumberInput
                   step="0.1"
                   value={form.estimatedHours}
-                  onChange={(e) =>
-                    update("estimatedHours", parseFloat(e.target.value) || 0)
-                  }
+                  onChange={(n) => update("estimatedHours", n)}
                 />
               </Labeled>
               <div className="flex items-end pb-1">

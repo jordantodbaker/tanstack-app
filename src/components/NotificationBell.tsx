@@ -24,6 +24,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { QueryError } from "~/components/ui/list-page";
+import { formatShortDate } from "~/lib/dates";
 
 /**
  * Header bell + dropdown inbox. Driven by workflow transitions emitted from
@@ -217,5 +218,5 @@ function formatRelative(iso: string): string {
   if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
   if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
   if (diffSec < 86400 * 7) return `${Math.floor(diffSec / 86400)}d ago`;
-  return new Date(iso).toLocaleDateString();
+  return formatShortDate(iso);
 }

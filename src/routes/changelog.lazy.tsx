@@ -39,6 +39,7 @@ import { cvrCsvColumns } from "~/utils/changelogCsv";
 import { ExportCsvButton } from "~/components/ExportCsvButton";
 import { formatAreaLabel } from "~/utils/areaLabels";
 import { CVR_TRANSITIONS } from "~/utils/workflow";
+import { formatShortDate } from "~/lib/dates";
 
 export const Route = createLazyFileRoute("/changelog")({
   component: ChangelogPage,
@@ -159,7 +160,7 @@ function ChangelogPage() {
     {
       header: "Requested",
       cellClassName: "text-xs text-slate-500",
-      cell: (item) => new Date(item.requestedAt).toLocaleDateString(),
+      cell: (item) => formatShortDate(item.requestedAt),
     },
   ];
 

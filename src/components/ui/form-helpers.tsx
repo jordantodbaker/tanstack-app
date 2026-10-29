@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Input } from "~/components/ui/input";
 
 export function Labeled({
   label,
@@ -62,4 +63,62 @@ export function fromDateInputValue(v: string): string | null {
   if (!v) return null;
   const d = new Date(v + "T00:00:00");
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+type InputRest = Omit<
+  React.ComponentProps<"input">,
+  "type" | "value" | "onChange"
+>;
+
+/**
+ * A date box over an ISO timestamp: shows the local calendar day and hands
+ * back midnight-local as ISO, or `null` when cleared. A field that must keep
+ * a date decides what a cleared box means at the call site.
+ */
+export function DateInput({
+  value,
+  onChange,
+  ...rest
+}: InputRest & {
+  value: string | null;
+  onChange: (iso: string | null) => void;
+}) {
+  return (
+    <Input
+      {...rest}
+      type="date"
+      value={toDateInputValue(value)}
+      onChange={(e) => onChange(fromDateInputValue(e.target.value))}
+    />
+  );
+}
+
+/**
+ * A number box that always hands back a number: an empty or unparseable
+ * entry is 0. `integer` drops any fraction typed, for day counts.
+ */
+export function NumberInput({
+  value,
+  onChange,
+  integer = false,
+  ...rest
+}: InputRest & {
+  value: number;
+  onChange: (n: number) => void;
+  integer?: boolean;
+}) {
+  return (
+    <Input
+      {...rest}
+      type="number"
+      value={value}
+      onChange={(e) =>
+        onChange(
+          (integer
+            ? parseInt(e.target.value, 10)
+            : parseFloat(e.target.value)) || 0,
+        )
+      }
+    />
+  );
 }

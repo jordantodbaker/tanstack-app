@@ -14,9 +14,9 @@ import {
   Section,
   KvGrid,
   SignatureBlock,
-  formatDate,
 } from "~/components/PrintablePageShell";
 import { disciplineById } from "~/config/disciplines";
+import { formatDate } from "~/lib/dates";
 
 export const Route = createLazyFileRoute("/rfi-print/$id")({
   component: PrintableRfiPage,

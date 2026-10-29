@@ -43,6 +43,7 @@ import {
 } from "~/components/ui/list-view";
 import { formatMoney } from "~/lib/formatting";
 import { PCO_TRANSITIONS } from "~/utils/workflow";
+import { formatShortDate } from "~/lib/dates";
 
 export const Route = createLazyFileRoute("/pco")({
   component: PcoLogPage,
@@ -147,7 +148,7 @@ function PcoLogPage() {
       cellClassName: "align-top text-xs text-slate-500",
       cell: (item) =>
         item.submittedAt
-          ? new Date(item.submittedAt).toLocaleDateString()
+          ? formatShortDate(item.submittedAt)
           : "—",
     },
     {

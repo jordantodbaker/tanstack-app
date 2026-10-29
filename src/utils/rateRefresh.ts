@@ -5,7 +5,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { prisma } from "../server/db";
 import { qk } from "~/lib/query-keys";
 import { VersionId } from "~/lib/validators";
-import { hasAtLeastRole, type CurrentUser } from "./users";
+import { assertRole, type CurrentUser } from "./users";
 import { requireVersionAccess } from "./users.server";
 import { recordUpdates } from "./audit.server";
 import { resolveRoleRates, toPlainRates } from "~/lib/role-rates";
@@ -35,9 +35,7 @@ const RefreshInput = z.object({ versionId: VersionId });
 
 /** Writing over an estimate's line items is an approver-level act. */
 function assertMayRefresh(actor: CurrentUser): void {
-  if (!hasAtLeastRole(actor.role, "APPROVER")) {
-    throw new Error("Forbidden: refreshing rates requires APPROVER privilege");
-  }
+  assertRole(actor, "APPROVER", "refreshing rates");
 }
 
 /** Everything the planner needs, read at one scope. */

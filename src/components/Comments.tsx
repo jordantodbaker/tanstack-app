@@ -11,6 +11,7 @@ import {
   type CommentEntityType,
   type CommentItem,
 } from "~/utils/comments";
+import { formatDateTime } from "~/lib/dates";
 
 /**
  * Threaded-discussion panel for a CVR / FCO / RFI. Appears in the dialog's
@@ -153,7 +154,7 @@ function CommentRow({ item }: { item: CommentItem }) {
   return (
     <li className="border-l-2 border-slate-200 pl-3">
       <div className="text-xs text-slate-400">
-        {item.authorEmail} · {new Date(item.createdAt).toLocaleString()}
+        {item.authorEmail} · {formatDateTime(item.createdAt)}
       </div>
       <div className="mt-0.5 whitespace-pre-wrap text-sm text-slate-700">
         {item.body}

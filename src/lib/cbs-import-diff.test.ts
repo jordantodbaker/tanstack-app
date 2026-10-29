@@ -41,8 +41,6 @@ function row(over: Partial<CbsDictionaryRow> = {}): CbsDictionaryRow {
     description: "Summary of Fab.",
     notes: null,
     displayDescription: "601-05-0000-00-0:  Fab",
-    rowType: "ORIGINAL",
-    generatedFrom: null,
     ...over,
   };
 }
@@ -118,10 +116,6 @@ describe("cbsBulkUpdateSql", () => {
     // after the field would not exist and fail the whole batch.
     expect(sql).toContain(`"masterCbsRow" = v."originalRow"`);
     expect(sql).not.toContain(`"originalRow" = `);
-  });
-
-  it("casts the row type to its enum", () => {
-    expect(sql).toContain(`"rowType" = v."rowType"::"CbsRowType"`);
   });
 
   it("writes the Original Row flag as a boolean", () => {

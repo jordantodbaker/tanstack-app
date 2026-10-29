@@ -209,7 +209,6 @@ export const cbsTreeRowSelect = {
   name: true,
   uom: true,
   accountDescription: true,
-  rowType: true,
   // The workbook's cost-type flags — the views badge a row by what companions
   // it carries, since those sections list no generated rows. One per
   // CBS_COST_TYPES entry.
@@ -229,6 +228,9 @@ export const cbsTreeRowSelect = {
   costClassification: true,
   // The Dictionary's Material Type picker. A handful of repeated values.
   materialType: true,
+  // The toolbar's Discipline picker — the workbook's Discipline column. About
+  // twenty-five repeated values, so cheap gzipped.
+  discipline: true,
   // The Dictionary's Row Type filter — the workbook's "Original Row" flag.
   isOriginal: true,
 } satisfies Prisma.CbsItemSelect;
@@ -280,7 +282,7 @@ export const fetchProjectCostCodes = createServerFn({ method: "GET" })
  * granted, and both callers are admin-only routes anyway.
  */
 export const fetchCbsCatalog = createServerFn({ method: "GET" }).handler(
-  adminHandlerNoInput(() => cbsCatalogRows(false)),
+  adminHandlerNoInput(() => cbsCatalogRows()),
 );
 
 export const cbsCatalogQueryOptions = () =>
@@ -313,8 +315,6 @@ export const fetchCbsItemDetail = createServerFn({ method: "GET" })
         costCode: true,
         name: true,
         uom: true,
-        rowType: true,
-        generatedFrom: true,
         subReporting: true,
         materialCode: true,
         materialType: true,

@@ -7,8 +7,7 @@ import {
   type CbsRowFilter,
   cbsAncestorCodes,
   CBS_NO_CLASSIFICATION,
-  cbsClassificationOptions,
-  cbsMaterialTypeOptions,
+  cbsValueFilterOptions,
   CBS_BLANK_VALUE,
   cbsFilterIsEmpty,
   CBS_COST_TYPES,
@@ -20,7 +19,6 @@ import {
   cbsIsBackboneCode,
   collectExpandableKeys,
   collectKeysToLevel,
-  cbsRowTypeBadges,
   compareCbsDisplayCodes,
   computeCbsSelectionCounts,
   filterCbsTree,
@@ -51,7 +49,6 @@ function item(
     name: "",
     accountDescription: "",
     uom: "",
-    rowType: "ORIGINAL",
     ...overrides,
   };
 }
@@ -411,10 +408,10 @@ describe("buildCbsTree", () => {
     // under the 100 root.
     const tree = buildCbsTree([
       item("100-00-0000-00-0"),
-      item("100-00-0000-00-S", { rowType: "SUB" }),
-      item("100-00-0000-00-M", { rowType: "MATERIAL" }),
+      item("100-00-0000-00-S"),
+      item("100-00-0000-00-M"),
       item("101-00-0000-00-0"),
-      item("101-00-0000-00-M", { rowType: "MATERIAL" }),
+      item("101-00-0000-00-M"),
     ]);
     expect(tree[0].children.map((c) => c.item.displayCode)).toEqual([
       "100-00-0000-00-S",
@@ -519,21 +516,6 @@ describe("buildCbsTree", () => {
     expect(tree.map((n) => n.item.name)).toEqual(["first", "second"]);
     expect(tree[0].pathKey).toBe("601-00-0000-00-0");
     expect(tree[1].pathKey).toBe(`601-00-0000-00-0#${second.id}`);
-  });
-});
-
-describe("cbsRowTypeBadges", () => {
-  it("badges a generated row by what it is", () => {
-    expect(
-      cbsRowTypeBadges(item("601-05-0000-00-S", { rowType: "SUB" })),
-    ).toEqual([{ label: "S", title: "Generated sub-code row" }]);
-    expect(
-      cbsRowTypeBadges(item("601-05-0000-00-M", { rowType: "MATERIAL" })),
-    ).toEqual([{ label: "M", title: "Generated material row" }]);
-  });
-
-  it("badges an original row with nothing", () => {
-    expect(cbsRowTypeBadges(item("601-05-0000-00-0"))).toEqual([]);
   });
 });
 
@@ -878,7 +860,6 @@ describe("cbsHasCostType", () => {
     for (const t of CBS_COST_TYPES)
       expect(cbsHasCostType(plain, t)).toBe(false);
   });
-
 });
 
 /**
@@ -1185,9 +1166,7 @@ describe("pruneCbsTree cost-type matching", () => {
         walk(n.children);
       }
     };
-    walk(
-      pruneCbsTree(tree(), { ...CBS_FILTER_NONE, ...over }).nodes,
-    );
+    walk(pruneCbsTree(tree(), { ...CBS_FILTER_NONE, ...over }).nodes);
     return out;
   };
 
@@ -1216,9 +1195,7 @@ describe("pruneCbsTree cost-type matching", () => {
 
   it("leaves a text search alone", () => {
     // Cost types are strict; a query still keeps ancestors.
-    expect(kept({ query: "subcontracts" })).toContain(
-      "601-00-0000-00-S",
-    );
+    expect(kept({ query: "subcontracts" })).toContain("601-00-0000-00-S");
   });
 });
 
@@ -1253,7 +1230,9 @@ describe("stripCostTypeSuffix / costTypeSuffixOf", () => {
 
   it("leaves a name that only looks parenthesized alone", () => {
     // Only a one-letter or "*" marker at the very end is a cost type.
-    expect(stripCostTypeSuffix("Hot Tap (reserved)")).toBe("Hot Tap (reserved)");
+    expect(stripCostTypeSuffix("Hot Tap (reserved)")).toBe(
+      "Hot Tap (reserved)",
+    );
     expect(stripCostTypeSuffix("Pipe (L) Rack")).toBe("Pipe (L) Rack");
     expect(costTypeSuffixOf("Hot Tap (reserved)")).toBe("");
   });
@@ -1300,7 +1279,7 @@ describe("cost classification filter", () => {
   });
 
   it("lists each value with its count, trimmed, blank last", () => {
-    expect(cbsClassificationOptions(ROWS)).toEqual([
+    expect(cbsValueFilterOptions(ROWS).classifications).toEqual([
       { value: "DIRECT LABOR", count: 2 },
       { value: "INDIRECT", count: 1 },
       { value: CBS_NO_CLASSIFICATION, count: 1 },
@@ -1315,7 +1294,7 @@ describe("cost classification filter", () => {
       },
       item("200-10-0000-00-L", { costClassification: "DIRECT LABOR" }),
     ];
-    expect(cbsClassificationOptions(rows)).toEqual([
+    expect(cbsValueFilterOptions(rows).classifications).toEqual([
       { value: "DIRECT LABOR", count: 1 },
     ]);
   });
@@ -1346,6 +1325,60 @@ describe("cost classification filter", () => {
   });
 });
 
+describe("discipline filter", () => {
+  const ROWS = [
+    item("100-00-0000-00-0", { name: "Civil", discipline: "Civil" }),
+    item("100-10-0000-00-0", { name: "Site", discipline: " Civil " }),
+    item("100-10-0500-00-L", { name: "Site Labor", discipline: "Civil" }),
+    item("600-00-0000-00-0", { name: "Piping", discipline: "Piping" }),
+    item("600-05-0000-00-M", { name: "Pipe Materials", discipline: null }),
+  ];
+  const names = (nodes: CbsTreeNode[]): string[] =>
+    nodes.flatMap((n) => [n.item.name, ...names(n.children)]);
+  const by = (...disciplines: string[]): CbsRowFilter => ({
+    ...CBS_FILTER_NONE,
+    disciplines,
+  });
+
+  it("offers each discipline with its count, trimmed, blank last", () => {
+    expect(cbsValueFilterOptions(ROWS).disciplines).toEqual([
+      { value: "Civil", count: 3 },
+      { value: "Piping", count: 1 },
+      { value: CBS_BLANK_VALUE, count: 1 },
+    ]);
+  });
+
+  it("is empty until a discipline is picked", () => {
+    expect(cbsFilterIsEmpty(by())).toBe(true);
+    expect(cbsFilterIsEmpty(by("Civil"))).toBe(false);
+    expect(cbsFilterIsEmpty(by(CBS_BLANK_VALUE))).toBe(false);
+  });
+
+  it("keeps only rows of the disciplines picked", () => {
+    const { nodes, matches } = pruneCbsTree(buildCbsTree(ROWS), by("Civil"));
+    expect(names(nodes)).toEqual(["Civil", "Site", "Site Labor"]);
+    expect(matches).toBe(3);
+    expect(
+      names(pruneCbsTree(buildCbsTree(ROWS), by(CBS_BLANK_VALUE)).nodes),
+    ).toEqual(["Pipe Materials"]);
+  });
+
+  it("narrows the other filters rather than widening them", () => {
+    const shown = names(
+      pruneCbsTree(buildCbsTree(ROWS), { ...by("Civil"), labor: true }).nodes,
+    );
+    expect(shown).toEqual(["Site Labor"]);
+  });
+
+  it("does not let a matching parent carry its children through on Setup", () => {
+    // Under a text search Setup keeps a match's subtree; a discipline filter
+    // must not list a blank-discipline row as Piping because its parent is.
+    expect(names(filterCbsTree(buildCbsTree(ROWS), by("Piping")))).toEqual([
+      "Piping",
+    ]);
+  });
+});
+
 describe("row type and material type filters", () => {
   const M = (code: string, name: string, materialType: string | null) =>
     item(code, { name, materialType });
@@ -1355,31 +1388,44 @@ describe("row type and material type filters", () => {
     M("601-00-0000-00-M", "Welding Tagged", "Tagged"),
     M("601-05-0000-00-M", "Bolts Bulk", "Bulks"),
     M("601-10-0000-00-M", "Unknown Material", null),
-    item("601-15-0000-00-S", { name: "Generated Subs", rowType: "SUB" }),
+    item("601-15-0000-00-S", { name: "Generated Subs", isOriginal: false }),
   ];
   const names = (nodes: CbsTreeNode[]): string[] =>
     nodes.flatMap((n) => [n.item.name, ...names(n.children)]);
   const kept = (over: Partial<CbsRowFilter>) =>
-    names(pruneCbsTree(buildCbsTree(ROWS), { ...CBS_FILTER_NONE, ...over }).nodes);
+    names(
+      pruneCbsTree(buildCbsTree(ROWS), { ...CBS_FILTER_NONE, ...over }).nodes,
+    );
 
   it("Row Type picks out generated rows, or only the originals", () => {
-    expect(kept({ rowType: "generated" })).toEqual(["Generated Subs"]);
-    expect(kept({ rowType: "original" })).not.toContain("Generated Subs");
+    // Without an Original Row flag a line is read by its cost type: every
+    // typed line is generated, the -0 row is the original.
+    expect(kept({ rowType: "generated" }).sort()).toEqual([
+      "Bolts Bulk",
+      "Generated Subs",
+      "Unknown Material",
+      "Welding Labor",
+      "Welding Tagged",
+    ]);
+    expect(kept({ rowType: "original" })).toEqual(["Welding"]);
     expect(cbsFilterIsEmpty({ ...CBS_FILTER_NONE, rowType: "all" })).toBe(true);
-    expect(cbsFilterIsEmpty({ ...CBS_FILTER_NONE, rowType: "original" })).toBe(false);
+    expect(cbsFilterIsEmpty({ ...CBS_FILTER_NONE, rowType: "original" })).toBe(
+      false,
+    );
   });
 
-  it("reads the workbook's Original Row flag before the row type", () => {
+  it("reads the workbook's Original Row flag before the cost type", () => {
     const flagged = [
       item("602-00-0000-00-0", { name: "Account", isOriginal: true }),
       item("602-00-0000-00-L", { name: "Account Labor", isOriginal: false }),
-      // Imported before the column: falls back to the row type.
-      item("602-05-0000-00-S", { name: "Old Twin", rowType: "SUB", isOriginal: null }),
+      // Imported before the column: read by its cost type instead.
+      item("602-05-0000-00-S", { name: "Old Twin", isOriginal: null }),
       item("602-10-0000-00-0", { name: "Old Account", isOriginal: null }),
     ];
     const keep = (rowType: CbsRowFilter["rowType"]) =>
       names(
-        pruneCbsTree(buildCbsTree(flagged), { ...CBS_FILTER_NONE, rowType }).nodes,
+        pruneCbsTree(buildCbsTree(flagged), { ...CBS_FILTER_NONE, rowType })
+          .nodes,
       );
     expect(keep("generated").sort()).toEqual(["Account Labor", "Old Twin"]);
     expect(keep("original").sort()).toEqual(["Account", "Old Account"]);
@@ -1387,7 +1433,7 @@ describe("row type and material type filters", () => {
 
   it("offers only the Material Types found on Materials lines", () => {
     // The account and its Labor line carry "Tagged" too, but are not counted.
-    expect(cbsMaterialTypeOptions(ROWS)).toEqual([
+    expect(cbsValueFilterOptions(ROWS).materialTypes).toEqual([
       { value: "Bulks", count: 1 },
       { value: "Tagged", count: 1 },
       { value: CBS_BLANK_VALUE, count: 1 },
@@ -1404,7 +1450,11 @@ describe("row type and material type filters", () => {
   });
 
   it("leaves other cost types alone when Labor is on too", () => {
-    const shown = kept({ material: true, labor: true, materialTypes: ["Bulks"] });
+    const shown = kept({
+      material: true,
+      labor: true,
+      materialTypes: ["Bulks"],
+    });
     expect(shown).toContain("Bolts Bulk");
     expect(shown).toContain("Welding Labor");
     expect(shown).not.toContain("Welding Tagged");
@@ -1412,9 +1462,11 @@ describe("row type and material type filters", () => {
 
   it("is ignored while Materials is off", () => {
     // A stale pick must not hide rows once its cost type is turned off.
-    expect(cbsFilterIsEmpty({ ...CBS_FILTER_NONE, materialTypes: ["Bulks"] })).toBe(
-      true,
-    );
-    expect(kept({ labor: true, materialTypes: ["Bulks"] })).toEqual(["Welding Labor"]);
+    expect(
+      cbsFilterIsEmpty({ ...CBS_FILTER_NONE, materialTypes: ["Bulks"] }),
+    ).toBe(true);
+    expect(kept({ labor: true, materialTypes: ["Bulks"] })).toEqual([
+      "Welding Labor",
+    ]);
   });
 });

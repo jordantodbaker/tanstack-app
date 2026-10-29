@@ -38,8 +38,6 @@ export const CBS_IMPORT_FIELDS = [
   "description",
   "notes",
   "displayDescription",
-  "rowType",
-  "generatedFrom",
   "originalRow",
   "expandedRow",
   "isOriginal",
@@ -90,9 +88,6 @@ const SQL_TYPE: Record<CbsImportField, string> = {
   description: "text",
   notes: "text",
   displayDescription: "text",
-  // Read as text from the JSON, cast to the enum on the way in.
-  rowType: "text",
-  generatedFrom: "text",
   originalRow: "integer",
   expandedRow: "integer",
   isOriginal: "boolean",
@@ -114,11 +109,7 @@ const DB_COLUMN: Partial<Record<CbsImportField, string>> = {
  * same, and one statement shape serves every row.
  */
 export function cbsBulkUpdateSql(): string {
-  const set = CBS_IMPORT_FIELDS.map((f) => {
-    const value =
-      f === "rowType" ? `v."${f}"::"CbsRowType"` : `v."${f}"`;
-    return `"${DB_COLUMN[f] ?? f}" = ${value}`;
-  });
+  const set = CBS_IMPORT_FIELDS.map((f) => `"${DB_COLUMN[f] ?? f}" = v."${f}"`);
   const record = [
     `"costCode" text`,
     ...CBS_IMPORT_FIELDS.map((f) => `"${f}" ${SQL_TYPE[f]}`),

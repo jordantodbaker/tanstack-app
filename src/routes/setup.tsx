@@ -8,17 +8,15 @@ import {
   allowedFefCbsItemIdsQueryOptions,
   updateAllowedFefCbsItems,
 } from "~/utils/setup";
-import { cbsCatalogQueryOptions } from "~/utils/cbs";
+import { cbsCatalogQueryOptions, type CbsTreeRow } from "~/utils/cbs";
 import { currentUserQueryOptions, hasAtLeastRole } from "~/utils/users";
 import {
   buildCbsTree,
-  cbsClassificationOptions,
   cbsIsActive,
   computeCbsSelectionCounts,
   filterCbsTree,
   getNodeSelectionState,
   selectionStateFromCounts,
-  type CbsValueOption,
   type CbsTreeNode,
 } from "~/lib/cbs-tree";
 import {
@@ -67,10 +65,6 @@ function SetupPage() {
     [catalog],
   );
   const tree = React.useMemo(() => buildCbsTree(items), [items]);
-  const classificationOptions = React.useMemo(
-    () => cbsClassificationOptions(items),
-    [items],
-  );
 
   return (
     <main className="p-4 max-w-7xl">
@@ -96,7 +90,7 @@ function SetupPage() {
           key={projectId}
           projectId={projectId}
           tree={tree}
-          classificationOptions={classificationOptions}
+          items={items}
         />
       )}
     </main>
@@ -106,11 +100,12 @@ function SetupPage() {
 function CbsTreeEditorLoader({
   projectId,
   tree,
-  classificationOptions,
+  items,
 }: {
   projectId: number;
   tree: CbsTreeNode[];
-  classificationOptions: CbsValueOption[];
+  /** The rows `tree` was built from — what the filter pickers offer values from. */
+  items: CbsTreeRow[];
 }) {
   const allowedQuery = useQuery(allowedFefCbsItemIdsQueryOptions(projectId));
   if (allowedQuery.isPending) {
@@ -125,7 +120,7 @@ function CbsTreeEditorLoader({
     <CbsTreeEditor
       projectId={projectId}
       tree={tree}
-      classificationOptions={classificationOptions}
+      items={items}
       initialAllowedIds={allowedQuery.data ?? []}
     />
   );
@@ -134,12 +129,12 @@ function CbsTreeEditorLoader({
 function CbsTreeEditor({
   projectId,
   tree,
-  classificationOptions,
+  items,
   initialAllowedIds,
 }: {
   projectId: number;
   tree: CbsTreeNode[];
-  classificationOptions: CbsValueOption[];
+  items: CbsTreeRow[];
   initialAllowedIds: number[];
 }) {
   const [selectedIds, setSelectedIds] = React.useState<Set<number>>(
@@ -154,15 +149,15 @@ function CbsTreeEditor({
     levelShown,
   } = useCbsTreeExpansion(tree);
   const [selected, setSelected] = React.useState<CbsTreeNode | null>(null);
-  // No Status row: Setup grants codes rather than reporting on them, and its
-  // tree is active-only already. Row Type and Material Type are the
-  // Dictionary's own filters.
+  // Every CBS tree filters the same way, except that Status and Row Type
+  // belong to the Dictionary alone: Setup grants codes rather than reporting
+  // on them, and its tree is active-only already.
   const {
     filter,
     filtering: isFiltered,
     searchPending: isFiltering,
     controls,
-  } = useCbsRowFilter({ classificationOptions, deferQuery: true });
+  } = useCbsRowFilter({ items, deferQuery: true });
 
   const queryClient = useQueryClient();
   const mutation = useMutation({

@@ -1,12 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, X } from "lucide-react";
+import { cbsItemDetailQueryOptions, type CbsItemDetail } from "~/utils/cbs";
+import { cbsIsGenerated, type CbsTreeNode } from "~/lib/cbs-tree";
 import {
-  cbsItemDetailQueryOptions,
-  type CbsItemDetail,
-  type CbsTreeRow,
-} from "~/utils/cbs";
-import type { CbsTreeNode } from "~/lib/cbs-tree";
-import { cbsColorForLevel, type CbsLevelColor } from "~/config/cbs-level-colors";
+  cbsColorForLevel,
+  type CbsLevelColor,
+} from "~/config/cbs-level-colors";
 
 /**
  * The right-hand detail pane for a selected CBS row: every workbook column it
@@ -51,20 +50,12 @@ const DETAIL_FIELDS: {
   // a line number instead; a generated twin shared its account's.
   { label: "Original Row #", get: (i) => i.originalRow?.toString() },
   { label: "Expanded Row", get: (i) => i.expandedRow?.toString() },
-  { label: "Generated From", get: (i) => i.generatedFrom },
-  { label: "Row Type", get: (i) => rowTypeLabel(i.rowType) },
 ];
 
 function yesNo(v: boolean | null): string | null {
   if (v === true) return "YES";
   if (v === false) return "NO";
   return null;
-}
-
-export function rowTypeLabel(rowType: CbsTreeRow["rowType"]): string {
-  if (rowType === "SUB") return "Generated - Sub Code";
-  if (rowType === "MATERIAL") return "Generated - Material Code";
-  return "Original";
 }
 
 function DetailBody({
@@ -79,8 +70,10 @@ function DetailBody({
   const { item } = node;
   const detail = useQuery(cbsItemDetailQueryOptions(item.id));
   const rows = detail.data
-    ? DETAIL_FIELDS.map((f) => ({ label: f.label, value: f.get(detail.data) }))
-        .filter((r): r is { label: string; value: string } => !!r.value)
+    ? DETAIL_FIELDS.map((f) => ({
+        label: f.label,
+        value: f.get(detail.data),
+      })).filter((r): r is { label: string; value: string } => !!r.value)
     : [];
 
   return (
@@ -95,7 +88,8 @@ function DetailBody({
           </div>
           <div className="text-sm font-semibold break-words">{item.name}</div>
           <div className="mt-0.5 text-[11px] opacity-70">
-            Level {node.level} · {rowTypeLabel(item.rowType)}
+            Level {node.level} ·{" "}
+            {cbsIsGenerated(item) ? "Generated" : "Original"}
           </div>
         </div>
         <button
@@ -118,7 +112,10 @@ function DetailBody({
       ) : (
         <dl className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto px-4 py-2 text-sm">
           {rows.map((r) => (
-            <div key={r.label} className="grid grid-cols-[9rem_1fr] gap-2 py-1.5">
+            <div
+              key={r.label}
+              className="grid grid-cols-[9rem_1fr] gap-2 py-1.5"
+            >
               <dt className="text-xs font-medium text-slate-500">{r.label}</dt>
               <dd className="break-words text-slate-800">{r.value}</dd>
             </div>

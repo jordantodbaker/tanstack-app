@@ -59,8 +59,6 @@ describeIntegration("integration: CBS bulk update", () => {
       description: null,
       notes: null,
       displayDescription: `${displayCode}:  Account ${displayCode}`,
-      rowType: "ORIGINAL",
-      generatedFrom: null,
       originalRow: 10,
       expandedRow: 20,
       isOriginal: true,
@@ -98,7 +96,9 @@ describeIntegration("integration: CBS bulk update", () => {
         },
       },
     });
-    const ids = await db.cbsItem.findMany({ select: { id: true, costCode: true } });
+    const ids = await db.cbsItem.findMany({
+      select: { id: true, costCode: true },
+    });
 
     const after = [
       row("601-05-0000-00-0", {
@@ -108,7 +108,7 @@ describeIntegration("integration: CBS bulk update", () => {
         originalRow: 41,
         expandedRow: null,
       }),
-      row("601-05-0000-00-S", { rowType: "SUB", generatedFrom: "601-05-0000-00-0" }),
+      row("601-05-0000-00-S", { isOriginal: false }),
     ];
     const n = await db.$executeRawUnsafe(cbsBulkUpdateSql(), payload(after));
     expect(n).toBe(2);

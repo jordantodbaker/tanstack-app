@@ -31,9 +31,9 @@ export type ProjectFefRowTotals = {
   materialsByL1: Record<string, number>;
   /**
    * Finer than `…ByL1`: keyed by the de-dashed L1+L2 prefix (5 chars, e.g.
-   * "01310" = L1 013 / L2 10). Lets the Summary break an L1 division into its
+   * "03205" = L1 032 / L2 05). Lets the Summary break an L1 division into its
    * L2 sub-accounts — used by the Administration & Home Office section to split
-   * L1 013 into Bonds / Insurance / Taxes / etc.
+   * L1 032 (Special Project Costs) into Bonds / Insurance / Taxes / etc.
    */
   laborByL1L2: Record<string, number>;
   laborHoursByL1L2: Record<string, number>;
@@ -78,10 +78,7 @@ export const DISCIPLINE_TO_DIGIT: Record<string, string> = {
 
 /** The FEF fields the arithmetic here needs on every row. */
 type TotalsNumericField =
-  | "quantity"
-  | "laborHours"
-  | "laborRate"
-  | "materialCost";
+  "quantity" | "laborHours" | "laborRate" | "materialCost";
 
 /**
  * A FefRow as this aggregator sees it: the bucketing keys, the numeric fields
@@ -169,8 +166,8 @@ export function accumulateProjectTotals(
     const l1 =
       (r.cbsCode && r.cbsCode.length >= 3 ? r.cbsCode.slice(0, 3) : "") ||
       (/^\d{3}/.test(r.discipline) ? r.discipline.slice(0, 3) : "");
-    // L1+L2 bucket: the de-dashed 5-char prefix, e.g. "013-10-0000-00-O" →
-    // "01310". Used by the Summary to split an L1 division into its L2
+    // L1+L2 bucket: the de-dashed 5-char prefix, e.g. "032-05-0000-00-O" →
+    // "03205". Used by the Summary to split an L1 division into its L2
     // sub-accounts; requires a cbsCode (no discipline fallback at L2 level).
     const deDashedCode = r.cbsCode ? r.cbsCode.replace(/-/g, "") : "";
     const l1l2 = deDashedCode.length >= 5 ? deDashedCode.slice(0, 5) : "";
@@ -188,8 +185,7 @@ export function accumulateProjectTotals(
         laborByL1L2[l1l2] = (laborByL1L2[l1l2] ?? 0) + labor;
       }
       if (digit && Number.isFinite(hours) && hours > 0) {
-        laborHoursByDigit[digit] =
-          (laborHoursByDigit[digit] ?? 0) + hours;
+        laborHoursByDigit[digit] = (laborHoursByDigit[digit] ?? 0) + hours;
       }
       if (l1 && Number.isFinite(hours) && hours > 0) {
         laborHoursByL1[l1] = (laborHoursByL1[l1] ?? 0) + hours;

@@ -115,7 +115,7 @@ describe("buildSummaryRows — L1 / L1L2 sections", () => {
 
   it("rolls an Admin row up from its L1+L2 sub-account bucket", () => {
     const t = emptyTotals();
-    t.materialsByL1L2["01310"] = 200; // Bonds
+    t.materialsByL1L2["03205"] = 200; // Bonds
     const { adminHomeOffice } = buildSummaryRows(t);
     const bonds = adminHomeOffice.find((r) => r.description === "Bonds");
     expect(bonds?.material).toBe(formatMoney(200));

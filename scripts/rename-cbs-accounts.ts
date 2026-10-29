@@ -1,16 +1,21 @@
 // Renames individual CBS accounts, in the database and in the workbook.
 //
 // A rename has two halves. The database half makes the app show the new name
-// now; the workbook half makes it survive, because `npm run cbs:import` reads
-// the Name column of `prisma/data/CBS.xlsx` and puts the old name back
-// otherwise. Doing only the first is why "Structural Steel" kept reverting.
+// now; the workbook half makes it survive, because the next `cbs:expand` and
+// `cbs:import` take every name from the Name column of the condensed master
+// (`prisma/data/CBS.master.xlsx`) and put the old one back otherwise. Doing
+// only the first is why "Structural Steel" kept reverting.
+//
+// The master has one row per account, so a rename there reaches every typed
+// line ("(L)", "(S)", …) at the next expand; the database half renames just
+// the account's own "-0" row, and the import catches the rest up.
 //
 //   npx tsx scripts/rename-cbs-accounts.ts --dry-run    see both halves
 //   npx tsx scripts/rename-cbs-accounts.ts              database half
 //   npx tsx scripts/rename-cbs-accounts.ts --workbook   both halves
 //
-// The workbook half is opt-in because CBS.xlsx is the master data file and is
-// usually someone's open Excel window. It rewrites only the Name cells of the
+// The workbook half is opt-in because the master is usually someone's open
+// Excel window. It rewrites only the Name cells of the
 // accounts listed below, leaving every other byte of the archive alone, and
 // refuses rather than guessing if a cell is not where it expects.
 //
@@ -25,6 +30,7 @@ import {
   openCbsSheet,
   writeCbsWorkbookCells,
 } from "../prisma/cbs-workbook-cells";
+import { CBS_MASTER_PATH } from "../prisma/cbs-sheet";
 import { costTypeSuffixOf, stripCostTypeSuffix } from "../src/lib/cbs-tree";
 import {
   cbsDisplayDescription,
@@ -37,8 +43,8 @@ const writeWorkbook = process.argv.includes("--workbook");
 
 /**
  * The renames to apply. `workbookCell` records where the same edit belonged in
- * CBS.xlsx when the rename was written, so a future import carries the new name
- * rather than reverting it.
+ * the workbook when the rename was written, so a future import carries the new
+ * name rather than reverting it.
  *
  * The cell is also resolved against the workbook at run time, because a hand-
  * written reference goes stale on every revision: these two said sheet "Master
@@ -74,24 +80,40 @@ type WorkbookName = {
 };
 
 /**
- * Finds the Name cell for each display code in the workbook the import reads.
+ * The master's code for an account: its "-0" roll-up code without the
+ * cost-type segment. A rename names the account's own row, so only those
+ * resolve; a typed line has no row of its own in the master.
+ */
+function masterCodeOf(displayCode: string): string | null {
+  const m = /^([0-9A-Z]{3}-[0-9A-Z]{2}-[0-9A-Z]{4}-[0-9A-Z]{2})-0$/.exec(
+    displayCode,
+  );
+  return m ? m[1] : null;
+}
+
+/**
+ * Finds the Name cell for each display code in the master.
  *
  * Headers are located by label rather than by a fixed column, and the sheet by
- * the loader's own precedence list, so this survives a re-ordered or renamed
- * workbook the same way the import does.
+ * the loader's own precedence list (`openCbsSheet`), so this survives a
+ * re-ordered or renamed workbook the same way the import does.
  */
 async function resolveWorkbookNames(
   displayCodes: string[],
 ): Promise<Map<string, WorkbookName>> {
   const found = new Map<string, WorkbookName>();
-  const sheet = await openCbsSheet();
-  if (!sheet.column["Display Code"] || !sheet.column["Name"]) return found;
+  const sheet = await openCbsSheet(CBS_MASTER_PATH);
+  if (!sheet.col("Name")) return found;
 
-  const wanted = new Set(displayCodes);
+  const wanted = new Map<string, string>();
+  for (const code of displayCodes) {
+    const master = masterCodeOf(code);
+    if (master) wanted.set(master, code);
+  }
   sheet.ws.eachRow((row, r) => {
-    if (r === 1 || wanted.size === found.size) return;
-    const code = cellText(sheet, row, "Display Code");
-    if (!wanted.has(code) || found.has(code)) return;
+    if (r <= sheet.headerRow || wanted.size === found.size) return;
+    const code = wanted.get(cellText(sheet, row, "Display Code"));
+    if (!code || found.has(code)) return;
     found.set(code, {
       sheet: sheet.ws.name,
       cell: cellAddress(sheet, "Name", r),
@@ -152,7 +174,9 @@ async function main() {
   // workbook half is independent of the database half and is the one usually
   // left undone — and once the database is renamed the script has nothing left
   // to say about it, which is exactly when the reminder matters most.
-  console.log("\nThe workbook half — the next CBS import reads these cells:");
+  console.log(
+    "\nThe workbook half — the next cbs:expand reads these master cells:",
+  );
   const inWorkbook = await resolveWorkbookNames(
     RENAMES.map((r) => r.displayCode),
   );
@@ -161,7 +185,7 @@ async function main() {
     const at = inWorkbook.get(r.displayCode);
     if (!at) {
       console.log(
-        `  MISSING ${r.displayCode} → "${r.to}" — not in the workbook (recorded as ${r.workbookCell}); an import cannot carry this name`,
+        `  MISSING ${r.displayCode} → "${r.to}" — no account row in the master (recorded as ${r.workbookCell}); an expand cannot carry this name`,
       );
       continue;
     }
@@ -181,7 +205,10 @@ async function main() {
     // Keep whatever cost-type marker the cell carried — "(*)" marks the
     // account's own row and the import stores it, so dropping it would be a
     // second, silent edit.
-    pending.push({ cell: at.cell, value: `${r.to}${costTypeSuffixOf(at.value)}` });
+    pending.push({
+      cell: at.cell,
+      value: `${r.to}${costTypeSuffixOf(at.value)}`,
+    });
   }
 
   if (pending.length === 0) {
@@ -193,8 +220,10 @@ async function main() {
       `\n  Re-run with --workbook to apply ${pending.length === 1 ? "that edit" : `those ${pending.length} edits`}, or the next import reverts the rename.`,
     );
   } else {
-    const { cells } = await writeCbsWorkbookCells(pending);
-    console.log(`\n  Wrote ${cells.join(", ")} to CBS.xlsx.`);
+    const { cells } = await writeCbsWorkbookCells(pending, CBS_MASTER_PATH);
+    console.log(
+      `\n  Wrote ${cells.join(", ")} to CBS.master.xlsx. Next: npm run cbs:expand, then cbs:import.`,
+    );
   }
 }
 

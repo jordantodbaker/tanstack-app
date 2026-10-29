@@ -12,7 +12,7 @@ import {
 /**
  * Exercises the workbook loader on small workbooks generated here, so the
  * parsing rules (header detection, code validation, duplicate handling,
- * flag parsing, twin generation, ordering) are pinned without a fixture file.
+ * flag parsing, ordering) are pinned without a fixture file.
  */
 
 const HEADERS = [
@@ -278,7 +278,7 @@ afterAll(() => {
 });
 
 describe("loadCbsWorkbook", () => {
-  it("parses the Master CBS sheet, validates codes, de-duplicates and expands twins", async () => {
+  it("parses the Master CBS sheet, validates codes and de-duplicates", async () => {
     const path = join(dir, "master.xlsx");
     await writeWorkbook(path, [
       {
@@ -296,7 +296,7 @@ describe("loadCbsWorkbook", () => {
               "Material Code": "YES",
             }),
           ),
-          // Already present in the workbook → its generated twin is skipped.
+          // The account's own typed line, as the expanded sheet carries it.
           toRow(r("101-00-0000-00-M", "Civil Shop Materials")),
           // Cost Code cell disagrees with the Display Code → derived wins, counted.
           toRow(r("101-05-0000-00-0", "Earthwork", { "Cost Code": "WRONG" })),
@@ -328,10 +328,6 @@ describe("loadCbsWorkbook", () => {
     expect(report.sheet).toBe("Master CBS");
     expect(report.sheetRows).toBe(11);
     expect(report.originals).toBe(8);
-    expect(report.generatedSub).toBe(1);
-    expect(report.generatedMaterial).toBe(1);
-    expect(report.skippedExistingSub).toBe(0);
-    expect(report.skippedExistingMaterial).toBe(1);
     expect(report.costCodeMismatches).toBe(1);
     expect(report.invalid).toEqual([
       {
@@ -356,11 +352,10 @@ describe("loadCbsWorkbook", () => {
       },
     ]);
 
-    // Dictionary order: parents first, each original followed by its twins.
+    // Dictionary order: the hierarchy, parents first. Nothing is generated —
+    // the Sub Code / Material Code flags are stored, not acted on.
     expect(items.map((i) => i.displayCode)).toEqual([
       "100-00-0000-00-0",
-      "100-00-0000-00-S",
-      "100-00-0000-00-M",
       "101-00-0000-00-0",
       "101-00-0000-00-M",
       "101-05-0000-00-0",
@@ -384,19 +379,12 @@ describe("loadCbsWorkbook", () => {
       l6: "0",
       subReporting: true,
       materialCode: true,
-      rowType: "ORIGINAL",
       displayDescription: "100-00-0000-00-0:  Civil",
     });
-    expect(byCode.get("100-00-0000-00-S")).toMatchObject({
-      name: "Civil Subcontracts (S)",
-      l6: "S",
-      costCode: "10000000000S",
-      gl: "5200",
-      rowType: "SUB",
-      generatedFrom: "100-00-0000-00-0",
+    expect(byCode.get("101-00-0000-00-M")).toMatchObject({
+      l6: "M",
+      costCode: "10100000000M",
     });
-    // The workbook's own M row is kept as an original, not replaced by a twin.
-    expect(byCode.get("101-00-0000-00-M")?.rowType).toBe("ORIGINAL");
   });
 
   it("finds the header below a title block and falls back to the first sheet", async () => {

@@ -22,7 +22,7 @@ function CbsSection({
   exportView,
   focusCode = null,
   statusFilter = false,
-  dictionaryFilters = false,
+  rowTypeFilter = false,
 }: {
   title: string;
   description: string;
@@ -34,8 +34,8 @@ function CbsSection({
   focusCode?: string | null;
   /** Offer the Status filter — see `CbsDictionaryBrowser`. */
   statusFilter?: boolean;
-  /** Offer the Row Type and Material Type filters — the Dictionary's own. */
-  dictionaryFilters?: boolean;
+  /** Offer the Row Type filter — see `CbsDictionaryBrowser`. */
+  rowTypeFilter?: boolean;
 }) {
   return (
     <CbsSectionShell
@@ -51,8 +51,7 @@ function CbsSection({
         exportView={exportView}
         focusCode={focusCode}
         statusFilter={statusFilter}
-        rowTypeFilter={dictionaryFilters}
-        materialTypeFilter={dictionaryFilters}
+        rowTypeFilter={rowTypeFilter}
       />
     </CbsSectionShell>
   );
@@ -162,7 +161,7 @@ export function CbsDictionarySections({
         exportView="dictionary"
         focusCode={inDictionary ? focusCode : null}
         statusFilter
-        dictionaryFilters
+        rowTypeFilter
       />
     </div>
   );

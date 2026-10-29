@@ -5,9 +5,7 @@ import {
   buildCbsTree,
   cbsAncestorCodes,
   CBS_COST_TYPES,
-  cbsClassificationOptions,
   cbsIsBackbone,
-  cbsMaterialTypeOptions,
   pruneCbsTree,
   type CbsTreeNode,
 } from "~/lib/cbs-tree";
@@ -157,7 +155,6 @@ export function CbsDictionaryBrowser({
   focusCode = null,
   statusFilter = false,
   rowTypeFilter = false,
-  materialTypeFilter = false,
 }: {
   items: CbsBrowserRow[];
   sourceNote: string;
@@ -172,11 +169,6 @@ export function CbsDictionaryBrowser({
   statusFilter?: boolean;
   /** Offer All / Original / Generated. The CBS Dictionary only. */
   rowTypeFilter?: boolean;
-  /**
-   * Offer the Material Type picker while Materials is on. The CBS Dictionary
-   * only.
-   */
-  materialTypeFilter?: boolean;
   /** Which view to export as Excel. Omit to leave the button out. */
   exportView?: CbsExportView;
   /**
@@ -225,17 +217,11 @@ export function CbsDictionaryBrowser({
     };
     setSelected(find(nodes));
   }, [focusCode, nodes, reveal]);
-  const classificationOptions = React.useMemo(
-    () => cbsClassificationOptions(items),
-    [items],
-  );
-  const materialTypeOptions = React.useMemo(
-    () => (materialTypeFilter ? cbsMaterialTypeOptions(items) : undefined),
-    [items, materialTypeFilter],
-  );
+  // Every tree offers the same filters, Status and Row Type apart: those two
+  // belong to the Dictionary, the one view that lists inactive and generated
+  // rows as a matter of course.
   const { filter, filtering, controls } = useCbsRowFilter({
-    classificationOptions,
-    materialTypeOptions,
+    items,
     statusFilter,
     rowTypeFilter,
   });

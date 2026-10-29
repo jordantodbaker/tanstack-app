@@ -66,23 +66,25 @@ const INDIRECTS = [
 
 // Administration & Home Office rows. "Home Office Construction Support" sums
 // all of L1 012 (via the `byL1` bucket). The remaining rows are the L2 sub-
-// accounts of L1 013 ("Project Costs") and sum at that level + their children
-// (via the `byL1L2` bucket, keyed by the de-dashed 5-char L1+L2 prefix).
+// accounts of L1 032, under the 030 Special Project Costs division (they were
+// L1 013 "Project Costs" until 2026-10-29), and sum at that level + their
+// children (via the `byL1L2` bucket, keyed by the de-dashed 5-char L1+L2
+// prefix).
 const SUMMARY_ADMIN_HOME_OFFICE: {
   label: string;
   uom: string;
   /** Sum the whole L1 division (3-char). */
   l1?: string;
-  /** Sum one L2 sub-account (5-char de-dashed L1+L2, e.g. "01310"). */
+  /** Sum one L2 sub-account (5-char de-dashed L1+L2, e.g. "03205"). */
   l1l2?: string;
 }[] = [
   { label: "Home Office Construction Support", uom: "HR", l1: "012" },
-  { label: "Bonds", uom: "LS", l1l2: "01310" },
-  { label: "Insurance", uom: "LS", l1l2: "01320" },
-  { label: "Finance Charges", uom: "LS", l1l2: "01330" },
-  { label: "Taxes", uom: "LS", l1l2: "01340" },
-  { label: "Permitting", uom: "LS", l1l2: "01350" },
-  { label: "Licenses", uom: "LS", l1l2: "01360" },
+  { label: "Bonds", uom: "LS", l1l2: "03205" },
+  { label: "Insurance", uom: "LS", l1l2: "03210" },
+  { label: "Finance Charges", uom: "LS", l1l2: "03215" },
+  { label: "Taxes", uom: "LS", l1l2: "03220" },
+  { label: "Permitting", uom: "LS", l1l2: "03225" },
+  { label: "Licenses", uom: "LS", l1l2: "03230" },
 ];
 
 // Each Engineering & Design row is a parent CBS item (L1 code) under the
@@ -218,10 +220,13 @@ export function buildSummaryRows(
 ): SummarySections {
   const disciplineRows: SummaryRow[] = [];
   for (const { label, uom, digit } of SUMMARY_DISCIPLINES) {
-    const material = digit !== null ? (dbTotals?.materialsByDigit[digit] ?? 0) : 0;
+    const material =
+      digit !== null ? (dbTotals?.materialsByDigit[digit] ?? 0) : 0;
     const labor = digit !== null ? (dbTotals?.laborByDigit[digit] ?? 0) : 0;
-    const hours = digit !== null ? (dbTotals?.laborHoursByDigit[digit] ?? 0) : 0;
-    const quantity = digit !== null ? (dbTotals?.quantityByDigit[digit] ?? 0) : 0;
+    const hours =
+      digit !== null ? (dbTotals?.laborHoursByDigit[digit] ?? 0) : 0;
+    const quantity =
+      digit !== null ? (dbTotals?.quantityByDigit[digit] ?? 0) : 0;
     // Rows like "Structural Steel Shop" / "Piping Shop" have no underlying
     // discipline, so neither id nor route are set and no link renders.
     disciplineRows.push(
@@ -253,8 +258,7 @@ export function buildSummaryRows(
         ...row,
         hrs: craftSupportHours > 0 ? formatMoney(craftSupportHours) : "",
         rate: craftSupportRate > 0 ? formatMoney(craftSupportRate) : "",
-        totalLabor:
-          craftSupportTotal > 0 ? formatMoney(craftSupportTotal) : "",
+        totalLabor: craftSupportTotal > 0 ? formatMoney(craftSupportTotal) : "",
       };
     }
     return row;

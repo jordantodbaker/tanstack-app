@@ -1,16 +1,14 @@
 /**
- * Loads the CBS workbook (`prisma/data/CBS.xlsx`) and expands it
- * into the CBS Dictionary the app stores in `CbsItem`:
+ * Loads the CBS workbook (`prisma/data/CBS.xlsx`) into the CBS Dictionary the
+ * app stores in `CbsItem`: one item per sheet row.
  *
- *   - every workbook row ("ORIGINAL"), plus
- *   - for each row with Sub Code = YES, a "SUB" twin whose cost type (the
- *     trailing code segment) is `S`, and
- *   - for each row with Material Code = YES, a "MATERIAL" twin with type `M`.
- *
- * A twin is skipped when the workbook already carries that code. Generated
- * rows copy the original, suffix the name ("… Subcontracts" / "… Materials"),
- * set the G/L (5200 / 5100) and record `generatedFrom` — the same shape as
- * the "CBS S-M Generated" dictionary sheet.
+ * The sheet is the expanded one `cbs:expand` writes from the condensed master
+ * — a "-0" roll-up row per account plus a typed line per cost type the account
+ * carries — so nothing is generated here. (The loader used to add S / M twins
+ * for accounts flagged Sub Code / Material Code; the expand script owns every
+ * cost type now, with one set of rules in `src/lib/cbs-workbook-expand.ts`.)
+ * What the loader does to every row is validate the code, normalize a
+ * four-segment summary code to the "-0" backbone, and derive the levels.
  *
  * The workbook's own L1–L6 helper columns and outline levels are NOT trusted
  * (they disagree with the Display Code in ~1,100 rows); every level segment is
@@ -21,35 +19,24 @@
  * Shared by the seed (`prisma/seed.ts`) and the live-DB re-import
  * (`scripts/import-cbs.ts`).
  */
-import ExcelJS from "exceljs";
-import { readFileSync, statSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
-import { unzipSync, zipSync, strToU8, strFromU8 } from "fflate";
+import { statSync } from "node:fs";
 import {
   compareCbsDisplayCodes,
   parseCbsDisplayCode,
 } from "../src/lib/cbs-tree";
-import {
-  expandCbsDictionary,
-  type CbsDictionaryRow,
-} from "../src/lib/cbs-dictionary";
+import type { CbsDictionaryRow } from "../src/lib/cbs-dictionary";
+import { CBS_WORKBOOK_PATH, openCbsSheet } from "./cbs-sheet";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-export const CBS_WORKBOOK_PATH = join(__dirname, "data", "CBS.xlsx");
-
-export type { CbsRowType, CbsDictionaryRow } from "../src/lib/cbs-dictionary";
+export type { CbsDictionaryRow } from "../src/lib/cbs-dictionary";
+export { CBS_WORKBOOK_PATH, CBS_MASTER_PATH, SHEET_NAMES } from "./cbs-sheet";
 
 export type CbsWorkbookReport = {
   source: string;
   sheet: string;
   /** Non-empty workbook rows read (before de-duplication). */
   sheetRows: number;
+  /** Distinct, valid rows loaded — the dictionary's size. */
   originals: number;
-  generatedSub: number;
-  generatedMaterial: number;
-  skippedExistingSub: number;
-  skippedExistingMaterial: number;
   /** Rows whose "Cost Code" cell disagreed with the Display Code (derived wins). */
   costCodeMismatches: number;
   /**
@@ -77,9 +64,6 @@ export type CbsWorkbookReport = {
   invalid: { row: number; displayCode: string; name: string; reason: string }[];
 };
 
-/** Sheet names to look for, in order, before falling back to the first. */
-export const SHEET_NAMES = ["CBS", "CBS Expanded", "Master CBS"] as const;
-
 const DISPLAY_CODE_RE =
   /^[0-9A-Z]{3}-[0-9A-Z]{2}-[0-9A-Z]{4}-[0-9A-Z]{2}-[0-9A-Z]$/;
 
@@ -99,41 +83,6 @@ function normalizeDisplayCode(raw: string): string {
 
 /** The cost type a summary row carries once normalized. */
 const BACKBONE_COST_TYPE = "0";
-
-/**
- * ExcelJS throws on the `colorFilter` autofilter nodes inside Excel Tables.
- * Strip the table parts in memory — only cell values are needed. A no-op for
- * workbooks without tables.
- */
-function stripTables(bytes: Uint8Array): Uint8Array {
-  const files = unzipSync(bytes);
-  const out: Record<string, Uint8Array> = {};
-  for (const [path, data] of Object.entries(files)) {
-    if (path.startsWith("xl/tables/")) continue;
-    if (path.startsWith("xl/worksheets/") && path.endsWith(".xml")) {
-      out[path] = strToU8(
-        strFromU8(data).replace(/<tableParts[^>]*>[\s\S]*?<\/tableParts>/g, ""),
-      );
-    } else if (path.includes("/worksheets/_rels/") && path.endsWith(".rels")) {
-      out[path] = strToU8(
-        strFromU8(data).replace(
-          /<Relationship[^>]*relationships\/table[^>]*\/>/g,
-          "",
-        ),
-      );
-    } else if (path === "[Content_Types].xml") {
-      out[path] = strToU8(
-        strFromU8(data).replace(
-          /<Override[^>]*spreadsheetml\.table\+xml[^>]*\/>/g,
-          "",
-        ),
-      );
-    } else {
-      out[path] = data;
-    }
-  }
-  return zipSync(out);
-}
 
 function toBool(v: string): boolean | null {
   const t = v.trim().toUpperCase();
@@ -190,41 +139,13 @@ export async function loadCbsWorkbookCached(
 export async function loadCbsWorkbook(
   path: string = CBS_WORKBOOK_PATH,
 ): Promise<{ items: CbsDictionaryRow[]; report: CbsWorkbookReport }> {
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(Buffer.from(stripTables(readFileSync(path))) as never);
-  // Prefer a sheet named for the CBS, but fall back to the first one so a
-  // renamed tab does not break the import — the header scan below is what
-  // actually validates that we are reading the right thing.
-  const ws =
-    SHEET_NAMES.map((n) => wb.getWorksheet(n)).find(Boolean) ??
-    wb.worksheets[0];
-  if (!ws) throw new Error(`${path}: workbook has no sheets`);
-
-  // The header row is wherever "Display Code" appears (row 1 in the CBS sheet,
-  // row 4 in the dictionary-style sheets that carry a title block).
-  let headerRow = 0;
-  const headers: string[] = [];
-  for (let r = 1; r <= Math.min(ws.rowCount, 10) && !headerRow; r++) {
-    const found: string[] = [];
-    ws.getRow(r).eachCell({ includeEmpty: true }, (cell, col) => {
-      found[col] = (cell.text ?? "").trim();
-    });
-    if (found.includes("Display Code")) {
-      headerRow = r;
-      headers.push(...found);
-    }
-  }
-  if (!headerRow) {
-    throw new Error(`${path} [${ws.name}]: no header row with "Display Code"`);
-  }
-  const col = (label: string): number => {
-    const exact = headers.indexOf(label);
-    if (exact >= 0) return exact;
-    return headers.findIndex((h) => h && h.startsWith(label));
-  };
-  const required = ["Display Code", "Name"] as const;
-  for (const label of required) {
-    if (col(label) < 0) {
+  // Which sheet, where the header row is, how a column is matched: see
+  // `openCbsSheet`. Only "Display Code" and "Name" are required; every other
+  // column is read when present and null when not.
+  const sheet = await openCbsSheet(path);
+  const { ws, headerRow, col } = sheet;
+  for (const label of ["Display Code", "Name"] as const) {
+    if (!col(label)) {
       throw new Error(`${path} [${ws.name}]: missing "${label}" column`);
     }
   }
@@ -234,10 +155,6 @@ export async function loadCbsWorkbook(
     sheet: ws.name,
     sheetRows: 0,
     originals: 0,
-    generatedSub: 0,
-    generatedMaterial: 0,
-    skippedExistingSub: 0,
-    skippedExistingMaterial: 0,
     costCodeMismatches: 0,
     segmentMismatches: [],
     duplicates: [],
@@ -344,8 +261,6 @@ export async function loadCbsWorkbook(
       description: or("Description"),
       notes: or("Notes"),
       displayDescription: `${displayCode}:  ${name}`,
-      rowType: "ORIGINAL",
-      generatedFrom: null,
       // "Original Row" was "Master Row" and before that "Master CBS Row"; read
       // any of them so an older copy of the workbook still traces. The current
       // workbook reuses the header for a TRUE / FALSE flag instead (below), so
@@ -373,32 +288,19 @@ export async function loadCbsWorkbook(
 
   report.segmentMismatches = [...segmentMismatches.values()];
 
-  const originals = [...byCode.values()].sort((a, b) =>
+  // Hierarchy order — parents before children, an account's typed lines
+  // right after its roll-up — so ascending ids read like the dictionary.
+  const items = [...byCode.values()].sort((a, b) =>
     compareCbsDisplayCodes(a.displayCode, b.displayCode),
   );
-  report.originals = originals.length;
-
-  const expanded = expandCbsDictionary(originals);
-  report.generatedSub = expanded.generatedSub;
-  report.generatedMaterial = expanded.generatedMaterial;
-  report.skippedExistingSub = expanded.skippedExistingSub;
-  report.skippedExistingMaterial = expanded.skippedExistingMaterial;
-
-  // Final order follows the hierarchy (parents before children, S/M twins
-  // right after their original) so ascending ids read like the dictionary.
-  const items = expanded.items.sort((a, b) =>
-    compareCbsDisplayCodes(a.displayCode, b.displayCode),
-  );
+  report.originals = items.length;
   return { items, report };
 }
 
 export function formatCbsWorkbookReport(report: CbsWorkbookReport): string {
   const lines = [
     `Master CBS: ${report.source} [${report.sheet}]`,
-    `  workbook rows ${report.sheetRows} → originals ${report.originals}` +
-      ` (+${report.generatedSub} generated S, +${report.generatedMaterial} generated M;` +
-      ` skipped ${report.skippedExistingSub} S / ${report.skippedExistingMaterial} M already present)`,
-    `  dictionary total: ${report.originals + report.generatedSub + report.generatedMaterial}`,
+    `  workbook rows ${report.sheetRows} → dictionary rows ${report.originals}`,
   ];
   if (report.costCodeMismatches) {
     lines.push(

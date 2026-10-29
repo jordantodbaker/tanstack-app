@@ -1,13 +1,17 @@
 import * as React from "react";
 import {
+  CBS_VALUE_FILTERS,
   cbsFilterIsEmpty,
   cbsNoCostTypes,
   cbsNoStatuses,
+  cbsNoValues,
+  cbsValueFilterOptions,
   type CbsCostTypeKey,
   type CbsRowFilter,
   type CbsRowTypeFilter,
   type CbsStatusKey,
-  type CbsValueOption,
+  type CbsTreeItem,
+  type CbsValueFilterKey,
 } from "~/lib/cbs-tree";
 import type { CbsTreeFilterControls } from "~/components/Cbs/CbsTreeToolbar";
 
@@ -16,24 +20,23 @@ import type { CbsTreeFilterControls } from "~/components/Cbs/CbsTreeToolbar";
  * folded into the one `CbsRowFilter` that `pruneCbsTree`, `filterCbsTree` and
  * the Excel export all take.
  *
+ * Every CBS tree offers the same filters, Status and Row Type apart (those
+ * are the Dictionary's, so a page opts into them). The value pickers'
+ * option lists are counted from `items`, the rows the view lists, so a picker
+ * never offers a value that could only filter to nothing.
+ *
  * Every filter is always in the returned `filter`; a page that does not offer
  * one simply never changes it from its "everything" value, and its control is
  * left off the toolbar because the handler is not handed out.
  */
 export function useCbsRowFilter({
-  classificationOptions,
-  materialTypeOptions,
+  items,
   statusFilter = false,
   rowTypeFilter = false,
   deferQuery = false,
 }: {
-  /** The Cost Classifications to offer — see `cbsClassificationOptions`. */
-  classificationOptions: readonly CbsValueOption[];
-  /**
-   * The Material Types to offer — see `cbsMaterialTypeOptions`. Passing them
-   * turns the picker on; it shows only while Materials is pressed.
-   */
-  materialTypeOptions?: readonly CbsValueOption[];
+  /** The rows the view lists — what the value pickers offer values from. */
+  items: readonly CbsTreeItem[];
   /** Offer Active / Inactive / Retired. */
   statusFilter?: boolean;
   /** Offer All / Original / Generated. */
@@ -57,13 +60,30 @@ export function useCbsRowFilter({
   const deferredQuery = React.useDeferredValue(query);
   const appliedQuery = deferQuery ? deferredQuery : query;
 
+  const [values, setValues] = React.useState(cbsNoValues);
+  const setValue = React.useCallback(
+    (key: CbsValueFilterKey, next: string[]) =>
+      setValues((prev) => ({ ...prev, [key]: next })),
+    [],
+  );
+  const valueOptions = React.useMemo(
+    () => cbsValueFilterOptions(items),
+    [items],
+  );
+
   const [costTypes, setCostTypes] = React.useState(cbsNoCostTypes);
-  const [materialTypes, setMaterialTypes] = React.useState<string[]>([]);
   const toggleCostType = React.useCallback((key: CbsCostTypeKey) => {
     setCostTypes((prev) => ({ ...prev, [key]: !prev[key] }));
-    // The Material Type picker belongs to Materials; it starts fresh each
-    // time Materials is pressed rather than reviving an old pick.
-    if (key === "material") setMaterialTypes([]);
+    // A picker that belongs to a cost type (Material Type to Materials)
+    // starts fresh each time that type is pressed rather than reviving an
+    // old pick.
+    const owned = CBS_VALUE_FILTERS.filter((v) => v.requiresCostType === key);
+    if (owned.length > 0) {
+      setValues((prev) => ({
+        ...prev,
+        ...Object.fromEntries(owned.map((v) => [v.key, []])),
+      }));
+    }
   }, []);
 
   const [statuses, setStatuses] = React.useState(cbsNoStatuses);
@@ -73,18 +93,16 @@ export function useCbsRowFilter({
     [],
   );
   const [rowType, setRowType] = React.useState<CbsRowTypeFilter>("all");
-  const [classifications, setClassifications] = React.useState<string[]>([]);
 
   const filter: CbsRowFilter = React.useMemo(
     () => ({
       query: appliedQuery.trim().toLowerCase(),
-      classifications,
       rowType,
-      materialTypes,
+      ...values,
       ...costTypes,
       ...statuses,
     }),
-    [appliedQuery, classifications, rowType, materialTypes, costTypes, statuses],
+    [appliedQuery, rowType, values, costTypes, statuses],
   );
 
   return {
@@ -96,17 +114,13 @@ export function useCbsRowFilter({
       onQueryChange: setQuery,
       costTypes,
       onToggleCostType: toggleCostType,
+      values,
+      onValueChange: setValue,
+      valueOptions,
       statuses,
       onToggleStatus: statusFilter ? toggleStatus : undefined,
-      classifications,
-      onClassificationsChange: setClassifications,
-      classificationOptions,
       rowType,
       onRowTypeChange: rowTypeFilter ? setRowType : undefined,
-      materialTypes,
-      onMaterialTypesChange:
-        materialTypeOptions && costTypes.material ? setMaterialTypes : undefined,
-      materialTypeOptions,
     },
   };
 }

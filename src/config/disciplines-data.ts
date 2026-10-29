@@ -45,9 +45,14 @@ export const SUPPORT_L1_SUFFIXES = ["02", "32"];
  * The suffixes only mean something inside a discipline's block. 00X is the
  * project root — 001 is Project Development, not a materials account — and
  * reading it by suffix put Project Development's only code on the Materials
- * page and off its own take-off.
+ * page and off its own take-off. 03X is Special Project Costs (since
+ * 2026-10-29: 030 is the division root, 032 its Bonds / Insurance / Finance
+ * Charges / Taxes / Permitting / Licenses accounts), a division with no
+ * overhead block at all, so 032 is not a support-labor account either.
  */
-const inDisciplineBlock = (l1: string) => !l1.startsWith("00");
+const NON_DISCIPLINE_DIVISIONS = ["00", "03"];
+const inDisciplineBlock = (l1: string) =>
+  !NON_DISCIPLINE_DIVISIONS.some((p) => l1.startsWith(p));
 
 /** Belongs on the Materials sheet, not a take-off. */
 export const isMaterialL1 = (l1: string) =>
@@ -76,12 +81,15 @@ export const disciplinesData: DisciplineData[] = [
     id: "administration",
     label: "Administration & Home Office",
     to: "/administration",
-    // 013 ("Project Costs") covers Bonds / Insurance / Finance Charges /
-    // Taxes / Permitting / Licenses — surfaced as L2 sub-account rows on
-    // the Summary page. Listed here so its CBS items also show in the
+    // 030 Special Project Costs is a CBS division of its own since 2026-10-29
+    // (it was L1 013 "Project Costs" before), with 032 holding Bonds /
+    // Insurance / Finance Charges / Taxes / Permitting / Licenses — surfaced
+    // as L2 sub-account rows on the Summary page. Owned here, as the
+    // workbook's Discipline column says, so its CBS items show in this
     // discipline's Take Off picker and roll back up under "administration"
-    // via the auto-derived `L1_TO_DISCIPLINE` reverse map.
-    l1Codes: ["010", "012", "013", "014", "015", "016", "017", "019"],
+    // via the auto-derived `L1_TO_DISCIPLINE` reverse map. 019 left the
+    // workbook at the same time.
+    l1Codes: ["010", "012", "013", "014", "015", "016", "017", "030", "032"],
   },
   {
     id: "engineering",
@@ -93,7 +101,10 @@ export const disciplinesData: DisciplineData[] = [
     id: "procurement",
     label: "Procurement",
     to: "/procurement",
-    l1Codes: ["030", "031", "032", "033", "034"],
+    // Moved from 03X to 04X on 2026-10-29, when 030 became Special Project
+    // Costs: 040 summary, 041 bulk materials, 042 support labor, 043
+    // activities, 044 engineered equipment.
+    l1Codes: ["040", "041", "042", "043", "044"],
   },
   {
     id: "indirects",
@@ -121,6 +132,7 @@ export const disciplinesData: DisciplineData[] = [
       "140",
       "141",
       "142",
+      "143",
       "150",
     ],
   },
@@ -171,7 +183,24 @@ export const disciplinesData: DisciplineData[] = [
     id: "buildings",
     label: "Buildings",
     to: "/buildings",
-    l1Codes: ["400", "431", "432", "434", "440"],
+    // 441–449 are the building trades (Concrete, Metals, Doors & Windows,
+    // Enclosure, Wood & Plastics, Finishes, Specialties, Mechanical,
+    // Electrical) under 440 Building Construction; 431 left the workbook.
+    l1Codes: [
+      "400",
+      "432",
+      "434",
+      "440",
+      "441",
+      "442",
+      "443",
+      "444",
+      "445",
+      "446",
+      "447",
+      "448",
+      "449",
+    ],
   },
   {
     id: "equipment",
@@ -269,6 +298,7 @@ export const disciplinesData: DisciplineData[] = [
       "746",
       "747",
       "748",
+      "749",
     ],
   },
   {
@@ -287,6 +317,7 @@ export const disciplinesData: DisciplineData[] = [
       "841",
       "842",
       "843",
+      "844",
     ],
   },
   {
@@ -301,6 +332,7 @@ export const disciplinesData: DisciplineData[] = [
       "931",
       "932",
       "934",
+      "939",
       "940",
       "941",
       "942",
@@ -332,7 +364,7 @@ export const disciplinesData: DisciplineData[] = [
     id: "operations",
     label: "Operations",
     to: "/operations",
-    l1Codes: ["970", "971", "972", "973", "974", "975", "976", "977"],
+    l1Codes: ["970", "971", "972", "973", "974", "975", "976", "977", "979"],
   },
   {
     id: "contingency",

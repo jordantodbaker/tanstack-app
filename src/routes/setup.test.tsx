@@ -71,11 +71,7 @@ beforeEach(() => {
 });
 
 let nextId = 1;
-function item(
-  displayCode: string,
-  name: string,
-  rowType: CbsTreeItem["rowType"] = "ORIGINAL",
-): SetupItem {
+function item(displayCode: string, name: string): SetupItem {
   return {
     id: nextId++,
     ...parseCbsDisplayCode(displayCode),
@@ -83,7 +79,6 @@ function item(
     name,
     uom: "LS",
     accountDescription: name,
-    rowType,
     subReporting: null,
     materialCode: null,
     laborCode: null,
@@ -95,6 +90,7 @@ function item(
     status: "Active",
     costClassification: null,
     materialType: null,
+    discipline: null,
     isOriginal: null,
   };
 }
@@ -104,10 +100,10 @@ function item(
 const civil = item("100-00-0000-00-0", "Civil");
 const shop = item("101-00-0000-00-0", "Civil Shop Materials");
 const earthwork = item("101-05-0000-00-0", "Earthwork & Trenching");
-const topsoil = item("101-05-0500-00-M", "Topsoil", "MATERIAL");
+const topsoil = item("101-05-0500-00-M", "Topsoil");
 const piping = item("600-00-0000-00-0", "Piping");
 const retired = {
-  ...item("101-05-0600-00-M", "Hot Tap (reserved)", "MATERIAL"),
+  ...item("101-05-0600-00-M", "Hot Tap (reserved)"),
   status: "Inactive",
 };
 const CATALOG = [civil, shop, earthwork, topsoil, piping, retired];
@@ -123,8 +119,6 @@ function detail(
     costCode: row.displayCode.replace(/-/g, ""),
     name: row.name,
     uom: row.uom,
-    rowType: row.rowType,
-    generatedFrom: null,
     // Workbook provenance, shown at the bottom of the detail pane.
     originalRow: null,
     expandedRow: null,
@@ -226,7 +220,10 @@ describe("Setup page", () => {
     // with no expiry. Unless a save invalidates that cache, a newly granted
     // code never reaches the Name picker until a full reload.
     const { qc } = renderSetup([topsoil.id]);
-    const picker = qk.cbs.itemsByL1Filtered({ l1Values: ["100"], projectId: 1 });
+    const picker = qk.cbs.itemsByL1Filtered({
+      l1Values: ["100"],
+      projectId: 1,
+    });
     qc.setQueryData(picker, []);
     expect(qc.getQueryState(picker)?.isInvalidated).toBe(false);
 
@@ -261,10 +258,6 @@ describe("Setup page", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
     expect(within(tree).getByText("Topsoil")).toBeInTheDocument();
-    // Generated rows carry their S/M marker.
-    expect(within(tree).getByTitle("Generated material row")).toHaveTextContent(
-      "M",
-    );
 
     fireEvent.click(screen.getByRole("button", { name: "Collapse all" }));
     expect(within(tree).queryByText("Topsoil")).toBeNull();
@@ -372,6 +365,17 @@ describe("Setup filters", () => {
     // Carries Material Code YES, but is the subcontract line.
     expect(shown()).not.toContain("Welding Subs");
     expect(shown()).not.toContain("Welding Labor");
+  });
+
+  it("offers the Material type picker once Materials is pressed, like the other trees", () => {
+    renderSetup([], WELDING);
+    expect(
+      screen.queryByRole("button", { name: /^Material type:/ }),
+    ).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Materials" }));
+    expect(
+      screen.getByRole("button", { name: /^Material type:/ }),
+    ).toHaveTextContent("All material types");
   });
 
   it("offers the Cost Classification picker with the catalog's values", () => {

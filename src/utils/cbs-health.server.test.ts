@@ -177,7 +177,6 @@ function sheetRow(displayCode: string, over: Record<string, unknown> = {}) {
     costCode: displayCode.replace(/-/g, ""),
     name: `Account ${displayCode}`,
     originalRow: 10,
-    rowType: "ORIGINAL",
     ...over,
   };
 }
@@ -188,10 +187,6 @@ const CLEAN_REPORT = {
   sheet: "CBS",
   sheetRows: 0,
   originals: 0,
-  generatedSub: 0,
-  generatedMaterial: 0,
-  skippedExistingSub: 0,
-  skippedExistingMaterial: 0,
   costCodeMismatches: 0,
   segmentMismatches: [],
   duplicates: [],

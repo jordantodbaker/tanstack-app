@@ -338,9 +338,7 @@ describe("accumulateProjectTotals", () => {
         }),
       ]);
 
-      const byId = Object.fromEntries(
-        totals.byArea.map((a) => [a.areaId, a]),
-      );
+      const byId = Object.fromEntries(totals.byArea.map((a) => [a.areaId, a]));
       expect(byId["1"]).toEqual({
         areaId: "1",
         directByDigit: { "6": 230 }, // 200 labor + 30 material
@@ -441,12 +439,36 @@ describe("accumulateProjectTotals", () => {
     // stops covering a field.
     it("counts rows touched only through the newer columns", () => {
       const totals = accumulateProjectTotals([
-        row({ section: "TAKE_OFF", discipline: "piping", ...BLANK, drawingNumber: "P-101" }),
-        row({ section: "TAKE_OFF", discipline: "piping", ...BLANK, lineSpec: "CS150" }),
-        row({ section: "TAKE_OFF", discipline: "civil", ...BLANK, siteFactor: "1.2" }),
-        row({ section: "TAKE_OFF", discipline: "steel", ...BLANK, shapeCount: "3" }),
+        row({
+          section: "TAKE_OFF",
+          discipline: "piping",
+          ...BLANK,
+          drawingNumber: "P-101",
+        }),
+        row({
+          section: "TAKE_OFF",
+          discipline: "piping",
+          ...BLANK,
+          lineSpec: "CS150",
+        }),
+        row({
+          section: "TAKE_OFF",
+          discipline: "civil",
+          ...BLANK,
+          siteFactor: "1.2",
+        }),
+        row({
+          section: "TAKE_OFF",
+          discipline: "steel",
+          ...BLANK,
+          shapeCount: "3",
+        }),
       ]);
-      expect(totals.invalidByDiscipline).toEqual({ piping: 2, civil: 1, steel: 1 });
+      expect(totals.invalidByDiscipline).toEqual({
+        piping: 2,
+        civil: 1,
+        steel: 1,
+      });
     });
 
     it("ignores SUPPORT_LABOR and MATERIALS rows", () => {
@@ -559,21 +581,21 @@ describe("accumulateProjectTotals", () => {
         row({
           section: "TAKE_OFF",
           discipline: "administration",
-          cbsCode: "013-10-2000-00-O",
+          cbsCode: "032-05-2000-00-O",
           laborHours: "8",
           laborRate: "100",
         }),
         row({
           section: "TAKE_OFF",
           discipline: "administration",
-          cbsCode: "013-20-0000-00-O",
+          cbsCode: "032-10-0000-00-O",
           laborHours: "5",
           laborRate: "100",
         }),
       ]);
-      expect(totals.laborByL1L2).toEqual({ "01310": 800, "01320": 500 });
-      // The L1 bucket still rolls both L2s up under "013".
-      expect(totals.laborByL1).toEqual({ "013": 1300 });
+      expect(totals.laborByL1L2).toEqual({ "03205": 800, "03210": 500 });
+      // The L1 bucket still rolls both L2s up under "032".
+      expect(totals.laborByL1).toEqual({ "032": 1300 });
     });
 
     it("buckets MATERIALS by L1+L2", () => {

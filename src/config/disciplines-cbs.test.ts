@@ -46,7 +46,10 @@ const UNCLAIMED_BACKLOG: Record<string, string> = {};
  */
 const DISCIPLINE_ROOT_NAME: Record<string, string> = {
   "project-development": "Project Development",
-  administration: "Administration & Home Office Management",
+  // Renamed from "Administration & Home Office Management" in the 2026-10-29
+  // workbook, the one that moved Procurement to 04X and gave Special Project
+  // Costs its own 030 division.
+  administration: "Home Office and Administration",
   engineering: "Engineering & Design",
   procurement: "Procurement",
   indirects: "Field Indirects",
@@ -174,7 +177,9 @@ describe("disciplines-data against the CBS workbook", () => {
       .filter((l1) => isMaterialL1(l1) || isSupportL1(l1))
       .map((l1) => ({ l1, name: rootNameOf(l1) }))
       .filter(({ l1, name }) =>
-        isMaterialL1(l1) ? !/material/i.test(name) : !/staff|support/i.test(name),
+        isMaterialL1(l1)
+          ? !/material/i.test(name)
+          : !/staff|support/i.test(name),
       )
       .map(({ l1, name }) => `${l1} "${name}"`);
     expect(wrong).toEqual([]);

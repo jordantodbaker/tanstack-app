@@ -509,20 +509,27 @@ follow-up feature (a scheduled job marking and removing eligible projects).
 
 ## 11a. Updating the CBS
 
-The CBS lives in `prisma/data/CBS.xlsx`. The loader takes the sheet named
+The CBS is maintained condensed in `prisma/data/CBS.master.xlsx`;
+`npm run cbs:expand` generates `prisma/data/CBS.xlsx`, which is what the
+loader reads. The loader takes the sheet named
 "CBS", falling back to "CBS Expanded", "Master CBS" and then to the first sheet
 (`SHEET_NAMES` in [cbs-workbook.ts](../prisma/cbs-workbook.ts)). The app
-stores the _expanded_ CBS Dictionary in `CbsItem`. Since the 2026-10 workbook
-the sheet arrives pre-expanded: every row flagged **Labor**, **Sub**,
-**Material**, **Equipment** or **Other Code** already carries its typed
-companion, so the loader's own `S`/`M` generation now fills gaps rather than
-doing the bulk of the work. On every row it normalizes a summary code written
-with four segments (`012-05-0000-00`) by adding the `-0` backbone segment.
+stores the _expanded_ CBS Dictionary in `CbsItem`. Since 2026-10 the master is
+condensed (one row per account, four-segment codes, a YES/NO flag per cost
+type) and `cbs:expand` writes the expanded sheet: a `-0` roll-up row per
+account plus a typed companion for every row flagged **Labor**, **Sub**,
+**Material**, **Equipment**, **Other** or **Rental Code**, with the code
+suffix, G/L, cost classification, name marker and description each rule sets
+(`src/lib/cbs-workbook-expand.ts`). A Material Type of **Both** becomes a Bulk
+and a Tagged material row. The loader generates nothing itself — it stores one
+item per sheet row (its own `S`/`M` twin generation, and the `rowType` /
+`generatedFrom` columns that recorded it, were removed on 2026-10-29). On
+every row it normalizes a summary code written with four segments
+(`012-05-0000-00`) by adding the `-0` backbone segment.
 Names are stored as the workbook writes them, cost-type marker included
-(`Executive (L)`), so the CBS Dictionary shows each line's cost type; the Cost
-Accounts list on the CBS Code Book strips the marker because its badges
-already show it. A generated twin is skipped when the workbook
-already carries that code. Level segments are derived from the Display Code,
+(`Executive (L)`), so every CBS view shows each line's cost type in its name
+and in the last segment of its code. Level segments are derived from the
+Display Code,
 not from the workbook's L1–L6 helper columns. See `prisma/cbs-workbook.ts`.
 
 The 2026-10 sheet also carries **Original Row** and **Expanded Row**, stored
@@ -540,24 +547,28 @@ anything reading by column letter would have written into the wrong cell.
 
 When a new master arrives:
 
-1. Replace `prisma/data/CBS.xlsx` (same sheet/column layout).
-   1a. `npm run cbs:repair` — twice now a fresh copy has arrived carrying the same
-   two defects, and both are invisible until an import runs: ~1,100 engineering
-   Display Codes with their cost type written twice (`022-00-0000-00-0-S`),
-   which the loader rejects so the import reads them as _deleted_ and cascades
-   every project's grants away; and the 95/96 division renumber. Dry run by
-   default, `-- --apply` to write, backs the file up first, and is safe to run
-   on a workbook that is already clean. Then `npm run cbs:rename -- --workbook`
-   to re-apply account renames the new copy reverted.
+1. Replace `prisma/data/CBS.master.xlsx` (same sheet/column layout), then
+   `npm run cbs:expand -- --dry-run` to see the plan and `npm run cbs:expand`
+   to write `prisma/data/CBS.xlsx`. It refuses an already-expanded file,
+   derives every cost code from its Display Code, and lists the Material Type
+   Both accounts, whose two material rows share one code (the loader keeps the
+   first, Bulk). Commit both files; `CBS.xlsx` is generated, so a fix belongs
+   in the master.
+   1a. `npm run cbs:rename -- --workbook` re-applies the standing account
+   renames to the master if a new copy reverted them (a no-op while the
+   master already carries them). `cbs:repair` is gone: the defects it fixed
+   came with upstream-expanded workbooks, and the expand script now validates
+   the master and generates every code itself.
 2. `npm run cbs:import -- --dry-run` — prints the workbook report (duplicate
-   codes, invalid rows, generated-twin counts) and the create/update/delete
+   codes, invalid rows, row counts) and the create/update/delete
    plan without writing anything. Fix the workbook if the report flags
    duplicates you didn't expect.
 3. `DATABASE_URL=<env-url> npm run cbs:import` — upserts by cost code so
    existing rows keep their ids and every project's Setup allow-list
    survives. Codes that no longer exist are deleted (and drop out of the
-   allow-lists). Brand-new codes, including newly generated S/M twins, are
-   NOT auto-added to any project — grant them on the Setup page.
+   allow-lists). Brand-new codes, including the typed lines `cbs:expand`
+   produces for a newly flagged account, are NOT auto-added to any project —
+   grant them on the Setup page.
 4. `DATABASE_URL=<env-url> npm run piping:sync-codes` (preview with
    `-- --dry-run`) — pushes the piping metallurgy codes from
    `prisma/data/piping_groups.csv` into `PipingGroup.installCode` /
@@ -572,9 +583,10 @@ When a new master arrives:
    import takes every account's name straight from the workbook, so a name
    edited only in the database is reverted. `scripts/rename-cbs-accounts.ts`
    (`npm run cbs:rename`, preview with `-- --dry-run`) holds the renames that
-   have been applied this way, each recording the workbook cell the same edit
-   belongs in. Fix the workbook and the entry becomes a no-op; the script
-   refuses to touch a name that doesn't match what it expects.
+   have been applied this way; `-- --workbook` writes them into the master,
+   `CBS.master.xlsx`, where the next `cbs:expand` picks them up. Fix the
+   master and the entry becomes a no-op; the script refuses to touch a name
+   that doesn't match what it expects.
 
 The full seed (`prisma db seed`) loads the same workbook but wipes projects
 first; use it only for a fresh database.

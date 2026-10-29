@@ -12,7 +12,10 @@ import {
   CBS_BLANK_VALUE,
   CBS_ROW_TYPE_FILTERS,
   CBS_STATUSES,
+  CBS_VALUE_FILTERS,
   type CbsRowTypeFilter,
+  type CbsValueFilter,
+  type CbsValueFilterKey,
   type CbsValueOption,
   type CbsCostTypeKey,
   type CbsStatusKey,
@@ -22,10 +25,10 @@ const valueLabel = (value: string) =>
   value === CBS_BLANK_VALUE ? "(none)" : value;
 
 /**
- * A multi-select over one free-text column — Cost Classification, Material
- * Type: a button naming what is picked, and a checkbox list under it. A list
- * rather than buttons: the workbook carries too many values for a row of
- * toggles.
+ * A multi-select over one free-text column — one entry of
+ * `CBS_VALUE_FILTERS`: a button naming what is picked, and a checkbox list
+ * under it. A list rather than buttons: the workbook carries too many values
+ * for a row of toggles.
  */
 function ValuePicker({
   label,
@@ -164,29 +167,22 @@ export type CbsTreeFilterControls = {
   statuses?: Record<CbsStatusKey, boolean>;
   onToggleStatus?: (key: CbsStatusKey) => void;
   /**
-   * The Cost Classifications picked, empty for all. Omit the handler to leave
-   * the picker out.
+   * What each value picker has ticked, empty for all, by `CBS_VALUE_FILTERS`
+   * key. Omit the handler to leave the pickers out. A picker that belongs to
+   * a cost type shows only while that type is on.
    */
-  classifications?: readonly string[];
-  onClassificationsChange?: (next: string[]) => void;
-  /** The classifications to offer — see `cbsClassificationOptions`. */
-  classificationOptions?: readonly CbsValueOption[];
+  values?: Record<CbsValueFilterKey, readonly string[]>;
+  onValueChange?: (key: CbsValueFilterKey, next: string[]) => void;
+  /** Each picker's options — see `cbsValueFilterOptions`. */
+  valueOptions?: Record<CbsValueFilterKey, readonly CbsValueOption[]>;
   /** All / Original / Generated. Omit the handler to leave the row out. */
   rowType?: CbsRowTypeFilter;
   onRowTypeChange?: (next: CbsRowTypeFilter) => void;
-  /**
-   * The Material Types picked, empty for all. Omit the handler to leave the
-   * picker out — the Dictionary passes it only while Materials is on.
-   */
-  materialTypes?: readonly string[];
-  onMaterialTypesChange?: (next: string[]) => void;
-  /** The Material Types on the Materials lines — see `cbsMaterialTypeOptions`. */
-  materialTypeOptions?: readonly CbsValueOption[];
 };
 
 /**
- * Rows for a CBS tree: the cost-type, status and classification filters, then
- * the search box with
+ * Rows for a CBS tree: the value pickers around the cost-type buttons, then
+ * Status and Row Type where a page offers them, then the search box with
  * Expand all / Collapse all and a trailing slot for page-specific controls
  * (the Excel export, a match count, a selected count, saving…). Shared by the
  * Setup editor and the CBS dictionary viewers.
@@ -205,14 +201,11 @@ export function CbsTreeToolbar({
   onToggleCostType,
   statuses,
   onToggleStatus,
-  classifications = [],
-  onClassificationsChange,
-  classificationOptions = [],
+  values,
+  onValueChange,
+  valueOptions,
   rowType = "all",
   onRowTypeChange,
-  materialTypes = [],
-  onMaterialTypesChange,
-  materialTypeOptions = [],
   children,
 }: CbsTreeFilterControls & {
   placeholder?: string;
@@ -220,8 +213,28 @@ export function CbsTreeToolbar({
   onCollapseAll: () => void;
   children?: React.ReactNode;
 }) {
+  // A picker that belongs to a cost type (Material Type to Materials) appears
+  // only while that type is on, and only narrows that type's lines.
+  const pickers = (placement: CbsValueFilter["placement"]) =>
+    onValueChange &&
+    CBS_VALUE_FILTERS.filter(
+      (v) =>
+        v.placement === placement &&
+        (!v.requiresCostType || costTypes?.[v.requiresCostType]),
+    ).map((v) => (
+      <ValuePicker
+        key={v.key}
+        label={v.label}
+        plural={v.plural}
+        selected={values?.[v.key] ?? []}
+        options={valueOptions?.[v.key] ?? []}
+        onChange={(next) => onValueChange(v.key, next)}
+      />
+    ));
+
   return (
     <div className="mb-3 flex flex-col gap-2">
+      {pickers("before-cost-types")}
       {onToggleCostType && (
         <div
           className="flex flex-wrap items-center gap-2"
@@ -246,17 +259,7 @@ export function CbsTreeToolbar({
           })}
         </div>
       )}
-      {/* Directly under the cost types: it only appears while Materials is
-          on, and only narrows the Materials lines. */}
-      {onMaterialTypesChange && (
-        <ValuePicker
-          label="Material type"
-          plural="material types"
-          selected={materialTypes}
-          options={materialTypeOptions}
-          onChange={onMaterialTypesChange}
-        />
-      )}
+      {pickers("after-cost-types")}
       {onToggleStatus && (
         <div
           className="flex flex-wrap items-center gap-2"
@@ -283,15 +286,6 @@ export function CbsTreeToolbar({
       )}
       {onRowTypeChange && (
         <RowTypeToggle value={rowType} onChange={onRowTypeChange} />
-      )}
-      {onClassificationsChange && (
-        <ValuePicker
-          label="Cost classification"
-          plural="classifications"
-          selected={classifications}
-          options={classificationOptions}
-          onChange={onClassificationsChange}
-        />
       )}
       <div className="flex flex-wrap items-center gap-2">
         <SearchBox

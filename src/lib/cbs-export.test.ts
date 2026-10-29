@@ -30,7 +30,6 @@ function item(
     name: "",
     accountDescription: "",
     uom: "",
-    rowType: "ORIGINAL",
     ...over,
   };
 }

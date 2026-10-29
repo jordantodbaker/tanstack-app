@@ -1,12 +1,7 @@
 import * as React from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronRight } from "lucide-react";
-import {
-  cbsRowTypeBadges,
-  type CbsBadge,
-  type CbsTreeItem,
-  type CbsTreeNode,
-} from "~/lib/cbs-tree";
+import { type CbsTreeItem, type CbsTreeNode } from "~/lib/cbs-tree";
 import {
   CBS_HEADER_COLOR,
   CBS_LEGEND_LEVELS,
@@ -58,7 +53,6 @@ const CbsRow = React.memo(function CbsRow({
   onSelect,
   color,
   leading,
-  badges,
 }: {
   node: CbsTreeNode;
   hasChildren: boolean;
@@ -69,15 +63,12 @@ const CbsRow = React.memo(function CbsRow({
   color: CbsLevelColor;
   /** Optional control rendered between the chevron and the code (Setup's checkbox). */
   leading?: React.ReactNode;
-  /** Markers shown after the name, resolved by the panel so this memoized row
-   *  receives a plain array rather than a fresh callback each render. */
-  badges: readonly CbsBadge[];
 }) {
   const { item } = node;
   const label = item.name || item.accountDescription || item.displayCode;
   // A context row is not part of this project's scope — it is here so its
-  // granted descendants have something to hang from. Mute it and drop its
-  // badges so it cannot be mistaken for an available code.
+  // granted descendants have something to hang from. Mute it so it cannot be
+  // mistaken for an available code.
   const isContext = item.context === true;
 
   return (
@@ -128,15 +119,6 @@ const CbsRow = React.memo(function CbsRow({
         {item.displayCode}
       </span>
       <span className="truncate font-medium">{label}</span>
-      {(isContext ? [] : badges).map((b) => (
-        <span
-          key={b.label}
-          title={b.title}
-          className="shrink-0 rounded border border-current/30 px-1 text-[10px] leading-4 font-semibold opacity-70"
-        >
-          {b.label}
-        </span>
-      ))}
       {item.uom && (
         <span className="ml-auto shrink-0 font-mono text-[11px] opacity-70">
           {item.uom}
@@ -318,7 +300,6 @@ export function CbsTreePanel({
                     onSelect={onSelect}
                     color={cbsColorForLevel(node.level)}
                     leading={renderLeading?.(node)}
-                    badges={cbsRowTypeBadges(node.item)}
                   />
                 </div>
               );

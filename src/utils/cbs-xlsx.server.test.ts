@@ -29,7 +29,6 @@ function item(code: string, over: Partial<CbsTreeItem> = {}): CbsTreeItem {
     name: "",
     accountDescription: "",
     uom: "",
-    rowType: "ORIGINAL",
     ...over,
   };
 }

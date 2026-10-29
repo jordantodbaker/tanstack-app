@@ -23,7 +23,6 @@ const row = (
   name,
   uom: "LS",
   accountDescription: name,
-  rowType: "ORIGINAL" as const,
   subReporting: null,
   materialCode: null,
   laborCode: null,
@@ -124,7 +123,7 @@ describe("projectCostCodeRows", () => {
   it("keeps a granted generated row and looks up ancestors of any row type", async () => {
     findMany
       .mockResolvedValueOnce([
-        { ...row("100-10-0000-00-S", "Site Prep Subcontracts"), rowType: "SUB" },
+        row("100-10-0000-00-S", "Site Prep Subcontracts"),
       ])
       .mockResolvedValueOnce([]);
 

@@ -20,7 +20,7 @@
  * the public API. This list is that boundary, and reads as the contents page.
  */
 
-export type { CbsRowType, CbsTreeItem, CbsTreeNode } from "./cbs/types";
+export type { CbsTreeItem, CbsTreeNode } from "./cbs/types";
 
 export {
   getGroupL1,
@@ -56,17 +56,22 @@ export {
   cbsNoStatuses,
   cbsHasCostTypeFilter,
   cbsHasStatusFilter,
-  cbsHasClassificationFilter,
+  cbsHasRowTypeFilter,
+  CBS_VALUE_FILTERS,
+  cbsNoValues,
+  cbsValueFilterInForce,
+  cbsHasValueFilter,
+  cbsMatchesValueFilter,
+  cbsValueFilterOptions,
   CBS_NO_CLASSIFICATION,
-  cbsClassificationOf,
-  cbsClassificationOptions,
   CBS_BLANK_VALUE,
   CBS_ROW_TYPE_FILTERS,
   cbsMatchesRowType,
-  cbsMaterialTypeOf,
-  cbsMaterialTypeOptions,
+  cbsIsGenerated,
   cbsFilterIsEmpty,
   cbsQueryTokens,
+  type CbsValueFilter,
+  type CbsValueFilterKey,
   type CbsValueOption,
   type CbsCostType,
   type CbsCostTypeKey,
@@ -76,7 +81,5 @@ export {
 } from "./cbs/filter";
 
 export { filterCbsTree, pruneCbsTree } from "./cbs/prune";
-
-export { cbsRowTypeBadges, type CbsBadge } from "./cbs/badges";
 
 export { collectKeysToLevel, collectExpandableKeys } from "./cbs/expansion";

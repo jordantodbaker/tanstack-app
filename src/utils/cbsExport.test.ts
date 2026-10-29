@@ -74,7 +74,6 @@ const wire = (
   name,
   uom: "LS",
   accountDescription: name,
-  rowType: "ORIGINAL",
   subReporting: null,
   materialCode: null,
   laborCode: null,
@@ -82,17 +81,30 @@ const wire = (
   otherCode: null,
   status: "Active",
   costClassification: null,
+  discipline: null,
   ...over,
 });
 
 // One account and its lines. Every line carries the account's flags, as the
 // workbook ships them — which is what makes reading the flags wrong here.
-const FLAGS = { subReporting: true, materialCode: true };
+const FLAGS = { subReporting: true, materialCode: true, discipline: "Piping" };
 const CATALOG = [
-  wire("601-00-0000-00-0", "Welding (*)", { ...FLAGS, costClassification: "INDIRECT" }),
-  wire("601-00-0000-00-L", "Welding Labor (L)", { ...FLAGS, costClassification: "DIRECT LABOR" }),
-  wire("601-00-0000-00-S", "Welding Subs (S)", { ...FLAGS, costClassification: "DIRECT SUBCONTRACTS" }),
-  wire("601-00-0000-00-M", "Welding Materials (M)", { ...FLAGS, costClassification: "MATERIALS" }),
+  wire("601-00-0000-00-0", "Welding (*)", {
+    ...FLAGS,
+    costClassification: "INDIRECT",
+  }),
+  wire("601-00-0000-00-L", "Welding Labor (L)", {
+    ...FLAGS,
+    costClassification: "DIRECT LABOR",
+  }),
+  wire("601-00-0000-00-S", "Welding Subs (S)", {
+    ...FLAGS,
+    costClassification: "DIRECT SUBCONTRACTS",
+  }),
+  wire("601-00-0000-00-M", "Welding Materials (M)", {
+    ...FLAGS,
+    costClassification: "MATERIALS",
+  }),
   wire("601-05-0000-00-0", "Hot Tap (reserved)", { status: "Inactive" }),
   wire("601-10-0000-00-0", "Old Rack", { status: "Retired" }),
   wire("601-15-0000-00-0", "Blank Status", { status: null }),
@@ -146,7 +158,11 @@ describe("which rows each catalog view exports", () => {
 
   it("CBS Dictionary honors the Status filter", async () => {
     await exportCbsCatalog({
-      data: { view: "dictionary", projectId: null, filter: filter({ retired: true }) },
+      data: {
+        view: "dictionary",
+        projectId: null,
+        filter: filter({ retired: true }),
+      },
     });
     expect(written().names).toEqual(["Old Rack"]);
     expect(written().meta.filterNote).toBe("Filtered: status retired");
@@ -156,7 +172,11 @@ describe("which rows each catalog view exports", () => {
 describe("filters reach the file", () => {
   it("reads a cost type off each line's own code, not the account's flags", async () => {
     await exportCbsCatalog({
-      data: { view: "codeBook", projectId: null, filter: filter({ material: true }) },
+      data: {
+        view: "codeBook",
+        projectId: null,
+        filter: filter({ material: true }),
+      },
     });
     // Not the S line, though it carries Material Code YES, nor the roll-up.
     expect(written().names).toEqual(["Welding Materials (M)"]);
@@ -182,15 +202,54 @@ describe("filters reach the file", () => {
 
   it("picks out blank classifications with the (none) entry", async () => {
     await exportCbsCatalog({
-      data: { view: "codeBook", projectId: null, filter: filter({ classifications: [""] }) },
+      data: {
+        view: "codeBook",
+        projectId: null,
+        filter: filter({ classifications: [""] }),
+      },
     });
     expect(written().names).toEqual(["Blank Status"]);
-    expect(written().meta.filterNote).toBe("Filtered: cost classification none");
+    expect(written().meta.filterNote).toBe(
+      "Filtered: cost classification none",
+    );
+  });
+
+  it("keeps only the disciplines picked", async () => {
+    await exportCbsCatalog({
+      data: {
+        view: "dictionary",
+        projectId: null,
+        filter: filter({ disciplines: ["Piping"] }),
+      },
+    });
+    expect([...written().names].sort()).toEqual([
+      "Welding (*)",
+      "Welding Labor (L)",
+      "Welding Materials (M)",
+      "Welding Subs (S)",
+    ]);
+    expect(written().meta.filterNote).toBe("Filtered: discipline Piping");
+  });
+
+  it("picks out blank disciplines with the (none) entry", async () => {
+    await exportCbsCatalog({
+      data: {
+        view: "codeBook",
+        projectId: null,
+        filter: filter({ disciplines: [""] }),
+      },
+    });
+    expect(written().names).toEqual(["Blank Status"]);
+    expect(written().meta.filterNote).toBe("Filtered: discipline none");
   });
 
   it("matches a search the way the page does — trimmed and case-folded", async () => {
     await exportCbsCatalog({
-      data: { view: "dictionary", projectId: null, filter: filter({ query: "  WELDING subs " }) },
+      data: {
+        view: "dictionary",
+        projectId: null,
+        filter: filter({ query: "  WELDING subs " }),
+      },
     });
     expect(written().names).toContain("Welding Subs (S)");
     expect(written().names).not.toContain("Welding Labor (L)");
@@ -199,10 +258,17 @@ describe("filters reach the file", () => {
   it("filters on Rental like any other cost type", async () => {
     catalogRows.mockResolvedValue([
       ...CATALOG,
-      wire("601-00-0000-00-R", "Welding Rental (R)", { ...FLAGS, rentalCode: true }),
+      wire("601-00-0000-00-R", "Welding Rental (R)", {
+        ...FLAGS,
+        rentalCode: true,
+      }),
     ]);
     await exportCbsCatalog({
-      data: { view: "dictionary", projectId: null, filter: filter({ rental: true }) },
+      data: {
+        view: "dictionary",
+        projectId: null,
+        filter: filter({ rental: true }),
+      },
     });
     expect(written().names).toEqual(["Welding Rental (R)"]);
     expect(written().meta.filterNote).toBe("Filtered: rental codes");
@@ -211,12 +277,22 @@ describe("filters reach the file", () => {
   it("carries the Dictionary's Row Type into the file", async () => {
     catalogRows.mockResolvedValue([
       ...CATALOG,
-      wire("601-20-0000-00-S", "Generated Subs (S)", { rowType: "SUB" }),
+      wire("601-20-0000-00-S", "Generated Subs (S)", { isOriginal: false }),
     ]);
     await exportCbsCatalog({
-      data: { view: "dictionary", projectId: null, filter: filter({ rowType: "generated" }) },
+      data: {
+        view: "dictionary",
+        projectId: null,
+        filter: filter({ rowType: "generated" }),
+      },
     });
-    expect(written().names).toEqual(["Generated Subs (S)"]);
+    // Flagged FALSE, or — the CATALOG rows carry no flag — a typed line.
+    expect([...written().names].sort()).toEqual([
+      "Generated Subs (S)",
+      "Welding Labor (L)",
+      "Welding Materials (M)",
+      "Welding Subs (S)",
+    ]);
     expect(written().meta.filterNote).toBe("Filtered: generated rows only");
   });
 
@@ -266,15 +342,22 @@ describe("the project view", () => {
     projectRows.mockResolvedValue(PROJECT);
     requireProjectAccess.mockRejectedValue(new Error("Forbidden"));
     await expect(
-      exportProjectCostCodes({ data: { view: "projectCostCodes", projectId: 1 } }),
+      exportProjectCostCodes({
+        data: { view: "projectCostCodes", projectId: 1 },
+      }),
     ).rejects.toThrow("Forbidden");
     expect(buildWorkbook).not.toHaveBeenCalled();
   });
 
   it("leaves ungranted parents in, uncounted, unless they are hidden", async () => {
     projectRows.mockResolvedValue(PROJECT);
-    await exportProjectCostCodes({ data: { view: "projectCostCodes", projectId: 1 } });
-    expect(written().names).toEqual(["Ungranted Parent (*)", "Granted Labor (L)"]);
+    await exportProjectCostCodes({
+      data: { view: "projectCostCodes", projectId: 1 },
+    });
+    expect(written().names).toEqual([
+      "Ungranted Parent (*)",
+      "Granted Labor (L)",
+    ]);
     expect(written().meta.availableRows).toBe(1);
 
     await exportProjectCostCodes({
@@ -289,7 +372,9 @@ describe("the project view", () => {
     const result = await exportProjectCostCodes({
       data: { view: "projectCostCodes", projectId: 1 },
     });
-    expect(result.filename).toMatch(/^project-cost-code-list-1901-\d{4}-\d{2}-\d{2}\.xlsx$/);
+    expect(result.filename).toMatch(
+      /^project-cost-code-list-1901-\d{4}-\d{2}-\d{2}\.xlsx$/,
+    );
   });
 
   it("won't export the project view through the catalog route, or vice versa", async () => {
@@ -324,8 +409,8 @@ describe("describeCbsFilter", () => {
   });
 
   it("lists three or more with commas and a final 'or'", () => {
-    expect(
-      describeCbsFilter(filter({ classifications: ["A", "B", ""] })),
-    ).toBe("Filtered: cost classification A, B or none");
+    expect(describeCbsFilter(filter({ classifications: ["A", "B", ""] }))).toBe(
+      "Filtered: cost classification A, B or none",
+    );
   });
 });

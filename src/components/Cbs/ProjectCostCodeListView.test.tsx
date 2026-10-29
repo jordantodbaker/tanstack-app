@@ -73,7 +73,6 @@ function item(
     name,
     uom: "LS",
     accountDescription: name,
-    rowType: "ORIGINAL",
     subReporting: null,
     materialCode: null,
     laborCode: null,
@@ -85,6 +84,7 @@ function item(
     status: "Active",
     costClassification: null,
     materialType: null,
+    discipline: null,
     isOriginal: null,
     ...over,
   };
@@ -109,14 +109,8 @@ const PIPE_FLAGS = { laborCode: true, subReporting: true, materialCode: true };
 const LINES: CbsTreeRow[] = [
   item("600-00-0000-00-0", "Pipe (*)", PIPE_FLAGS),
   item("600-00-0000-00-L", "Pipe Labor (L)", PIPE_FLAGS),
-  item("600-00-0000-00-S", "Pipe Subcontracts (S)", {
-    ...PIPE_FLAGS,
-    rowType: "SUB",
-  }),
-  item("600-00-0000-00-M", "Pipe Materials (M)", {
-    ...PIPE_FLAGS,
-    rowType: "MATERIAL",
-  }),
+  item("600-00-0000-00-S", "Pipe Subcontracts (S)", PIPE_FLAGS),
+  item("600-00-0000-00-M", "Pipe Materials (M)", PIPE_FLAGS),
 ];
 
 // A project granted one leaf and none of its parents. The query pulls the
@@ -223,23 +217,6 @@ describe("ProjectCostCodeListView", () => {
     for (const name of LINES.map((r) => r.name)) {
       expect(within(tree).getByText(name)).toBeInTheDocument();
     }
-  });
-
-  it("badges a generated row by what it is, not by the account's flags", () => {
-    renderView(LINES);
-    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
-    const tree = screen.getByRole("tree");
-    const sub = within(tree)
-      .getByText("Pipe Subcontracts (S)")
-      .closest('[role="treeitem"]')! as HTMLElement;
-    expect(within(sub).getByTitle("Generated sub-code row")).toHaveTextContent(
-      "S",
-    );
-    // The account row carries every flag, but its own line is the roll-up.
-    const account = within(tree)
-      .getByText("Pipe (*)")
-      .closest('[role="treeitem"]')! as HTMLElement;
-    expect(within(account).queryByTitle(/Code: YES/)).toBeNull();
   });
 
   it("colors the L0 discipline roots red", () => {
@@ -603,6 +580,68 @@ describe("ProjectCostCodeListView", () => {
         filter: { classifications: ["DIRECT LABOR", "MATERIALS"] },
       });
     });
+  });
+
+  describe("Discipline picker", () => {
+    const DISCIPLINED = [
+      item("100-00-0000-00-0", "Civil (*)", { discipline: "Civil" }),
+      item("100-10-0000-00-L", "Grading (L)", { discipline: "Civil" }),
+      item("600-00-0000-00-0", "Pipe (*)", { discipline: "Piping" }),
+      item("600-00-0000-00-L", "Pipe Labor (L)", { discipline: null }),
+    ];
+    const trigger = () => screen.getByRole("button", { name: /^Discipline:/ });
+    const group = () =>
+      screen.getByRole("group", { name: "Filter by discipline" });
+    const names = () =>
+      within(screen.getByRole("tree"))
+        .getAllByRole("treeitem")
+        .map((r) => r.textContent ?? "")
+        .join("|");
+
+    it("offers each discipline on the list, with counts, and keeps only the ones ticked", () => {
+      renderView(DISCIPLINED);
+      expect(trigger()).toHaveTextContent("All disciplines");
+      fireEvent.click(trigger());
+      expect(
+        within(group())
+          .getAllByRole("checkbox")
+          .map((c) => c.closest("label")!.textContent),
+      ).toEqual(["Civil2", "Piping1", "(none)1"]);
+      fireEvent.click(within(group()).getByLabelText("Civil"));
+      expect(trigger()).toHaveTextContent("Civil");
+      expect(names()).toContain("Civil (*)");
+      expect(names()).toContain("Grading (L)");
+      expect(names()).not.toContain("Pipe (*)");
+      expect(screen.getByText("2 matches")).toBeInTheDocument();
+    });
+
+    it("sends the disciplines with the export", async () => {
+      renderView(DISCIPLINED);
+      fireEvent.click(trigger());
+      fireEvent.click(within(group()).getByLabelText("Piping"));
+      fireEvent.click(screen.getByRole("button", { name: /Export Excel/ }));
+      await vi.waitFor(() => expect(exportCall).toHaveBeenCalledTimes(1));
+      expect(exportCall.mock.calls[0][0].data).toMatchObject({
+        filter: { disciplines: ["Piping"] },
+      });
+    });
+  });
+
+  it("offers the Material type picker once Materials is pressed", () => {
+    renderView([
+      item("600-00-0000-00-0", "Pipe (*)"),
+      item("600-00-0000-00-M", "Pipe Materials (M)", { materialType: "Bulks" }),
+    ]);
+    expect(
+      screen.queryByRole("button", { name: /^Material type:/ }),
+    ).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Materials" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Material type:/ }));
+    expect(
+      within(
+        screen.getByRole("group", { name: "Filter by material type" }),
+      ).getByLabelText("Bulks"),
+    ).toBeInTheDocument();
   });
 
   it("filters by search query", async () => {

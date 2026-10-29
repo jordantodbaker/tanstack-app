@@ -1,52 +1,19 @@
 /**
- * Reading and rewriting individual cells of the CBS workbook, for the scripts
- * that correct `prisma/data/CBS.xlsx` in place (`cbs:repair`, `cbs:rename`).
+ * Rewriting individual cells of a CBS workbook in place — the write side for
+ * `cbs:rename -- --workbook`, which edits Name cells of the condensed master.
  *
- * The loader in `cbs-workbook.ts` only reads; this is the write side, kept in
- * one place because the cell-level XML edit is the fiddly part and two copies
- * of it had already started to drift.
+ * The read side (`openCbsSheet`, `cellText`, `cellAddress`) lives in
+ * `cbs-sheet.ts` and is re-exported here so a script needs one import.
  */
 import { readFileSync, writeFileSync } from "node:fs";
-import ExcelJS from "exceljs";
 import JSZip from "jszip";
-import { CBS_WORKBOOK_PATH, SHEET_NAMES } from "./cbs-workbook";
 
-export type CbsSheet = {
-  ws: ExcelJS.Worksheet;
-  /** 1-based column index by header label, from row 1. */
-  column: Record<string, number>;
-};
-
-/**
- * The sheet the loader reads — same name precedence, same fallback to the
- * first sheet — with its columns indexed by header.
- *
- * Columns by header, never by position: this workbook has had columns
- * inserted and removed, and a fixed index writes into the wrong cell silently.
- */
-export async function openCbsSheet(
-  path: string = CBS_WORKBOOK_PATH,
-): Promise<CbsSheet> {
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.readFile(path);
-  const ws =
-    SHEET_NAMES.map((n) => wb.getWorksheet(n)).find(Boolean) ??
-    wb.worksheets[0];
-  if (!ws) throw new Error(`${path}: no sheets`);
-  const column: Record<string, number> = {};
-  ws.getRow(1).eachCell((cell, n) => {
-    column[`${cell.value ?? ""}`.trim()] = n;
-  });
-  return { ws, column };
-}
-
-/** A cell's text, trimmed, by header label. */
-export const cellText = (sheet: CbsSheet, row: ExcelJS.Row, label: string) =>
-  `${row.getCell(sheet.column[label]).value ?? ""}`.trim();
-
-/** The A1 address of `label`'s cell on sheet row `row`. */
-export const cellAddress = (sheet: CbsSheet, label: string, row: number) =>
-  `${sheet.ws.getColumn(sheet.column[label]).letter}${row}`;
+export {
+  cellAddress,
+  cellText,
+  openCbsSheet,
+  type CbsSheet,
+} from "./cbs-sheet";
 
 const escapeXml = (v: string) =>
   v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -63,10 +30,14 @@ const escapeXml = (v: string) =>
  * All or nothing: a cell that cannot be found throws before anything is
  * written, because a silent miss would look like success and revert on the
  * next import.
+ *
+ * `path` is required rather than defaulted: the generated `CBS.xlsx` is
+ * overwritten by every `cbs:expand`, so a write that lands there by default
+ * would be a write that quietly disappears.
  */
 export async function writeCbsWorkbookCells(
   edits: { cell: string; value: string }[],
-  path: string = CBS_WORKBOOK_PATH,
+  path: string,
 ): Promise<{ cells: string[]; bytes: number }> {
   if (edits.length === 0) return { cells: [], bytes: 0 };
   const zip = await JSZip.loadAsync(readFileSync(path));
@@ -80,7 +51,8 @@ export async function writeCbsWorkbookCells(
     // `[^]` rather than a backslash class: this pattern is built in a template.
     const re = new RegExp(`<c r="${cell}"([^>]*?)(/>|>[^]*?</c>)`);
     const hit = re.exec(xml);
-    if (!hit) throw new Error(`${path}: cell ${cell} not found — nothing written`);
+    if (!hit)
+      throw new Error(`${path}: cell ${cell} not found — nothing written`);
     const attrs = hit[1].replace(/\s*t="[^"]*"/, "");
     xml =
       xml.slice(0, hit.index) +

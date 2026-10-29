@@ -60,10 +60,9 @@ export async function projectCostCodeRows(
   return [...granted, ...ancestors.map((a) => ({ ...a, context: true }))];
 }
 
-/** Every catalog row, or only the originals — the two Admin → CBS sections. */
-export function cbsCatalogRows(originalsOnly: boolean): Promise<CbsWireRow[]> {
+/** Every catalog row — the Admin → CBS sections narrow it on the client. */
+export function cbsCatalogRows(): Promise<CbsWireRow[]> {
   return prisma.cbsItem.findMany({
-    where: originalsOnly ? { rowType: "ORIGINAL" } : {},
     orderBy: { id: "asc" },
     select: cbsTreeRowSelect,
   });

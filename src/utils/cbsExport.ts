@@ -9,6 +9,8 @@ import {
   CBS_STATUSES,
   cbsIsActive,
   cbsFilterIsEmpty,
+  CBS_VALUE_FILTERS,
+  cbsValueFilterInForce,
   pruneCbsTree,
   withCbsLevels,
   type CbsRowFilter,
@@ -68,6 +70,8 @@ const ExportInput = z.object({
       retired: z.boolean().default(false),
       /** The Cost Classifications picked; empty for all, "" for blank cells. */
       classifications: z.array(z.string().max(200)).max(100).default([]),
+      /** The Disciplines picked; empty for all, "" for blank cells. */
+      disciplines: z.array(z.string().max(200)).max(100).default([]),
       /** All / Original / Generated — the Dictionary's Row Type choice. */
       rowType: z.enum(["all", "original", "generated"]).default("all"),
       /** The Material Types picked; read only while `material` is on. */
@@ -76,6 +80,7 @@ const ExportInput = z.object({
     .default({
       query: "",
       classifications: [],
+      disciplines: [],
       rowType: "all",
       materialTypes: [],
       labor: false,
@@ -112,9 +117,13 @@ export function describeCbsFilter(filter: CbsRowFilter): string {
   else if (on.length > 1) {
     parts.push(`${on.slice(0, -1).join(", ")} or ${on.at(-1)} codes`);
   }
-  if (filter.material && filter.materialTypes.length > 0) {
-    parts.push(`material type ${orList(filter.materialTypes)}`);
-  }
+  // The pickers that belong to a cost type read best right after the types.
+  const owned = (byType: boolean) =>
+    CBS_VALUE_FILTERS.filter(
+      (v) =>
+        !!v.requiresCostType === byType && cbsValueFilterInForce(filter, v),
+    ).map((v) => `${v.note} ${orList(filter[v.key])}`);
+  parts.push(...owned(true));
   if (filter.rowType !== "all") parts.push(`${filter.rowType} rows only`);
   const status = CBS_STATUSES.filter((s) => filter[s.key]).map((s) =>
     s.label.toLowerCase(),
@@ -123,9 +132,7 @@ export function describeCbsFilter(filter: CbsRowFilter): string {
   else if (status.length > 1) {
     parts.push(`status ${status.slice(0, -1).join(", ")} or ${status.at(-1)}`);
   }
-  if (filter.classifications.length > 0) {
-    parts.push(`cost classification ${orList(filter.classifications)}`);
-  }
+  parts.push(...owned(false));
   return `Filtered: ${parts.join(", ")}`;
 }
 
@@ -143,22 +150,13 @@ function orList(values: readonly string[]): string {
  * filter and workbook assembly exist once.
  */
 async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
+  // The wire schema is `CbsRowFilter` written out field by field, so the
+  // parsed input IS the filter once the search text is normalized.
   const filter: CbsRowFilter = {
+    ...input.filter,
     // The page lower-cases and trims before filtering; match it exactly or a
     // search that showed rows on screen would export none.
     query: input.filter.query.trim().toLowerCase(),
-    classifications: input.filter.classifications,
-    rowType: input.filter.rowType,
-    materialTypes: input.filter.materialTypes,
-    labor: input.filter.labor,
-    sub: input.filter.sub,
-    material: input.filter.material,
-    equipment: input.filter.equipment,
-    other: input.filter.other,
-    rental: input.filter.rental,
-    active: input.filter.active,
-    inactive: input.filter.inactive,
-    retired: input.filter.retired,
   };
 
   let rows: ProjectCostCodeRow[];
@@ -177,7 +175,7 @@ async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
     // The Cost Accounts view lists only active rows, so the export applies the
     // same filter the page does, or the file stops matching the screen. The
     // Dictionary deliberately keeps everything, inactive and retired included.
-    const catalog = await cbsCatalogRows(false);
+    const catalog = await cbsCatalogRows();
     rows =
       input.view === "codeBook"
         ? catalog.filter((r) => cbsIsActive(r.status))

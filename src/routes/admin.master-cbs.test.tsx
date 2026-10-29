@@ -56,7 +56,6 @@ function item(
     name,
     uom: "LS",
     accountDescription: name,
-    rowType: "ORIGINAL",
     subReporting: null,
     materialCode: null,
     laborCode: null,
@@ -68,6 +67,7 @@ function item(
     status: "Active",
     costClassification: null,
     materialType: null,
+    discipline: null,
     isOriginal: null,
     ...over,
   };
@@ -75,7 +75,7 @@ function item(
 
 const CATALOG: CbsTreeRow[] = [
   item("100-00-0000-00-0", "Civil", { subReporting: true }),
-  item("100-00-0000-00-S", "Civil Subcontracts", { rowType: "SUB" }),
+  item("100-00-0000-00-S", "Civil Subcontracts", { isOriginal: false }),
   item("600-00-0000-00-0", "Pipe Shop"),
   item("600-10-0000-00-0", "Hot Tap (reserved)", { status: "Inactive" }),
   item("600-20-0000-00-0", "Blank Status Account", { status: null }),
@@ -106,7 +106,9 @@ describe("CBS Code Book", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Expand all" })[0]);
     const [accounts] = screen.getAllByRole("tree");
     expect(within(accounts).getByText("Civil")).toBeInTheDocument();
-    expect(within(accounts).getByText("Civil Subcontracts")).toBeInTheDocument();
+    expect(
+      within(accounts).getByText("Civil Subcontracts"),
+    ).toBeInTheDocument();
   });
 
   it("still lists every cost type in the dictionary section", () => {
@@ -141,26 +143,6 @@ describe("CBS Code Book", () => {
     expect(
       screen.getByRole("button", { name: /^CBS Dictionary/ }),
     ).toHaveTextContent("5 rows");
-  });
-
-  it("badges a generated row by its row type in both sections", () => {
-    renderPage();
-    for (const btn of screen.getAllByRole("button", { name: "Expand all" })) {
-      fireEvent.click(btn);
-    }
-    for (const tree of screen.getAllByRole("tree")) {
-      const sub = within(tree)
-        .getByText("Civil Subcontracts")
-        .closest('[role="treeitem"]')! as HTMLElement;
-      expect(within(sub).getByTitle("Generated sub-code row")).toHaveTextContent(
-        "S",
-      );
-      // The account row is an original: no flag badges any more.
-      const civil = within(tree)
-        .getByText("Civil")
-        .closest('[role="treeitem"]')! as HTMLElement;
-      expect(within(civil).queryByTitle(/Code: YES/)).toBeNull();
-    }
   });
 
   it("offers no Status filter on the Cost Accounts list", () => {
@@ -214,7 +196,7 @@ describe("CBS Code Book", () => {
     });
     qc.setQueryData(cbsCatalogQueryOptions().queryKey, [
       item("100-00-0000-00-0", "Civil (*)", { subReporting: true }),
-      item("100-00-0000-00-S", "Civil (S)", { rowType: "SUB" }),
+      item("100-00-0000-00-S", "Civil (S)", { isOriginal: false }),
     ]);
     render(
       <QueryClientProvider client={qc}>
@@ -392,15 +374,15 @@ describe("cost-type filter across the two lists", () => {
 });
 
 /**
- * Row Type and Material Type belong to the CBS Dictionary alone; Cost
- * Accounts lists the same lines without either control.
+ * Row Type belongs to the CBS Dictionary alone; Cost Accounts lists the same
+ * lines without it. Material Type, like every other filter, is on both.
  */
 describe("Dictionary-only filters", () => {
   const ROWS: CbsTreeRow[] = [
     item("700-00-0000-00-0", "Welding"),
     item("700-00-0000-00-M", "Welding Tagged", { materialType: "Tagged" }),
     item("700-05-0000-00-M", "Bolts Bulk", { materialType: "Bulks" }),
-    item("700-10-0000-00-S", "Generated Subs", { rowType: "SUB" }),
+    item("700-10-0000-00-S", "Generated Subs", { isOriginal: false }),
     // How the current workbook marks a generated line: Original Row FALSE.
     item("700-00-0000-00-L", "Welding Labor", { isOriginal: false }),
   ];
@@ -432,33 +414,41 @@ describe("Dictionary-only filters", () => {
 
   it("shows only generated rows under Generated, and none of them under Original", () => {
     renderRows();
-    const group = screen.getByRole("radiogroup", { name: "Filter by row type" });
+    const group = screen.getByRole("radiogroup", {
+      name: "Filter by row type",
+    });
     fireEvent.click(within(group).getByRole("radio", { name: "Generated" }));
-    expect(within(dictionaryTree()).getByText("Generated Subs")).toBeInTheDocument();
+    expect(
+      within(dictionaryTree()).getByText("Generated Subs"),
+    ).toBeInTheDocument();
     // Flagged FALSE in the workbook's Original Row column.
-    expect(within(dictionaryTree()).getByText("Welding Labor")).toBeInTheDocument();
-    expect(within(dictionaryTree()).queryByText("Welding Tagged")).toBeNull();
+    expect(
+      within(dictionaryTree()).getByText("Welding Labor"),
+    ).toBeInTheDocument();
+    // The account's own -0 row is the original.
+    expect(within(dictionaryTree()).queryByText("Welding")).toBeNull();
 
     fireEvent.click(within(group).getByRole("radio", { name: "Original" }));
+    expect(within(dictionaryTree()).getByText("Welding")).toBeInTheDocument();
     expect(within(dictionaryTree()).queryByText("Generated Subs")).toBeNull();
     expect(within(dictionaryTree()).queryByText("Welding Labor")).toBeNull();
   });
 
-  it("offers Material Type only once Materials is pressed, in the Dictionary only", () => {
+  it("offers Material Type in either section once its Materials is pressed", () => {
     renderRows();
     expect(
       screen.queryByRole("button", { name: /^Material type:/ }),
     ).toBeNull();
-    // Materials in Cost Accounts does not bring it up.
+    // Each section's picker follows its own Materials button.
     fireEvent.click(screen.getAllByRole("button", { name: "Materials" })[0]);
     expect(
-      screen.queryByRole("button", { name: /^Material type:/ }),
-    ).toBeNull();
+      screen.getAllByRole("button", { name: /^Material type:/ }),
+    ).toHaveLength(1);
 
     pressDictionary("Materials");
-    expect(
-      screen.getByRole("button", { name: /^Material type:/ }),
-    ).toHaveTextContent("All material types");
+    const pickers = screen.getAllByRole("button", { name: /^Material type:/ });
+    expect(pickers).toHaveLength(2);
+    expect(pickers[1]).toHaveTextContent("All material types");
   });
 
   it("narrows the Materials lines to the material types picked", () => {
@@ -469,7 +459,9 @@ describe("Dictionary-only filters", () => {
       name: "Filter by material type",
     });
     fireEvent.click(within(group).getByLabelText("Bulks"));
-    expect(within(dictionaryTree()).getByText("Bolts Bulk")).toBeInTheDocument();
+    expect(
+      within(dictionaryTree()).getByText("Bolts Bulk"),
+    ).toBeInTheDocument();
     expect(within(dictionaryTree()).queryByText("Welding Tagged")).toBeNull();
   });
 
@@ -491,6 +483,8 @@ describe("Dictionary-only filters", () => {
     expect(
       screen.getByRole("button", { name: /^Material type:/ }),
     ).toHaveTextContent("All material types");
-    expect(within(dictionaryTree()).getByText("Welding Tagged")).toBeInTheDocument();
+    expect(
+      within(dictionaryTree()).getByText("Welding Tagged"),
+    ).toBeInTheDocument();
   });
 });

@@ -10,17 +10,16 @@ import { type CbsTreeItem, type CbsTreeNode } from "./types";
 import {
   CBS_COST_TYPES,
   CBS_STATUSES,
+  CBS_VALUE_FILTERS,
   cbsFilterIsEmpty,
   cbsIsCostType,
   cbsHasCostTypeFilter,
   cbsHasStatus,
   cbsHasStatusFilter,
-  cbsHasClassificationFilter,
-  cbsClassificationOf,
   cbsHasRowTypeFilter,
-  cbsHasMaterialTypeFilter,
+  cbsHasValueFilter,
   cbsMatchesRowType,
-  cbsMatchesMaterialType,
+  cbsMatchesValueFilter,
   cbsQueryTokens,
   type CbsRowFilter,
 } from "./filter";
@@ -57,14 +56,10 @@ function rowMatches<T extends CbsTreeItem>(
   ) {
     return false;
   }
-  if (
-    filter.classifications.length > 0 &&
-    !filter.classifications.includes(cbsClassificationOf(node.item))
-  ) {
-    return false;
-  }
   if (!cbsMatchesRowType(node.item, filter.rowType)) return false;
-  if (!cbsMatchesMaterialType(node.item, filter)) return false;
+  for (const picker of CBS_VALUE_FILTERS) {
+    if (!cbsMatchesValueFilter(node.item, filter, picker)) return false;
+  }
   return true;
 }
 
@@ -77,9 +72,8 @@ function isStrictFilter(filter: CbsRowFilter): boolean {
   return (
     cbsHasCostTypeFilter(filter) ||
     cbsHasStatusFilter(filter) ||
-    cbsHasClassificationFilter(filter) ||
     cbsHasRowTypeFilter(filter) ||
-    cbsHasMaterialTypeFilter(filter)
+    cbsHasValueFilter(filter)
   );
 }
 
@@ -180,14 +174,13 @@ export function pruneCbsTree<T extends CbsTreeItem>(
   if (cbsFilterIsEmpty(filter)) return { nodes, matches: 0 };
   let matches = 0;
   const onMatch = () => matches++;
-  // A cost-type, status or classification filter is read as a report — "show
-  // me the Labor codes", "show me the inactive ones", "show me the INDIRECT
-  // ones" — so only rows that qualify survive. A bare text search still keeps
+  // A cost-type, status, row-type or value-picker filter is read as a report
+  // — "show me the Labor codes", "show me the inactive ones", "show me the
+  // INDIRECT ones" — so only rows that qualify survive. A bare text search still keeps
   // ancestors: there, knowing WHERE a hit sits is most of the answer.
   const criteria = criteriaFor(filter);
-  const kept =
-    isStrictFilter(filter)
-      ? strictCbsRows(nodes, criteria, 0, onMatch)
-      : searchCbsTree(nodes, criteria, false, onMatch);
+  const kept = isStrictFilter(filter)
+    ? strictCbsRows(nodes, criteria, 0, onMatch)
+    : searchCbsTree(nodes, criteria, false, onMatch);
   return { nodes: kept, matches };
 }

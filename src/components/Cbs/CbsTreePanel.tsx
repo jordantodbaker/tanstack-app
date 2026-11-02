@@ -284,8 +284,23 @@ export function CbsTreePanel({
     if (!scrollToKey || scrolled.current === scrollToKey) return;
     const index = flat.findIndex((n) => n.pathKey === scrollToKey);
     if (index === -1) return; // not revealed yet; a later render will find it
-    scrolled.current = scrollToKey;
-    rowVirtualizer.scrollToIndex(index, { align: "center" });
+    // On a fresh page load the row can be in the list before the virtualizer
+    // has measured its viewport (hydration, the panel's own layout), and a
+    // scroll centred on a zero-height viewport lands at the wrong offset.
+    // Wait a frame at a time for the measurement, then scroll once. Bounded,
+    // so a panel that never gets a height (hidden, or a test DOM) gives up.
+    let frame = 0;
+    let attempts = 0;
+    const go = () => {
+      if ((rowVirtualizer.scrollRect?.height ?? 0) > 0) {
+        scrolled.current = scrollToKey;
+        rowVirtualizer.scrollToIndex(index, { align: "center" });
+      } else if (attempts++ < 60) {
+        frame = requestAnimationFrame(go);
+      }
+    };
+    go();
+    return () => cancelAnimationFrame(frame);
   }, [scrollToKey, flat, rowVirtualizer]);
 
   return (

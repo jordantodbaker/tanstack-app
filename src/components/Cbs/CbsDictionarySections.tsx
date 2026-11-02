@@ -21,6 +21,7 @@ function CbsSection({
   defaultOpen = false,
   exportView,
   focusCode = null,
+  linkPath = null,
   statusFilter = false,
   rowTypeFilter = false,
 }: {
@@ -32,6 +33,8 @@ function CbsSection({
   defaultOpen?: boolean;
   exportView: CbsExportView;
   focusCode?: string | null;
+  /** The page the detail panel's "Copy link" points at — see `CbsDictionaryBrowser`. */
+  linkPath?: string | null;
   /** Offer the Status filter — see `CbsDictionaryBrowser`. */
   statusFilter?: boolean;
   /** Offer the Row Type filter — see `CbsDictionaryBrowser`. */
@@ -50,6 +53,7 @@ function CbsSection({
         emptyMessage={emptyMessage}
         exportView={exportView}
         focusCode={focusCode}
+        linkPath={linkPath}
         statusFilter={statusFilter}
         rowTypeFilter={rowTypeFilter}
       />
@@ -105,6 +109,8 @@ function CbsSectionShell({
 const MASTER_SOURCE_NOTE =
   "Source: the CBS Dictionary, in full — no project allow-list applied. Colors mirror the source workbook's outline levels.";
 const MASTER_EMPTY = "No CBS items in the catalog.";
+/** The page these sections live on, which reads `?code=` — for "Copy link". */
+const ADMIN_MASTER_CBS_PATH = "/admin/master-cbs";
 
 /**
  * The whole catalog as two collapsible datasets: the active Cost Accounts and
@@ -150,6 +156,7 @@ export function CbsDictionarySections({
         defaultOpen
         exportView="codeBook"
         focusCode={inAccounts ? focusCode : null}
+        linkPath={ADMIN_MASTER_CBS_PATH}
       />
       <CbsSection
         title="CBS Dictionary"
@@ -160,6 +167,7 @@ export function CbsDictionarySections({
         defaultOpen
         exportView="dictionary"
         focusCode={inDictionary ? focusCode : null}
+        linkPath={ADMIN_MASTER_CBS_PATH}
         statusFilter
         rowTypeFilter
       />

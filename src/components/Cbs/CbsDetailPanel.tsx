@@ -1,5 +1,6 @@
+import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, X } from "lucide-react";
+import { Check, Link2, Loader2, X } from "lucide-react";
 import { cbsItemDetailQueryOptions, type CbsItemDetail } from "~/utils/cbs";
 import { cbsIsGenerated, type CbsTreeNode } from "~/lib/cbs-tree";
 import {
@@ -58,13 +59,68 @@ function yesNo(v: boolean | null): string | null {
   return null;
 }
 
+/**
+ * The `?code=` deep link to one row on the page at `path`: the link you paste
+ * into an email so the reader lands on the row (see `project-cost-codes.tsx`).
+ * Absolute, since it leaves the app.
+ */
+export function cbsCodeLink(path: string, displayCode: string): string {
+  return `${window.location.origin}${path}?code=${encodeURIComponent(displayCode)}`;
+}
+
+/**
+ * Copies the row's deep link and says so for a moment. Writing to the
+ * clipboard can be refused (no permission, an insecure origin), and silence
+ * there would read as "copied", so the failure is shown too.
+ */
+function CopyLinkButton({ href }: { href: string }) {
+  const [state, setState] = React.useState<"idle" | "copied" | "failed">(
+    "idle",
+  );
+  React.useEffect(() => {
+    if (state === "idle") return;
+    const t = window.setTimeout(() => setState("idle"), 2000);
+    return () => window.clearTimeout(t);
+  }, [state]);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(href);
+      setState("copied");
+    } catch {
+      setState("failed");
+    }
+  };
+
+  const label =
+    state === "copied"
+      ? "Copied"
+      : state === "failed"
+        ? "Couldn't copy"
+        : "Copy link";
+  return (
+    <button
+      type="button"
+      onClick={() => void copy()}
+      aria-label="Copy link to this code"
+      title={href}
+      className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] hover:bg-black/10"
+    >
+      {state === "copied" ? <Check size={13} /> : <Link2 size={13} />}
+      {label}
+    </button>
+  );
+}
+
 function DetailBody({
   node,
   color,
+  linkPath,
   onClose,
 }: {
   node: CbsTreeNode;
   color: CbsLevelColor;
+  linkPath: string | null;
   onClose: () => void;
 }) {
   const { item } = node;
@@ -92,14 +148,19 @@ function DetailBody({
             {cbsIsGenerated(item) ? "Generated" : "Original"}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close details"
-          className="shrink-0 rounded p-0.5 hover:bg-black/10"
-        >
-          <X size={15} />
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          {linkPath && (
+            <CopyLinkButton href={cbsCodeLink(linkPath, item.displayCode)} />
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close details"
+            className="shrink-0 rounded p-0.5 hover:bg-black/10"
+          >
+            <X size={15} />
+          </button>
+        </div>
       </div>
       {detail.isPending ? (
         <div className="flex items-center gap-2 px-4 py-6 text-sm text-slate-500">
@@ -134,9 +195,16 @@ function DetailBody({
  */
 export function CbsDetailPanel({
   selected,
+  linkPath = null,
   onClose,
 }: {
   selected: CbsTreeNode | null;
+  /**
+   * The page a "Copy link" should point at — one that reads `?code=`, such
+   * as "/project-cost-codes". Omit on a page that does not, and the button
+   * is left out.
+   */
+  linkPath?: string | null;
   onClose: () => void;
 }) {
   return (
@@ -146,6 +214,7 @@ export function CbsDetailPanel({
           key={selected.pathKey}
           node={selected}
           color={cbsColorForLevel(selected.level)}
+          linkPath={linkPath}
           onClose={onClose}
         />
       ) : (

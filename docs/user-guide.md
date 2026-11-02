@@ -245,8 +245,9 @@ is how many rows ticking that value would show given the other filters in
 force, so they move as you filter, and a value with nothing left shows **0**
 rather than vanishing, so a tick can always be undone.
 
-- **Discipline** — the workbook's Discipline column (Civil, Piping, Home Office
-  & Administration, …). It sits first because the other filters are usually
+- **Discipline** — the workbook's Discipline column, each entry prefixed with
+  the discipline's L1 (its division root: "100 - Civil", "630 - Piping") and
+  listed in that order. It sits first because the other filters are usually
   asked within one discipline.
 - **Material type** — Tagged, Bulk, Consumable, … over the **Materials** lines
   only. It is greyed out until **Materials** is pressed, since it narrows those
@@ -273,7 +274,9 @@ panel's header says whether the row is **Original** or **Generated**.
 that account, selects it so the detail panel fills, and scrolls it into view.
 Useful for pointing someone at a specific code in an email rather than
 describing where to find it. An unknown code is ignored and the page opens
-normally.
+normally. You don't have to type the link: the detail panel's **Copy link**
+button (beside its close button) puts the selected row's link on the
+clipboard, pointed at the page you are on.
 
 **Export Excel** downloads what you are looking at — the rows left by the search
 box and the filters, and nothing else. The sheet opens with a labeled block

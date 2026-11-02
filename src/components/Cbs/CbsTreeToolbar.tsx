@@ -24,8 +24,16 @@ import {
   type CbsStatusKey,
 } from "~/lib/cbs-tree";
 
-const valueLabel = (value: string) =>
-  value === CBS_BLANK_VALUE ? "(none)" : value;
+/** "(none)" for the blank cell; "100 - Civil" where the picker files by code. */
+const valueLabel = ({
+  value,
+  prefix,
+}: Pick<CbsValueOption, "value" | "prefix">) =>
+  value === CBS_BLANK_VALUE
+    ? "(none)"
+    : prefix === undefined
+      ? value
+      : `${prefix} - ${value}`;
 
 /**
  * A multi-select over one free-text column — one entry of
@@ -70,7 +78,11 @@ function ValuePicker({
     selected.length === 0
       ? `All ${plural}`
       : selected.length === 1
-        ? valueLabel(selected[0])
+        ? valueLabel(
+            options.find((o) => o.value === selected[0]) ?? {
+              value: selected[0],
+            },
+          )
         : `${selected.length} ${plural}`;
 
   return (
@@ -102,11 +114,11 @@ function ValuePicker({
               >
                 <input
                   type="checkbox"
-                  aria-label={valueLabel(o.value)}
+                  aria-label={valueLabel(o)}
                   checked={picked.has(o.value)}
                   onChange={() => toggle(o.value)}
                 />
-                <span className="truncate">{valueLabel(o.value)}</span>
+                <span className="truncate">{valueLabel(o)}</span>
                 <span className="ml-auto text-xs text-slate-500 tabular-nums">
                   {o.count.toLocaleString()}
                 </span>

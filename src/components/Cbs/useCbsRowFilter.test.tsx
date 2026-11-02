@@ -49,7 +49,7 @@ describe("useCbsRowFilter", () => {
   it("counts each picker's options from the rows, judging only the rows it applies to", () => {
     const { result } = renderHook(() => useCbsRowFilter({ items: ITEMS }));
     expect(result.current.controls.valueOptions).toEqual({
-      disciplines: [{ value: "Piping", count: 3 }],
+      disciplines: [{ value: "Piping", count: 3, prefix: "601" }],
       classifications: [
         { value: "INDIRECT", count: 1 },
         { value: "MATERIALS", count: 2 },
@@ -64,7 +64,7 @@ describe("useCbsRowFilter", () => {
     act(() => result.current.controls.onToggleCostType!("labor"));
     expect(result.current.controls.valueOptions).toEqual({
       // Only the Labor line is left for the other pickers to count.
-      disciplines: [{ value: "Piping", count: 1 }],
+      disciplines: [{ value: "Piping", count: 1, prefix: "601" }],
       classifications: [
         { value: "INDIRECT", count: 0 },
         { value: "MATERIALS", count: 1 },

@@ -47,6 +47,7 @@ function ProjectCostCodes({
         emptyMessage="No cost codes selected for this project."
         exportView="projectCostCodes"
         focusCode={focusCode}
+        linkPath="/project-cost-codes"
       />
     </div>
   );

@@ -598,7 +598,7 @@ describe("ProjectCostCodeListView", () => {
         .map((r) => r.textContent ?? "")
         .join("|");
 
-    it("offers each discipline on the list, with counts, and keeps only the ones ticked", () => {
+    it("offers each discipline on the list under its L1, with counts, and keeps only the ones ticked", () => {
       renderView(DISCIPLINED);
       expect(trigger()).toHaveTextContent("All disciplines");
       fireEvent.click(trigger());
@@ -606,9 +606,9 @@ describe("ProjectCostCodeListView", () => {
         within(group())
           .getAllByRole("checkbox")
           .map((c) => c.closest("label")!.textContent),
-      ).toEqual(["Civil2", "Piping1", "(none)1"]);
-      fireEvent.click(within(group()).getByLabelText("Civil"));
-      expect(trigger()).toHaveTextContent("Civil");
+      ).toEqual(["100 - Civil2", "600 - Piping1", "(none)1"]);
+      fireEvent.click(within(group()).getByLabelText("100 - Civil"));
+      expect(trigger()).toHaveTextContent("100 - Civil");
       expect(names()).toContain("Civil (*)");
       expect(names()).toContain("Grading (L)");
       expect(names()).not.toContain("Pipe (*)");
@@ -618,7 +618,7 @@ describe("ProjectCostCodeListView", () => {
     it("sends the disciplines with the export", async () => {
       renderView(DISCIPLINED);
       fireEvent.click(trigger());
-      fireEvent.click(within(group()).getByLabelText("Piping"));
+      fireEvent.click(within(group()).getByLabelText("600 - Piping"));
       fireEvent.click(screen.getByRole("button", { name: /Export Excel/ }));
       await vi.waitFor(() => expect(exportCall).toHaveBeenCalledTimes(1));
       expect(exportCall.mock.calls[0][0].data).toMatchObject({
@@ -731,5 +731,82 @@ describe("ProjectCostCodeListView", () => {
     // Ancestors stay so the match is reachable.
     expect(within(tree).getByText("Earthwork & Trenching")).toBeInTheDocument();
     expect(screen.getByText("1 match")).toBeInTheDocument();
+  });
+});
+
+describe("ProjectCostCodeListView ?code= deep link", () => {
+  function renderLinked(fixture: CbsBrowserRow[], focusCode: string) {
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    qc.setQueryData(projectCostCodesQueryOptions(1).queryKey, fixture);
+    return render(
+      <QueryClientProvider client={qc}>
+        <ProjectCostCodeListView focusCode={focusCode} />
+      </QueryClientProvider>,
+    );
+  }
+
+  it("opens a typed line that sits under its own account's roll-up", () => {
+    // The common case — most of the catalog is typed lines — and the one a
+    // "Copy link" on a selected row produces. The line's parent is the
+    // account's "-0" row, which no code arithmetic names as an ancestor; the
+    // path has to come off the built tree or the row stays behind a closed
+    // parent and the link lands on a collapsed tree.
+    renderLinked(
+      [
+        ...FIXTURE,
+        item("101-05-0500-00-L", "Topsoil (L)", { laborCode: true }),
+      ],
+      "101-05-0500-00-L",
+    );
+    const tree = screen.getByRole("tree");
+    expect(within(tree).getByText("Topsoil (L)")).toBeInTheDocument();
+    // Every ancestor opened on the way down.
+    expect(within(tree).getByText("Topsoil")).toBeInTheDocument();
+    expect(within(tree).getByText("Earthwork & Trenching")).toBeInTheDocument();
+    // And it is the selected row: the detail panel's header names it.
+    expect(screen.getAllByText("Topsoil (L)").length).toBeGreaterThan(1);
+  });
+
+  it("opens a pipe-shop size variant, which the tree hangs under its bore account", () => {
+    // 610-LB-1200-ST shares a lineage key with 610-LB-1200-00 (the trailing
+    // marker does not count as a level), so the tree parents it there —
+    // somewhere no ancestor-code arithmetic would look.
+    renderLinked(
+      [
+        item("600-00-0000-00-0", "Piping (*)"),
+        item("610-00-0000-00-0", "Shop Fab Carbon Steel (*)"),
+        item("610-LB-0000-00-0", "Shop Fab CS Large Bore (*)"),
+        item("610-LB-1200-00-0", 'Shop Fab CS LB 12" (*)'),
+        item("610-LB-1200-00-L", 'Shop Fab CS LB 12" (L)', { laborCode: true }),
+        item("610-LB-1200-ST-L", 'Shop Fab CS LB 12" STD (L)', {
+          laborCode: true,
+        }),
+      ],
+      "610-LB-1200-ST-L",
+    );
+    const tree = screen.getByRole("tree");
+    expect(
+      within(tree).getByText('Shop Fab CS LB 12" STD (L)'),
+    ).toBeInTheDocument();
+  });
+
+  it("opens a typed line that has no roll-up of its own", () => {
+    // What the expand script writes for an account with one cost type and
+    // nothing beneath it: the line collapses up to the nearest row that exists.
+    renderLinked(
+      [
+        item("500-00-0000-00-0", "Equipment (*)"),
+        item("543-00-0000-00-0", "Fired Heaters (*)"),
+        item("543-05-0000-00-0", "Gas Fired (*)"),
+        item("543-05-1005-15-L", "Tube Banks / Coils (L)", { laborCode: true }),
+      ],
+      "543-05-1005-15-L",
+    );
+    const tree = screen.getByRole("tree");
+    expect(
+      within(tree).getByText("Tube Banks / Coils (L)"),
+    ).toBeInTheDocument();
   });
 });

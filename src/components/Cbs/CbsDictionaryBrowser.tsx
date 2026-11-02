@@ -3,7 +3,6 @@ import { Loader2 } from "lucide-react";
 import type { CbsBrowserRow } from "~/utils/cbs";
 import {
   buildCbsTree,
-  cbsAncestorCodes,
   CBS_COST_TYPES,
   cbsIsBackbone,
   pruneCbsTree,
@@ -155,12 +154,18 @@ export function CbsDictionaryBrowser({
   emptyMessage,
   exportView,
   focusCode = null,
+  linkPath = null,
   statusFilter = false,
   rowTypeFilter = false,
 }: {
   items: CbsBrowserRow[];
   sourceNote: string;
   emptyMessage: string;
+  /**
+   * The page the detail panel's "Copy link" points at — one that reads
+   * `?code=`, such as "/project-cost-codes". Omit to leave the button out.
+   */
+  linkPath?: string | null;
   /**
    * Offer the Active / Inactive / Retired buttons. Only the CBS Dictionary
    * does: Cost Accounts and the Project Cost Code List are active-only by
@@ -203,21 +208,34 @@ export function CbsDictionaryBrowser({
   } = useCbsTreeExpansion(nodes);
   const [selected, setSelected] = React.useState<Node | null>(null);
 
-  // Deep link: open the path down to the code, then select it. Runs on the
-  // code rather than on `nodes`, so re-rendering does not keep re-selecting a
-  // row the user has since clicked away from.
+  // Deep link: open the path down to the code, then select it.
+  //
+  // The path is read off the built tree, not computed from the code. The
+  // tree does not always hang a row where its code says: a typed line sits
+  // under its own account's "-0" roll-up, the pipe shop's size variants sit
+  // under their bore account through a shared lineage key, and a row whose
+  // roll-up is absent collapses up to whatever exists. `cbsAncestorCodes`
+  // names none of the first and misses the second, so opening what it listed
+  // left the linked row behind a closed parent — for every typed line, which
+  // is most of the catalog. Runs on the code rather than on `nodes`, so
+  // re-rendering does not keep re-selecting a row the user has since clicked
+  // away from.
   React.useEffect(() => {
     if (!focusCode) return;
-    reveal(cbsAncestorCodes(focusCode));
+    const path: Node[] = [];
     const find = (list: Node[]): Node | null => {
       for (const n of list) {
         if (n.item.displayCode === focusCode) return n;
+        path.push(n);
         const hit = find(n.children);
         if (hit) return hit;
+        path.pop();
       }
       return null;
     };
-    setSelected(find(nodes));
+    const hit = find(nodes);
+    if (hit) reveal(path.map((n) => n.pathKey));
+    setSelected(hit);
   }, [focusCode, nodes, reveal]);
   // Every tree offers the same filters, Status and Row Type apart: those two
   // belong to the Dictionary, the one view that lists inactive and generated
@@ -310,7 +328,11 @@ export function CbsDictionaryBrowser({
           {searchPending && <LoadMask label="Filtering…" size="sm" rounded />}
         </CbsTreePanel>
 
-        <CbsDetailPanel selected={selected} onClose={() => setSelected(null)} />
+        <CbsDetailPanel
+          selected={selected}
+          linkPath={linkPath}
+          onClose={() => setSelected(null)}
+        />
       </div>
 
       <p className="mt-2 text-[11px] text-slate-400">{sourceNote}</p>

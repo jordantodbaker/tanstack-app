@@ -1340,11 +1340,29 @@ describe("discipline filter", () => {
     disciplines,
   });
 
-  it("offers each discipline with its count, trimmed, blank last", () => {
+  it("offers each discipline with its count, trimmed, blank last, filed under its lowest L1", () => {
     expect(cbsValueFilterOptions(ROWS).disciplines).toEqual([
-      { value: "Civil", count: 3 },
-      { value: "Piping", count: 1 },
+      { value: "Civil", count: 3, prefix: "100" },
+      { value: "Piping", count: 1, prefix: "600" },
       { value: CBS_BLANK_VALUE, count: 1 },
+    ]);
+  });
+
+  it("lists disciplines in L1 order, not alphabetically, and files one under its division root", () => {
+    const rows = [
+      item("630-00-0000-00-0", {
+        name: "Install Piping",
+        discipline: "Piping",
+      }),
+      item("300-00-0000-00-0", { name: "Steel", discipline: "Steel" }),
+      item("100-00-0000-00-0", { name: "Civil", discipline: "Civil" }),
+      // Civil spans 100 and 150; the lowest names the root.
+      item("150-00-0000-00-0", { name: "Paving", discipline: "Civil" }),
+    ];
+    expect(cbsValueFilterOptions(rows).disciplines).toEqual([
+      { value: "Civil", count: 2, prefix: "100" },
+      { value: "Steel", count: 1, prefix: "300" },
+      { value: "Piping", count: 1, prefix: "630" },
     ]);
   });
 
@@ -1353,8 +1371,9 @@ describe("discipline filter", () => {
       cbsValueFilterOptions(ROWS, { ...CBS_FILTER_NONE, labor: true })
         .disciplines,
     ).toEqual([
-      { value: "Civil", count: 1 },
-      { value: "Piping", count: 0 },
+      { value: "Civil", count: 1, prefix: "100" },
+      // Nothing left to count, but still filed where it was.
+      { value: "Piping", count: 0, prefix: "600" },
       { value: CBS_BLANK_VALUE, count: 0 },
     ]);
     // A picker's own ticks are left out, so its list is steady while picking.

@@ -30,12 +30,31 @@ const find = (rows: QcRow[], id: string) =>
   runCbsQcChecks(rows).find((c) => c.id === id)!;
 
 describe("runCbsQcChecks", () => {
-  it("flags a roll-up level that carries a cost type", () => {
+  it("flags a roll-up level that carries a cost type over other rows", () => {
     // The workbook's L3 segment is characters 5-6 of the display code; "00"
-    // there means a roll-up, which must be cost type 0.
-    const c = find([row("600-00-0000-00-L")], "qc-l3-cost-type");
+    // there means a roll-up, which must be cost type 0 when rows sit under it.
+    const c = find(
+      [row("600-00-0000-00-L"), row("600-10-0000-00-L")],
+      "qc-l3-cost-type",
+    );
     expect(c.count).toBe(1);
+    expect(c.findings[0].code).toBe("600-00-0000-00-L");
     expect(c.severity).toBe("error");
+  });
+
+  it("flags a typed row at a roll-up level beside the account's own 0 row", () => {
+    const c = find(
+      [row("600-00-0000-00-0"), row("600-00-0000-00-L")],
+      "qc-l3-cost-type",
+    );
+    expect(c.count).toBe(1);
+    expect(c.findings[0].code).toBe("600-00-0000-00-L");
+  });
+
+  it("accepts a typed row at a roll-up level that is the account's only row with nothing beneath it", () => {
+    // What the expand script writes for an account with one cost type and no
+    // account under it: the typed row alone, no "-0".
+    expect(find([row("600-00-0000-00-L")], "qc-l3-cost-type").count).toBe(0);
   });
 
   it("accepts a roll-up level that carries cost type 0", () => {
@@ -234,12 +253,13 @@ describe("runCbsQcChecks", () => {
       { ...row("603-00-0000-00-L"), originalRow: 900 },
       { ...row("601-00-0000-00-L"), originalRow: 100 },
       { ...row("602-00-0000-00-L"), originalRow: 500 },
+      // Each typed row sits beside its account's own 0 row, so every one of
+      // the three above is a roll-up level carrying a cost type.
+      row("603-00-0000-00-0"),
+      row("601-00-0000-00-0"),
+      row("602-00-0000-00-0"),
     ];
-    // Every one of these is a roll-up level carrying a cost type.
-    const c = find(
-      rows.map((r) => ({ ...r, displayCode: r.displayCode })),
-      "qc-l3-cost-type",
-    );
+    const c = find(rows, "qc-l3-cost-type");
     expect(c.findings.map((f) => f.originalRow)).toEqual([100, 500, 900]);
   });
 
@@ -247,6 +267,8 @@ describe("runCbsQcChecks", () => {
     const rows = [
       { ...row("603-00-0000-00-L"), originalRow: null },
       { ...row("601-00-0000-00-L"), originalRow: 100 },
+      row("603-00-0000-00-0"),
+      row("601-00-0000-00-0"),
     ];
     const c = find(rows, "qc-l3-cost-type");
     expect(c.findings.map((f) => f.originalRow)).toEqual([100, null]);

@@ -59,9 +59,12 @@ function row(displayCode: string, over: Record<string, unknown> = {}) {
   };
 }
 
-// One roll-up row carrying a cost type (trips a QC rule, and has no "-0"
-// account row above it), and one retired row a project still holds.
+// One roll-up level carrying a cost type beside its account's own "-0" row
+// (trips a QC rule; alone it would be the account's single typed row, which
+// the expand script writes on purpose), and one retired row a project still
+// holds.
 const ROWS = [
+  row("600-00-0000-00-0"),
   row("600-00-0000-00-L"),
   row("601-00-0000-00-0", { status: "Retired" }),
 ];
@@ -207,16 +210,21 @@ const withWorkbook = (codes: string[], over: Record<string, unknown> = {}) =>
 
 describe("the import-drift check", () => {
   it("counts both sides of the difference, not just one", async () => {
-    // The database has 600-…-L and 601-…-0; the workbook has 601-…-0 and a new
-    // 602-…-0. So one row would be added and one deleted.
-    withWorkbook(["601-00-0000-00-0", "602-00-0000-00-0"]);
+    // The database has 600-…-0, 600-…-L and 601-…-0; the workbook has 600-…-0,
+    // 601-…-0 and a new 602-…-0. So one row would be added and one deleted.
+    withWorkbook(["600-00-0000-00-0", "601-00-0000-00-0", "602-00-0000-00-0"]);
     const c = byId((await buildCbsHealthReport()).checks, "import-drift");
     expect(c.count).toBe(2);
     expect(c.severity).toBe("warning");
   });
 
   it("says which rows an import would add", async () => {
-    withWorkbook(["600-00-0000-00-L", "601-00-0000-00-0", "602-00-0000-00-0"]);
+    withWorkbook([
+      "600-00-0000-00-0",
+      "600-00-0000-00-L",
+      "601-00-0000-00-0",
+      "602-00-0000-00-0",
+    ]);
     const c = byId((await buildCbsHealthReport()).checks, "import-drift");
     const added = c.findings.filter((f) => f.detail.includes("would add"));
     expect(added.map((f) => f.code)).toEqual(["602-00-0000-00-0"]);
@@ -251,7 +259,7 @@ describe("the import-drift check", () => {
 
   it("reports all clear when the catalog matches the workbook", async () => {
     // Both database rows, nothing else: an import would change nothing.
-    withWorkbook(["600-00-0000-00-L", "601-00-0000-00-0"]);
+    withWorkbook(["600-00-0000-00-0", "600-00-0000-00-L", "601-00-0000-00-0"]);
     const c = byId((await buildCbsHealthReport()).checks, "import-drift");
     expect(c).toMatchObject({ count: 0, severity: "info", findings: [] });
     expect(c.summary).toContain("would add and remove nothing");
@@ -259,7 +267,7 @@ describe("the import-drift check", () => {
 
   it("keeps its title whichever way the comparison comes out", async () => {
     // The title is the export's filename and the row you look for on the page.
-    withWorkbook(["600-00-0000-00-L", "601-00-0000-00-0"]);
+    withWorkbook(["600-00-0000-00-0", "600-00-0000-00-L", "601-00-0000-00-0"]);
     const clean = byId((await buildCbsHealthReport()).checks, "import-drift");
     withWorkbook(["602-00-0000-00-0"]);
     const dirty = byId((await buildCbsHealthReport()).checks, "import-drift");
@@ -270,7 +278,7 @@ describe("the import-drift check", () => {
   it("matches on the code, not on the hyphens", async () => {
     // The database stores `costCode` without separators; the workbook carries
     // the display code. Comparing them raw would report every row twice over.
-    withWorkbook(["600-00-0000-00-L", "601-00-0000-00-0"]);
+    withWorkbook(["600-00-0000-00-0", "600-00-0000-00-L", "601-00-0000-00-0"]);
     expect(
       byId((await buildCbsHealthReport()).checks, "import-drift").count,
     ).toBe(0);

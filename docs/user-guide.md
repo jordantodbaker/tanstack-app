@@ -192,7 +192,9 @@ and, beneath it, one row per cost type the account carries — **L** labor,
 each with its own code. The letter at the end of a row's code is its cost type,
 and a small colored **chip** beside the code repeats it so the tree scans at a
 glance; the roll-up row has no chip. Names keep the marker the workbook writes
-("Executive (L)", "Piping (*)").
+("Executive (L)", "Piping (*)"). An account that carries a single cost type
+and has no accounts beneath it has no roll-up row: its one typed row is the
+account.
 
 **Level colors.** The tree is colored by code level, the way the source
 workbook colors it. The **L0–L5 swatches** under "Level colors" are buttons:

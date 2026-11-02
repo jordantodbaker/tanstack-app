@@ -5,9 +5,12 @@
  * four-segment codes (`012-05-1000-00`) and a YES/NO flag per cost type. The
  * loader and everything below it want the expanded form the workbook used to
  * arrive in: a "-0" roll-up row per account plus one typed row per flag that
- * is YES. This module is that rule, kept free of Excel so it can be tested on
- * plain objects; `scripts/expand-cbs-workbook.ts` does the reading and
- * writing.
+ * is YES. The roll-up is written only where it has something to summarize:
+ * an account with exactly one YES flag and no account beneath it gets its
+ * typed row alone, since a roll-up over a single row says nothing. An
+ * account with no YES flag at all keeps its roll-up, or it would vanish.
+ * This module is that rule, kept free of Excel so it can be tested on plain
+ * objects; `scripts/expand-cbs-workbook.ts` does the reading and writing.
  *
  * Rows are handled as header-to-value maps rather than a fixed shape, so a
  * column added to the master passes straight through to the expanded sheet
@@ -15,6 +18,8 @@
  *
  * The rules are still being settled; the constants below are the knobs.
  */
+import { getGroupL1 } from "./cbs/codes";
+import { LEVEL_DEFAULT } from "./cbs/types";
 
 export type CellValue = string | number | boolean | null;
 
@@ -142,8 +147,49 @@ export type ExpansionStats = {
   generated: Record<CostTypeRule["rowType"], number>;
   /** Accounts whose Both material type became two material rows. */
   materialBothSplit: number;
+  /**
+   * Accounts written without a roll-up row: one cost type and nothing
+   * beneath them, so the typed row stands for the account by itself.
+   */
+  rollupsSkipped: number;
   total: number;
 };
+
+/**
+ * The master codes that have other master codes beneath them.
+ *
+ * A code is beneath another when zeroing any of its trailing non-"00"
+ * segments reaches it — the parent lookup CBS Health uses, which also catches
+ * the pipe shop's 610-LB-1200-ST under 610-LB-1200-00 (the tree hangs those
+ * variants off that roll-up too, through a shared lineage key) — or when the
+ * other is its division root (`getGroupL1`: 010 above 012, 600 above 601),
+ * which is where the tree roots an L1 account.
+ */
+export function masterCodesWithDescendants(
+  codes: Iterable<string>,
+): Set<string> {
+  const all = new Set(codes);
+  const parents = new Set<string>();
+  const consider = (code: string) => {
+    if (all.has(code)) parents.add(code);
+  };
+  for (const code of all) {
+    const [l1, l2, l34, l5] = code.split("-");
+    const parts = [l2, l34.slice(0, 2), l34.slice(2), l5];
+    for (let i = parts.length - 1; i >= 0; i--) {
+      if (parts[i] === LEVEL_DEFAULT) continue;
+      parts[i] = LEVEL_DEFAULT;
+      consider(`${l1}-${parts[0]}-${parts[1]}${parts[2]}-${parts[3]}`);
+    }
+    const root = getGroupL1(l1);
+    if (root !== l1) {
+      consider(
+        `${root}-${LEVEL_DEFAULT}-${LEVEL_DEFAULT}${LEVEL_DEFAULT}-${LEVEL_DEFAULT}`,
+      );
+    }
+  }
+  return parents;
+}
 
 export type ExpansionPlan = {
   headers: string[];
@@ -209,6 +255,7 @@ export function planCbsWorkbookExpansion(
       Rental: 0,
     },
     materialBothSplit: 0,
+    rollupsSkipped: 0,
     total: 0,
   };
   const rows: ExpandedRow[] = [];
@@ -216,6 +263,13 @@ export function planCbsWorkbookExpansion(
   const seenExpanded = new Map<string, number>();
   let expandedInput = 0;
   let costCodeMismatches = 0;
+  // Whether a roll-up has anything beneath it is a question about the whole
+  // master, so it is answered before the rows are walked.
+  const parents = masterCodesWithDescendants(
+    master
+      .map(({ cells }) => text(cells[COL.displayCode]).toUpperCase())
+      .filter((code) => MASTER_CODE_RE.test(code)),
+  );
 
   for (const { row, cells } of master) {
     const displayCode = text(cells[COL.displayCode]).toUpperCase();
@@ -299,16 +353,28 @@ export function planCbsWorkbookExpansion(
       rows.push({ cells: out, rowType, sourceRow: row });
     };
 
-    emit(
-      typed(ROLLUP_TYPE, {
-        [COL.name]: `${name} (*)`,
-        [COL.description]: rollupDescription(name),
-        [COL.rowType]: "Original",
-        [COL.originalRow]: true,
-      }),
-      "Original",
-    );
-    stats.originals++;
+    // A roll-up summarizes what sits under it: the account's typed rows and
+    // the accounts beneath it. With one typed row and nothing beneath, it
+    // would summarize a single line, so that line stands for the account by
+    // itself (and is the account's original row, since no other row is).
+    // No typed row at all still gets the roll-up — it is the account's only
+    // row then, and dropping it would drop the account.
+    const yesCount = COST_TYPE_RULES.filter((r) => flags[r.type]).length;
+    const soleLine = yesCount === 1 && !parents.has(displayCode);
+    if (soleLine) {
+      stats.rollupsSkipped++;
+    } else {
+      emit(
+        typed(ROLLUP_TYPE, {
+          [COL.name]: `${name} (*)`,
+          [COL.description]: rollupDescription(name),
+          [COL.rowType]: "Original",
+          [COL.originalRow]: true,
+        }),
+        "Original",
+      );
+      stats.originals++;
+    }
 
     for (const rule of COST_TYPE_RULES) {
       if (!flags[rule.type]) continue;
@@ -317,7 +383,7 @@ export function planCbsWorkbookExpansion(
         [COL.gl]: rule.gl,
         [COL.description]: costTypeDescription(rule.noun, name),
         [COL.rowType]: rule.rowType,
-        [COL.originalRow]: false,
+        [COL.originalRow]: soleLine,
       };
       if (rule.costClassification) {
         base[COL.costClassification] = rule.costClassification;

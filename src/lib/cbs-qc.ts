@@ -166,9 +166,29 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
     return null;
   };
 
+  // What sits under each parent, by cost type. Shared by rules 1 and 2.
+  const childTypes = new Map<string, Set<string>>();
+  for (const r of rows) {
+    const parent = parentOf(r);
+    if (!parent) continue;
+    const set = childTypes.get(parent.displayCode) ?? new Set<string>();
+    set.add(costTypeOf(r.displayCode));
+    childTypes.set(parent.displayCode, set);
+  }
+
   // --- 1. A roll-up level (workbook L3 = 00) must carry the "0" cost type.
+  //
+  // Except where the typed row IS the account: the expand script writes an
+  // account with one cost type and nothing beneath it as its typed row alone,
+  // with no "-0" above it. Such a row summarizes nothing, so it is a line item
+  // that happens to sit at a level the code reserves for roll-ups. A typed row
+  // beside its account's own "-0" row, or with rows beneath it, is still wrong.
+  const backboneOf = (code: string) => `${code.slice(0, 15)}0`;
   const l3 = rows.filter(
-    (r) => l3Of(r.displayCode) === "00" && costTypeOf(r.displayCode) !== "0",
+    (r) =>
+      l3Of(r.displayCode) === "00" &&
+      costTypeOf(r.displayCode) !== "0" &&
+      (byCode.has(backboneOf(r.displayCode)) || childTypes.has(r.displayCode)),
   );
   checks.push(
     check({
@@ -180,7 +200,7 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
       ),
       count: l3.length,
       summary:
-        "A row whose L3 segment is 00 is a roll-up level and must carry cost type 0. These carry a priced type instead, so they total as though they were line items.",
+        "A row whose L3 segment is 00 is a roll-up level and must carry cost type 0. These carry a priced type beside their own 0 row or above other rows, so they total as though they were line items. (An account with a single cost type and nothing beneath it has only its typed row, which is fine.)",
       action:
         "Set the cost type to 0 in CBS.xlsx, or move the cost to a child row.",
       clear: "Every roll-up level carries cost type 0.",
@@ -188,14 +208,6 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
   );
 
   // --- 2. A parent's cost type against its children's.
-  const childTypes = new Map<string, Set<string>>();
-  for (const r of rows) {
-    const parent = parentOf(r);
-    if (!parent) continue;
-    const set = childTypes.get(parent.displayCode) ?? new Set<string>();
-    set.add(costTypeOf(r.displayCode));
-    childTypes.set(parent.displayCode, set);
-  }
   const parentType: HealthFinding[] = [];
   for (const [code, types] of childTypes) {
     const row = byCode.get(code)!;

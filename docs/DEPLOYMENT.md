@@ -529,7 +529,10 @@ account plus a typed companion for every row flagged **Labor**, **Sub**,
 **Material**, **Equipment**, **Other** or **Rental Code**, with the code
 suffix, G/L, cost classification, name marker and description each rule sets
 (`src/lib/cbs-workbook-expand.ts`). A Material Type of **Both** becomes a Bulk
-and a Tagged material row. The loader generates nothing itself — it stores one
+and a Tagged material row. The `-0` row is written only where it has more than
+one row to summarize: an account with exactly one flag and no account beneath
+it (by the tree's own ancestry, so 010 counts 012 beneath it and 600 counts 601) gets its typed row alone, marked as the original row. An account with no
+flag at all keeps its `-0` row, or it would vanish. The loader generates nothing itself — it stores one
 item per sheet row (its own `S`/`M` twin generation, and the `rowType` /
 `generatedFrom` columns that recorded it, were removed on 2026-10-29). On
 every row it normalizes a summary code written with four segments

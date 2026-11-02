@@ -5,8 +5,9 @@
 // Material / Equipment / Other / Rental). The loader, the CBS Health report
 // and `cbs:import` all expect the expanded dictionary the sheet used to ship
 // as: a "-0" roll-up row per account plus one typed row per YES flag, each
-// with its own code, G/L, name marker and description. This script produces
-// that file. The rules live in `src/lib/cbs-workbook-expand.ts`; the Excel
+// with its own code, G/L, name marker and description. An account with one
+// YES flag and no account beneath it gets its typed row alone, with no
+// roll-up over a single line. This script produces that file. The rules live in `src/lib/cbs-workbook-expand.ts`; the Excel
 // around them in `prisma/cbs-expand.ts`.
 //
 //   npm run cbs:expand                 read CBS.master.xlsx, write CBS.xlsx
@@ -52,6 +53,11 @@ async function main() {
   if (plan.stats.materialBothSplit) {
     console.log(
       `  ${plan.stats.materialBothSplit} account(s) with Material Type Both became a Bulk and a Tagged material row`,
+    );
+  }
+  if (plan.stats.rollupsSkipped) {
+    console.log(
+      `  ${plan.stats.rollupsSkipped.toLocaleString()} account(s) with one cost type and nothing beneath them have no -0 roll-up row; the typed row is the account`,
     );
   }
   for (const w of plan.warnings) console.log(`  warning: ${w}`);

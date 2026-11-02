@@ -105,11 +105,11 @@ describe("expandCbsWorkbook", () => {
     expect(report.sheet).toBe("CBS Expanded");
     expect(report.invalid).toEqual([]);
     // In the loader's own order: the roll-up, then its lines by cost type.
+    // Fittings has one cost type and nothing beneath it, so no roll-up.
     expect(items.map((i) => i.displayCode)).toEqual([
       "600-00-0000-00-0",
       "600-00-0000-00-S",
       "600-00-0000-00-L",
-      "601-05-0000-00-0",
       "601-05-0000-00-M",
     ]);
     const byCode = new Map(items.map((i) => [i.displayCode, i]));
@@ -139,13 +139,15 @@ describe("expandCbsWorkbook", () => {
       laborCode: true,
       subReporting: true,
     });
-    // Numbers and pass-through columns survive the trip as text.
-    expect(byCode.get("601-05-0000-00-0")).toMatchObject({
+    // Numbers and pass-through columns survive the trip as text. This row is
+    // the account's only one, so it reads back as the original row.
+    expect(byCode.get("601-05-0000-00-M")).toMatchObject({
       costCenter: "2010",
       discipline: "Piping",
       uom: "EA",
-      materialType: "n/a",
+      isOriginal: true,
     });
+    expect(byCode.has("601-05-0000-00-0")).toBe(false);
 
     // Both: two -M rows sharing a code. The loader keeps the first (Bulk) and
     // reports the second, rather than refusing the file.
@@ -193,7 +195,8 @@ describe("expandCbsWorkbook", () => {
       outPath,
       write: false,
     });
-    expect(plan.stats).toMatchObject({ masterRows: 1, total: 2 });
+    // Labor alone and nothing beneath: the one typed row, no roll-up.
+    expect(plan.stats).toMatchObject({ masterRows: 1, total: 1 });
     expect(bytes).toBeNull();
     expect(existsSync(outPath)).toBe(false);
   });

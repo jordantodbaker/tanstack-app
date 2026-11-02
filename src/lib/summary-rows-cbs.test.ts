@@ -36,10 +36,10 @@ const ACCOUNT_FOR_KEY: Record<string, string> = {
   "028": "Engineering Commissioning & Startup Support",
 };
 
-/** A key's account row: "012" → 012-00-0000-00-0, "03205" → 032-05-0000-00-0. */
+/** A key's account code: "012" → 012-00-0000-00, "03205" → 032-05-0000-00. */
 function accountCodeFor(key: string): string {
   const l2 = key.length >= 5 ? key.slice(3, 5) : "00";
-  return `${key.slice(0, 3)}-${l2}-0000-00-0`;
+  return `${key.slice(0, 3)}-${l2}-0000-00`;
 }
 
 const keyed = [
@@ -51,16 +51,28 @@ const keyed = [
 ];
 
 const workbook = await loadCbsWorkbook();
-const byCode = new Map(workbook.items.map((i) => [i.displayCode, i]));
+/**
+ * Each account's own row, by its four-segment code: the "-0" roll-up where
+ * there is one, otherwise its single typed row — the expand script writes an
+ * account with one cost type and nothing beneath it without a roll-up, and the
+ * Summary rows sum by code prefix either way.
+ */
+const byAccount = new Map<string, (typeof workbook.items)[number]>();
+for (const item of workbook.items) {
+  const account = item.displayCode.slice(0, 14);
+  if (!byAccount.has(account) || item.displayCode.endsWith("-0")) {
+    byAccount.set(account, item);
+  }
+}
 const nameAt = (key: string) => {
-  const row = byCode.get(accountCodeFor(key));
+  const row = byAccount.get(accountCodeFor(key));
   return row ? stripCostTypeSuffix(row.name) : null;
 };
 
 describe("Summary rows against the CBS workbook", () => {
   it("points every row at an account the CBS has", () => {
     const dead = keyed
-      .filter(({ key }) => !byCode.has(accountCodeFor(key)))
+      .filter(({ key }) => !byAccount.has(accountCodeFor(key)))
       .map(({ label, key }) => `${label} → ${key} (${accountCodeFor(key)})`);
     // A dead key is a Summary row that can never show a number.
     expect(dead).toEqual([]);

@@ -4,7 +4,8 @@
  * The master (`CBS.master.xlsx`) has one row per account, four-segment codes
  * and a YES/NO flag per cost type. The loader, CBS Health and `cbs:import`
  * want the expanded dictionary: a "-0" roll-up row per account plus one typed
- * row per flag that is YES. The rules are `planCbsWorkbookExpansion` in
+ * row per flag that is YES (no roll-up where it would cover a single typed
+ * row and nothing beneath it). The rules are `planCbsWorkbookExpansion` in
  * `src/lib/cbs-workbook-expand.ts`; this is the Excel around them — reading
  * the master through the shared sheet reader and writing the result — kept
  * out of the script so a test can run the whole round trip on a temp file.

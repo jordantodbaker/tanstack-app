@@ -4,7 +4,8 @@
  *
  * The sheet is the expanded one `cbs:expand` writes from the condensed master
  * — a "-0" roll-up row per account plus a typed line per cost type the account
- * carries — so nothing is generated here. (The loader used to add S / M twins
+ * carries (an account with one cost type and nothing beneath it has the typed
+ * line alone) — so nothing is generated here. (The loader used to add S / M twins
  * for accounts flagged Sub Code / Material Code; the expand script owns every
  * cost type now, with one set of rules in `src/lib/cbs-workbook-expand.ts`.)
  * What the loader does to every row is validate the code, normalize a

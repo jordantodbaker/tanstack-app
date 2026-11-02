@@ -56,7 +56,7 @@ const codes = (plan: ReturnType<typeof planCbsWorkbookExpansion>) =>
   plan.rows.map((r) => r.cells["Display Code"]);
 
 describe("planCbsWorkbookExpansion", () => {
-  it("writes a -0 roll-up row for every master row, flagged as the original", () => {
+  it("writes a -0 roll-up row for a master row with no cost type, flagged as the original", () => {
     const plan = planCbsWorkbookExpansion(HEADERS, [
       master(2, "012-05-1000-00", "Home Office Executive"),
     ]);
@@ -193,19 +193,139 @@ describe("planCbsWorkbookExpansion", () => {
       const plan = planCbsWorkbookExpansion(HEADERS, [
         master(2, "012-05-1000-00", "Pipe", { [rule.flag]: "YES" }),
       ]);
-      expect(plan.rows).toHaveLength(2);
-      expect(plan.rows[1].rowType).toBe(rowType);
-      expect(plan.rows[1].cells).toMatchObject({
+      // One cost type and nothing beneath: the typed row alone, no roll-up,
+      // and it is the account's original row since no other row is.
+      expect(plan.rows).toHaveLength(1);
+      expect(plan.rows[0].rowType).toBe(rowType);
+      expect(plan.rows[0].cells).toMatchObject({
         "Display Code": `012-05-1000-00-${type}`,
         "Cost Code": costCode,
         Name: `Pipe (${type})`,
         "G/L": gl,
         "Cost Classification": classification,
         Description: description,
-        "Original Row": false,
+        "Row Type": rowType,
+        "Original Row": true,
       });
+      expect(plan.stats).toMatchObject({ originals: 0, rollupsSkipped: 1 });
     },
   );
+
+  describe("the roll-up row is written only where it has more than one row to summarize", () => {
+    it("leaves it out for an account with one cost type and nothing beneath it", () => {
+      const plan = planCbsWorkbookExpansion(HEADERS, [
+        master(2, "543-05-1005-15", "Tube Banks / Coils", {
+          "Labor Code": "YES",
+        }),
+      ]);
+      expect(plan.problems).toEqual([]);
+      expect(codes(plan)).toEqual(["543-05-1005-15-L"]);
+      expect(plan.rows[0].cells["Original Row"]).toBe(true);
+      expect(plan.stats).toMatchObject({
+        originals: 0,
+        rollupsSkipped: 1,
+        total: 1,
+      });
+    });
+
+    it("keeps it for an account with two cost types", () => {
+      const plan = planCbsWorkbookExpansion(HEADERS, [
+        master(2, "543-05-1005-15", "Tube Banks / Coils", {
+          "Labor Code": "YES",
+          "Material Code": "YES",
+        }),
+      ]);
+      expect(codes(plan)).toEqual([
+        "543-05-1005-15-0",
+        "543-05-1005-15-L",
+        "543-05-1005-15-M",
+      ]);
+      expect(plan.rows.map((r) => r.cells["Original Row"])).toEqual([
+        true,
+        false,
+        false,
+      ]);
+      expect(plan.stats.rollupsSkipped).toBe(0);
+    });
+
+    it("keeps it for a single-type account that has accounts beneath it", () => {
+      const plan = planCbsWorkbookExpansion(HEADERS, [
+        master(2, "543-05-1000-00", "Fired Heaters", { "Labor Code": "YES" }),
+        master(3, "543-05-1005-15", "Tube Banks / Coils", {
+          "Labor Code": "YES",
+        }),
+      ]);
+      expect(codes(plan)).toEqual([
+        "543-05-1000-00-0",
+        "543-05-1000-00-L",
+        "543-05-1005-15-L",
+      ]);
+      expect(plan.stats).toMatchObject({ originals: 1, rollupsSkipped: 1 });
+    });
+
+    it("counts a division's L1 accounts as beneath its root, the way the tree does", () => {
+      // 012 is not a four-segment descendant of 010, but the tree roots it
+      // there (getGroupL1), so 010's roll-up has something to summarize.
+      const plan = planCbsWorkbookExpansion(HEADERS, [
+        master(2, "010-00-0000-00", "Home Office and Administration", {
+          "Labor Code": "YES",
+        }),
+        master(3, "012-00-0000-00", "Home Office Construction Support", {
+          "Labor Code": "YES",
+        }),
+      ]);
+      expect(codes(plan)).toEqual([
+        "010-00-0000-00-0",
+        "010-00-0000-00-L",
+        "012-00-0000-00-L",
+      ]);
+    });
+
+    it("counts the pipe shop's size/schedule variants as beneath their bore account", () => {
+      // 610-LB-1200-ST hangs off 610-LB-1200-00's roll-up in the tree, so
+      // that roll-up has something to summarize even with one cost type.
+      const plan = planCbsWorkbookExpansion(HEADERS, [
+        master(2, "610-LB-1200-00", 'Pipe Shop 12" LB', {
+          "Labor Code": "YES",
+        }),
+        master(3, "610-LB-1200-ST", 'Pipe Shop 12" LB STD', {
+          "Labor Code": "YES",
+        }),
+      ]);
+      expect(codes(plan)).toEqual([
+        "610-LB-1200-00-0",
+        "610-LB-1200-00-L",
+        "610-LB-1200-ST-L",
+      ]);
+    });
+
+    it("keeps it for an account with no cost type at all, so the account survives", () => {
+      const plan = planCbsWorkbookExpansion(HEADERS, [
+        master(2, "543-05-1005-15", "Reserved"),
+      ]);
+      expect(codes(plan)).toEqual(["543-05-1005-15-0"]);
+      expect(plan.stats.rollupsSkipped).toBe(0);
+    });
+
+    it("treats a Both material split as one cost type: two rows, one code, no roll-up", () => {
+      const plan = planCbsWorkbookExpansion(HEADERS, [
+        master(2, "543-05-1005-15", "Tube Banks / Coils", {
+          "Material Code": "YES",
+          "Material Type": "Both",
+        }),
+      ]);
+      expect(
+        plan.rows.map((r) => [
+          r.cells["Display Code"],
+          r.cells["Material Type"],
+          r.cells["Original Row"],
+        ]),
+      ).toEqual([
+        ["543-05-1005-15-M", "Bulk", true],
+        ["543-05-1005-15-M", "Tagged", true],
+      ]);
+    });
+  });
 
   it("keeps the master's flags on every generated row", () => {
     const plan = planCbsWorkbookExpansion(HEADERS, [

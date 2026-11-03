@@ -5,7 +5,13 @@ import { Prisma } from "../generated/prisma/client";
 import { prisma } from "../server/db";
 import { z } from "zod";
 import { Id, parseProjectIdInput } from "~/lib/validators";
-import { adminHandlerNoInput, projectIdScopedHandler } from "./users.server";
+import {
+  adminHandlerNoInput,
+  projectIdScopedHandler,
+  requireProjectAccess,
+  requireUser,
+  signedInHandler,
+} from "./users.server";
 import { withCbsLevels } from "~/lib/cbs-tree";
 import { cbsCatalogRows, projectCostCodeRows } from "./cbs-rows.server";
 
@@ -34,6 +40,7 @@ const CbsItemsByL1FilteredSchema = z.object({
 export const resolveCbsCodes = createServerFn({ method: "GET" })
   .inputValidator(StringArrParser)
   .handler(async ({ data }) => {
+    await requireUser();
     const normalized = [
       ...new Set(
         data
@@ -74,7 +81,8 @@ export const cbsCodeResolveQueryOptions = (codes: string[]) =>
 
 export const fetchCbsItemsByL1 = createServerFn({ method: "GET" })
   .inputValidator(StringArrParser)
-  .handler(({ data }) => {
+  .handler(async ({ data }) => {
+    await requireUser();
     return prisma.cbsItem.findMany({
       where: { l1: { in: data } },
       orderBy: { id: "asc" },
@@ -101,6 +109,10 @@ export const fetchCbsItemsByL1Paged = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => CbsItemsByL1PagedSchema.parse(input))
   .handler(async ({ data }) => {
     const { l1Values, page, pageSize, projectId } = data;
+    // With a project, the rows are that project's allow-list, so the caller
+    // must be on the project; without one, the whole catalog, open to any
+    // signed-in user.
+    await (projectId == null ? requireUser() : requireProjectAccess(projectId));
     const where =
       projectId != null
         ? {
@@ -139,8 +151,11 @@ export const cbsItemsByL1PagedQueryOptions = (input: {
 
 export const fetchCbsItemsByL1Filtered = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => CbsItemsByL1FilteredSchema.parse(input))
-  .handler(({ data }) => {
+  .handler(async ({ data }) => {
     const { l1Values, projectId } = data;
+    // As in `fetchCbsItemsByL1Paged`: the project's allow-list needs project
+    // access; the open catalog needs a signed-in user.
+    await (projectId == null ? requireUser() : requireProjectAccess(projectId));
     const where =
       projectId != null
         ? {
@@ -175,7 +190,8 @@ export const cbsItemsByL1FilteredQueryOptions = (input: {
 
 export const fetchCbsItemsByL1EndsWith = createServerFn({ method: "GET" })
   .inputValidator(StringArrParser)
-  .handler(({ data }) => {
+  .handler(async ({ data }) => {
+    await requireUser();
     return prisma.cbsItem.findMany({
       where: { OR: data.map((suffix) => ({ l1: { endsWith: suffix } })) },
       orderBy: { id: "asc" },
@@ -306,36 +322,38 @@ export const projectCostCodesQueryOptions = (projectId: number) =>
 /** Every workbook column for one dictionary row — the detail panel. */
 export const fetchCbsItemDetail = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => Id.parse(input))
-  .handler(({ data: id }) =>
-    prisma.cbsItem.findUniqueOrThrow({
-      where: { id },
-      select: {
-        id: true,
-        displayCode: true,
-        costCode: true,
-        name: true,
-        uom: true,
-        subReporting: true,
-        materialCode: true,
-        materialType: true,
-        costCenter: true,
-        costClassification: true,
-        status: true,
-        accountDescription: true,
-        l2Description: true,
-        core: true,
-        coreExtension: true,
-        wbs: true,
-        p6CostAccount: true,
-        gl: true,
-        discipline: true,
-        description: true,
-        notes: true,
-        originalRow: true,
-        expandedRow: true,
-        isOriginal: true,
-      },
-    }),
+  .handler(
+    signedInHandler(({ data: id }) =>
+      prisma.cbsItem.findUniqueOrThrow({
+        where: { id },
+        select: {
+          id: true,
+          displayCode: true,
+          costCode: true,
+          name: true,
+          uom: true,
+          subReporting: true,
+          materialCode: true,
+          materialType: true,
+          costCenter: true,
+          costClassification: true,
+          status: true,
+          accountDescription: true,
+          l2Description: true,
+          core: true,
+          coreExtension: true,
+          wbs: true,
+          p6CostAccount: true,
+          gl: true,
+          discipline: true,
+          description: true,
+          notes: true,
+          originalRow: true,
+          expandedRow: true,
+          isOriginal: true,
+        },
+      }),
+    ),
   );
 
 export type CbsItemDetail = Awaited<ReturnType<typeof fetchCbsItemDetail>>;
@@ -362,7 +380,8 @@ const CbsCodeSearchSchema = z.object({
 });
 export const searchCbsCodeOptions = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => CbsCodeSearchSchema.parse(input))
-  .handler(({ data }) => {
+  .handler(async ({ data }) => {
+    await requireUser();
     const q = data.query.trim();
     return prisma.cbsItem.findMany({
       where: q

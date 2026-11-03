@@ -80,12 +80,14 @@ export const SUMMARY_ADMIN_HOME_OFFICE: {
   l1l2?: string;
 }[] = [
   { label: "Home Office Construction Support", uom: "HR", l1: "012" },
-  { label: "Bonds", uom: "LS", l1l2: "03205" },
-  { label: "Insurance", uom: "LS", l1l2: "03210" },
-  { label: "Finance Charges", uom: "LS", l1l2: "03215" },
-  { label: "Taxes", uom: "LS", l1l2: "03220" },
-  { label: "Permitting", uom: "LS", l1l2: "03225" },
-  { label: "Licenses", uom: "LS", l1l2: "03230" },
+  // The 2026-11-03 master inserted Legal at 032-05, moving the rest up five.
+  { label: "Legal", uom: "LS", l1l2: "03205" },
+  { label: "Bonds", uom: "LS", l1l2: "03210" },
+  { label: "Insurance", uom: "LS", l1l2: "03215" },
+  { label: "Finance Charges", uom: "LS", l1l2: "03220" },
+  { label: "Taxes", uom: "LS", l1l2: "03225" },
+  { label: "Permitting", uom: "LS", l1l2: "03230" },
+  { label: "Licenses", uom: "LS", l1l2: "03235" },
 ];
 
 // Each Engineering & Design row is a parent CBS item (L1 code) under the
@@ -101,13 +103,13 @@ export const SUMMARY_ENGINEERING: {
   uom: string;
   l1: string;
 }[] = [
-  { label: "Combined Phase (Preliminary & Detailed)", uom: "HR", l1: "022" },
-  { label: "Concept Design", uom: "HR", l1: "024" },
-  { label: "Preliminary Design – FEED (Class 4–3)", uom: "HR", l1: "025" },
-  { label: "Detailed Design (Class 2-1)", uom: "HR", l1: "026" },
-  { label: "Engineering Construction Support", uom: "HR", l1: "027" },
+  { label: "Combined Phase (D23)", uom: "HR", l1: "022" },
+  { label: "Concept Design (D1)", uom: "HR", l1: "024" },
+  { label: "Preliminary Design – FEED (D2)", uom: "HR", l1: "025" },
+  { label: "Detailed Design (D3)", uom: "HR", l1: "026" },
+  { label: "Engineering Construction Support (D4)", uom: "HR", l1: "027" },
   {
-    label: "Engineering Commissioning & Startup Support",
+    label: "Engineering Commissioning & Startup Support (D5)",
     uom: "HR",
     l1: "028",
   },

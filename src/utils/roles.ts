@@ -3,7 +3,13 @@ import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { z } from "zod";
-import { adminHandler, adminHandlerNoInput } from "./users.server";
+import {
+  adminHandler,
+  adminHandlerNoInput,
+  requireProjectAccess,
+  requireUser,
+  requireVersionAccess,
+} from "./users.server";
 import { parseIdInput, parseUpsertRole } from "~/lib/validators";
 import {
   resolveRoleRates,
@@ -42,6 +48,13 @@ export const fetchRoleData = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => RoleDataInput.parse(input))
   .handler(async ({ data }): Promise<RoleData> => {
     const { disciplineId, projectId, versionId } = data;
+    // The project and version rate books are that project's to see; the
+    // global roles and rates are any signed-in user's. Both scopes are
+    // checked when both are given: a stale cookie can pair a version with a
+    // project it does not belong to.
+    if (projectId !== null) await requireProjectAccess(projectId);
+    if (versionId !== null) await requireVersionAccess(versionId);
+    if (projectId === null && versionId === null) await requireUser();
     const roleWhere =
       disciplineId === null ? {} : { disciplines: { has: disciplineId } };
     const rateWhere = disciplineId === null ? {} : { role: roleWhere };

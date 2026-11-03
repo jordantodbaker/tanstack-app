@@ -2,17 +2,20 @@ import { queryOptions } from "@tanstack/react-query";
 import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
+import { signedInHandlerNoInput } from "./users.server";
 import {
   packPipingFactors,
   type PipingFactorData as PipingFactorDataType,
 } from "~/lib/piping-factors";
 
-export const fetchPipingGroups = createServerFn({ method: "GET" }).handler(() => {
-  return prisma.pipingGroup.findMany({
-    include: { values: { orderBy: { size: "asc" } } },
-    orderBy: { groupNo: "asc" },
-  });
-});
+export const fetchPipingGroups = createServerFn({ method: "GET" }).handler(
+  signedInHandlerNoInput(() =>
+    prisma.pipingGroup.findMany({
+      include: { values: { orderBy: { size: "asc" } } },
+      orderBy: { groupNo: "asc" },
+    }),
+  ),
+);
 
 export const pipingGroupsQueryOptions = () =>
   queryOptions({
@@ -34,13 +37,16 @@ export type {
  * — see `~/lib/piping-factors` for why it moved and what it preserves.
  */
 export const fetchPipingFactorData = createServerFn({ method: "GET" }).handler(
-  async (): Promise<PipingFactorDataType> => {
+  signedInHandlerNoInput(async (): Promise<PipingFactorDataType> => {
     const factors = await prisma.pipingFactor.findMany({
       select: {
         code: true,
         unit: true,
         taskDefinition: true,
-        values: { select: { size: true, value: true }, orderBy: { size: "asc" } },
+        values: {
+          select: { size: true, value: true },
+          orderBy: { size: "asc" },
+        },
       },
       // `id` breaks the tie between two rows sharing a code, so which one wins
       // is at least STABLE rather than left to the planner. Which one *should*
@@ -50,7 +56,7 @@ export const fetchPipingFactorData = createServerFn({ method: "GET" }).handler(
       orderBy: [{ code: "asc" }, { id: "asc" }],
     });
     return packPipingFactors(factors);
-  },
+  }),
 );
 
 export const pipingFactorDataQueryOptions = () =>

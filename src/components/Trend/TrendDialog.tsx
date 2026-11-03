@@ -38,12 +38,7 @@ import { TrendStatusBadge } from "~/components/Trend/TrendBadges";
 import { rfiListQueryOptions } from "~/utils/rfis";
 import { fcoListQueryOptions } from "~/utils/fcoLog";
 import { formatMoney } from "~/lib/formatting";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from "~/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
 import {
   EntityAuxTabTriggers,
   EntityAuxTabPanels,
@@ -173,8 +168,7 @@ function TrendDialogBody({
       fromItem,
       onSubmit,
       onDelete,
-      deleteConfirm: (i) =>
-        `Delete trend "${i.title}"? This cannot be undone.`,
+      deleteConfirm: (i) => `Delete trend "${i.title}"? This cannot be undone.`,
       closeDialog,
       recent: (i) => ({
         entityType: "Trend",
@@ -231,336 +225,335 @@ function TrendDialogBody({
   return (
     <>
       <div className="space-y-4">
-          <EntityDialogHeader
-            title={initial ? "Edit Trend" : "New Trend"}
-            subtitle={
-              <>
-                Anticipated cost impact that hasn't been approved yet. Drives
-                the project's AFC (Anticipated Final Cost) at{" "}
-                <span className="font-mono">probability × likely cost</span>.
-              </>
-            }
-          >
-            {canPromote && (
-              <PromoteButton
-                label="Promote to CVR"
-                onClick={handlePromote}
-                disabled={busy}
+        <EntityDialogHeader
+          title={initial ? "Edit Trend" : "New Trend"}
+          subtitle={
+            <>
+              Anticipated cost impact that hasn't been approved yet. Drives the
+              project's AFC (Anticipated Final Cost) at{" "}
+              <span className="font-mono">probability × likely cost</span>.
+            </>
+          }
+        >
+          {canPromote && (
+            <PromoteButton
+              label="Promote to CVR"
+              onClick={handlePromote}
+              disabled={busy}
+            />
+          )}
+          {initial && onDelete && (
+            <DeleteEntityButton onClick={handleDelete} disabled={busy} />
+          )}
+        </EntityDialogHeader>
+
+        {initial?.linkedCvrId && (
+          <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+            <div className="flex items-center gap-2 font-medium">
+              <LinkIcon className="size-4" />
+              Promoted to CVR #{initial.linkedCvrId}
+            </div>
+            <p className="mt-0.5 text-xs text-emerald-800">
+              This trend is now tracked through its CVR. Status changes on the
+              CVR drive Current Budget; the trend no longer contributes to AFC.
+            </p>
+          </div>
+        )}
+
+        <Tabs defaultValue="details" className="w-full">
+          <TabsList>
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <EntityAuxTabTriggers />
+          </TabsList>
+
+          <TabsContent value="details" className="space-y-4 mt-3">
+            {/* Identity */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Labeled label="Trend Number">
+                <Input
+                  value={form.trendNumber}
+                  placeholder="Auto-assigned if blank"
+                  onChange={(e) => update("trendNumber", e.target.value)}
+                />
+              </Labeled>
+              <Labeled label="Title" className="md:col-span-2">
+                <Input
+                  value={form.title}
+                  placeholder="One-line summary"
+                  onChange={(e) => update("title", e.target.value)}
+                />
+              </Labeled>
+            </div>
+
+            {/* State row */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Labeled
+                label="Status"
+                help={
+                  initial
+                    ? "Use the workflow actions below to advance status."
+                    : "New trends start as Identified."
+                }
+              >
+                <div className="flex h-9 items-center">
+                  <TrendStatusBadge
+                    status={initial ? initial.status : "IDENTIFIED"}
+                  />
+                </div>
+              </Labeled>
+              <Labeled label="Priority">
+                <NativeSelect
+                  value={form.priority}
+                  onChange={(v) => update("priority", v as TrendPriority)}
+                  options={TREND_PRIORITIES.map((s) => ({
+                    value: s,
+                    label: TREND_PRIORITY_LABELS[s],
+                  }))}
+                />
+              </Labeled>
+              <DisciplineField
+                value={form.discipline}
+                onChange={(v) => update("discipline", v)}
+              />
+              <Labeled label="Needed by">
+                <DateInput
+                  value={form.neededBy}
+                  onChange={(iso) => update("neededBy", iso)}
+                />
+              </Labeled>
+            </div>
+
+            {initial && onTransition && (
+              <WorkflowActions
+                transitions={transitions}
+                busy={busy}
+                setBusy={setBusy}
+                onTransition={onTransition}
+                entityId={initial.id}
+                entityNoun="Trend"
+                onSuccess={closeDialog}
               />
             )}
-            {initial && onDelete && (
-              <DeleteEntityButton onClick={handleDelete} disabled={busy} />
-            )}
-          </EntityDialogHeader>
 
-          {initial?.linkedCvrId && (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-              <div className="flex items-center gap-2 font-medium">
-                <LinkIcon className="size-4" />
-                Promoted to CVR #{initial.linkedCvrId}
-              </div>
-              <p className="mt-0.5 text-xs text-emerald-800">
-                This trend is now tracked through its CVR. Status changes on
-                the CVR drive Current Budget; the trend no longer contributes
-                to AFC.
-              </p>
-            </div>
-          )}
-
-          <Tabs defaultValue="details" className="w-full">
-            <TabsList>
-              <TabsTrigger value="details">Details</TabsTrigger>
-              <EntityAuxTabTriggers />
-            </TabsList>
-
-            <TabsContent value="details" className="space-y-4 mt-3">
-              {/* Identity */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <Labeled label="Trend Number">
-                  <Input
-                    value={form.trendNumber}
-                    placeholder="Auto-assigned if blank"
-                    onChange={(e) => update("trendNumber", e.target.value)}
-                  />
-                </Labeled>
-                <Labeled label="Title" className="md:col-span-2">
-                  <Input
-                    value={form.title}
-                    placeholder="One-line summary"
-                    onChange={(e) => update("title", e.target.value)}
-                  />
-                </Labeled>
-              </div>
-
-              {/* State row */}
+            {/* Forecast math */}
+            <fieldset className="rounded-lg border border-slate-200 p-3 space-y-3">
+              <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Forecast
+              </legend>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <Labeled
-                  label="Status"
-                  help={
-                    initial
-                      ? "Use the workflow actions below to advance status."
-                      : "New trends start as Identified."
-                  }
+                  label="Probability (%)"
+                  help="0–100. Drives AFC weight."
                 >
-                  <div className="flex h-9 items-center">
-                    <TrendStatusBadge
-                      status={initial ? initial.status : "IDENTIFIED"}
-                    />
-                  </div>
-                </Labeled>
-                <Labeled label="Priority">
-                  <NativeSelect
-                    value={form.priority}
-                    onChange={(v) => update("priority", v as TrendPriority)}
-                    options={TREND_PRIORITIES.map((s) => ({
-                      value: s,
-                      label: TREND_PRIORITY_LABELS[s],
-                    }))}
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={Math.round(form.probability * 100)}
+                    onChange={(e) => {
+                      const n = parseFloat(e.target.value);
+                      update(
+                        "probability",
+                        Number.isFinite(n)
+                          ? Math.min(100, Math.max(0, n)) / 100
+                          : 0,
+                      );
+                    }}
                   />
                 </Labeled>
-                <DisciplineField
-                  value={form.discipline}
-                  onChange={(v) => update("discipline", v)}
-                />
-                <Labeled label="Needed by">
-                  <DateInput
-                    value={form.neededBy}
-                    onChange={(iso) => update("neededBy", iso)}
+                <Labeled label="Cost — likely" help="Drives AFC math.">
+                  <NumberInput
+                    min={0}
+                    step={100}
+                    value={form.costLikely}
+                    onChange={(n) => update("costLikely", n)}
+                  />
+                </Labeled>
+                <Labeled label="Cost — low" help="Best case. Display only.">
+                  <NumberInput
+                    min={0}
+                    step={100}
+                    value={form.costLow}
+                    onChange={(n) => update("costLow", n)}
+                  />
+                </Labeled>
+                <Labeled label="Cost — high" help="Worst case. Display only.">
+                  <NumberInput
+                    min={0}
+                    step={100}
+                    value={form.costHigh}
+                    onChange={(n) => update("costHigh", n)}
                   />
                 </Labeled>
               </div>
-
-              {initial && onTransition && (
-                <WorkflowActions
-                  transitions={transitions}
-                  busy={busy}
-                  setBusy={setBusy}
-                  onTransition={onTransition}
-                  entityId={initial.id}
-                  entityNoun="Trend"
-                  onSuccess={closeDialog}
-                />
-              )}
-
-              {/* Forecast math */}
-              <fieldset className="rounded-lg border border-slate-200 p-3 space-y-3">
-                <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Forecast
-                </legend>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <Labeled
-                    label="Probability (%)"
-                    help="0–100. Drives AFC weight."
-                  >
-                    <Input
-                      type="number"
-                      min={0}
-                      max={100}
-                      step={5}
-                      value={Math.round(form.probability * 100)}
-                      onChange={(e) => {
-                        const n = parseFloat(e.target.value);
-                        update(
-                          "probability",
-                          Number.isFinite(n)
-                            ? Math.min(100, Math.max(0, n)) / 100
-                            : 0,
-                        );
-                      }}
-                    />
-                  </Labeled>
-                  <Labeled label="Cost — likely" help="Drives AFC math.">
-                    <NumberInput
-                      min={0}
-                      step={100}
-                      value={form.costLikely}
-                      onChange={(n) => update("costLikely", n)}
-                    />
-                  </Labeled>
-                  <Labeled label="Cost — low" help="Best case. Display only.">
-                    <NumberInput
-                      min={0}
-                      step={100}
-                      value={form.costLow}
-                      onChange={(n) => update("costLow", n)}
-                    />
-                  </Labeled>
-                  <Labeled label="Cost — high" help="Worst case. Display only.">
-                    <NumberInput
-                      min={0}
-                      step={100}
-                      value={form.costHigh}
-                      onChange={(n) => update("costHigh", n)}
-                    />
-                  </Labeled>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
-                  <Labeled label="Schedule impact (days)">
-                    <NumberInput
-                      step={1}
-                      value={form.scheduleDaysImpact}
-                      integer
-                      onChange={(n) => update("scheduleDaysImpact", n)}
-                    />
-                  </Labeled>
-                  <div className="md:col-span-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
-                    <div className="text-xs font-medium uppercase tracking-wide text-amber-700">
-                      AFC contribution
-                    </div>
-                    <div className="text-lg font-semibold tabular-nums text-amber-900">
-                      {formatMoney(previewContribution)}
-                    </div>
-                    <div className="text-xs text-amber-800">
-                      {Math.round(form.probability * 100)}% ×{" "}
-                      {formatMoney(form.costLikely)} — folded into AFC while
-                      this trend is Identified or Probable.
-                    </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+                <Labeled label="Schedule impact (days)">
+                  <NumberInput
+                    step={1}
+                    value={form.scheduleDaysImpact}
+                    integer
+                    onChange={(n) => update("scheduleDaysImpact", n)}
+                  />
+                </Labeled>
+                <div className="md:col-span-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                  <div className="text-xs font-medium uppercase tracking-wide text-amber-700">
+                    AFC contribution
+                  </div>
+                  <div className="text-lg font-semibold tabular-nums text-amber-900">
+                    {formatMoney(previewContribution)}
+                  </div>
+                  <div className="text-xs text-amber-800">
+                    {Math.round(form.probability * 100)}% ×{" "}
+                    {formatMoney(form.costLikely)} — folded into AFC while this
+                    trend is Identified or Probable.
                   </div>
                 </div>
-              </fieldset>
+              </div>
+            </fieldset>
 
-              {/* Field context */}
-              <fieldset className="rounded-lg border border-slate-200 p-3 space-y-3">
-                <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Context
-                </legend>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <Labeled
-                    label="Area"
-                    help={
-                      projectId === null
-                        ? "Select a project first."
-                        : areas.length === 0
-                          ? "No areas defined. Add some in Admin → Areas."
-                          : undefined
+            {/* Field context */}
+            <fieldset className="rounded-lg border border-slate-200 p-3 space-y-3">
+              <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Context
+              </legend>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Labeled
+                  label="Area"
+                  help={
+                    projectId === null
+                      ? "Select a project first."
+                      : areas.length === 0
+                        ? "No areas defined. Add some in Admin → Areas."
+                        : undefined
+                  }
+                >
+                  <NativeSelect
+                    value={form.locationArea}
+                    onChange={(v) => update("locationArea", v)}
+                    options={[
+                      { value: "", label: "— None —" },
+                      ...areas.map((a) => ({
+                        value: String(a.id),
+                        label: a.name
+                          ? `${a.displayId} — ${a.name}`
+                          : a.displayId,
+                      })),
+                    ]}
+                  />
+                </Labeled>
+                <Labeled label="Initiated by">
+                  <Input
+                    value={form.initiatedBy}
+                    placeholder="PM / PE / superintendent"
+                    onChange={(e) => update("initiatedBy", e.target.value)}
+                  />
+                </Labeled>
+                <Labeled label="Identified at">
+                  <DateInput
+                    value={form.identifiedAt}
+                    // Required: clearing the box keeps the date it had.
+                    onChange={(iso) => iso && update("identifiedAt", iso)}
+                  />
+                </Labeled>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Labeled
+                  label="Linked RFI"
+                  help="Optional. Use when this trend tracks the cost risk on an open RFI."
+                >
+                  <NativeSelect
+                    value={
+                      form.linkedRfiId === null ? "" : String(form.linkedRfiId)
                     }
-                  >
-                    <NativeSelect
-                      value={form.locationArea}
-                      onChange={(v) => update("locationArea", v)}
-                      options={[
-                        { value: "", label: "— None —" },
-                        ...areas.map((a) => ({
-                          value: String(a.id),
-                          label: a.name
-                            ? `${a.displayId} — ${a.name}`
-                            : a.displayId,
-                        })),
-                      ]}
-                    />
-                  </Labeled>
-                  <Labeled label="Initiated by">
-                    <Input
-                      value={form.initiatedBy}
-                      placeholder="PM / PE / superintendent"
-                      onChange={(e) => update("initiatedBy", e.target.value)}
-                    />
-                  </Labeled>
-                  <Labeled label="Identified at">
-                    <DateInput
-                      value={form.identifiedAt}
-                      // Required: clearing the box keeps the date it had.
-                      onChange={(iso) => iso && update("identifiedAt", iso)}
-                    />
-                  </Labeled>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <Labeled
-                    label="Linked RFI"
-                    help="Optional. Use when this trend tracks the cost risk on an open RFI."
-                  >
-                    <NativeSelect
-                      value={
-                        form.linkedRfiId === null ? "" : String(form.linkedRfiId)
-                      }
-                      onChange={(v) =>
-                        update("linkedRfiId", v === "" ? null : Number(v))
-                      }
-                      options={[
-                        { value: "", label: "— None —" },
-                        ...rfiList.map((r) => ({
-                          value: String(r.id),
-                          label: `${r.rfiNumber || `RFI #${r.id}`} — ${r.subject}`,
-                        })),
-                      ]}
-                    />
-                  </Labeled>
-                  <Labeled
-                    label="Linked FCO"
-                    help="Optional. Use when this trend tracks the cost risk on an in-flight FCO."
-                  >
-                    <NativeSelect
-                      value={
-                        form.linkedFcoId === null ? "" : String(form.linkedFcoId)
-                      }
-                      onChange={(v) =>
-                        update("linkedFcoId", v === "" ? null : Number(v))
-                      }
-                      options={[
-                        { value: "", label: "— None —" },
-                        ...fcoList.map((f) => ({
-                          value: String(f.id),
-                          label: `${f.fcoNumber || `FCO #${f.id}`} — ${f.title}`,
-                        })),
-                      ]}
-                    />
-                  </Labeled>
-                </div>
-              </fieldset>
+                    onChange={(v) =>
+                      update("linkedRfiId", v === "" ? null : Number(v))
+                    }
+                    options={[
+                      { value: "", label: "— None —" },
+                      ...rfiList.map((r) => ({
+                        value: String(r.id),
+                        label: `${r.rfiNumber || `RFI #${r.id}`} — ${r.subject}`,
+                      })),
+                    ]}
+                  />
+                </Labeled>
+                <Labeled
+                  label="Linked FCO"
+                  help="Optional. Use when this trend tracks the cost risk on an in-flight FCO."
+                >
+                  <NativeSelect
+                    value={
+                      form.linkedFcoId === null ? "" : String(form.linkedFcoId)
+                    }
+                    onChange={(v) =>
+                      update("linkedFcoId", v === "" ? null : Number(v))
+                    }
+                    options={[
+                      { value: "", label: "— None —" },
+                      ...fcoList.map((f) => ({
+                        value: String(f.id),
+                        label: `${f.fcoNumber || `FCO #${f.id}`} — ${f.title}`,
+                      })),
+                    ]}
+                  />
+                </Labeled>
+              </div>
+            </fieldset>
 
-              <Labeled label="Description">
-                <Textarea
-                  value={form.description}
-                  rows={3}
-                  placeholder="What's the trend, what's driving it"
-                  onChange={(e) => update("description", e.target.value)}
-                />
-              </Labeled>
+            <Labeled label="Description">
+              <Textarea
+                value={form.description}
+                rows={3}
+                placeholder="What's the trend, what's driving it"
+                onChange={(e) => update("description", e.target.value)}
+              />
+            </Labeled>
 
-              <Labeled label="Reason narrative">
-                <Textarea
-                  value={form.reasonNarrative}
-                  rows={3}
-                  placeholder="Why we think this will land — assumptions, references"
-                  onChange={(e) => update("reasonNarrative", e.target.value)}
-                />
-              </Labeled>
+            <Labeled label="Reason narrative">
+              <Textarea
+                value={form.reasonNarrative}
+                rows={3}
+                placeholder="Why we think this will land — assumptions, references"
+                onChange={(e) => update("reasonNarrative", e.target.value)}
+              />
+            </Labeled>
 
-              <Labeled
-                label="Affected CBS codes"
-                help="Search and select one or more CBS items. The first code's digit drives bucket attribution for AFC."
-              >
-                <CbsMultiSelect
-                  values={form.cbsCodes}
-                  onChange={(values) => update("cbsCodes", values)}
-                  placeholder="Type to search CBS codes…"
-                />
-              </Labeled>
+            <Labeled
+              label="Affected CBS codes"
+              help="Search and select one or more CBS items. The first code's digit drives bucket attribution for AFC."
+            >
+              <CbsMultiSelect
+                values={form.cbsCodes}
+                onChange={(values) => update("cbsCodes", values)}
+                placeholder="Type to search CBS codes…"
+              />
+            </Labeled>
 
-              <Labeled label="Notes">
-                <Textarea
-                  value={form.notes}
-                  rows={2}
-                  placeholder="Internal notes — escalations, follow-ups"
-                  onChange={(e) => update("notes", e.target.value)}
-                />
-              </Labeled>
-            </TabsContent>
+            <Labeled label="Notes">
+              <Textarea
+                value={form.notes}
+                rows={2}
+                placeholder="Internal notes — escalations, follow-ups"
+                onChange={(e) => update("notes", e.target.value)}
+              />
+            </Labeled>
+          </TabsContent>
 
-            <EntityAuxTabPanels
-              entityType="Trend"
-              entityId={initial?.id ?? null}
-              projectId={initial?.projectId ?? null}
-            />
-          </Tabs>
-
-          <DialogFooterActions
-            busy={busy}
-            disabled={busy || projectId === null}
-            submitLabel={initial ? "Save" : "Create"}
-            onSubmit={() => handleSubmit()}
-            error={error}
+          <EntityAuxTabPanels
+            entityType="Trend"
+            entityId={initial?.id ?? null}
+            projectId={initial?.projectId ?? null}
           />
+        </Tabs>
+
+        <DialogFooterActions
+          busy={busy}
+          disabled={busy || projectId === null || !form.title.trim()}
+          submitLabel={initial ? "Save" : "Create"}
+          onSubmit={() => handleSubmit()}
+          error={error}
+        />
       </div>
     </>
   );

@@ -168,6 +168,38 @@ export function adminHandlerNoInput<O>(fn: () => Promise<O>): () => Promise<O> {
 }
 
 /**
+ * The weakest guard: any signed-in user. For reference data every user may
+ * read (schedules, crew mixes, the CBS catalog, piping factors). The Clerk
+ * middleware in `start.ts` only attaches the auth state; it never requires a
+ * session, so a handler with no guard at all answers anonymous requests.
+ */
+export const requireUser = (): Promise<CurrentUser> => requireRole("USER");
+
+/**
+ * Wraps a server-fn handler so it runs `requireUser()` first — the signed-in
+ * counterpart of `adminHandler`, so a read that is open to every user still
+ * names its gate where `server-fn-guards.test.ts` can see it.
+ */
+export function signedInHandler<I, O>(
+  fn: (args: { data: I }) => Promise<O>,
+): (args: { data: I }) => Promise<O> {
+  return async (args) => {
+    await requireUser();
+    return fn(args);
+  };
+}
+
+/** Same as `signedInHandler` but for handlers that take no input. */
+export function signedInHandlerNoInput<O>(
+  fn: () => Promise<O>,
+): () => Promise<O> {
+  return async () => {
+    await requireUser();
+    return fn();
+  };
+}
+
+/**
  * Returns either the set of project ids the signed-in user may access, or
  * the literal string `"all"` when the user is an administrator (and thus
  * bypasses the per-project ACL).

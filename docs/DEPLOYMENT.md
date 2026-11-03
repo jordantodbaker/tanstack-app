@@ -361,8 +361,10 @@ fallback for long-running / non-serverless hosts; on Vercel it never fires
 ### What IT needs to set up
 
 - **Set `CRON_SECRET`** (§7). Vercel sends it as `Authorization: Bearer
-<CRON_SECRET>`; the endpoint 401s on anything else. Unset = guard skipped
-  (acceptable for dev only).
+<CRON_SECRET>`; the endpoint 401s on anything else. Unset, the guard is
+  skipped in development and the endpoint answers 401 in production
+  (`NODE_ENV=production`), so a deploy that forgot the variable fails closed
+  rather than running reminders for anyone who finds the URL.
 - **Adjust the schedule if needed.** Vercel crons run in **UTC** — `0 14 * * *`
   ≈ 07:00 Pacific. Edit `vercel.json`'s `crons` to suit timezone / DST.
 

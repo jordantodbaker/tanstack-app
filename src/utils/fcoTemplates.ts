@@ -2,7 +2,12 @@ import { queryOptions } from "@tanstack/react-query";
 import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
-import { adminHandler, adminHandlerNoInput, requireRole } from "./users.server";
+import {
+  adminHandler,
+  adminHandlerNoInput,
+  requireRole,
+  signedInHandlerNoInput,
+} from "./users.server";
 import {
   parseIdInput,
   parseUpsertFcoTemplate,
@@ -74,7 +79,11 @@ export type FcoTemplatePickerItem = TemplatePickerItem;
 
 export const fetchFcoTemplatePickerItems = createServerFn({
   method: "GET",
-}).handler((): Promise<FcoTemplatePickerItem[]> => ops().picker());
+}).handler(
+  signedInHandlerNoInput((): Promise<FcoTemplatePickerItem[]> =>
+    ops().picker(),
+  ),
+);
 
 export const fcoTemplatePickerQueryOptions = () =>
   queryOptions({

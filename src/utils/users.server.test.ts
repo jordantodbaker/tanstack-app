@@ -52,8 +52,11 @@ import {
   requireProjectAccess,
   requireRecordAccess,
   requireRole,
+  requireUser,
   resolveCurrentUser,
   requireVersionAccess,
+  signedInHandler,
+  signedInHandlerNoInput,
   versionScopedHandler,
 } from "./users.server";
 
@@ -731,5 +734,67 @@ describe("resolveCurrentUser", () => {
     authFn.mockResolvedValue({ userId: null });
     await expect(resolveCurrentUser()).resolves.toBeNull();
     expect(userFindUnique).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The weakest gate. Reference data every user may read still has to refuse
+ * an anonymous request — the Clerk middleware attaches the session but never
+ * requires one — so these wrappers exist to make that refusal structural, the
+ * way `adminHandler` does for admin writes.
+ */
+describe("requireUser / signedInHandler / signedInHandlerNoInput", () => {
+  beforeEach(() => {
+    authFn.mockReset();
+    userFindUnique.mockReset();
+    userFindFirst.mockReset();
+  });
+
+  it("admits any signed-in user, whatever their role", async () => {
+    authFn.mockResolvedValue({ userId: user.clerkId });
+    userFindUnique.mockResolvedValue(user);
+    await expect(requireUser()).resolves.toEqual(user);
+    // No project membership is consulted: the gate is sign-in alone.
+    expect(userFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("refuses a signed-out request", async () => {
+    authFn.mockResolvedValue({ userId: null });
+    await expect(requireUser()).rejects.toThrow("Unauthorized: not signed in");
+  });
+
+  it("signedInHandler runs the body, with its args, only once the check passes", async () => {
+    authFn.mockResolvedValue({ userId: user.clerkId });
+    userFindUnique.mockResolvedValue(user);
+    const body = vi.fn().mockResolvedValue("ok");
+
+    await expect(signedInHandler(body)({ data: { q: "x" } })).resolves.toBe(
+      "ok",
+    );
+    expect(body).toHaveBeenCalledWith({ data: { q: "x" } });
+  });
+
+  it("signedInHandler never reaches the body when signed out", async () => {
+    authFn.mockResolvedValue({ userId: null });
+    const body = vi.fn();
+
+    await expect(signedInHandler(body)({ data: 1 })).rejects.toThrow(
+      "Unauthorized: not signed in",
+    );
+    expect(body).not.toHaveBeenCalled();
+  });
+
+  it("signedInHandlerNoInput gates the same way", async () => {
+    authFn.mockResolvedValue({ userId: null });
+    const body = vi.fn();
+    await expect(signedInHandlerNoInput(body)()).rejects.toThrow(
+      "Unauthorized: not signed in",
+    );
+    expect(body).not.toHaveBeenCalled();
+
+    authFn.mockResolvedValue({ userId: user.clerkId });
+    userFindUnique.mockResolvedValue(user);
+    body.mockResolvedValue("ok");
+    await expect(signedInHandlerNoInput(body)()).resolves.toBe("ok");
   });
 });

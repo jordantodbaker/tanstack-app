@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
-import { adminHandler } from "./users.server";
+import { adminHandler, signedInHandlerNoInput } from "./users.server";
 import { parseIdInput, parseUpsertSchedule } from "~/lib/validators";
 
 /**
@@ -14,12 +14,12 @@ import { parseIdInput, parseUpsertSchedule } from "~/lib/validators";
 export type ScheduleItem = { id: number; name: string; position: number };
 
 export const fetchSchedules = createServerFn({ method: "GET" }).handler(
-  async (): Promise<ScheduleItem[]> => {
-    return prisma.schedule.findMany({
+  signedInHandlerNoInput(async (): Promise<ScheduleItem[]> =>
+    prisma.schedule.findMany({
       orderBy: [{ position: "asc" }, { name: "asc" }],
       select: { id: true, name: true, position: true },
-    });
-  },
+    }),
+  ),
 );
 
 export const schedulesQueryOptions = () =>

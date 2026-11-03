@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
-import { resolveCurrentUser } from "./users.server";
+import { resolveCurrentUser, signedInHandlerNoInput } from "./users.server";
 import { parseIdInput } from "~/lib/validators";
 import {
   countUnread,
@@ -75,7 +75,9 @@ export const markAllNotificationsReadFn = createServerFn({
  *  showing it when nothing can be sent. */
 export const fetchEmailDeliveryConfigured = createServerFn({
   method: "GET",
-}).handler(async (): Promise<boolean> => isEmailConfigured());
+}).handler(
+  signedInHandlerNoInput(async (): Promise<boolean> => isEmailConfigured()),
+);
 
 export const emailDeliveryConfiguredQueryOptions = () =>
   queryOptions({

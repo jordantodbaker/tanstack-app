@@ -2,7 +2,11 @@ import { queryOptions } from "@tanstack/react-query";
 import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
-import { adminHandler, projectIdScopedHandler } from "./users.server";
+import {
+  adminHandler,
+  adminHandlerNoInput,
+  projectIdScopedHandler,
+} from "./users.server";
 import {
   parseIdInput,
   parseProjectIdInput,
@@ -17,17 +21,24 @@ export type AreaOption = {
   description: string;
 };
 
-export const fetchAreas = createServerFn({ method: "GET" }).handler(() =>
-  prisma.area.findMany({
-    orderBy: [{ projectId: "asc" }, { displayId: "asc" }],
-    select: {
-      id: true,
-      projectId: true,
-      displayId: true,
-      name: true,
-      description: true,
-    },
-  }),
+/**
+ * Every project's areas in one list — the Admin → Areas page and the project
+ * dialog. Admin-only for that reason; a project's own areas come through
+ * `fetchAreasByProject`, which gates on the project.
+ */
+export const fetchAreas = createServerFn({ method: "GET" }).handler(
+  adminHandlerNoInput(() =>
+    prisma.area.findMany({
+      orderBy: [{ projectId: "asc" }, { displayId: "asc" }],
+      select: {
+        id: true,
+        projectId: true,
+        displayId: true,
+        name: true,
+        description: true,
+      },
+    }),
+  ),
 );
 
 export const areasQueryOptions = () =>

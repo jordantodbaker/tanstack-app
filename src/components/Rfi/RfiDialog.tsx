@@ -6,11 +6,7 @@ import { CbsMultiSelect } from "~/components/CbsMultiSelect";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { Checkbox } from "~/components/ui/checkbox";
-import {
-  DateInput,
-  Labeled,
-  NativeSelect,
-} from "~/components/ui/form-helpers";
+import { DateInput, Labeled, NativeSelect } from "~/components/ui/form-helpers";
 import { useRecordDialogForm } from "~/lib/use-record-dialog-form";
 import { areasByProjectQueryOptions } from "~/utils/areas";
 import {
@@ -32,16 +28,9 @@ import {
   PrintPdfLink,
   PromoteButton,
 } from "~/components/EntityDialog/EntityDialogActions";
-import {
-  RFI_PRIORITY_LABELS,
-} from "~/utils/rfiLabels";
+import { RFI_PRIORITY_LABELS } from "~/utils/rfiLabels";
 import { RfiStatusBadge } from "~/components/Rfi/RfiBadges";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from "~/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
 import {
   EntityAuxTabTriggers,
   EntityAuxTabPanels,
@@ -176,8 +165,7 @@ function RfiDialogBody({
       fromItem,
       onSubmit,
       onDelete,
-      deleteConfirm: (i) =>
-        `Delete RFI "${i.subject}"? This cannot be undone.`,
+      deleteConfirm: (i) => `Delete RFI "${i.subject}"? This cannot be undone.`,
       closeDialog,
       recent: (i) => ({
         entityType: "Rfi",
@@ -229,275 +217,275 @@ function RfiDialogBody({
   return (
     <>
       <div className="space-y-4">
-          <EntityDialogHeader
-            title={initial ? "Edit RFI" : "New RFI"}
-            subtitle="Question to the designer/engineer — drawings, specs, field conditions. Promote to an FCO if the answer drives new scope."
-          >
-            {initial?.id && <PrintPdfLink href={`/rfi-print/${initial.id}`} />}
-            {canPromote && (
-              <PromoteButton
-                label="Promote to FCO"
-                onClick={handlePromote}
-                disabled={busy}
+        <EntityDialogHeader
+          title={initial ? "Edit RFI" : "New RFI"}
+          subtitle="Question to the designer/engineer — drawings, specs, field conditions. Promote to an FCO if the answer drives new scope."
+        >
+          {initial?.id && <PrintPdfLink href={`/rfi-print/${initial.id}`} />}
+          {canPromote && (
+            <PromoteButton
+              label="Promote to FCO"
+              onClick={handlePromote}
+              disabled={busy}
+            />
+          )}
+          {initial && onDelete && (
+            <DeleteEntityButton onClick={handleDelete} disabled={busy} />
+          )}
+        </EntityDialogHeader>
+
+        {initial && initial.linkedFcos.length > 0 && (
+          <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-900">
+            <div className="flex items-center gap-2 font-medium">
+              <LinkIcon className="size-4" />
+              Promoted to FCO
+              {initial.linkedFcos.length > 1 ? "s" : ""}
+            </div>
+            <ul className="mt-1 space-y-0.5 pl-6 text-violet-800">
+              {initial.linkedFcos.map((f) => (
+                <li key={f.id}>
+                  <span className="font-mono text-xs">
+                    {f.fcoNumber || `FCO #${f.id}`}
+                  </span>
+                  {f.title && (
+                    <span className="text-violet-700"> — {f.title}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <Tabs defaultValue="details" className="w-full">
+          <TabsList>
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <EntityAuxTabTriggers />
+          </TabsList>
+          <TabsContent value="details" className="space-y-4 mt-3">
+            {/* Identity */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Labeled label="RFI Number">
+                <Input
+                  value={form.rfiNumber}
+                  placeholder="Auto-assigned if blank"
+                  onChange={(e) => update("rfiNumber", e.target.value)}
+                />
+              </Labeled>
+              <Labeled label="Subject" className="md:col-span-2">
+                <Input
+                  value={form.subject}
+                  placeholder="One-line summary"
+                  onChange={(e) => update("subject", e.target.value)}
+                />
+              </Labeled>
+            </div>
+
+            {/* State row */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Labeled
+                label="Status"
+                help={
+                  initial
+                    ? "Use the workflow actions below to advance status."
+                    : "New RFIs start as Draft."
+                }
+              >
+                <div className="flex h-9 items-center">
+                  <RfiStatusBadge status={initial ? initial.status : "DRAFT"} />
+                </div>
+              </Labeled>
+              <Labeled label="Priority">
+                <NativeSelect
+                  value={form.priority}
+                  onChange={(v) => update("priority", v as RfiPriority)}
+                  options={RFI_PRIORITIES.map((s) => ({
+                    value: s,
+                    label: RFI_PRIORITY_LABELS[s],
+                  }))}
+                />
+              </Labeled>
+              <DisciplineField
+                value={form.discipline}
+                onChange={(v) => update("discipline", v)}
+              />
+              <Labeled label="Due date">
+                <DateInput
+                  value={form.dueDate}
+                  onChange={(iso) => update("dueDate", iso)}
+                />
+              </Labeled>
+            </div>
+
+            {initial && onTransition && (
+              <WorkflowActions
+                transitions={transitions}
+                busy={busy}
+                setBusy={setBusy}
+                onTransition={onTransition}
+                entityId={initial.id}
+                entityNoun="RFI"
+                onSuccess={closeDialog}
               />
             )}
-            {initial && onDelete && (
-              <DeleteEntityButton onClick={handleDelete} disabled={busy} />
-            )}
-          </EntityDialogHeader>
 
-          {initial && initial.linkedFcos.length > 0 && (
-            <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-900">
-              <div className="flex items-center gap-2 font-medium">
-                <LinkIcon className="size-4" />
-                Promoted to FCO
-                {initial.linkedFcos.length > 1 ? "s" : ""}
-              </div>
-              <ul className="mt-1 space-y-0.5 pl-6 text-violet-800">
-                {initial.linkedFcos.map((f) => (
-                  <li key={f.id}>
-                    <span className="font-mono text-xs">
-                      {f.fcoNumber || `FCO #${f.id}`}
-                    </span>
-                    {f.title && (
-                      <span className="text-violet-700"> — {f.title}</span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <Tabs defaultValue="details" className="w-full">
-            <TabsList>
-              <TabsTrigger value="details">Details</TabsTrigger>
-              <EntityAuxTabTriggers />
-            </TabsList>
-            <TabsContent value="details" className="space-y-4 mt-3">
-              {/* Identity */}
+            {/* Field context */}
+            <fieldset className="rounded-lg border border-slate-200 p-3 space-y-3">
+              <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Field context
+              </legend>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <Labeled label="RFI Number">
-                  <Input
-                    value={form.rfiNumber}
-                    placeholder="Auto-assigned if blank"
-                    onChange={(e) => update("rfiNumber", e.target.value)}
-                  />
-                </Labeled>
-                <Labeled label="Subject" className="md:col-span-2">
-                  <Input
-                    value={form.subject}
-                    placeholder="One-line summary"
-                    onChange={(e) => update("subject", e.target.value)}
-                  />
-                </Labeled>
-              </div>
-
-              {/* State row */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <Labeled
-                  label="Status"
+                  label="Area"
                   help={
-                    initial
-                      ? "Use the workflow actions below to advance status."
-                      : "New RFIs start as Draft."
+                    projectId === null
+                      ? "Select a project first."
+                      : areas.length === 0
+                        ? "No areas defined. Add some in Admin → Areas."
+                        : undefined
                   }
                 >
-                  <div className="flex h-9 items-center">
-                    <RfiStatusBadge status={initial ? initial.status : "DRAFT"} />
-                  </div>
-                </Labeled>
-                <Labeled label="Priority">
                   <NativeSelect
-                    value={form.priority}
-                    onChange={(v) => update("priority", v as RfiPriority)}
-                    options={RFI_PRIORITIES.map((s) => ({
-                      value: s,
-                      label: RFI_PRIORITY_LABELS[s],
-                    }))}
+                    value={form.locationArea}
+                    onChange={(v) => update("locationArea", v)}
+                    options={[
+                      { value: "", label: "— None —" },
+                      ...areas.map((a) => ({
+                        value: String(a.id),
+                        label: a.name
+                          ? `${a.displayId} — ${a.name}`
+                          : a.displayId,
+                      })),
+                    ]}
                   />
                 </Labeled>
-                <DisciplineField
-                  value={form.discipline}
-                  onChange={(v) => update("discipline", v)}
-                />
-                <Labeled label="Due date">
-                  <DateInput
-                    value={form.dueDate}
-                    onChange={(iso) => update("dueDate", iso)}
+                <Labeled label="Initiated by">
+                  <Input
+                    value={form.initiatedBy}
+                    placeholder="Foreman / field engineer"
+                    onChange={(e) => update("initiatedBy", e.target.value)}
+                  />
+                </Labeled>
+                <Labeled
+                  label="Assigned to (responder)"
+                  help="Free text — usually the EOR or designer."
+                >
+                  <Input
+                    value={form.assignedTo}
+                    placeholder="Engineer of record"
+                    onChange={(e) => update("assignedTo", e.target.value)}
                   />
                 </Labeled>
               </div>
-
-              {initial && onTransition && (
-                <WorkflowActions
-                  transitions={transitions}
-                  busy={busy}
-                  setBusy={setBusy}
-                  onTransition={onTransition}
-                  entityId={initial.id}
-                  entityNoun="RFI"
-                  onSuccess={closeDialog}
-                />
-              )}
-
-              {/* Field context */}
-              <fieldset className="rounded-lg border border-slate-200 p-3 space-y-3">
-                <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Field context
-                </legend>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <Labeled
-                    label="Area"
-                    help={
-                      projectId === null
-                        ? "Select a project first."
-                        : areas.length === 0
-                          ? "No areas defined. Add some in Admin → Areas."
-                          : undefined
-                    }
-                  >
-                    <NativeSelect
-                      value={form.locationArea}
-                      onChange={(v) => update("locationArea", v)}
-                      options={[
-                        { value: "", label: "— None —" },
-                        ...areas.map((a) => ({
-                          value: String(a.id),
-                          label: a.name
-                            ? `${a.displayId} — ${a.name}`
-                            : a.displayId,
-                        })),
-                      ]}
-                    />
-                  </Labeled>
-                  <Labeled label="Initiated by">
-                    <Input
-                      value={form.initiatedBy}
-                      placeholder="Foreman / field engineer"
-                      onChange={(e) => update("initiatedBy", e.target.value)}
-                    />
-                  </Labeled>
-                  <Labeled
-                    label="Assigned to (responder)"
-                    help="Free text — usually the EOR or designer."
-                  >
-                    <Input
-                      value={form.assignedTo}
-                      placeholder="Engineer of record"
-                      onChange={(e) => update("assignedTo", e.target.value)}
-                    />
-                  </Labeled>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <Labeled
-                    label="Drawing references"
-                    help="Comma-separated (e.g. P-101-A, M-303-B)"
-                  >
-                    <Input
-                      value={drawingRefsText}
-                      onChange={(e) => setDrawingRefsText(e.target.value)}
-                      onBlur={(e) => commitList(e.target.value, "drawingRefs")}
-                      placeholder="P-101-A, M-303-B"
-                    />
-                  </Labeled>
-                  <Labeled
-                    label="Spec references"
-                    help="Comma-separated spec sections"
-                  >
-                    <Input
-                      value={specRefsText}
-                      onChange={(e) => setSpecRefsText(e.target.value)}
-                      onBlur={(e) => commitList(e.target.value, "specRefs")}
-                      placeholder="03 30 00, 05 12 00"
-                    />
-                  </Labeled>
-                </div>
-                <div className="flex flex-wrap gap-4 text-sm">
-                  <label className="flex items-center gap-2">
-                    <Checkbox
-                      checked={form.suspectsCostImpact}
-                      onCheckedChange={(v) =>
-                        update("suspectsCostImpact", v === true)
-                      }
-                    />
-                    <span className="font-medium text-slate-700">
-                      Cost impact suspected
-                    </span>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <Checkbox
-                      checked={form.suspectsScheduleImpact}
-                      onCheckedChange={(v) =>
-                        update("suspectsScheduleImpact", v === true)
-                      }
-                    />
-                    <span className="font-medium text-slate-700">
-                      Schedule impact suspected
-                    </span>
-                  </label>
-                </div>
-              </fieldset>
-
-              {/* Question */}
-              <Labeled label="Question">
-                <Textarea
-                  value={form.question}
-                  rows={4}
-                  placeholder="What needs to be clarified, and why"
-                  onChange={(e) => update("question", e.target.value)}
-                />
-              </Labeled>
-
-              <Labeled
-                label="Affected CBS codes"
-                help="Search and select one or more CBS items"
-              >
-                <CbsMultiSelect
-                  values={form.cbsCodes}
-                  onChange={(values) => update("cbsCodes", values)}
-                  placeholder="Type to search CBS codes…"
-                />
-              </Labeled>
-
-              {/* Response side */}
-              <fieldset className="rounded-lg border border-slate-200 p-3 space-y-3">
-                <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Response
-                </legend>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <Labeled
-                  label="Answer"
-                  help='Filled in when the responder posts an answer. Use "Post answer" in the workflow actions above to stamp the answered date.'
+                  label="Drawing references"
+                  help="Comma-separated (e.g. P-101-A, M-303-B)"
                 >
-                  <Textarea
-                    value={form.response}
-                    rows={4}
-                    placeholder="The designer/engineer's response"
-                    onChange={(e) => update("response", e.target.value)}
-                  />
-                </Labeled>
-                <Labeled label="Answered by">
                   <Input
-                    value={form.answeredBy}
-                    placeholder="Responder name"
-                    onChange={(e) => update("answeredBy", e.target.value)}
+                    value={drawingRefsText}
+                    onChange={(e) => setDrawingRefsText(e.target.value)}
+                    onBlur={(e) => commitList(e.target.value, "drawingRefs")}
+                    placeholder="P-101-A, M-303-B"
                   />
                 </Labeled>
-              </fieldset>
-            </TabsContent>
-            <EntityAuxTabPanels
-              entityType="Rfi"
-              entityId={initial?.id ?? null}
-              projectId={initial?.projectId ?? null}
-            />
-          </Tabs>
+                <Labeled
+                  label="Spec references"
+                  help="Comma-separated spec sections"
+                >
+                  <Input
+                    value={specRefsText}
+                    onChange={(e) => setSpecRefsText(e.target.value)}
+                    onBlur={(e) => commitList(e.target.value, "specRefs")}
+                    placeholder="03 30 00, 05 12 00"
+                  />
+                </Labeled>
+              </div>
+              <div className="flex flex-wrap gap-4 text-sm">
+                <label className="flex items-center gap-2">
+                  <Checkbox
+                    checked={form.suspectsCostImpact}
+                    onCheckedChange={(v) =>
+                      update("suspectsCostImpact", v === true)
+                    }
+                  />
+                  <span className="font-medium text-slate-700">
+                    Cost impact suspected
+                  </span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <Checkbox
+                    checked={form.suspectsScheduleImpact}
+                    onCheckedChange={(v) =>
+                      update("suspectsScheduleImpact", v === true)
+                    }
+                  />
+                  <span className="font-medium text-slate-700">
+                    Schedule impact suspected
+                  </span>
+                </label>
+              </div>
+            </fieldset>
 
-          <DialogFooterActions
-            busy={busy}
-            disabled={busy || projectId === null}
-            submitLabel={initial ? "Save" : "Create"}
-            onSubmit={() => handleSubmit()}
-            error={error}
+            {/* Question */}
+            <Labeled label="Question">
+              <Textarea
+                value={form.question}
+                rows={4}
+                placeholder="What needs to be clarified, and why"
+                onChange={(e) => update("question", e.target.value)}
+              />
+            </Labeled>
+
+            <Labeled
+              label="Affected CBS codes"
+              help="Search and select one or more CBS items"
+            >
+              <CbsMultiSelect
+                values={form.cbsCodes}
+                onChange={(values) => update("cbsCodes", values)}
+                placeholder="Type to search CBS codes…"
+              />
+            </Labeled>
+
+            {/* Response side */}
+            <fieldset className="rounded-lg border border-slate-200 p-3 space-y-3">
+              <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Response
+              </legend>
+              <Labeled
+                label="Answer"
+                help='Filled in when the responder posts an answer. Use "Post answer" in the workflow actions above to stamp the answered date.'
+              >
+                <Textarea
+                  value={form.response}
+                  rows={4}
+                  placeholder="The designer/engineer's response"
+                  onChange={(e) => update("response", e.target.value)}
+                />
+              </Labeled>
+              <Labeled label="Answered by">
+                <Input
+                  value={form.answeredBy}
+                  placeholder="Responder name"
+                  onChange={(e) => update("answeredBy", e.target.value)}
+                />
+              </Labeled>
+            </fieldset>
+          </TabsContent>
+          <EntityAuxTabPanels
+            entityType="Rfi"
+            entityId={initial?.id ?? null}
+            projectId={initial?.projectId ?? null}
           />
+        </Tabs>
+
+        <DialogFooterActions
+          busy={busy}
+          disabled={busy || projectId === null || !form.subject.trim()}
+          submitLabel={initial ? "Save" : "Create"}
+          onSubmit={() => handleSubmit()}
+          error={error}
+        />
       </div>
     </>
   );

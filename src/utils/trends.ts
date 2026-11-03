@@ -4,10 +4,7 @@ import { prisma } from "../server/db";
 import { qk } from "~/lib/query-keys";
 import { serializeDateFields } from "~/lib/serialize";
 import { invalidateEntityRecordQueries } from "~/lib/invalidate";
-import {
-  fetchProjectScopedList,
-  fetchRecordById,
-} from "./entity-reads.server";
+import { fetchProjectScopedList, fetchRecordById } from "./entity-reads.server";
 import {
   projectScopedListQueryOptions,
   recordQueryOptions,
@@ -20,9 +17,7 @@ import {
   parseTransitionInput,
   parseUpsertTrend,
 } from "~/lib/validators";
-import {
-  requireProjectAccess,
-} from "./users.server";
+import { assertProjectAccess, requireUser } from "./users.server";
 import { assertRole } from "./users";
 import { assertSameProject } from "./entityLookup.server";
 import {
@@ -30,10 +25,7 @@ import {
   transitionProjectScopedRecord,
   upsertProjectScopedRecord,
 } from "./entity-writes.server";
-import {
-  diffFields,
-  recordUpdate,
-} from "./audit.server";
+import { diffFields, recordUpdate } from "./audit.server";
 import { claimPromotion, createLinkedCvr } from "./promote.server";
 import { TREND_TRANSITIONS } from "./workflow";
 import { TREND_STATUS_LABELS } from "./trendLabels";
@@ -318,7 +310,9 @@ export const upsertTrend = createServerFn({ method: "POST" })
 // PROBABLE moves the trend's exposure from "loose hunch" into the published
 // AFC; it warrants the reviewer fan-out. REJECTED/CONVERTED are outcomes
 // that the originator should see; they don't fan out to the reviewer pool.
-const TREND_STATUSES_NEEDING_REVIEW: ReadonlySet<string> = new Set(["PROBABLE"]);
+const TREND_STATUSES_NEEDING_REVIEW: ReadonlySet<string> = new Set([
+  "PROBABLE",
+]);
 
 export const transitionTrend = createServerFn({ method: "POST" })
   .inputValidator(parseTransitionInput)
@@ -361,29 +355,35 @@ export const transitionTrend = createServerFn({ method: "POST" })
 export const promoteTrendToCvr = createServerFn({ method: "POST" })
   .inputValidator(parsePromoteTrendInput)
   .handler(async ({ data }): Promise<{ cvrId: number }> => {
-    const trend = await prisma.trend.findUniqueOrThrow({
-      where: { id: data.trendId },
-    });
-    const actor = await requireProjectAccess(trend.projectId);
-    assertRole(actor, "APPROVER", "promoting a trend");
-    if (trend.status === "CONVERTED") {
-      throw new Error("This trend has already been promoted to a CVR.");
-    }
-    if (trend.status === "VOID" || trend.status === "REJECTED") {
-      throw new Error(`Cannot promote a ${trend.status.toLowerCase()} trend.`);
-    }
-    const isOriginator =
-      trend.createdById !== null && trend.createdById === actor.id;
-    // Block self-conversion for the same reason `blockOriginator` exists on
-    // the workflow approval steps: a trend converting to a CVR shifts real
-    // budget; the originator shouldn't sign their own.
-    if (isOriginator) {
-      throw new Error(
-        "The trend originator cannot promote it themselves — ask another approver.",
-      );
-    }
-
+    const actor = await requireUser();
     return prisma.$transaction(async (tx) => {
+      // Read and authorize inside the transaction, as the entity writes do,
+      // so a project reassignment cannot land between the check and the
+      // write.
+      const trend = await tx.trend.findUniqueOrThrow({
+        where: { id: data.trendId },
+      });
+      await assertProjectAccess(actor, trend.projectId);
+      assertRole(actor, "APPROVER", "promoting a trend");
+      if (trend.status === "CONVERTED") {
+        throw new Error("This trend has already been promoted to a CVR.");
+      }
+      if (trend.status === "VOID" || trend.status === "REJECTED") {
+        throw new Error(
+          `Cannot promote a ${trend.status.toLowerCase()} trend.`,
+        );
+      }
+      const isOriginator =
+        trend.createdById !== null && trend.createdById === actor.id;
+      // Block self-conversion for the same reason `blockOriginator` exists on
+      // the workflow approval steps: a trend converting to a CVR shifts real
+      // budget; the originator shouldn't sign their own.
+      if (isOriginator) {
+        throw new Error(
+          "The trend originator cannot promote it themselves — ask another approver.",
+        );
+      }
+
       // `status` is intentionally omitted so the CVR opens in the schema
       // default (REQUESTED) for the team to refine before submitting.
       const cvr = await createLinkedCvr(tx, actor, trend.projectId, {
@@ -404,7 +404,11 @@ export const promoteTrendToCvr = createServerFn({ method: "POST" })
       // Convert only if still unconverted — see `claimPromotion`.
       await claimPromotion(
         tx.trend.updateMany({
-          where: { id: trend.id, linkedCvrId: null, status: { not: "CONVERTED" } },
+          where: {
+            id: trend.id,
+            linkedCvrId: null,
+            status: { not: "CONVERTED" },
+          },
           data: {
             status: "CONVERTED",
             linkedCvrId: cvr.id,

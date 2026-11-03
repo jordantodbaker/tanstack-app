@@ -2,7 +2,11 @@ import { queryOptions } from "@tanstack/react-query";
 import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
-import { adminHandler, adminHandlerNoInput } from "./users.server";
+import {
+  adminHandler,
+  adminHandlerNoInput,
+  signedInHandlerNoInput,
+} from "./users.server";
 import { parseIdInput, parseUpsertCrewMix } from "~/lib/validators";
 
 /**
@@ -20,7 +24,7 @@ export type CrewMixData = {
 }[];
 
 export const fetchCrewMixData = createServerFn({ method: "GET" }).handler(
-  async (): Promise<CrewMixData> => {
+  signedInHandlerNoInput(async (): Promise<CrewMixData> => {
     const rows = await prisma.crewMix.findMany({
       orderBy: { name: "asc" },
       select: {
@@ -37,9 +41,12 @@ export const fetchCrewMixData = createServerFn({ method: "GET" }).handler(
       id: r.id,
       name: r.name,
       schedule: r.schedule,
-      members: r.members.map((m) => ({ roleName: m.role.name, count: m.count })),
+      members: r.members.map((m) => ({
+        roleName: m.role.name,
+        count: m.count,
+      })),
     }));
-  },
+  }),
 );
 
 export const crewMixDataQueryOptions = () =>
@@ -71,7 +78,11 @@ export const fetchCrewMixesAdmin = createServerFn({ method: "GET" }).handler(
         description: true,
         schedule: true,
         members: {
-          select: { roleId: true, count: true, role: { select: { name: true } } },
+          select: {
+            roleId: true,
+            count: true,
+            role: { select: { name: true } },
+          },
           orderBy: { id: "asc" },
         },
       },

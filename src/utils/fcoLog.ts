@@ -3,10 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
 import { serializeDateFields } from "~/lib/serialize";
 import { invalidateEntityRecordQueries } from "~/lib/invalidate";
-import {
-  fetchProjectScopedList,
-  fetchRecordById,
-} from "./entity-reads.server";
+import { fetchProjectScopedList, fetchRecordById } from "./entity-reads.server";
 import {
   projectScopedListQueryOptions,
   recordQueryOptions,
@@ -21,30 +18,23 @@ import {
   parseUpsertFco,
 } from "~/lib/validators";
 import {
+  assertProjectAccess,
   projectIdScopedHandler,
-  requireProjectAccess,
+  requireUser,
 } from "./users.server";
 import {
   deleteProjectScopedRecord,
   transitionProjectScopedRecord,
   upsertProjectScopedRecord,
 } from "./entity-writes.server";
-import {
-  diffFields,
-  recordUpdate,
-} from "./audit.server";
+import { diffFields, recordUpdate } from "./audit.server";
 import { claimPromotion, createLinkedCvr } from "./promote.server";
 import type { RiskLevel } from "./changelog";
 import { FCO_TRANSITIONS } from "./workflow";
 import { FCO_STATUS_LABELS } from "./fcoLogLabels";
-import {
-  type WorkflowTransitionConfig,
-} from "./workflow.server";
+import { type WorkflowTransitionConfig } from "./workflow.server";
 
-const FCO_STATUSES_NEEDING_REVIEW = new Set<string>([
-  "SUBMITTED",
-  "IN_REVIEW",
-]);
+const FCO_STATUSES_NEEDING_REVIEW = new Set<string>(["SUBMITTED", "IN_REVIEW"]);
 
 const FCO_WORKFLOW_CONFIG: WorkflowTransitionConfig<FcoScalarRow, FcoStatus> = {
   entityType: "FieldChangeOrder",
@@ -443,20 +433,24 @@ export const deleteFco = createServerFn({ method: "POST" })
 export const promoteFcoToCvr = createServerFn({ method: "POST" })
   .inputValidator(parsePromoteFcoInput)
   .handler(async ({ data }): Promise<{ cvrId: number }> => {
-    const fco = await prisma.fieldChangeOrder.findUniqueOrThrow({
-      where: { id: data.fcoId },
-    });
-    const actor = await requireProjectAccess(fco.projectId);
-    // The dialog hides Promote once an FCO is linked, but the server is the
-    // only place that can stop a double-click or a second open dialog.
-    if (fco.linkedCvrId !== null) {
-      throw new Error("This FCO has already been promoted to a CVR.");
-    }
-    if (fco.status === "VOID" || fco.status === "REJECTED") {
-      throw new Error(`Cannot promote a ${fco.status.toLowerCase()} FCO.`);
-    }
-
+    const actor = await requireUser();
     return prisma.$transaction(async (tx) => {
+      // Read and authorize inside the transaction, as the entity writes do,
+      // so a project reassignment cannot land between the check and the
+      // write.
+      const fco = await tx.fieldChangeOrder.findUniqueOrThrow({
+        where: { id: data.fcoId },
+      });
+      await assertProjectAccess(actor, fco.projectId);
+      // The dialog hides Promote once an FCO is linked, but the server is the
+      // only place that can stop a double-click or a second open dialog.
+      if (fco.linkedCvrId !== null) {
+        throw new Error("This FCO has already been promoted to a CVR.");
+      }
+      if (fco.status === "VOID" || fco.status === "REJECTED") {
+        throw new Error(`Cannot promote a ${fco.status.toLowerCase()} FCO.`);
+      }
+
       const cvr = await createLinkedCvr(tx, actor, fco.projectId, {
         title: fco.title,
         description:

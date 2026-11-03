@@ -39,7 +39,7 @@ export function ShopFieldSelectCell({ getValue, row, table }: CellProps) {
       value={value}
       onChange={(e) => {
         const newShopField = e.target.value;
-        const rowData = table.getRowModel().rows[row.index].original;
+        const rowData = row.original;
         const map = table.options.meta?.weldGroupMaterialMap ?? {};
         const entry = rowData.weldGroupDescription
           ? map[rowData.weldGroupDescription]
@@ -90,7 +90,7 @@ export function FabricateErectSelectCell({ getValue, row, table }: CellProps) {
       value={value}
       onChange={(e) => {
         const fabricateErect = e.target.value;
-        const rowData = table.getRowModel().rows[row.index].original;
+        const rowData = row.original;
         const next = { ...rowData, fabricateErect };
         const stamp = resolveCbsStamp(
           rowData.metallurgyCode,
@@ -122,7 +122,7 @@ export function WeldGroupSelectCell({ getValue, row, table }: CellProps) {
       value={value}
       options={options}
       onSelect={(classification) => {
-        const rowData = table.getRowModel().rows[row.index].original;
+        const rowData = row.original;
         const entry = classification
           ? weldGroupMaterialMap[classification]
           : undefined;
@@ -258,7 +258,7 @@ export function RoleSelectCell({ getValue, row, table }: CellProps) {
       options={options}
       ariaLabel="Role"
       onValueChange={(v) => {
-        const rowData = table.getRowModel().rows[row.index].original;
+        const rowData = row.original;
         table.options.meta?.updateRow?.(
           row.index,
           applyRoleRate({ role: v }, rowData, roleRates),
@@ -351,7 +351,7 @@ export function TaskCodeSelectCell({ getValue, row, table }: CellProps) {
         const unit = newCode
           ? (pipingFactorLookup?.get(newCode)?.unit ?? "")
           : "";
-        const rowData = table.getRowModel().rows[row.index].original;
+        const rowData = row.original;
         const laborHours = deriveLaborHours(
           { ...rowData, taskCode: newCode },
           pipingFactorLookup,
@@ -386,7 +386,7 @@ export function PipingSizeCell({ getValue, row, table }: CellProps) {
       value={getValue() as string}
       onCommit={(value) => {
         const boreSize = computeBoreSize(value);
-        const rowData = table.getRowModel().rows[row.index].original;
+        const rowData = row.original;
         const stamp = resolveCbsStamp(
           rowData.metallurgyCode,
           boreSize,
@@ -421,7 +421,7 @@ export function PipingQuantityCell({ getValue, row, table }: CellProps) {
     <TextCell
       value={getValue() as string}
       onCommit={(value) => {
-        const rowData = table.getRowModel().rows[row.index].original;
+        const rowData = row.original;
         const laborHours = deriveLaborHours(
           { ...rowData, quantity: value },
           table.options.meta?.pipingFactorLookup,
@@ -445,7 +445,7 @@ export function ScheduleSelectCell({ getValue, row, table }: CellProps) {
       options={options}
       ariaLabel="Schedule"
       onValueChange={(v) => {
-        const rowData = table.getRowModel().rows[row.index].original;
+        const rowData = row.original;
         table.options.meta?.updateRow?.(
           row.index,
           applyRoleRate({ schedule: v }, rowData, roleRates),

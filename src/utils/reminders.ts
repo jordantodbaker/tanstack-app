@@ -1,5 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getRequestHeader, setResponseStatus } from "@tanstack/react-start/server";
+import {
+  getRequestHeader,
+  setResponseStatus,
+} from "@tanstack/react-start/server";
 import type { ChangeLogItem } from "./changelog";
 import type { FcoItem } from "./fcoLog";
 import { FCO_OPEN_STATUSES } from "./fcoLog";
@@ -15,8 +18,7 @@ export type RunRemindersResult = {
 };
 
 export type RunRemindersCronResult =
-  | ({ ok: true } & RunRemindersResult)
-  | { ok: false; error: string };
+  ({ ok: true } & RunRemindersResult) | { ok: false; error: string };
 
 /**
  * Cron entry point for the daily reminder pass — the production scheduler on
@@ -27,14 +29,19 @@ export type RunRemindersCronResult =
  *
  * Guarded by a shared secret rather than an admin session (the scheduler has
  * no user): it checks the `Authorization: Bearer <CRON_SECRET>` header Vercel
- * Cron sends. When `CRON_SECRET` is unset the guard is skipped (local/dev),
- * matching how the rest of the app degrades when an integration isn't
- * configured. `node-cron` still covers long-running/non-serverless hosts.
+ * Cron sends. When `CRON_SECRET` is unset the guard is skipped in development
+ * only; a production deploy missing the variable answers 401 rather than
+ * letting anyone on the internet fire a reminder pass. `node-cron` still
+ * covers long-running/non-serverless hosts.
  */
 export const runRemindersCronFn = createServerFn({ method: "POST" })
   .inputValidator(() => ({}))
   .handler(async (): Promise<RunRemindersCronResult> => {
     const secret = process.env.CRON_SECRET;
+    if (!secret && process.env.NODE_ENV === "production") {
+      setResponseStatus(401);
+      return { ok: false, error: "CRON_SECRET is not configured" };
+    }
     if (secret) {
       const auth = getRequestHeader("authorization");
       if (auth !== `Bearer ${secret}`) {

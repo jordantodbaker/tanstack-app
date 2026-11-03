@@ -1,9 +1,5 @@
 import * as React from "react";
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { qk } from "~/lib/query-keys";
 import { Button } from "~/components/ui/button";
@@ -65,6 +61,11 @@ export function NewPeriodDialog({ projectId }: { projectId: number }) {
       queryClient.invalidateQueries({
         queryKey: qk.reporting.evmTimeSeries(projectId),
       });
+      // The new period is now the latest: the dashboard's EVM card reads this
+      // key and stayed on the old period until its cache expired.
+      queryClient.invalidateQueries({
+        queryKey: qk.reporting.latestPeriodWithEvm(projectId),
+      });
       setOpen(false);
       setLabel("");
       setDataDate(toDateInputValue(new Date().toISOString()));
@@ -111,8 +112,8 @@ export function NewPeriodDialog({ projectId }: { projectId: number }) {
       <Labeled label="Baseline snapshot">
         {snapshots.length === 0 ? (
           <p className="text-xs text-slate-500">
-            No snapshots on this project yet. Create one from the Summary
-            page first.
+            No snapshots on this project yet. Create one from the Summary page
+            first.
           </p>
         ) : (
           <NativeSelect

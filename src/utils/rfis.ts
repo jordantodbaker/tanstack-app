@@ -4,10 +4,7 @@ import { prisma } from "../server/db";
 import { qk } from "~/lib/query-keys";
 import { serializeDateFields } from "~/lib/serialize";
 import { invalidateEntityRecordQueries } from "~/lib/invalidate";
-import {
-  fetchProjectScopedList,
-  fetchRecordById,
-} from "./entity-reads.server";
+import { fetchProjectScopedList, fetchRecordById } from "./entity-reads.server";
 import {
   projectScopedListQueryOptions,
   recordQueryOptions,
@@ -20,8 +17,7 @@ import {
   parseTransitionInput,
   parseUpsertRfi,
 } from "~/lib/validators";
-import { requireProjectAccess } from "./users.server";
-import { assertProjectUnchanged } from "./users";
+import { assertProjectAccess, requireUser } from "./users.server";
 import {
   deleteProjectScopedRecord,
   transitionProjectScopedRecord,
@@ -79,7 +75,12 @@ export type RfiListItem = {
   createdAt: string;
   updatedAt: string;
   /** FCOs promoted from this RFI. Empty array when none. */
-  linkedFcos: { id: number; fcoNumber: string; title: string; status: string }[];
+  linkedFcos: {
+    id: number;
+    fcoNumber: string;
+    title: string;
+    status: string;
+  }[];
 };
 
 export type RfiItem = RfiListItem & {
@@ -352,12 +353,16 @@ export const transitionRfi = createServerFn({ method: "POST" })
 export const promoteRfiToFco = createServerFn({ method: "POST" })
   .inputValidator(parsePromoteRfiInput)
   .handler(async ({ data }): Promise<{ fcoId: number }> => {
-    const rfi = await prisma.rfi.findUniqueOrThrow({
-      where: { id: data.rfiId },
-    });
-    const actor = await requireProjectAccess(rfi.projectId);
-
+    const actor = await requireUser();
     return prisma.$transaction(async (tx) => {
+      // Read and authorize inside the transaction, as the entity writes do,
+      // so a project reassignment cannot land between the check and the
+      // write.
+      const rfi = await tx.rfi.findUniqueOrThrow({
+        where: { id: data.rfiId },
+      });
+      await assertProjectAccess(actor, rfi.projectId);
+
       const fco = await tx.fieldChangeOrder.create({
         data: {
           projectId: rfi.projectId,

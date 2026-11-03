@@ -4,10 +4,7 @@ import { prisma } from "../server/db";
 import { qk } from "~/lib/query-keys";
 import { serializeDateFields } from "~/lib/serialize";
 import { invalidateEntityRecordQueries } from "~/lib/invalidate";
-import {
-  fetchProjectScopedList,
-  fetchRecordById,
-} from "./entity-reads.server";
+import { fetchProjectScopedList, fetchRecordById } from "./entity-reads.server";
 import {
   projectScopedListQueryOptions,
   recordQueryOptions,
@@ -19,7 +16,6 @@ import {
   parseTransitionInput,
   parseUpsertChangeLog,
 } from "~/lib/validators";
-import { assertProjectUnchanged } from "./users";
 import {
   deleteProjectScopedRecord,
   transitionProjectScopedRecord,
@@ -27,9 +23,7 @@ import {
 } from "./entity-writes.server";
 import { CVR_TRANSITIONS } from "./workflow";
 import { STATUS_LABELS } from "./changelogLabels";
-import {
-  type WorkflowTransitionConfig,
-} from "./workflow.server";
+import { type WorkflowTransitionConfig } from "./workflow.server";
 import {
   mergeAffectedCbsCodes,
   sumLineItems,
@@ -42,7 +36,10 @@ const CVR_STATUSES_NEEDING_REVIEW = new Set<string>([
   "PENDING_APPROVAL",
 ]);
 
-const CVR_WORKFLOW_CONFIG: WorkflowTransitionConfig<ChangeLogRow, ChangeStatus> = {
+const CVR_WORKFLOW_CONFIG: WorkflowTransitionConfig<
+  ChangeLogRow,
+  ChangeStatus
+> = {
   entityType: "ChangeLog",
   transitionMap: CVR_TRANSITIONS,
   statusLabels: STATUS_LABELS,
@@ -466,7 +463,9 @@ export function invalidateChangeLogQueries(
   });
   // PCO and FCO dialogs read the CVR option list; both must drop on any CVR
   // mutation so the dropdown picks up new/renamed CVRs without a hard refresh.
-  queryClient.invalidateQueries({ queryKey: qk.changeLog.cvrOptions(projectId) });
+  queryClient.invalidateQueries({
+    queryKey: qk.changeLog.cvrOptions(projectId),
+  });
   queryClient.invalidateQueries({ queryKey: qk.dashboardSummary(projectId) });
   // Approved/executed CVR cost feeds the living-budget reconciliation.
   queryClient.invalidateQueries({

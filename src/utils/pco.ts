@@ -4,10 +4,7 @@ import { prisma } from "../server/db";
 import { qk } from "~/lib/query-keys";
 import { serializeDateFields } from "~/lib/serialize";
 import { invalidateEntityRecordQueries } from "~/lib/invalidate";
-import {
-  fetchProjectScopedList,
-  fetchRecordById,
-} from "./entity-reads.server";
+import { fetchProjectScopedList, fetchRecordById } from "./entity-reads.server";
 import {
   projectScopedListQueryOptions,
   recordQueryOptions,
@@ -22,18 +19,13 @@ import {
   parseTransitionInput,
   parseUpsertPco,
 } from "~/lib/validators";
-import {
-  projectScopedHandler,
-} from "./users.server";
-import { assertProjectUnchanged } from "./users";
+import { projectScopedHandler } from "./users.server";
 import {
   deleteProjectScopedRecord,
   transitionProjectScopedRecord,
   upsertProjectScopedRecord,
 } from "./entity-writes.server";
-import {
-  recordUpdates,
-} from "./audit.server";
+import { recordUpdates } from "./audit.server";
 import { PCO_TRANSITIONS } from "./workflow";
 import { PCO_STATUS_LABELS } from "./pcoLabels";
 

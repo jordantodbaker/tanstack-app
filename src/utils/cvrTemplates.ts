@@ -2,7 +2,12 @@ import { queryOptions } from "@tanstack/react-query";
 import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
-import { adminHandler, adminHandlerNoInput, requireRole } from "./users.server";
+import {
+  adminHandler,
+  adminHandlerNoInput,
+  requireRole,
+  signedInHandlerNoInput,
+} from "./users.server";
 import {
   parseIdInput,
   parseUpsertCvrTemplate,
@@ -85,7 +90,11 @@ export type CvrTemplatePickerItem = TemplatePickerItem;
 
 export const fetchCvrTemplatePickerItems = createServerFn({
   method: "GET",
-}).handler((): Promise<CvrTemplatePickerItem[]> => ops().picker());
+}).handler(
+  signedInHandlerNoInput((): Promise<CvrTemplatePickerItem[]> =>
+    ops().picker(),
+  ),
+);
 
 export const cvrTemplatePickerQueryOptions = () =>
   queryOptions({

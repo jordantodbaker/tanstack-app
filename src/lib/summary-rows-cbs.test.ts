@@ -22,18 +22,20 @@ import { SUMMARY_ADMIN_HOME_OFFICE, SUMMARY_ENGINEERING } from "./summary-rows";
  */
 const ACCOUNT_FOR_KEY: Record<string, string> = {
   "012": "Home Office Construction Support",
-  "03205": "Project Bonds",
-  "03210": "Project Insurance",
-  "03215": "Project Finance Charges",
-  "03220": "Project Taxes",
-  "03225": "Project Permitting",
-  "03230": "Project Licenses",
-  "022": "Combined Phase (Preliminary & Detailed)",
-  "024": "Concept Design",
-  "025": "Preliminary Design – FEED (Class 4–3)",
-  "026": "Detailed Design (Class 2-1)",
-  "027": "Engineering Construction Support",
-  "028": "Engineering Commissioning & Startup Support",
+  // 2026-11-03: Legal inserted at 032-05, the rest moved up five.
+  "03205": "Legal",
+  "03210": "Project Bonds",
+  "03215": "Project Insurance",
+  "03220": "Project Finance Charges",
+  "03225": "Project Taxes",
+  "03230": "Project Permitting",
+  "03235": "Project Licenses",
+  "022": "Combined Phase (D23)",
+  "024": "Concept Design (D1)",
+  "025": "Preliminary Design – FEED (D2)",
+  "026": "Detailed Design (D3)",
+  "027": "Engineering Construction Support (D4)",
+  "028": "Engineering Commissioning & Startup Support (D5)",
 };
 
 /** A key's account code: "012" → 012-00-0000-00, "03205" → 032-05-0000-00. */

@@ -5,25 +5,36 @@ import type { CurrentUser } from "./users";
  * `promoteTrendToCvr` — who may promote, which trends may be promoted, and
  * that two promotes racing on one trend can't both mint a CVR. Prisma and the
  * CVR minting are faked; `claimPromotion` is the real one.
+ *
+ * The trend is read and the project check made INSIDE the transaction, as
+ * the entity writes do. The first read in the transaction is the trend; the
+ * second, after the conversion, is the re-read for the audit diff.
  */
-const { prismaMock, tx, requireProjectAccessFn, createLinkedCvrFn, recordUpdateFn } =
-  vi.hoisted(() => {
-    const tx = { trend: { updateMany: vi.fn(), findUniqueOrThrow: vi.fn() } };
-    return {
-      tx,
-      requireProjectAccessFn: vi.fn(),
-      createLinkedCvrFn: vi.fn(),
-      recordUpdateFn: vi.fn(),
-      prismaMock: {
-        trend: { findUniqueOrThrow: vi.fn() },
-        $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
-      },
-    };
-  });
+const {
+  prismaMock,
+  tx,
+  requireUserFn,
+  assertProjectAccessFn,
+  createLinkedCvrFn,
+  recordUpdateFn,
+} = vi.hoisted(() => {
+  const tx = { trend: { updateMany: vi.fn(), findUniqueOrThrow: vi.fn() } };
+  return {
+    tx,
+    requireUserFn: vi.fn(),
+    assertProjectAccessFn: vi.fn(),
+    createLinkedCvrFn: vi.fn(),
+    recordUpdateFn: vi.fn(),
+    prismaMock: {
+      $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
+    },
+  };
+});
 
 vi.mock("../server/db", () => ({ prisma: prismaMock }));
 vi.mock("./users.server", () => ({
-  requireProjectAccess: requireProjectAccessFn,
+  requireUser: requireUserFn,
+  assertProjectAccess: assertProjectAccessFn,
   projectIdScopedHandler: (h: unknown) => h,
 }));
 vi.mock("./promote.server", async (importOriginal) => ({
@@ -81,22 +92,26 @@ const trend = (over: Record<string, unknown> = {}) => ({
 });
 
 const promote = () => promoteTrendToCvr({ data: { trendId: 12 } });
+/** The trend the transaction reads first; the re-read after conversion follows. */
+const given = (row: ReturnType<typeof trend>) =>
+  tx.trend.findUniqueOrThrow.mockResolvedValueOnce(row);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  requireProjectAccessFn.mockResolvedValue(approver);
+  requireUserFn.mockResolvedValue(approver);
+  assertProjectAccessFn.mockResolvedValue(undefined);
   createLinkedCvrFn.mockResolvedValue({ id: 88, projectId: 3 });
   tx.trend.updateMany.mockResolvedValue({ count: 1 });
   tx.trend.findUniqueOrThrow.mockResolvedValue(
     trend({ status: "CONVERTED", linkedCvrId: 88 }),
   );
-  prismaMock.trend.findUniqueOrThrow.mockResolvedValue(trend());
 });
 
 describe("promoteTrendToCvr", () => {
   it("mints a CVR carrying the likely cost, links it and converts the trend", async () => {
+    given(trend());
     await expect(promote()).resolves.toEqual({ cvrId: 88 });
-    expect(requireProjectAccessFn).toHaveBeenCalledWith(3);
+    expect(assertProjectAccessFn).toHaveBeenCalledWith(approver, 3);
     expect(createLinkedCvrFn.mock.calls[0][3]).toMatchObject({
       title: "Steel price drift",
       costImpact: 25_000,
@@ -114,60 +129,63 @@ describe("promoteTrendToCvr", () => {
 
   it("throws when a concurrent promote converted it first, rolling back", async () => {
     // Passed the status check, but the other request's update landed first.
+    given(trend());
     tx.trend.updateMany.mockResolvedValue({ count: 0 });
     await expect(promote()).rejects.toThrow(/already been promoted/);
-    // Thrown inside the transaction, so Prisma discards the minted CVR.
+    // Thrown inside the transaction, so Prisma discards the minted CVR; the
+    // only read was the trend itself, never the post-conversion re-read.
     expect(createLinkedCvrFn).toHaveBeenCalledTimes(1);
-    expect(tx.trend.findUniqueOrThrow).not.toHaveBeenCalled();
+    expect(tx.trend.findUniqueOrThrow).toHaveBeenCalledTimes(1);
     expect(recordUpdateFn).not.toHaveBeenCalled();
   });
 
   it("refuses a trend that is already converted, before minting a CVR", async () => {
-    prismaMock.trend.findUniqueOrThrow.mockResolvedValue(
-      trend({ status: "CONVERTED", linkedCvrId: 41 }),
-    );
+    given(trend({ status: "CONVERTED", linkedCvrId: 41 }));
     await expect(promote()).rejects.toThrow(/already been promoted/);
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(createLinkedCvrFn).not.toHaveBeenCalled();
   });
 
   it.each(["VOID", "REJECTED"])("refuses a %s trend", async (status) => {
-    prismaMock.trend.findUniqueOrThrow.mockResolvedValue(trend({ status }));
+    given(trend({ status }));
     await expect(promote()).rejects.toThrow(/Cannot promote/);
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(createLinkedCvrFn).not.toHaveBeenCalled();
   });
 
   it("refuses a plain USER — Approver or higher only", async () => {
-    requireProjectAccessFn.mockResolvedValue({ ...approver, role: "USER" });
+    given(trend());
+    requireUserFn.mockResolvedValue({ ...approver, role: "USER" });
     await expect(promote()).rejects.toThrow(/requires APPROVER/);
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(createLinkedCvrFn).not.toHaveBeenCalled();
   });
 
   it("lets an ADMINISTRATOR promote", async () => {
-    requireProjectAccessFn.mockResolvedValue({
-      ...approver,
-      role: "ADMINISTRATOR",
-    });
+    given(trend());
+    requireUserFn.mockResolvedValue({ ...approver, role: "ADMINISTRATOR" });
     await expect(promote()).resolves.toEqual({ cvrId: 88 });
   });
 
   it("refuses the trend's own originator", async () => {
-    prismaMock.trend.findUniqueOrThrow.mockResolvedValue(
-      trend({ createdById: approver.id }),
-    );
+    given(trend({ createdById: approver.id }));
     await expect(promote()).rejects.toThrow(/originator cannot promote/);
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(createLinkedCvrFn).not.toHaveBeenCalled();
   });
 
   it("lets an approver promote a trend with no recorded originator", async () => {
-    prismaMock.trend.findUniqueOrThrow.mockResolvedValue(
-      trend({ createdById: null }),
-    );
+    given(trend({ createdById: null }));
     await expect(promote()).resolves.toEqual({ cvrId: 88 });
   });
 
-  it("checks project access before anything else", async () => {
-    requireProjectAccessFn.mockRejectedValue(new Error("Forbidden"));
+  it("checks project access inside the transaction, before anything else", async () => {
+    given(trend());
+    assertProjectAccessFn.mockRejectedValue(new Error("Forbidden"));
     await expect(promote()).rejects.toThrow("Forbidden");
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    expect(createLinkedCvrFn).not.toHaveBeenCalled();
+  });
+
+  it("refuses a signed-out caller without opening a transaction", async () => {
+    requireUserFn.mockRejectedValue(new Error("Unauthorized: not signed in"));
+    await expect(promote()).rejects.toThrow("Unauthorized");
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 });

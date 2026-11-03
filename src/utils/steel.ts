@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
+import { signedInHandlerNoInput } from "./users.server";
 
 /**
  * Steel take-off (SLTO) reference data — one entry per steel member, carrying
@@ -42,11 +43,12 @@ const STEEL_MEMBER_SELECT = {
 } as const;
 
 export const fetchSteelMembers = createServerFn({ method: "GET" }).handler(
-  (): Promise<SteelMemberOption[]> =>
+  signedInHandlerNoInput((): Promise<SteelMemberOption[]> =>
     prisma.steelMember.findMany({
       select: STEEL_MEMBER_SELECT,
       orderBy: { member: "asc" },
     }),
+  ),
 );
 
 export const steelMembersQueryOptions = () =>

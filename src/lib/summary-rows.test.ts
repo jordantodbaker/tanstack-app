@@ -105,7 +105,7 @@ describe("buildSummaryRows — Craft Support Labor override", () => {
 describe("buildSummaryRows — L1 / L1L2 sections", () => {
   it("rolls an Engineering row up from its L1 bucket", () => {
     const t = emptyTotals();
-    t.laborByL1["026"] = 800; // Detailed Design (Class 2-1)
+    t.laborByL1["026"] = 800; // Detailed Design (D3)
     const { engineering } = buildSummaryRows(t);
     const row = engineering.find((r) =>
       r.description.startsWith("Detailed Design"),
@@ -115,7 +115,7 @@ describe("buildSummaryRows — L1 / L1L2 sections", () => {
 
   it("rolls an Admin row up from its L1+L2 sub-account bucket", () => {
     const t = emptyTotals();
-    t.materialsByL1L2["03205"] = 200; // Bonds
+    t.materialsByL1L2["03210"] = 200; // Bonds — 032-10 since Legal took 032-05
     const { adminHomeOffice } = buildSummaryRows(t);
     const bonds = adminHomeOffice.find((r) => r.description === "Bonds");
     expect(bonds?.material).toBe(formatMoney(200));

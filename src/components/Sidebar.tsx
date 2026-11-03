@@ -1,3 +1,4 @@
+import { toggleInSet } from "~/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -224,12 +225,7 @@ function DisciplineNav({
     () => new Set(["project-controls"]),
   );
   const toggleSection = (id: string) =>
-    setOpenSections((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setOpenSections((prev) => toggleInSet(prev, id));
 
   const { projectId } = useSelectedProject();
   const { data: allowedL1Codes } = useQuery({

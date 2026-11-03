@@ -1,4 +1,4 @@
-import type { UserRole } from "~/utils/users";
+import type { UserRole } from "~/lib/roles";
 
 /**
  * The in-app user guide, as data.
@@ -482,6 +482,7 @@ export const HELP_SECTIONS: HelpSection[] = [
               "A cost-type filter is strict: only rows of that type survive. A parent that is not of that type is dropped and its matching children are lifted into its place. A plain text search still keeps the parents, because knowing where a hit sits is most of the answer.",
               'Each typed line carries a small chip with its cost-type letter, read off the end of its code; the account\'s own "-0" row has none. Search matches the code, the name, the account description and the unit. Terms are order-free and all required, so "rental pipe" finds "Pipe Shop Third Party Rental"; a code typed without its dashes ("60420") finds its row, which helps when pasting from Excel.',
               "A ?code= link — /project-cost-codes?code=052-15-0500-00-L — opens the page on that account: the tree expands to it, it is selected, and the list scrolls to it. Handy for pointing someone at one code. The detail panel's Copy link button, beside its close button, puts the selected row's link on the clipboard, pointed at the page you are on.",
+              "Full screen, in the toolbar, opens the same tree in a new tab with none of the app's navigation around it — no header, no sidebar — so the whole window is the tree. It carries the search, every filter, Hide ungranted parents and the selected row with it, and the tab's own toolbar works as usual from there. Close the tab to come back; the page you left is as you left it.",
               'The L0–L5 swatches under "Level colors" open the tree to one code level at a time — L0 is just the discipline roots, L5 is everything. The one in force is outlined until you open or close a row yourself.',
               "Grayed-out italic rows are parent summaries the project was not granted. They appear only so the codes beneath them nest correctly — they carry no badges, are left out of the row count, and cannot be used on an estimate. Tick one in Setup to make it usable.",
               "Select any row to see its full detail: unit, cost code, account, cost classification, discipline, description, and the Row and Expanded Row it occupies in the source workbook.",

@@ -1,3 +1,4 @@
+import { isBlankId, isUntouchedBlankRow } from "~/lib/fef-helpers";
 /**
  * Live running totals for a Take Off sheet — item count, labor hours, and labor
  * cost. Pure (no React) so it's unit-tested and cheap to recompute on edits.
@@ -22,8 +23,7 @@ export function computeTakeOffTotals(rows: FefRow[]): TakeOffTotals {
   let laborCost = 0;
 
   for (const r of rows) {
-    const isBlankTemplate =
-      r.id.startsWith("__fe-blank-") && !fefRowHasUserData(r);
+    const isBlankTemplate = isUntouchedBlankRow(r);
     if (isBlankTemplate) continue;
     itemCount++;
 

@@ -46,7 +46,8 @@ vi.mock("@tanstack/react-start", () => ({
         return builder;
       },
       handler(h: (args: { data: unknown }) => unknown) {
-        return async (args?: { data: unknown }) => h({ data: validate(args?.data) });
+        return async (args?: { data: unknown }) =>
+          h({ data: validate(args?.data) });
       },
     };
     return builder;
@@ -62,33 +63,20 @@ const agg = (count: number, sums: Record<string, number | null> = {}) => ({
 
 /** Every stub returns an empty/zero result; individual tests override. */
 function stubAll() {
-  prismaMock.changeLog.aggregate
-    .mockResolvedValueOnce(
-      agg(0, { costImpact: null, scheduleDaysImpact: null, laborHoursImpact: null }),
-    )
-    .mockResolvedValueOnce(agg(0, { costImpact: null }));
-  prismaMock.changeLog.count
-    .mockResolvedValueOnce(0)
-    .mockResolvedValueOnce(0)
-    .mockResolvedValueOnce(0);
+  // Ten statements: a per-status groupBy per table carries the headline
+  // figures; the counts are the filters a status can't express.
+  prismaMock.changeLog.count.mockResolvedValueOnce(0); // cvrOverdue
   prismaMock.changeLog.groupBy
-    .mockResolvedValueOnce([])
-    .mockResolvedValueOnce([])
-    .mockResolvedValueOnce([]);
-  prismaMock.fieldChangeOrder.aggregate.mockResolvedValueOnce(
-    agg(0, { estimatedCost: null }),
-  );
+    .mockResolvedValueOnce([]) // by status (with cost, days, hours sums)
+    .mockResolvedValueOnce([]) // by risk
+    .mockResolvedValueOnce([]); // by discipline
   prismaMock.fieldChangeOrder.count
-    .mockResolvedValueOnce(0)
-    .mockResolvedValueOnce(0)
-    .mockResolvedValueOnce(0);
+    .mockResolvedValueOnce(0) // fcoWorkStoppedOpen
+    .mockResolvedValueOnce(0); // fcoOverdue
   prismaMock.fieldChangeOrder.groupBy.mockResolvedValueOnce([]);
   prismaMock.rfi.count
-    .mockResolvedValueOnce(0)
-    .mockResolvedValueOnce(0)
-    .mockResolvedValueOnce(0)
-    .mockResolvedValueOnce(0)
-    .mockResolvedValueOnce(0);
+    .mockResolvedValueOnce(0) // rfiPastDue
+    .mockResolvedValueOnce(0); // rfiSuspectsImpact
   prismaMock.rfi.groupBy.mockResolvedValueOnce([]);
 }
 
@@ -215,7 +203,9 @@ describe("status breakdowns", () => {
     prismaMock.changeLog.groupBy
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ discipline: "civil", _sum: { costImpact: null } }]);
+      .mockResolvedValueOnce([
+        { discipline: "civil", _sum: { costImpact: null } },
+      ]);
 
     const out = await run();
 
@@ -224,21 +214,62 @@ describe("status breakdowns", () => {
 });
 
 describe("query predicates", () => {
-  it("counts approved cost from APPROVED and EXECUTED together", async () => {
+  it("derives the headline CVR figures from the per-status rows", async () => {
     stubAll();
-    await run();
+    prismaMock.changeLog.groupBy.mockReset();
+    prismaMock.changeLog.groupBy
+      .mockResolvedValueOnce([
+        {
+          status: "APPROVED",
+          _count: { _all: 2 },
+          _sum: {
+            costImpact: 300,
+            scheduleDaysImpact: 4,
+            laborHoursImpact: 10,
+          },
+        },
+        {
+          status: "EXECUTED",
+          _count: { _all: 1 },
+          _sum: {
+            costImpact: 200,
+            scheduleDaysImpact: null,
+            laborHoursImpact: 5,
+          },
+        },
+        {
+          status: "PENDING_APPROVAL",
+          _count: { _all: 3 },
+          _sum: { costImpact: -50, scheduleDaysImpact: 1, laborHoursImpact: 0 },
+        },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
 
-    const approvedAgg = prismaMock.changeLog.aggregate.mock.calls[1][0];
-    expect(approvedAgg.where.status.in).toEqual(["APPROVED", "EXECUTED"]);
+    const out = await run();
+
+    expect(out.cvr).toMatchObject({
+      total: 6,
+      open: 3, // PENDING_APPROVAL is open; APPROVED and EXECUTED are not
+      netCost: 450,
+      approvedCost: 500, // APPROVED and EXECUTED together
+      scheduleDays: 5, // a null sum counts as zero
+      laborHours: 15,
+    });
+    expect(out.attention.pendingApproval).toBe(3);
   });
 
   it("counts an overdue CVR only while it is still open", async () => {
     stubAll();
     await run();
 
-    // 3rd changeLog.count is cvrOverdue.
-    const where = prismaMock.changeLog.count.mock.calls[2][0].where;
-    expect(where.status.in).toEqual(["REQUESTED", "IN_REVIEW", "PENDING_APPROVAL"]);
+    // The one changeLog.count is cvrOverdue.
+    const where = prismaMock.changeLog.count.mock.calls[0][0].where;
+    expect(where.status.in).toEqual([
+      "REQUESTED",
+      "IN_REVIEW",
+      "PENDING_APPROVAL",
+    ]);
     expect(where.dueDate.lt).toBeInstanceOf(Date);
   });
 
@@ -246,8 +277,8 @@ describe("query predicates", () => {
     stubAll();
     await run();
 
-    // 2nd fieldChangeOrder.count is fcoWorkStoppedOpen.
-    const where = prismaMock.fieldChangeOrder.count.mock.calls[1][0].where;
+    // 1st fieldChangeOrder.count is fcoWorkStoppedOpen.
+    const where = prismaMock.fieldChangeOrder.count.mock.calls[0][0].where;
     expect(where.workStopped).toBe(true);
     expect(where.status.in).toEqual([
       "DRAFT",
@@ -261,8 +292,8 @@ describe("query predicates", () => {
     stubAll();
     await run();
 
-    // 5th rfi.count is rfiSuspectsImpact.
-    const where = prismaMock.rfi.count.mock.calls[4][0].where;
+    // 2nd rfi.count is rfiSuspectsImpact.
+    const where = prismaMock.rfi.count.mock.calls[1][0].where;
     expect(where.OR).toEqual([
       { suspectsCostImpact: true },
       { suspectsScheduleImpact: true },
@@ -275,7 +306,7 @@ describe("query predicates", () => {
     await run();
 
     const boundary: Date =
-      prismaMock.changeLog.count.mock.calls[2][0].where.dueDate.lt;
+      prismaMock.changeLog.count.mock.calls[0][0].where.dueDate.lt;
     expect(boundary.getHours()).toBe(0);
     expect(boundary.getMinutes()).toBe(0);
     expect(boundary.getSeconds()).toBe(0);
@@ -287,17 +318,18 @@ describe("query predicates", () => {
     await run();
 
     const everyCall = [
-      ...prismaMock.changeLog.aggregate.mock.calls,
       ...prismaMock.changeLog.count.mock.calls,
       ...prismaMock.changeLog.groupBy.mock.calls,
-      ...prismaMock.fieldChangeOrder.aggregate.mock.calls,
       ...prismaMock.fieldChangeOrder.count.mock.calls,
       ...prismaMock.fieldChangeOrder.groupBy.mock.calls,
       ...prismaMock.rfi.count.mock.calls,
       ...prismaMock.rfi.groupBy.mock.calls,
     ];
-    // 19 aggregations: 8 CVR, 5 FCO, 6 RFI.
-    expect(everyCall).toHaveLength(19);
+    // 10 statements: 4 CVR, 3 FCO, 3 RFI. The headline figures come from the
+    // per-status groupBys rather than their own aggregate/count statements.
+    expect(everyCall).toHaveLength(10);
+    expect(prismaMock.changeLog.aggregate).not.toHaveBeenCalled();
+    expect(prismaMock.fieldChangeOrder.aggregate).not.toHaveBeenCalled();
     for (const [arg] of everyCall) {
       expect(arg.where.projectId).toBe(1);
     }
@@ -308,22 +340,30 @@ describe("attention panel", () => {
   it("reuses the same numbers the per-entity sections report", async () => {
     stubAll();
     prismaMock.changeLog.count.mockReset();
-    prismaMock.changeLog.count
-      .mockResolvedValueOnce(4) // cvrOpen
-      .mockResolvedValueOnce(2) // cvrPendingApproval
-      .mockResolvedValueOnce(1); // cvrOverdue
+    prismaMock.changeLog.count.mockResolvedValueOnce(1); // cvrOverdue
+    prismaMock.changeLog.groupBy.mockReset();
+    prismaMock.changeLog.groupBy
+      .mockResolvedValueOnce([
+        {
+          status: "PENDING_APPROVAL",
+          _count: { _all: 2 },
+          _sum: { costImpact: 0, scheduleDaysImpact: 0, laborHoursImpact: 0 },
+        },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
     prismaMock.fieldChangeOrder.count.mockReset();
     prismaMock.fieldChangeOrder.count
-      .mockResolvedValueOnce(6) // fcoOpen
       .mockResolvedValueOnce(3) // fcoWorkStoppedOpen
       .mockResolvedValueOnce(5); // fcoOverdue
     prismaMock.rfi.count.mockReset();
     prismaMock.rfi.count
-      .mockResolvedValueOnce(9) // rfiTotal
-      .mockResolvedValueOnce(7) // rfiOpen
-      .mockResolvedValueOnce(2) // rfiAnswered
       .mockResolvedValueOnce(1) // rfiPastDue
       .mockResolvedValueOnce(0); // rfiSuspectsImpact
+    prismaMock.rfi.groupBy.mockReset();
+    prismaMock.rfi.groupBy.mockResolvedValueOnce([
+      { status: "ANSWERED", _count: { _all: 2 } },
+    ]);
 
     const out = await run();
 
@@ -351,6 +391,6 @@ describe("access control", () => {
 
   it("rejects a non-positive projectId at the validator", async () => {
     await expect(fetchDashboardSummary({ data: 0 })).rejects.toThrow();
-    expect(prismaMock.changeLog.aggregate).not.toHaveBeenCalled();
+    expect(prismaMock.changeLog.groupBy).not.toHaveBeenCalled();
   });
 });

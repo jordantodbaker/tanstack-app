@@ -17,8 +17,11 @@ import {
  * this page only scopes the rows to one project.
  */
 
-const SOURCE_NOTE =
+/** Exported for the full-screen tab, which renders this list alone. */
+export const PROJECT_COST_CODES_SOURCE_NOTE =
   "Source: the CBS Dictionary, limited to the items selected for this project on the Setup page. Colors mirror the source workbook's outline levels.";
+export const PROJECT_COST_CODES_EMPTY =
+  "No cost codes selected for this project.";
 
 function ProjectCostCodes({
   projectId,
@@ -43,11 +46,12 @@ function ProjectCostCodes({
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white pt-4 shadow-sm">
       <CbsDictionaryBrowser
         items={query.data}
-        sourceNote={SOURCE_NOTE}
-        emptyMessage="No cost codes selected for this project."
+        sourceNote={PROJECT_COST_CODES_SOURCE_NOTE}
+        emptyMessage={PROJECT_COST_CODES_EMPTY}
         exportView="projectCostCodes"
         focusCode={focusCode}
         linkPath="/project-cost-codes"
+        fullscreenView="project"
       />
     </div>
   );

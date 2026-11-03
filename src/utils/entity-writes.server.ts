@@ -1,7 +1,7 @@
 import type { Prisma } from "../generated/prisma/client";
 import { prisma } from "../server/db";
 import { assertProjectAccess, resolveCurrentUser } from "./users.server";
-import { assertProjectUnchanged, type CurrentUser } from "./users";
+import { assertProjectUnchanged, type CurrentUser } from "~/lib/roles";
 import { allocateIfBlank } from "./entityNumbers.server";
 import {
   diffFields,
@@ -279,11 +279,7 @@ export async function upsertProjectScopedRecord<
           projectId: written.projectId,
           actor,
         },
-        diffFields(
-          before,
-          written,
-          opts.auditFields as readonly (keyof Row)[],
-        ),
+        diffFields(before, written, opts.auditFields as readonly (keyof Row)[]),
       );
     } else {
       await assertProjectAccess(actor, opts.projectId);

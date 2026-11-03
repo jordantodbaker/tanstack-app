@@ -1,3 +1,14 @@
+import type { z } from "zod";
+import type { UpsertFcoSchema } from "~/lib/validators";
+import {
+  FCO_ORIGIN_TYPES,
+  FCO_STATUSES,
+  PRIORITIES,
+  type FcoOriginType,
+  type FcoStatus,
+  type Priority,
+} from "~/config/entity-enums";
+import { formatRecordRef, recordNumber } from "~/config/change-entities";
 import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
@@ -42,39 +53,15 @@ const FCO_WORKFLOW_CONFIG: WorkflowTransitionConfig<FcoScalarRow, FcoStatus> = {
   statusLabels: FCO_STATUS_LABELS,
   statusesNeedingReview: FCO_STATUSES_NEEDING_REVIEW,
   auditFields: ["status"],
-  buildTitle: (row) =>
-    row.fcoNumber ? `${row.fcoNumber} — ${row.title}` : row.title,
+  buildTitle: (row) => formatRecordRef("FieldChangeOrder", row),
 };
 
-export const FCO_STATUSES = [
-  "DRAFT",
-  "SUBMITTED",
-  "IN_REVIEW",
-  "LINKED_TO_CVR",
-  "APPROVED",
-  "REJECTED",
-  "IMPLEMENTED",
-  "CLOSED",
-  "VOID",
-] as const;
-export type FcoStatus = (typeof FCO_STATUSES)[number];
-
-export const FCO_ORIGIN_TYPES = [
-  "FIELD_CONDITION",
-  "RFI_RESPONSE",
-  "DESIGN_OMISSION",
-  "DESIGN_CONFLICT",
-  "OWNER_DIRECTIVE",
-  "SAFETY",
-  "REGULATORY",
-  "WEATHER",
-  "SUBCONTRACTOR",
-  "OTHER",
-] as const;
-export type FcoOriginType = (typeof FCO_ORIGIN_TYPES)[number];
-
-export const FCO_PRIORITIES = ["LOW", "NORMAL", "HIGH", "URGENT"] as const;
-export type FcoPriority = (typeof FCO_PRIORITIES)[number];
+// The enums live in `~/config/entity-enums`, shared with the validators;
+// re-exported here so callers keep reading them from the entity module. The
+// priority scale is the one every record shares.
+export { FCO_STATUSES, FCO_ORIGIN_TYPES, type FcoStatus, type FcoOriginType };
+export const FCO_PRIORITIES = PRIORITIES;
+export type FcoPriority = Priority;
 
 /** Map an FCO's priority to the risk level of the CVR it escalates into
  *  (`promoteFcoToCvr`). NORMAL (and any unlisted value) → MEDIUM. */
@@ -88,12 +75,8 @@ export function priorityToRiskLevel(priority: FcoPriority): RiskLevel {
         : "MEDIUM";
 }
 
-export const FCO_OPEN_STATUSES: FcoStatus[] = [
-  "DRAFT",
-  "SUBMITTED",
-  "IN_REVIEW",
-  "LINKED_TO_CVR",
-];
+import { FCO_OPEN_STATUSES } from "~/config/entity-enums";
+export { FCO_OPEN_STATUSES };
 
 /**
  * Slim shape used by the list-page table and the dashboard rollups. Drops
@@ -285,34 +268,8 @@ export const fcoListQueryOptions = (projectId: number | null) =>
     fetchFcoList,
   );
 
-export type UpsertFcoInput = {
-  id?: number;
-  projectId: number;
-  fcoNumber: string;
-  title: string;
-  description: string;
-  status: FcoStatus;
-  originType: FcoOriginType;
-  priority: FcoPriority;
-  discipline: string;
-  cbsCodes: string[];
-  locationArea: string;
-  drawingRefs: string[];
-  rfiNumbers: string[];
-  initiatedBy: string;
-  fieldContact: string;
-  estimatedCost: number;
-  estimatedHours: number;
-  workStopped: boolean;
-  photosUrl: string;
-  reasonNarrative: string;
-  resolution: string;
-  notes: string;
-  initiatedAt: string;
-  neededBy: string | null;
-  closedAt: string | null;
-  linkedCvrId: number | null;
-};
+/** What the dialog submits, as the validator parses it. */
+export type UpsertFcoInput = z.infer<typeof UpsertFcoSchema>;
 
 // User-meaningful columns tracked by the audit log. Excludes id, projectId,
 // and the createdAt/updatedAt timestamps.
@@ -466,7 +423,7 @@ export const promoteFcoToCvr = createServerFn({ method: "POST" })
         laborHoursImpact: fco.estimatedHours,
         riskLevel: priorityToRiskLevel(fco.priority),
         reasonCode: fco.originType,
-        notes: `Linked from FCO ${fco.fcoNumber || `#${fco.id}`}`,
+        notes: `Linked from ${recordNumber("FieldChangeOrder", fco)}`,
         // Carry the FCO's area through to the new CVR so the change keeps
         // its location context after escalation.
         area: fco.locationArea,

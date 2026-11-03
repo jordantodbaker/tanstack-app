@@ -1,3 +1,4 @@
+import { isBlankId, isUntouchedBlankRow } from "~/lib/fef-helpers";
 /**
  * CSV columns for exporting a Take Off sheet. The leading columns mirror the
  * "Paste from Excel" importer's column order (see TAKE_OFF_PASTE_COLUMNS), so an
@@ -9,8 +10,7 @@ import type { CsvColumn } from "./csv-export";
 import type { FefRow } from "./types";
 import { fefRowHasUserData } from "./fef-helpers";
 
-const codeOf = (r: FefRow): string =>
-  r.id.startsWith("__fe-blank-") ? "" : r.id;
+const codeOf = (r: FefRow): string => (isBlankId(r.id) ? "" : r.id);
 
 /** Labor hours × rate as a number for Excel; "" when not computable. */
 const totalCost = (r: FefRow): number | "" => {
@@ -57,12 +57,10 @@ export function makeTakeOffCsvColumns(
     // keeps both stable no matter how many custom columns a project defines.
     ...customFields
       .filter((f) => f.field !== "")
-      .map(
-        (f): CsvColumn<FefRow> => ({
-          header: f.label,
-          get: (r) => (r as unknown as Record<string, string>)[f.field] ?? "",
-        }),
-      ),
+      .map((f): CsvColumn<FefRow> => ({
+        header: f.label,
+        get: (r) => (r as unknown as Record<string, string>)[f.field] ?? "",
+      })),
   ];
 }
 
@@ -73,7 +71,5 @@ export const takeOffCsvColumns: CsvColumn<FefRow>[] = makeTakeOffCsvColumns();
 /** Real rows worth exporting — drops blank template rows (the trailing
  *  auto-blank, empty seeded rows). */
 export function takeOffRowsForExport(rows: FefRow[]): FefRow[] {
-  return rows.filter(
-    (r) => !(r.id.startsWith("__fe-blank-") && !fefRowHasUserData(r)),
-  );
+  return rows.filter((r) => !isUntouchedBlankRow(r));
 }

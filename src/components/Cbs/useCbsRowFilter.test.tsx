@@ -3,7 +3,10 @@ import { describe, it, expect } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import {
   CBS_FILTER_NONE,
+  cbsNoCostTypes,
+  cbsNoStatuses,
   parseCbsDisplayCode,
+  type CbsRowFilterState,
   type CbsTreeItem,
 } from "~/lib/cbs-tree";
 import { useCbsRowFilter } from "./useCbsRowFilter";
@@ -195,5 +198,48 @@ describe("useCbsRowFilter", () => {
     act(() => result.current.controls.onQueryChange("weld"));
     expect(result.current.filter.query).toBe("weld");
     expect(result.current.searchPending).toBe(false);
+  });
+});
+
+describe("useCbsRowFilter — initial state", () => {
+  it("starts from the state it is given, and hands the same state back", () => {
+    const initial: CbsRowFilterState = {
+      query: "pipe",
+      rowType: "generated",
+      values: {
+        disciplines: ["Piping"],
+        materialTypes: [],
+        classifications: [],
+      },
+      costTypes: { ...cbsNoCostTypes(), labor: true },
+      statuses: { ...cbsNoStatuses(), retired: true },
+    };
+    const { result } = renderHook(() =>
+      useCbsRowFilter({
+        items: ITEMS,
+        statusFilter: true,
+        rowTypeFilter: true,
+        initial,
+      }),
+    );
+    expect(result.current.state).toEqual(initial);
+    expect(result.current.filter).toEqual({
+      ...CBS_FILTER_NONE,
+      query: "pipe",
+      rowType: "generated",
+      disciplines: ["Piping"],
+      labor: true,
+      retired: true,
+    });
+    expect(result.current.filtering).toBe(true);
+    // From there the toolbar owns it, as usual.
+    act(() => result.current.controls.onClearFilters!());
+    expect(result.current.state).toEqual({
+      query: "",
+      rowType: "all",
+      values: { disciplines: [], materialTypes: [], classifications: [] },
+      costTypes: cbsNoCostTypes(),
+      statuses: cbsNoStatuses(),
+    });
   });
 });

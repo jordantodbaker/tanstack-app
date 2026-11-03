@@ -1,3 +1,4 @@
+import { recordNumber } from "~/config/change-entities";
 import {
   fmtBool,
   fmtDate,
@@ -23,11 +24,20 @@ export function rfiCsvColumns(
     { header: "Status", get: (r) => RFI_STATUS_LABELS[r.status] },
     { header: "Priority", get: (r) => RFI_PRIORITY_LABELS[r.priority] },
     { header: "Discipline", get: (r) => fmtDiscipline(r.discipline) },
-    { header: "Area", get: (r) => (r.locationArea ? areaLabel(r.locationArea) : "") },
+    {
+      header: "Area",
+      get: (r) => (r.locationArea ? areaLabel(r.locationArea) : ""),
+    },
     { header: "Initiated By", get: (r) => r.initiatedBy },
     { header: "Assigned To", get: (r) => r.assignedTo },
-    { header: "Suspects Cost Impact", get: (r) => fmtBool(r.suspectsCostImpact) },
-    { header: "Suspects Schedule Impact", get: (r) => fmtBool(r.suspectsScheduleImpact) },
+    {
+      header: "Suspects Cost Impact",
+      get: (r) => fmtBool(r.suspectsCostImpact),
+    },
+    {
+      header: "Suspects Schedule Impact",
+      get: (r) => fmtBool(r.suspectsScheduleImpact),
+    },
     { header: "CBS Codes", get: (r) => fmtList(r.cbsCodes) },
     { header: "Drawing Refs", get: (r) => fmtList(r.drawingRefs) },
     { header: "Spec Refs", get: (r) => fmtList(r.specRefs) },
@@ -39,7 +49,7 @@ export function rfiCsvColumns(
     {
       header: "Linked FCOs",
       get: (r) =>
-        r.linkedFcos.map((f) => f.fcoNumber || `FCO #${f.id}`).join("; "),
+        r.linkedFcos.map((f) => recordNumber("FieldChangeOrder", f)).join("; "),
     },
     { header: "Question", get: (r) => r.question },
     { header: "Response", get: (r) => r.response },

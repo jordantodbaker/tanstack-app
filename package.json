@@ -22,6 +22,7 @@
     "cbs:expand": "tsx scripts/expand-cbs-workbook.ts",
     "piping:sync-codes": "tsx scripts/sync-piping-group-codes.ts",
     "cbs:rename": "tsx scripts/rename-cbs-accounts.ts",
+    "snapshots:backfill": "tsx scripts/backfill-snapshot-totals.ts",
     "check:client-leak": "tsx scripts/check-client-leak.ts",
     "postinstall": "prisma generate"
   },

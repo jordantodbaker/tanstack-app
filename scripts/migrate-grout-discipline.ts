@@ -12,10 +12,7 @@
 // Run:  npx tsx scripts/migrate-grout-discipline.ts
 import "dotenv/config";
 import { prisma } from "../src/server/db";
-import {
-  accumulateProjectTotals,
-  type ProjectTotalsRow,
-} from "../src/lib/project-totals";
+import { backfillSnapshotTotals } from "../src/utils/snapshot-totals.server";
 
 // Digit → discipline id for the EVM bucket migration. Matches the canonical
 // discipline per digit; the project has only buckets {1,6,7} today.
@@ -90,31 +87,14 @@ async function migrateMeasurementBuckets() {
   );
 }
 
-async function backfillSnapshotTotals() {
-  const snaps = await prisma.estimateSnapshot.findMany({
-    select: { id: true, label: true, fefRows: true, totals: true },
-  });
-  let backfilled = 0;
-  for (const s of snaps) {
-    const totals = s.totals as Record<string, unknown> | null;
-    if (totals && "laborByL1" in totals) continue; // already current
-    const rows = (s.fefRows as unknown as ProjectTotalsRow[]) ?? [];
-    const recomputed = accumulateProjectTotals(rows);
-    await prisma.estimateSnapshot.update({
-      where: { id: s.id },
-      data: { totals: recomputed as unknown as object },
-    });
-    backfilled++;
-  }
-  console.log(
-    `[snapshots] backfilled byL1 totals on ${backfilled}/${snaps.length} snapshots.`,
-  );
-}
-
 async function main() {
   await migrateRoles();
   await migrateMeasurementBuckets();
-  await backfillSnapshotTotals();
+  // The same pass `npm run snapshots:backfill` runs on its own.
+  const { backfilled, total } = await backfillSnapshotTotals();
+  console.log(
+    `[snapshots] backfilled byL1 totals on ${backfilled}/${total} snapshots.`,
+  );
   console.log("Done.");
 }
 

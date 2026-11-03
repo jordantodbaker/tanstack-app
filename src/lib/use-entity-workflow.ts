@@ -1,4 +1,4 @@
-import { availableTransitions, type Transition } from "~/utils/workflow";
+import { availableTransitions, type Transition } from "~/lib/workflow";
 import { useCurrentUser } from "~/lib/use-current-user";
 
 /**

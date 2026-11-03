@@ -4,7 +4,18 @@ import { PrismaPg } from "@prisma/adapter-pg";
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
 const connectionString = `${process.env.DATABASE_URL}`;
-const adapter = new PrismaPg({ connectionString });
+// pg.Pool defaults closed idle connections after 10 s, so a user clicking
+// around paid a fresh TLS + SCRAM handshake to the Neon pooler (~20–50 ms)
+// on most navigations. Keep connections for a couple of minutes instead;
+// the pooler is built to hold them. `max` is per server instance — a modest
+// cap so a fan-out (the dashboard's summary runs many statements at once)
+// doesn't open ten connections per instance on a cold pool.
+const adapter = new PrismaPg({
+  connectionString,
+  max: 8,
+  idleTimeoutMillis: 120_000,
+  connectionTimeoutMillis: 10_000,
+});
 
 export const prisma =
   globalForPrisma.prisma ||

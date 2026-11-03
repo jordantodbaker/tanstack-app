@@ -1,3 +1,4 @@
+import { snapshotTotals } from "./snapshot-totals.server";
 import { queryOptions } from "@tanstack/react-query";
 import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
@@ -75,12 +76,7 @@ const SNAPSHOT_ROW_SELECT = {
 /** Standard JSON value — tighter than `unknown` so TanStack Start's
  *  server-function serializer accepts it. Matches Prisma's `JsonValue`. */
 type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+  string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 export type EstimateSnapshotBasis = {
   estimateFactor: string;
@@ -243,19 +239,11 @@ export const fetchSnapshotDetail = createServerFn({ method: "GET" })
       },
     });
     await requireProjectAccess(snap.projectId);
-    let totals: ProjectFefRowTotals;
-    if (snap.totals !== null) {
-      totals = snap.totals as unknown as ProjectFefRowTotals;
-    } else {
-      // Legacy fallback: pre-cache snapshots have no `totals` column value.
-      // Pull `fefRows` and recompute. New snapshots never hit this path.
-      const legacy = await prisma.estimateSnapshot.findUniqueOrThrow({
-        where: { id },
-        select: { fefRows: true },
-      });
-      const rows = (legacy.fefRows as unknown as ProjectTotalsRow[]) ?? [];
-      totals = accumulateProjectTotals(rows);
-    }
+    // The cached aggregator output; an old snapshot is recomputed in the one
+    // place that knows how (see snapshot-totals.server). This used to accept
+    // any non-null cache, while the EVM readers insisted on the L1 buckets —
+    // a snapshot cached before those existed passed here and failed there.
+    const totals = await snapshotTotals(snap);
     const creator =
       snap.createdById !== null
         ? await prisma.user.findUnique({

@@ -3,6 +3,7 @@ import { ChevronRight } from "lucide-react";
 import type { CbsTreeRow } from "~/utils/cbs";
 import { cbsIsActive } from "~/lib/cbs-tree";
 import type { CbsExportView } from "~/lib/cbs-export";
+import type { CbsFullscreenView } from "~/lib/cbs-fullscreen";
 import { CbsDictionaryBrowser } from "~/components/Cbs/CbsDictionaryBrowser";
 
 /**
@@ -22,6 +23,7 @@ function CbsSection({
   exportView,
   focusCode = null,
   linkPath = null,
+  fullscreenView = null,
   statusFilter = false,
   rowTypeFilter = false,
 }: {
@@ -35,6 +37,8 @@ function CbsSection({
   focusCode?: string | null;
   /** The page the detail panel's "Copy link" points at — see `CbsDictionaryBrowser`. */
   linkPath?: string | null;
+  /** Which tree the "Full screen" button opens — see `CbsDictionaryBrowser`. */
+  fullscreenView?: CbsFullscreenView | null;
   /** Offer the Status filter — see `CbsDictionaryBrowser`. */
   statusFilter?: boolean;
   /** Offer the Row Type filter — see `CbsDictionaryBrowser`. */
@@ -54,6 +58,7 @@ function CbsSection({
         exportView={exportView}
         focusCode={focusCode}
         linkPath={linkPath}
+        fullscreenView={fullscreenView}
         statusFilter={statusFilter}
         rowTypeFilter={rowTypeFilter}
       />
@@ -106,11 +111,12 @@ function CbsSectionShell({
   );
 }
 
-const MASTER_SOURCE_NOTE =
+/** Exported for the full-screen tab, which renders one of these sections alone. */
+export const MASTER_SOURCE_NOTE =
   "Source: the CBS Dictionary, in full — no project allow-list applied. Colors mirror the source workbook's outline levels.";
-const MASTER_EMPTY = "No CBS items in the catalog.";
+export const MASTER_EMPTY = "No CBS items in the catalog.";
 /** The page these sections live on, which reads `?code=` — for "Copy link". */
-const ADMIN_MASTER_CBS_PATH = "/admin/master-cbs";
+export const ADMIN_MASTER_CBS_PATH = "/admin/master-cbs";
 
 /**
  * The whole catalog as two collapsible datasets: the active Cost Accounts and
@@ -157,6 +163,7 @@ export function CbsDictionarySections({
         exportView="codeBook"
         focusCode={inAccounts ? focusCode : null}
         linkPath={ADMIN_MASTER_CBS_PATH}
+        fullscreenView="accounts"
       />
       <CbsSection
         title="CBS Dictionary"
@@ -168,6 +175,7 @@ export function CbsDictionarySections({
         exportView="dictionary"
         focusCode={inDictionary ? focusCode : null}
         linkPath={ADMIN_MASTER_CBS_PATH}
+        fullscreenView="dictionary"
         statusFilter
         rowTypeFilter
       />

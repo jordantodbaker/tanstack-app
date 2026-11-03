@@ -1,3 +1,5 @@
+import { compactFefRow, expandFefRow } from "~/lib/fef-wire";
+import { isBlankId, isUntouchedBlankRow } from "~/lib/fef-helpers";
 import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { FefRow } from "~/lib/types";
@@ -29,15 +31,26 @@ const NO_ROWS: FefRow[] = [];
  * setQueryData → re-hydrate cycle that redundant save can kick off).
  */
 function persistableSignature(rows: FefRow[]): string {
-  const persistable = rows.filter(
-    (r) => !r.id.startsWith("__fe-blank-") || fefRowHasUserData(r),
-  );
-  return JSON.stringify(
-    persistable.map((r) => {
-      const { id, ...fields } = r;
-      return [id.startsWith("__fe-blank-") ? "" : id, fields];
-    }),
-  );
+  const persistable = rows.filter((r) => !isUntouchedBlankRow(r));
+  return `[${persistable.map(rowSignature).join(",")}]`;
+}
+
+/**
+ * One row's part of the signature, cached on the row object. Rows are
+ * immutable — an edit replaces the edited row with a new object and leaves
+ * the rest — so after the first pass only the rows that changed are
+ * serialised again, instead of the whole sheet (about 400 KB of JSON on a
+ * piping take-off) on every committed keystroke.
+ */
+const ROW_SIGNATURES = new WeakMap<FefRow, string>();
+function rowSignature(row: FefRow): string {
+  let sig = ROW_SIGNATURES.get(row);
+  if (sig === undefined) {
+    const { id, ...fields } = row;
+    sig = JSON.stringify([isBlankId(id) ? "" : id, fields]);
+    ROW_SIGNATURES.set(row, sig);
+  }
+  return sig;
 }
 
 /**
@@ -152,6 +165,26 @@ export function useFefRowPersistence({
     // server holds is now known, and a later empty save can be trusted.
     serverSyncedKeyRef.current = currentKey;
     if (hydratedKeyRef.current === currentKey) {
+      // Already showing this key. New `loadedRows` for it are either our own
+      // save echoed back through the cache — the same content, nothing to do —
+      // or the server's copy changed under us: a rate refresh or a custom
+      // column clear rewrote the rows and invalidated the query. Those used to
+      // be ignored here, and the grid's next autosave wrote the old values
+      // straight back over them. Take the server's rows when they differ.
+      // An empty refetch is not taken: a sheet wiped underneath an open grid
+      // is not a supported flow, and keeping the rows is the safer failure.
+      if (
+        loadedRows.length > 0 &&
+        persistableSignature(loadedRows) !== lastSavedSigRef.current
+      ) {
+        skipNextSaveRef.current = true;
+        lastSavedSigRef.current = persistableSignature(loadedRows);
+        // A plain update, not a transition: the grid is already applied for
+        // this key, so a transition's pending re-render would run the
+        // autosave effect against the OLD rows with the NEW baseline and
+        // schedule a save of exactly what the server just replaced.
+        setData(loadedRows);
+      }
       setAppliedKey(currentKey);
       return;
     }
@@ -233,7 +266,8 @@ export function useFefRowPersistence({
           versionId,
           discipline,
           section,
-          rows: snapshot,
+          // Sparse on the wire — see `~/lib/fef-wire`.
+          rows: snapshot.map(compactFefRow),
           // Both halves required: the client must have seen what the server
           // holds AND the user must have removed rows to get here.
           allowClear:
@@ -245,14 +279,17 @@ export function useFefRowPersistence({
           // Consumed: a later empty save must be justified by its own delete.
           rowsRemovedRef.current = false;
           queryClient.setQueryData(
-            ["fefRows", versionId, discipline, section],
-            saved,
+            qk.fefRows.sheet(versionId, discipline, section),
+            saved.rows.map(expandFefRow),
+          );
+          // The sidebar badge comes back with the save, so write it rather
+          // than invalidating — that was a second request per autosave.
+          queryClient.setQueryData(
+            qk.invalidByDiscipline(versionId),
+            saved.invalidByDiscipline,
           );
           queryClient.invalidateQueries({
             queryKey: qk.projectFefRowTotals(versionId),
-          });
-          queryClient.invalidateQueries({
-            queryKey: qk.invalidByDiscipline(versionId),
           });
           setSaveStatus("saved");
           setLastSavedAt(Date.now());
@@ -271,7 +308,15 @@ export function useFefRowPersistence({
 
     // No cleanup: timer survives unmount so SPA nav doesn't lose pending saves.
     // Browser refresh will still drop pending saves — that's a separate concern.
-  }, [versionId, discipline, section, currentKey, data, queryClient, appliedKey]);
+  }, [
+    versionId,
+    discipline,
+    section,
+    currentKey,
+    data,
+    queryClient,
+    appliedKey,
+  ]);
 
   const notifyRowsRemoved = React.useCallback(() => {
     rowsRemovedRef.current = true;

@@ -21,7 +21,7 @@ vi.mock("~/utils/fefRows", () => ({
     queryKey: ["fefRows"],
     queryFn: async () => [],
   }),
-  saveFefRows: vi.fn(async () => []),
+  saveFefRows: vi.fn(async () => ({ rows: [], invalidByDiscipline: {} })),
 }));
 
 vi.mock("@tanstack/react-query", async (importActual) => {
@@ -410,5 +410,61 @@ describe("useFefRowPersistence — no baseline, no autosave", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+/**
+ * The server's copy can change under an open grid — a rate refresh or a
+ * custom column clear rewrites the rows and invalidates the query. The grid
+ * used to apply a refetch only when its key changed, so it kept the old rows
+ * and its next autosave wrote them back over the server's. It now takes the
+ * server's rows when they differ from what it last saved, and still ignores
+ * a refetch that merely echoes its own save.
+ */
+describe("useFefRowPersistence — the server's copy changes under the grid", () => {
+  it("re-hydrates from rows the server rewrote, without saving them back", () => {
+    vi.mocked(saveFefRows).mockClear();
+    vi.useFakeTimers();
+    try {
+      h.loadedRows = [filled("A", "Alpha")];
+      const { result, rerender } = renderHook(({ pid }) => useHarness(pid), {
+        initialProps: { pid: 1 },
+      });
+      expect(names(result.current)).toEqual(["Alpha"]);
+
+      // Same key, new rows from the server: a rate refresh renamed the row.
+      h.loadedRows = [filled("A", "Alpha (refreshed)")];
+      act(() => rerender({ pid: 1 }));
+      expect(names(result.current)).toEqual(["Alpha (refreshed)"]);
+
+      act(() => vi.advanceTimersByTime(1000));
+      // Taking the server's rows is not an edit.
+      expect(saveFefRows).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ignores a refetch that matches what it last saw", () => {
+    h.loadedRows = [filled("A", "Alpha")];
+    const { result, rerender } = renderHook(({ pid }) => useHarness(pid), {
+      initialProps: { pid: 1 },
+    });
+    const before = result.current;
+    // A new array with the same content — a focus refetch, or our own save
+    // echoed through the cache.
+    h.loadedRows = [filled("A", "Alpha")];
+    act(() => rerender({ pid: 1 }));
+    expect(result.current).toBe(before);
+  });
+
+  it("keeps its rows when a refetch comes back empty", () => {
+    h.loadedRows = [filled("A", "Alpha")];
+    const { result, rerender } = renderHook(({ pid }) => useHarness(pid), {
+      initialProps: { pid: 1 },
+    });
+    h.loadedRows = [];
+    act(() => rerender({ pid: 1 }));
+    expect(names(result.current)).toEqual(["Alpha"]);
   });
 });

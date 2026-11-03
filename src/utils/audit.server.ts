@@ -1,5 +1,5 @@
 import type { PrismaClient } from "../generated/prisma/client";
-import type { CurrentUser } from "./users";
+import type { CurrentUser } from "~/lib/roles";
 
 /**
  * SERVER-ONLY audit-log writers. Append-only: one row per CREATE/DELETE, one
@@ -13,13 +13,7 @@ import type { CurrentUser } from "./users";
 type AuditDb = Pick<PrismaClient, "auditEvent">;
 
 type AuditableValue =
-  | string
-  | number
-  | boolean
-  | string[]
-  | Date
-  | null
-  | undefined;
+  string | number | boolean | string[] | Date | null | undefined;
 
 export type FieldChange = {
   field: string;

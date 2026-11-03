@@ -1,3 +1,14 @@
+import type { z } from "zod";
+import type { UpsertChangeLogSchema } from "~/lib/validators";
+import {
+  CHANGE_STATUSES,
+  CHANGE_TYPES,
+  RISK_LEVELS,
+  type ChangeStatus,
+  type ChangeType,
+  type RiskLevel,
+} from "~/config/entity-enums";
+import { formatRecordRef } from "~/config/change-entities";
 import { type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
@@ -47,46 +58,26 @@ const CVR_WORKFLOW_CONFIG: WorkflowTransitionConfig<
   // Status is always diffed; approver/approvedAt only change on the APPROVED
   // step but live in the diff set so the audit row picks them up when they do.
   auditFields: ["status", "approver", "approvedAt"],
-  buildTitle: (row) =>
-    row.cvrNumber ? `${row.cvrNumber} — ${row.title}` : row.title,
+  buildTitle: (row) => formatRecordRef("ChangeLog", row),
   extraUpdateData: (transition, actor) =>
     transition.to === "APPROVED"
       ? { approver: actor.email, approvedAt: new Date() }
       : {},
 };
 
-export const CHANGE_STATUSES = [
-  "REQUESTED",
-  "IN_REVIEW",
-  "PENDING_APPROVAL",
-  "APPROVED",
-  "REJECTED",
-  "EXECUTED",
-  "VOID",
-] as const;
-export type ChangeStatus = (typeof CHANGE_STATUSES)[number];
+// The enums live in `~/config/entity-enums`, shared with the validators;
+// re-exported here so callers keep reading them from the entity module.
+export {
+  CHANGE_STATUSES,
+  CHANGE_TYPES,
+  RISK_LEVELS,
+  type ChangeStatus,
+  type ChangeType,
+  type RiskLevel,
+};
 
-/** CVR statuses still in flight — not yet executed, rejected, or voided. */
-export const CVR_OPEN_STATUSES: ChangeStatus[] = [
-  "REQUESTED",
-  "IN_REVIEW",
-  "PENDING_APPROVAL",
-];
-
-export const CHANGE_TYPES = [
-  "SCOPE",
-  "COST",
-  "SCHEDULE",
-  "ENGINEERING",
-  "CONSTRUCTION",
-  "PROCUREMENT",
-  "REGULATORY",
-  "OTHER",
-] as const;
-export type ChangeType = (typeof CHANGE_TYPES)[number];
-
-export const RISK_LEVELS = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
-export type RiskLevel = (typeof RISK_LEVELS)[number];
+import { CVR_OPEN_STATUSES } from "~/config/entity-enums";
+export { CVR_OPEN_STATUSES };
 
 /**
  * Slim shape used by the list table and dashboard. Drops `description`,
@@ -280,32 +271,12 @@ export const fetchChangeLog = createServerFn({ method: "GET" })
 export const changeLogQueryOptions = (id: number | null) =>
   recordQueryOptions(qk.changeLog.single(id), id, fetchChangeLog);
 
-export type UpsertChangeLogInput = {
-  id?: number;
-  projectId: number;
-  cvrNumber: string;
-  title: string;
-  description: string;
-  status: ChangeStatus;
-  type: ChangeType;
-  discipline: string;
-  cbsCodes: string[];
-  originator: string;
-  costImpact: number;
-  scheduleDaysImpact: number;
-  laborHoursImpact: number;
-  riskLevel: RiskLevel;
-  reasonCode: string;
-  requestedAt: string;
-  dueDate: string | null;
-  approvedAt: string | null;
-  approver: string;
-  notes: string;
-  area: string;
-  /** Optional cost buildup. When non-empty, the server derives `costImpact`
-   *  as the sum of line totals and ignores the manual `costImpact` field. */
-  lineItems: CvrLineItemDto[];
-};
+/**
+ * What the dialog submits, as the validator parses it. `lineItems` is the
+ * optional cost buildup: when non-empty, the server derives `costImpact` as
+ * the sum of line totals and ignores the manual `costImpact` field.
+ */
+export type UpsertChangeLogInput = z.infer<typeof UpsertChangeLogSchema>;
 
 // User-meaningful columns tracked by the audit log. Excludes id, projectId,
 // and the createdAt/updatedAt timestamps.

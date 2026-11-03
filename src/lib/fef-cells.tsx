@@ -20,7 +20,21 @@ import {
   canComputeTotalCost,
   isBlankId,
   makeFefRow,
+  MATERIAL_TYPE_OPTIONS,
+  MATERIAL_TYPES,
 } from "./fef-helpers";
+import { deriveRowPatch, writeCtxFromMeta, type WriteCtx } from "./grid-range";
+
+/**
+ * The lookups a cell editor derives with — the same `WriteCtx` the range
+ * paste uses, so an edit typed into a cell and the same value pasted into it
+ * produce the same row. `FefTableContent` builds it once per grid and puts it
+ * on the table meta; a cell rendered without one (a test, say) builds a
+ * throwaway from whatever meta it was given.
+ */
+export function writeCtxOf(table: CellProps["table"]): WriteCtx {
+  return table.options.meta?.writeCtx ?? writeCtxFromMeta(table.options.meta);
+}
 import {
   computeLaborHours,
   computeSteelQuantity,
@@ -263,8 +277,7 @@ export function TextCell({
    *  edit wrapper switch back to its read-only span. */
   onEditEnd?: () => void;
 }) {
-  const normalize = (v: string) =>
-    stripBlankPrefix && isBlankId(v) ? "" : v;
+  const normalize = (v: string) => (stripBlankPrefix && isBlankId(v) ? "" : v);
   const [value, setValue] = React.useState(() => normalize(rawValue));
   const inputRef = React.useRef<HTMLInputElement>(null);
 
@@ -419,20 +432,6 @@ export function EditableCell({ getValue, row, column, table }: CellProps) {
   );
 }
 
-export function SizeCell({ getValue, row, table }: CellProps) {
-  return (
-    <TextCell
-      value={getValue() as string}
-      onCommit={(v) =>
-        table.options.meta?.updateRow?.(row.index, {
-          size: v,
-          boreSize: computeBoreSize(v),
-        })
-      }
-    />
-  );
-}
-
 /**
  * Searchable CBS-item picker for a Name column. Client-filters the discipline's
  * `cbsOptions` (no server round-trip) and, on select, stamps the row's id (CBS
@@ -445,7 +444,7 @@ export function CbsSearchSelectCell({ row, table }: CellProps) {
   // so a page of ~25 of these doesn't each rebuild the catalog list on mount.
   const base = table.options.meta?.cbsSearchOptions ?? [];
   const rawId = row.original.id;
-  const value = rawId.startsWith("__fe-blank-") ? "" : rawId;
+  const value = isBlankId(rawId) ? "" : rawId;
   const name = row.original.name;
   const options: SearchableSelectOption[] = React.useMemo(() => {
     // Existing rows may reference a code that isn't in this discipline's option
@@ -469,48 +468,32 @@ export function CbsSearchSelectCell({ row, table }: CellProps) {
       value={value}
       options={options}
       onSelect={(code) => {
-        const selected = table.options.meta?.cbsByCode?.get(code);
-        table.options.meta?.updateRow?.(
-          row.index,
-          selected
-            ? {
-                id: selected.displayCode,
-                name: selected.name,
-                unit: selected.uom,
-              }
-            : { id: "", name: "", unit: "" },
+        // The same stamp a paste of the code into Name runs: id, name and
+        // unit from the catalog, or all three cleared by the placeholder.
+        const patch = deriveRowPatch(
+          "name",
+          code,
+          row.original,
+          writeCtxOf(table),
         );
+        if (patch) table.options.meta?.updateRow?.(row.index, patch);
       }}
     />
   );
 }
 
-export function TakeOffIdCell({ getValue, row, column, table }: CellProps) {
-  return (
-    <TextCell
-      value={getValue() as string}
-      stripBlankPrefix
-      onCommit={(v) =>
-        table.options.meta?.updateData?.(row.index, column.id, v)
-      }
-    />
-  );
-}
-
-export function TakeOffIdReadOnlyCell({ getValue }: { getValue: () => unknown }) {
+export function TakeOffIdReadOnlyCell({
+  getValue,
+}: {
+  getValue: () => unknown;
+}) {
   const raw = getValue() as string;
   const value = isBlankId(raw) ? "" : raw;
-  return (
-    <span className={readOnlyCellClass}>{value}</span>
-  );
+  return <span className={readOnlyCellClass}>{value}</span>;
 }
 
 export function ReadOnlyCell({ getValue }: { getValue: () => unknown }) {
-  return (
-    <span className={readOnlyCellClass}>
-      {getValue() as string}
-    </span>
-  );
+  return <span className={readOnlyCellClass}>{getValue() as string}</span>;
 }
 
 export { computeLaborHours, computeSteelQuantity } from "./fef-derive";
@@ -530,33 +513,6 @@ export function computeTotalTons(
 }
 
 /**
- * Labor-factor input for the dynamic disciplines' Take Off sheet. Empty
- * rows display `DEFAULT_LABOR_FACTOR` so a brand-new row produces a
- * meaningful labor-hours estimate (labor hours == quantity) without
- * further input. Typing overrides the default and stamps the row;
- * clearing reverts to the default on the next render.
- */
-export function LaborFactorInputCell({ getValue, row, table }: CellProps) {
-  const stored = (getValue() as string) ?? "";
-  return (
-    <TextCell
-      value={effectiveLaborFactor(stored)}
-      onCommit={(v) => {
-        const next = v.trim();
-        // Storing the default verbatim is wasteful — leave the row empty
-        // so a future change to `DEFAULT_LABOR_FACTOR` still flows through.
-        const persisted = next === DEFAULT_LABOR_FACTOR ? "" : next;
-        const newLaborHours = computeLaborHours(row.original.quantity, persisted);
-        table.options.meta?.updateRow?.(row.index, {
-          laborFactor: persisted,
-          laborHours: newLaborHours,
-        });
-      }}
-    />
-  );
-}
-
-/**
  * Quantity input that, beyond storing the typed value, recomputes the
  * row's `laborHours` from the new quantity × the effective labor factor.
  * Keeps `laborHours` authoritative so the read-only Labor Hours cell and
@@ -567,11 +523,14 @@ export function LaborFactorQuantityCell({ getValue, row, table }: CellProps) {
     <TextCell
       value={getValue() as string}
       onCommit={(v) => {
-        const newLaborHours = computeLaborHours(v, row.original.laborFactor);
-        table.options.meta?.updateRow?.(row.index, {
-          quantity: v,
-          laborHours: newLaborHours,
-        });
+        // The same derivation a paste into Quantity runs.
+        const patch = deriveRowPatch(
+          "quantity",
+          v,
+          row.original,
+          writeCtxOf(table),
+        );
+        if (patch) table.options.meta?.updateRow?.(row.index, patch);
       }}
     />
   );
@@ -599,9 +558,7 @@ export function LaborFactorQuantityCell({ getValue, row, table }: CellProps) {
  * multiplication.
  */
 export function ComputedLaborHoursCell({ row }: CellProps) {
-  return (
-    <span className={readOnlyCellClass}>{row.original.laborHours}</span>
-  );
+  return <span className={readOnlyCellClass}>{row.original.laborHours}</span>;
 }
 
 // ── Structural Steel Quantity = # of shapes × length (L) ─────────────────────
@@ -623,16 +580,14 @@ function makeSteelDimensionCell(field: "shapeCount" | "length") {
       <DisplayEditControl
         value={getValue() as string}
         onCommit={(v) => {
-          const shapeCount =
-            field === "shapeCount" ? v : row.original.shapeCount;
-          const length = field === "length" ? v : row.original.length;
-          const quantity = computeSteelQuantity(shapeCount, length);
-          const patch: Partial<FefRow> = {
-            quantity,
-            laborHours: computeLaborHours(quantity, row.original.laborFactor),
-          };
-          patch[field] = v;
-          table.options.meta?.updateRow?.(row.index, patch);
+          // The same derivation a paste into this column runs.
+          const patch = deriveRowPatch(
+            field,
+            v,
+            row.original,
+            writeCtxOf(table),
+          );
+          if (patch) table.options.meta?.updateRow?.(row.index, patch);
         }}
       />
     );
@@ -761,34 +716,25 @@ export function AreaSelectCell({ getValue, row, column, table }: CellProps) {
   );
 }
 
-/**
- * How an equipment line item is procured: in bulk, or as a tagged item with
- * its own equipment number. Blank means "not classified yet" — an estimator
- * types quantities long before that decision is made, so an unset value is a
- * normal state rather than a missing one.
- *
- * A fixed vocabulary rather than free text: it drives how the line is reported,
- * and "tagged"/"Tagged "/"TAG" would fragment that.
- */
-const MATERIAL_TYPE_OPTIONS = [
-  { value: "Bulk", label: "Bulk" },
-  { value: "Tagged", label: "Tagged" },
-] as const;
+// The vocabulary lives in `fef-helpers` (no React), where the range-paste
+// validator reads it without importing this file; re-exported for callers.
+export { MATERIAL_TYPES };
 
-/** Valid stored values, blank included. Shared with the range-paste validator
- *  so typing and pasting accept exactly the same set. */
-export const MATERIAL_TYPES: readonly string[] = MATERIAL_TYPE_OPTIONS.map(
-  (o) => o.value,
-);
-
-export function MaterialTypeSelectCell({ getValue, row, column, table }: CellProps) {
+export function MaterialTypeSelectCell({
+  getValue,
+  row,
+  column,
+  table,
+}: CellProps) {
   const value = getValue() as string;
   return (
     <CellSelect
       value={value}
       // `CellSelect`, not a native <select>: the native popup swallows Ctrl+V
       // at the OS level, which would break paste while the cell is focused.
-      options={MATERIAL_TYPE_OPTIONS as unknown as { value: string; label: string }[]}
+      options={
+        MATERIAL_TYPE_OPTIONS as unknown as { value: string; label: string }[]
+      }
       ariaLabel="Material type"
       onValueChange={(v) =>
         table.options.meta?.updateData?.(row.index, column.id, v)

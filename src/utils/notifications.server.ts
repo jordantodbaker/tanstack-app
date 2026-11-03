@@ -1,6 +1,6 @@
 import type { PrismaClient } from "../generated/prisma/client";
 import { prisma } from "../server/db";
-import type { CurrentUser } from "./users";
+import type { CurrentUser } from "~/lib/roles";
 import {
   resolveCommentRecipients,
   resolveNotificationRecipients,

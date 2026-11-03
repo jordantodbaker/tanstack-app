@@ -1,3 +1,5 @@
+import { toggleInSet } from "~/lib/utils";
+import { isBlankId, isUntouchedBlankRow } from "~/lib/fef-helpers";
 import React from "react";
 import {
   createColumnHelper,
@@ -49,7 +51,10 @@ import {
 import { Undo2, Redo2, AlertTriangle } from "lucide-react";
 import { splitRowsByDiscipline } from "~/lib/take-off-paste";
 import { computeTakeOffTotals } from "~/lib/take-off-totals";
-import { makeTakeOffCsvColumns, takeOffRowsForExport } from "~/lib/take-off-csv";
+import {
+  makeTakeOffCsvColumns,
+  takeOffRowsForExport,
+} from "~/lib/take-off-csv";
 import { rowsToCsv, downloadCsv, todayStamp } from "~/lib/csv-export";
 import { formatCurrency, formatNumber } from "~/lib/formatting";
 import { appendTakeOffRows } from "~/utils/fefRows";
@@ -103,7 +108,7 @@ function useEnsureTrailingBlankRows(
     let trailing = 0;
     for (let i = data.length - 1; i >= 0; i--) {
       const r = data[i];
-      if (r.id.startsWith("__fe-blank-") && !fefRowHasUserData(r)) trailing++;
+      if (isUntouchedBlankRow(r)) trailing++;
       else break;
     }
     const need = Math.max(minTrailing - trailing, minTotal - data.length);
@@ -185,8 +190,10 @@ export function DisciplineTabs({
     supportPersist.saveStatus,
   ]);
   const lastSavedAt =
-    Math.max(takeOffPersist.lastSavedAt ?? 0, supportPersist.lastSavedAt ?? 0) ||
-    null;
+    Math.max(
+      takeOffPersist.lastSavedAt ?? 0,
+      supportPersist.lastSavedAt ?? 0,
+    ) || null;
 
   // Warn before a browser refresh/close while a save is pending, in flight, or
   // failed — SPA navigation keeps the debounce timer alive, but unloading the
@@ -217,12 +224,7 @@ export function DisciplineTabs({
     Set<number>
   >(() => new Set());
   const onToggleRowSelected = React.useCallback((rowIndex: number) => {
-    setSelectedRowIndices((prev) => {
-      const next = new Set(prev);
-      if (next.has(rowIndex)) next.delete(rowIndex);
-      else next.add(rowIndex);
-      return next;
-    });
+    setSelectedRowIndices((prev) => toggleInSet(prev, rowIndex));
   }, []);
   // Wraps the default delete so the selection set stays consistent with the
   // post-delete indices (rows below the deleted one shift up by one).
@@ -283,10 +285,7 @@ export function DisciplineTabs({
       if (local.length > 0) {
         takeOffState.setData((prev) => {
           const last = prev[prev.length - 1];
-          const lastIsBlank =
-            !!last &&
-            last.id.startsWith("__fe-blank-") &&
-            !fefRowHasUserData(last);
+          const lastIsBlank = !!last && isUntouchedBlankRow(last);
           return lastIsBlank
             ? [...prev.slice(0, -1), ...local, last]
             : [...prev, ...local];
@@ -415,12 +414,7 @@ export function DisciplineTabs({
       ),
   );
   const toggleGroup = React.useCallback((label: string) => {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(label)) next.delete(label);
-      else next.add(label);
-      return next;
-    });
+    setCollapsedGroups((prev) => toggleInSet(prev, label));
   }, []);
   const takeOffColumnVisibility = React.useMemo<VisibilityState>(
     () => ({
@@ -546,165 +540,170 @@ export function DisciplineTabs({
               after a removal has to outlive the header that issued it.
               A provider renders no DOM of its own. */}
           <CustomColumnsProvider discipline={discipline}>
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={handleUndo}
-                disabled={!canUndo}
-                title="Undo (Ctrl+Z)"
-                aria-label="Undo"
-                className="flex items-center gap-1 px-2 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
-              >
-                <Undo2 className="size-4" />
-              </button>
-              <button
-                type="button"
-                onClick={handleRedo}
-                disabled={!canRedo}
-                title="Redo (Ctrl+Shift+Z)"
-                aria-label="Redo"
-                className="flex items-center gap-1 px-2 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
-              >
-                <Redo2 className="size-4" />
-              </button>
-            </div>
-            {/* Errors-only view filter. Doubles as the sheet's error count,
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={handleUndo}
+                  disabled={!canUndo}
+                  title="Undo (Ctrl+Z)"
+                  aria-label="Undo"
+                  className="flex items-center gap-1 px-2 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+                >
+                  <Undo2 className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRedo}
+                  disabled={!canRedo}
+                  title="Redo (Ctrl+Shift+Z)"
+                  aria-label="Redo"
+                  className="flex items-center gap-1 px-2 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+                >
+                  <Redo2 className="size-4" />
+                </button>
+              </div>
+              {/* Errors-only view filter. Doubles as the sheet's error count,
                 which is the same number the sidebar's ⚠ badge and the
                 Validation page report. Stays enabled while active even at
                 zero errors, so the filter can always be switched back off. */}
-            <button
-              type="button"
-              onClick={toggleErrorsOnly}
-              disabled={takeOffErrorCount === 0 && !errorsOnly}
-              aria-pressed={errorsOnly}
-              title={
-                errorsOnly
-                  ? "Show all rows"
-                  : takeOffErrorCount === 0
-                    ? "No rows on this sheet have errors"
-                    : "Show only rows with errors — rows stay listed while you fix them"
-              }
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-sm border rounded cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                errorsOnly
-                  ? "border-[#a63434] bg-[#a63434] text-white hover:bg-[#8d2a2a]"
-                  : takeOffErrorCount > 0
-                    ? "border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
-                    : "border-slate-300 text-slate-600 disabled:hover:bg-transparent"
-              }`}
-            >
-              <AlertTriangle className="size-4" />
-              {takeOffErrorCount} {takeOffErrorCount === 1 ? "error" : "errors"}
-            </button>
-            <ChangelogDialog
-              trigger={
-                <button
-                  type="button"
-                  disabled={selectedRowIndices.size === 0 || projectId === null}
-                  title="Create a CVR pre-filled from the selected take-off rows"
-                  className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
-                >
-                  Create CVR from Selected
-                </button>
-              }
-              draft={cvrDraft}
-              onSubmit={handleCreateCvr}
-            />
-            {(takeOffColumnGroups ?? []).length > 0 && (
-              <span className="text-xs font-medium text-slate-400 self-center">
-                Columns:
-              </span>
-            )}
-            {(takeOffColumnGroups ?? []).map((g) => {
-              const collapsed = collapsedGroups.has(g.label);
-              return (
-                <button
-                  key={g.label}
-                  type="button"
-                  onClick={() => toggleGroup(g.label)}
-                  aria-pressed={!collapsed}
-                  title={collapsed ? `Show ${g.label}` : `Hide ${g.label}`}
-                  className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded border cursor-pointer transition-colors ${
-                    collapsed
-                      ? "border-slate-300 bg-white text-slate-500 hover:bg-slate-50"
-                      : "border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200"
-                  }`}
-                >
-                  <span className="text-slate-400">{collapsed ? "▸" : "▾"}</span>
-                  {g.label}
-                </button>
-              );
-            })}
-            <CustomColumnsButton discipline={discipline} />
-            <CustomColumnsUndoBar />
-            {/* Right-aligned cluster: mode/import/export actions + live totals.
-                On a narrow screen it wraps whole buttons onto the next line
-                rather than squeezing each label onto three. */}
-            <div className="ml-auto flex flex-wrap items-center gap-2 whitespace-nowrap">
-              <button
-                onClick={() => setUseCrewMix((v) => !v)}
-                className={
-                  useCrewMix
-                    ? "px-3 py-1 text-sm border border-[#a63434] bg-[#a63434] text-white rounded hover:bg-[#8d2a2a] cursor-pointer"
-                    : "px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer"
-                }
-              >
-                {useCrewMix ? "Use Role" : "Use Crew Mix"}
-              </button>
-              <TakeOffPasteDialog
-                cbsOptions={takeOffMeta?.cbsOptions ?? []}
-                areaOptions={takeOffMeta?.areaOptions ?? []}
-                onAppend={handlePasteAppend}
-              />
               <button
                 type="button"
-                onClick={handleExportCsv}
-                disabled={takeOffTotals.itemCount === 0}
-                className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+                onClick={toggleErrorsOnly}
+                disabled={takeOffErrorCount === 0 && !errorsOnly}
+                aria-pressed={errorsOnly}
+                title={
+                  errorsOnly
+                    ? "Show all rows"
+                    : takeOffErrorCount === 0
+                      ? "No rows on this sheet have errors"
+                      : "Show only rows with errors — rows stay listed while you fix them"
+                }
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-sm border rounded cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                  errorsOnly
+                    ? "border-[#a63434] bg-[#a63434] text-white hover:bg-[#8d2a2a]"
+                    : takeOffErrorCount > 0
+                      ? "border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
+                      : "border-slate-300 text-slate-600 disabled:hover:bg-transparent"
+                }`}
               >
-                Export CSV
+                <AlertTriangle className="size-4" />
+                {takeOffErrorCount}{" "}
+                {takeOffErrorCount === 1 ? "error" : "errors"}
               </button>
-              <span className="mx-1 h-5 w-px bg-slate-200" aria-hidden />
-              <div className="flex items-center gap-3 text-xs text-slate-600">
-                <span>
+              <ChangelogDialog
+                trigger={
+                  <button
+                    type="button"
+                    disabled={
+                      selectedRowIndices.size === 0 || projectId === null
+                    }
+                    title="Create a CVR pre-filled from the selected take-off rows"
+                    className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+                  >
+                    Create CVR from Selected
+                  </button>
+                }
+                draft={cvrDraft}
+                onSubmit={handleCreateCvr}
+              />
+              {(takeOffColumnGroups ?? []).length > 0 && (
+                <span className="text-xs font-medium text-slate-400 self-center">
+                  Columns:
+                </span>
+              )}
+              {(takeOffColumnGroups ?? []).map((g) => {
+                const collapsed = collapsedGroups.has(g.label);
+                return (
+                  <button
+                    key={g.label}
+                    type="button"
+                    onClick={() => toggleGroup(g.label)}
+                    aria-pressed={!collapsed}
+                    title={collapsed ? `Show ${g.label}` : `Hide ${g.label}`}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded border cursor-pointer transition-colors ${
+                      collapsed
+                        ? "border-slate-300 bg-white text-slate-500 hover:bg-slate-50"
+                        : "border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200"
+                    }`}
+                  >
+                    <span className="text-slate-400">
+                      {collapsed ? "▸" : "▾"}
+                    </span>
+                    {g.label}
+                  </button>
+                );
+              })}
+              <CustomColumnsButton discipline={discipline} />
+              <CustomColumnsUndoBar />
+              {/* Right-aligned cluster: mode/import/export actions + live totals.
+                On a narrow screen it wraps whole buttons onto the next line
+                rather than squeezing each label onto three. */}
+              <div className="ml-auto flex flex-wrap items-center gap-2 whitespace-nowrap">
+                <button
+                  onClick={() => setUseCrewMix((v) => !v)}
+                  className={
+                    useCrewMix
+                      ? "px-3 py-1 text-sm border border-[#a63434] bg-[#a63434] text-white rounded hover:bg-[#8d2a2a] cursor-pointer"
+                      : "px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer"
+                  }
+                >
+                  {useCrewMix ? "Use Role" : "Use Crew Mix"}
+                </button>
+                <TakeOffPasteDialog
+                  cbsOptions={takeOffMeta?.cbsOptions ?? []}
+                  areaOptions={takeOffMeta?.areaOptions ?? []}
+                  onAppend={handlePasteAppend}
+                />
+                <button
+                  type="button"
+                  onClick={handleExportCsv}
+                  disabled={takeOffTotals.itemCount === 0}
+                  className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+                >
+                  Export CSV
+                </button>
+                <span className="mx-1 h-5 w-px bg-slate-200" aria-hidden />
+                <div className="flex items-center gap-3 text-xs text-slate-600">
+                  <span>
+                    <span className="font-semibold text-slate-800">
+                      {takeOffTotals.itemCount}
+                    </span>{" "}
+                    {takeOffTotals.itemCount === 1 ? "item" : "items"}
+                  </span>
+                  <span className="text-slate-300">·</span>
+                  <span>
+                    <span className="font-semibold text-slate-800">
+                      {formatNumber(takeOffTotals.laborHours, 1)}
+                    </span>{" "}
+                    hrs
+                  </span>
+                  <span className="text-slate-300">·</span>
                   <span className="font-semibold text-slate-800">
-                    {takeOffTotals.itemCount}
-                  </span>{" "}
-                  {takeOffTotals.itemCount === 1 ? "item" : "items"}
-                </span>
-                <span className="text-slate-300">·</span>
-                <span>
-                  <span className="font-semibold text-slate-800">
-                    {formatNumber(takeOffTotals.laborHours, 1)}
-                  </span>{" "}
-                  hrs
-                </span>
-                <span className="text-slate-300">·</span>
-                <span className="font-semibold text-slate-800">
-                  {formatCurrency(takeOffTotals.laborCost)}
-                </span>
+                    {formatCurrency(takeOffTotals.laborCost)}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-          <FefTableContent
-            state={takeOffState}
-            meta={takeOffWithSelection}
-            columns={takeOffColumnsWithSelection}
-            columnGroups={takeOffColumnGroups}
-            onToggleGroup={toggleGroup}
-            serverPagination={serverPagination}
-            columnVisibility={takeOffColumnVisibility}
-            minRows={20}
-            getRowInvalid={isTakeOffRowInvalidLive}
-            enableRangeEditing
-            columnWidthKey={`takeoff:${discipline}`}
-            // Keep the row identifiable while scrolling right: the selection
-            // gutter through Name. Named rather than counted because ID sits
-            // between them and lives in a collapsible group — a count froze
-            // Name only while ID happened to be hidden.
-            frozenThroughColumnId="name"
-            frozenColumnCount={2}
-          />
+            <FefTableContent
+              state={takeOffState}
+              meta={takeOffWithSelection}
+              columns={takeOffColumnsWithSelection}
+              columnGroups={takeOffColumnGroups}
+              onToggleGroup={toggleGroup}
+              serverPagination={serverPagination}
+              columnVisibility={takeOffColumnVisibility}
+              minRows={20}
+              getRowInvalid={isTakeOffRowInvalidLive}
+              enableRangeEditing
+              columnWidthKey={`takeoff:${discipline}`}
+              // Keep the row identifiable while scrolling right: the selection
+              // gutter through Name. Named rather than counted because ID sits
+              // between them and lives in a collapsible group — a count froze
+              // Name only while ID happened to be hidden.
+              frozenThroughColumnId="name"
+              frozenColumnCount={2}
+            />
           </CustomColumnsProvider>
         </TabsContent>
         <TabsContent value="estimate" className="mt-4">

@@ -1,3 +1,4 @@
+import { toggleInSet } from "~/lib/utils";
 import * as React from "react";
 import {
   bulkActionsForSelection,
@@ -7,7 +8,7 @@ import {
   type BulkRunResult,
 } from "./bulk-actions";
 import { useCurrentUser, useIsAdmin } from "./use-current-user";
-import type { Transition } from "~/utils/workflow";
+import type { Transition } from "~/lib/workflow";
 
 /**
  * Row-selection state for a log table. Holds the set of selected ids; the page
@@ -16,17 +17,10 @@ import type { Transition } from "~/utils/workflow";
  * set are simply never matched).
  */
 export function useBulkSelection() {
-  const [selected, setSelected] = React.useState<Set<number>>(
-    () => new Set(),
-  );
+  const [selected, setSelected] = React.useState<Set<number>>(() => new Set());
 
   const toggle = React.useCallback((id: number) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setSelected((prev) => toggleInSet(prev, id));
   }, []);
 
   const clear = React.useCallback(() => setSelected(new Set()), []);
@@ -65,8 +59,7 @@ export function useBulkRunner(opts: {
   const [busy, setBusy] = React.useState(false);
   const [result, setResult] = React.useState<string | null>(null);
 
-  const plural = (n: number) =>
-    `${n} ${opts.entityNoun}${n === 1 ? "" : "s"}`;
+  const plural = (n: number) => `${n} ${opts.entityNoun}${n === 1 ? "" : "s"}`;
 
   async function runAction(
     action: string,

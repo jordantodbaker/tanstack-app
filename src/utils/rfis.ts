@@ -1,3 +1,12 @@
+import type { z } from "zod";
+import type { UpsertRfiSchema } from "~/lib/validators";
+import {
+  PRIORITIES,
+  RFI_STATUSES,
+  type Priority,
+  type RfiStatus,
+} from "~/config/entity-enums";
+import { formatRecordRef, recordNumber } from "~/config/change-entities";
 import { type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
@@ -28,21 +37,15 @@ import { RFI_TRANSITIONS } from "./workflow";
 import { RFI_STATUS_LABELS } from "./rfiLabels";
 import { allocateEntityNumber } from "./entityNumbers.server";
 
-export const RFI_STATUSES = [
-  "DRAFT",
-  "OPEN",
-  "ANSWERED",
-  "CLOSED",
-  "SUPERSEDED",
-  "VOID",
-] as const;
-export type RfiStatus = (typeof RFI_STATUSES)[number];
+// The enums live in `~/config/entity-enums`, shared with the validators;
+// re-exported here so callers keep reading them from the entity module. The
+// priority scale is the one every record shares.
+export { RFI_STATUSES, type RfiStatus };
+export const RFI_PRIORITIES = PRIORITIES;
+export type RfiPriority = Priority;
 
-/** RFIs still expecting attention — drafts, open questions, awaiting close. */
-export const RFI_OPEN_STATUSES: RfiStatus[] = ["DRAFT", "OPEN", "ANSWERED"];
-
-export const RFI_PRIORITIES = ["LOW", "NORMAL", "HIGH", "URGENT"] as const;
-export type RfiPriority = (typeof RFI_PRIORITIES)[number];
+import { RFI_OPEN_STATUSES } from "~/config/entity-enums";
+export { RFI_OPEN_STATUSES };
 
 /**
  * Slim shape used by the list-page table and the dashboard rollups. Drops
@@ -211,28 +214,11 @@ export const fetchRfi = createServerFn({ method: "GET" })
 export const rfiQueryOptions = (id: number | null) =>
   recordQueryOptions(qk.rfis.single(id), id, fetchRfi);
 
-export type UpsertRfiInput = {
-  id?: number;
-  projectId: number;
-  rfiNumber: string;
-  subject: string;
-  question: string;
-  priority: RfiPriority;
-  discipline: string;
-  cbsCodes: string[];
-  locationArea: string;
-  drawingRefs: string[];
-  specRefs: string[];
-  suspectsCostImpact: boolean;
-  suspectsScheduleImpact: boolean;
-  initiatedBy: string;
-  assignedTo: string;
-  dueDate: string | null;
-  initiatedAt: string;
-  // Response side — editable by the responder; status moves via transitions.
-  response: string;
-  answeredBy: string;
-};
+/**
+ * What the dialog submits, as the validator parses it. The response side is
+ * editable by the responder; status moves via transitions.
+ */
+export type UpsertRfiInput = z.infer<typeof UpsertRfiSchema>;
 
 // User-meaningful columns tracked by the audit log. Excludes id, projectId,
 // timestamps, and the createdAt/updatedAt mirrors.
@@ -324,7 +310,7 @@ export const transitionRfi = createServerFn({ method: "POST" })
         statusLabels: RFI_STATUS_LABELS,
         statusesNeedingReview: RFI_STATUSES_NEEDING_REVIEW,
         auditFields: ["status", "answeredBy", "answeredAt", "closedAt"],
-        buildTitle: (r) => `${r.rfiNumber || `RFI #${r.id}`} — ${r.subject}`,
+        buildTitle: (r) => formatRecordRef("Rfi", r),
         // Stamp the responder + answeredAt when landing in ANSWERED; the
         // closedAt timestamp when landing in CLOSED. Saves a separate
         // UPDATE round-trip after the workflow action.
@@ -378,14 +364,8 @@ export const promoteRfiToFco = createServerFn({ method: "POST" })
           // Status defaults to DRAFT via the schema; do not pass it here so
           // the FCO opens for the originator to flesh out before submitting.
           originType: "RFI_RESPONSE",
-          priority:
-            rfi.priority === "URGENT"
-              ? "URGENT"
-              : rfi.priority === "HIGH"
-                ? "HIGH"
-                : rfi.priority === "LOW"
-                  ? "LOW"
-                  : "NORMAL",
+          // One priority scale on every record, so it carries over as is.
+          priority: rfi.priority,
           discipline: rfi.discipline,
           cbsCodes: rfi.cbsCodes,
           locationArea: rfi.locationArea,
@@ -401,7 +381,7 @@ export const promoteRfiToFco = createServerFn({ method: "POST" })
           photosUrl: "",
           reasonNarrative: rfi.question,
           resolution: "",
-          notes: `Promoted from RFI ${rfi.rfiNumber || `#${rfi.id}`}`,
+          notes: `Promoted from ${recordNumber("Rfi", rfi)}`,
           initiatedAt: new Date(),
           linkedRfiId: rfi.id,
           createdById: actor.id,
@@ -428,7 +408,7 @@ export const promoteRfiToFco = createServerFn({ method: "POST" })
           {
             field: "linkedFcos",
             oldValue: null,
-            newValue: fco.fcoNumber || `FCO #${fco.id}`,
+            newValue: recordNumber("FieldChangeOrder", fco),
           },
         ],
       );

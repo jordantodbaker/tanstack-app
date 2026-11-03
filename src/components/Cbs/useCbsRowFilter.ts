@@ -8,6 +8,7 @@ import {
   cbsValueFilterOptions,
   type CbsCostTypeKey,
   type CbsRowFilter,
+  type CbsRowFilterState,
   type CbsRowTypeFilter,
   type CbsStatusKey,
   type CbsTreeItem,
@@ -34,9 +35,15 @@ export function useCbsRowFilter({
   statusFilter = false,
   rowTypeFilter = false,
   deferQuery = false,
+  initial,
 }: {
   /** The rows the view lists — what the value pickers offer values from. */
   items: readonly CbsTreeItem[];
+  /**
+   * Start with these filters in force rather than none — the full-screen tab
+   * opening where its page left off. Read once, on mount.
+   */
+  initial?: CbsRowFilterState;
   /** Offer Active / Inactive / Retired. */
   statusFilter?: boolean;
   /** Offer All / Original / Generated. */
@@ -49,6 +56,8 @@ export function useCbsRowFilter({
   deferQuery?: boolean;
 }): {
   filter: CbsRowFilter;
+  /** The filters as held — what a full-screen tab is opened with. */
+  state: CbsRowFilterState;
   /** True when any filter narrows the rows. */
   filtering: boolean;
   /** True while a deferred search has not caught up with the box. */
@@ -56,18 +65,22 @@ export function useCbsRowFilter({
   /** Spread into `CbsTreeToolbar`. */
   controls: CbsTreeFilterControls;
 } {
-  const [query, setQuery] = React.useState("");
+  const [query, setQuery] = React.useState(initial?.query ?? "");
   const deferredQuery = React.useDeferredValue(query);
   const appliedQuery = deferQuery ? deferredQuery : query;
 
-  const [values, setValues] = React.useState(cbsNoValues);
+  const [values, setValues] = React.useState(
+    () => initial?.values ?? cbsNoValues(),
+  );
   const setValue = React.useCallback(
     (key: CbsValueFilterKey, next: string[]) =>
       setValues((prev) => ({ ...prev, [key]: next })),
     [],
   );
 
-  const [costTypes, setCostTypes] = React.useState(cbsNoCostTypes);
+  const [costTypes, setCostTypes] = React.useState(
+    () => initial?.costTypes ?? cbsNoCostTypes(),
+  );
   const toggleCostType = React.useCallback((key: CbsCostTypeKey) => {
     setCostTypes((prev) => ({ ...prev, [key]: !prev[key] }));
     // A picker that belongs to a cost type (Material Type to Materials)
@@ -82,13 +95,17 @@ export function useCbsRowFilter({
     }
   }, []);
 
-  const [statuses, setStatuses] = React.useState(cbsNoStatuses);
+  const [statuses, setStatuses] = React.useState(
+    () => initial?.statuses ?? cbsNoStatuses(),
+  );
   const toggleStatus = React.useCallback(
     (key: CbsStatusKey) =>
       setStatuses((prev) => ({ ...prev, [key]: !prev[key] })),
     [],
   );
-  const [rowType, setRowType] = React.useState<CbsRowTypeFilter>("all");
+  const [rowType, setRowType] = React.useState<CbsRowTypeFilter>(
+    initial?.rowType ?? "all",
+  );
   const clearFilters = React.useCallback(() => {
     setQuery("");
     setValues(cbsNoValues());
@@ -114,8 +131,14 @@ export function useCbsRowFilter({
     [items, filter],
   );
 
+  const state = React.useMemo<CbsRowFilterState>(
+    () => ({ query, rowType, values, costTypes, statuses }),
+    [query, rowType, values, costTypes, statuses],
+  );
+
   return {
     filter,
+    state,
     filtering: !cbsFilterIsEmpty(filter),
     searchPending: deferQuery && query !== deferredQuery,
     controls: {

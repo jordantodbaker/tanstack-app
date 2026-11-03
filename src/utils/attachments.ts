@@ -1,3 +1,4 @@
+import { CHANGE_ENTITY_TYPES } from "~/config/change-entities";
 import { queryOptions } from "@tanstack/react-query";
 import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
@@ -55,13 +56,8 @@ export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
  */
 
 /** Parent-entity types attachments can hang off. */
-export const ATTACHMENT_ENTITY_TYPES = [
-  "ChangeLog",
-  "FieldChangeOrder",
-  "Rfi",
-  "Trend",
-  "Pco",
-] as const;
+// The change-pipeline records — see `~/config/change-entities`.
+export const ATTACHMENT_ENTITY_TYPES = CHANGE_ENTITY_TYPES;
 export type AttachmentEntityType = (typeof ATTACHMENT_ENTITY_TYPES)[number];
 
 function isAttachmentEntityType(s: string): s is AttachmentEntityType {
@@ -258,10 +254,14 @@ export const deleteAttachment = createServerFn({ method: "POST" })
     const isUploader = row.uploadedById === actor.id;
     const isAdmin = hasAtLeastRole(actor.role, "ADMINISTRATOR");
     if (!isUploader && !isAdmin) {
-      throw new Error("Only the uploader or an administrator can delete this attachment.");
+      throw new Error(
+        "Only the uploader or an administrator can delete this attachment.",
+      );
     }
     if (!isAttachmentEntityType(row.entityType)) {
-      throw new Error(`Unknown entity type on attachment row: ${row.entityType}.`);
+      throw new Error(
+        `Unknown entity type on attachment row: ${row.entityType}.`,
+      );
     }
     await prisma.$transaction(async (tx) => {
       await tx.attachment.delete({ where: { id: row.id } });
@@ -283,4 +283,3 @@ export const deleteAttachment = createServerFn({ method: "POST" })
     await deleteAttachmentFile(row.storageKey);
     return { ok: true };
   });
-

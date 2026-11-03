@@ -1,8 +1,5 @@
-import type {
-  FcoOriginType,
-  FcoPriority,
-  FcoStatus,
-} from "./fcoLog";
+import { PRIORITY_LABELS } from "~/config/entity-enums";
+import type { FcoOriginType, FcoPriority, FcoStatus } from "./fcoLog";
 
 /**
  * Display labels for `FieldChangeOrder` enum values. Pure data, safe for both
@@ -22,12 +19,8 @@ export const FCO_STATUS_LABELS: Record<FcoStatus, string> = {
   VOID: "Void",
 };
 
-export const FCO_PRIORITY_LABELS: Record<FcoPriority, string> = {
-  LOW: "Low",
-  NORMAL: "Normal",
-  HIGH: "High",
-  URGENT: "Urgent",
-};
+/** The shared priority scale's labels — see `~/config/entity-enums`. */
+export const FCO_PRIORITY_LABELS: Record<FcoPriority, string> = PRIORITY_LABELS;
 
 export const FCO_ORIGIN_LABELS: Record<FcoOriginType, string> = {
   FIELD_CONDITION: "Field Condition",

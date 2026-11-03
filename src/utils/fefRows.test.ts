@@ -40,7 +40,8 @@ vi.mock("@tanstack/react-start", () => ({
         return builder;
       },
       handler(h: (args: { data: unknown }) => unknown) {
-        return async (args?: { data: unknown }) => h({ data: validate(args?.data) });
+        return async (args?: { data: unknown }) =>
+          h({ data: validate(args?.data) });
       },
     };
     return builder;
@@ -88,7 +89,7 @@ describe("saveFefRows — emptying a populated sheet", () => {
       expect(prismaMock.fefRow.deleteMany).not.toHaveBeenCalled();
       // Hands back what is on disk so the caller's cache re-syncs to reality
       // rather than to its own blank slate.
-      expect(returned).toHaveLength(120);
+      expect(returned.rows).toHaveLength(120);
     });
   });
 
@@ -110,7 +111,7 @@ describe("saveFefRows — emptying a populated sheet", () => {
     expect(prismaMock.fefRow.deleteMany).toHaveBeenCalledWith({
       where: { versionId: 7, discipline: "steel", section: "TAKE_OFF" },
     });
-    expect(returned).toEqual([]);
+    expect(returned.rows).toEqual([]);
   });
 
   it("does not need the flag when the sheet is already empty", async () => {
@@ -125,7 +126,10 @@ describe("saveFefRows — emptying a populated sheet", () => {
     // A grid holding only its trailing blank buffer is an empty sheet as far
     // as persistence is concerned — the guard has to cover that shape too.
     await save({
-      rows: [makeFefRow({ id: "__fe-blank-1" }), makeFefRow({ id: "__fe-blank-2" })],
+      rows: [
+        makeFefRow({ id: "__fe-blank-1" }),
+        makeFefRow({ id: "__fe-blank-2" }),
+      ],
       allowClear: false,
     });
     expect(prismaMock.fefRow.deleteMany).not.toHaveBeenCalled();

@@ -1,5 +1,5 @@
 import type { PrismaClient } from "../generated/prisma/client";
-import type { CurrentUser } from "./users";
+import type { CurrentUser } from "~/lib/roles";
 import type { Transition } from "./workflow";
 import { availableTransitions } from "./workflow";
 import { diffFields, recordUpdate } from "./audit.server";
@@ -18,10 +18,7 @@ import type { PendingNotificationEmail } from "./notification-email.server";
  * the surrounding transaction.
  */
 
-type WorkflowTx = Pick<
-  PrismaClient,
-  "auditEvent" | "notification" | "user"
->;
+type WorkflowTx = Pick<PrismaClient, "auditEvent" | "notification" | "user">;
 
 type RowMinimum = {
   id: number;

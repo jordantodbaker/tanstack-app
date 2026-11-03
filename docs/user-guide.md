@@ -278,6 +278,14 @@ normally. You don't have to type the link: the detail panel's **Copy link**
 button (beside its close button) puts the selected row's link on the
 clipboard, pointed at the page you are on.
 
+**Full screen.** The toolbar's **Full screen** button opens the same tree in a
+new browser tab with none of the app's navigation around it — no header, no
+sidebar — so the whole window is the tree. It carries the search box, every
+filter, **Hide ungranted parents** and the selected row with it, and the tab's
+own toolbar works as usual from there. Close the tab to come back; the page you
+left is as you left it. The tab's address can be bookmarked or shared like a
+`?code=` link.
+
 **Export Excel** downloads what you are looking at — the rows left by the search
 box and the filters, and nothing else. The sheet opens with a labeled block
 giving the **project number** and **project title**, what the rows cover, the

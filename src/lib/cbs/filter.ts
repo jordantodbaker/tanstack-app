@@ -132,8 +132,6 @@ export type CbsRowTypeFilter = (typeof CBS_ROW_TYPE_FILTERS)[number]["key"];
  * have no Cost Classification, the division roots among them.
  */
 export const CBS_BLANK_VALUE = "";
-/** The older name for the same thing. */
-export const CBS_NO_CLASSIFICATION = CBS_BLANK_VALUE;
 
 /**
  * One picker entry: a value and how many rows carry it. `prefix` is the
@@ -252,6 +250,20 @@ export type CbsRowFilter = {
 } & Record<CbsValueFilterKey, readonly string[]> &
   Record<CbsCostTypeKey, boolean> &
   Record<CbsStatusKey, boolean>;
+
+/**
+ * A toolbar's filters as it holds them, before `useCbsRowFilter` folds them
+ * into a `CbsRowFilter`: the search box as typed, each picker's ticks, the
+ * cost-type and status toggles, the Row Type choice. What a full-screen tab
+ * is opened with, so it starts where the page left off.
+ */
+export type CbsRowFilterState = {
+  query: string;
+  rowType: CbsRowTypeFilter;
+  values: Record<CbsValueFilterKey, string[]>;
+  costTypes: Record<CbsCostTypeKey, boolean>;
+  statuses: Record<CbsStatusKey, boolean>;
+};
 
 /** An all-off cost-type selection — the state both tree views start in. */
 export function cbsNoCostTypes(): Record<CbsCostTypeKey, boolean> {

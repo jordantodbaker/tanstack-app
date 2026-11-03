@@ -1,3 +1,4 @@
+import { CommaListInput } from "~/components/EntityDialog/EntityFields";
 import React from "react";
 import { Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -24,10 +25,7 @@ import {
   type FcoOriginType,
   type FcoPriority,
 } from "~/utils/fcoLog";
-import {
-  FCO_ORIGIN_LABELS,
-  FCO_PRIORITY_LABELS,
-} from "~/utils/fcoLogLabels";
+import { FCO_ORIGIN_LABELS, FCO_PRIORITY_LABELS } from "~/utils/fcoLogLabels";
 import type {
   FcoTemplateAdminItem,
   UpsertFcoTemplateInput,
@@ -106,24 +104,6 @@ export function FcoTemplateDialog({
         `Delete template "${t.name}"? Existing FCOs created from this template are unaffected. This cannot be undone.`,
     });
 
-
-  // Comma-separated text fields for the array columns. Commit on blur; mirrors
-  // the FcoDialog pattern.
-  const [drawingRefsText, setDrawingRefsText] = React.useState("");
-  const [rfiNumbersText, setRfiNumbersText] = React.useState("");
-  React.useEffect(() => {
-    setDrawingRefsText(form.drawingRefs.join(", "));
-    setRfiNumbersText(form.rfiNumbers.join(", "));
-  }, [form.drawingRefs, form.rfiNumbers]);
-
-  function commitList(raw: string, key: "drawingRefs" | "rfiNumbers") {
-    const items = raw
-      .split(/[,\n]/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    update(key, items);
-  }
-
   const canSave = !busy && form.name.trim() !== "";
 
   return (
@@ -137,8 +117,8 @@ export function FcoTemplateDialog({
                 {initial ? "Edit FCO Template" : "New FCO Template"}
               </h2>
               <p className="text-xs text-slate-500">
-                Reusable scaffold for repeat field changes. The FCO dialog
-                shows these in a "Start from template" picker.
+                Reusable scaffold for repeat field changes. The FCO dialog shows
+                these in a "Start from template" picker.
               </p>
             </div>
             {initial && onDelete && (
@@ -280,19 +260,17 @@ export function FcoTemplateDialog({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <Labeled label="Drawing Refs (comma-separated)">
-                <Input
-                  value={drawingRefsText}
+                <CommaListInput
+                  value={form.drawingRefs}
+                  onChange={(items) => update("drawingRefs", items)}
                   placeholder="DWG-101, DWG-204"
-                  onChange={(e) => setDrawingRefsText(e.target.value)}
-                  onBlur={() => commitList(drawingRefsText, "drawingRefs")}
                 />
               </Labeled>
               <Labeled label="RFI Numbers (comma-separated)">
-                <Input
-                  value={rfiNumbersText}
+                <CommaListInput
+                  value={form.rfiNumbers}
+                  onChange={(items) => update("rfiNumbers", items)}
                   placeholder="RFI-042"
-                  onChange={(e) => setRfiNumbersText(e.target.value)}
-                  onBlur={() => commitList(rfiNumbersText, "rfiNumbers")}
                 />
               </Labeled>
             </div>
@@ -316,16 +294,17 @@ export function FcoTemplateDialog({
                 <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer select-none">
                   <Checkbox
                     checked={form.workStopped}
-                    onCheckedChange={(v) =>
-                      update("workStopped", v === true)
-                    }
+                    onCheckedChange={(v) => update("workStopped", v === true)}
                   />
                   Work stopped (default)
                 </label>
               </div>
             </div>
 
-            <Labeled label="External link" help="Optional — Procore / SharePoint URL.">
+            <Labeled
+              label="External link"
+              help="Optional — Procore / SharePoint URL."
+            >
               <Input
                 value={form.photosUrl}
                 placeholder="https://..."

@@ -76,6 +76,10 @@ vi.mock("~/lib/logger", () => ({
   createDebug: () => vi.fn(),
 }));
 
+vi.mock("./fef-invalid.server", () => ({
+  loadInvalidByDiscipline: vi.fn(async () => ({})),
+}));
+
 import { FEF_UPSERT_BATCH_ROWS, saveFefRows } from "./fefRows";
 
 const BASE = {
@@ -130,7 +134,7 @@ describe("the unconfirmed-wipe guard", () => {
     // Nothing deleted, and the caller gets the server's rows back so its cache
     // re-syncs to reality instead of to the blank it just sent.
     expect(deleteMany).not.toHaveBeenCalled();
-    expect(out.map((r) => r.id)).toEqual(["611-A", "611-B"]);
+    expect(out.rows.map((r) => r.id)).toEqual(["611-A", "611-B"]);
   });
 
   it("deletes the sheet when the client confirms with allowClear", async () => {
@@ -141,7 +145,7 @@ describe("the unconfirmed-wipe guard", () => {
     expect(deleteMany).toHaveBeenCalledWith({
       where: { versionId: 1, discipline: "piping", section: "TAKE_OFF" },
     });
-    expect(out).toEqual([]);
+    expect(out).toEqual({ rows: [], invalidByDiscipline: {} });
   });
 
   it("is a harmless no-op when the sheet is already empty", async () => {
@@ -151,7 +155,7 @@ describe("the unconfirmed-wipe guard", () => {
 
     // No existing rows means there is nothing to protect — the delete runs but
     // removes nothing, and no refusal is needed.
-    expect(out).toEqual([]);
+    expect(out).toEqual({ rows: [], invalidByDiscipline: {} });
   });
 
   it("never reaches the guard when the payload has real rows", async () => {
@@ -217,7 +221,7 @@ describe("client id ↔ cbsCode round-trip", () => {
 
     const out = await save([filled("611-A", "pump")]);
 
-    expect(out.map((r) => r.id)).toEqual([
+    expect(out.rows.map((r) => r.id)).toEqual([
       "__fe-blank-loaded-42",
       "__fe-blank-loaded-43",
     ]);
@@ -228,7 +232,7 @@ describe("client id ↔ cbsCode round-trip", () => {
 
     const out = await save([filled("611-A", "pump")]);
 
-    expect(out[0].id).toBe("611-A");
+    expect(out.rows[0].id).toBe("611-A");
   });
 
   it("does not leak the DB primary key or position into the client row", async () => {
@@ -236,8 +240,8 @@ describe("client id ↔ cbsCode round-trip", () => {
 
     const out = await save([filled("611-A", "pump")]);
 
-    expect(out[0]).not.toHaveProperty("position");
-    expect(out[0].id).toBe("611-A");
+    expect(out.rows[0]).not.toHaveProperty("position");
+    expect(out.rows[0].id).toBe("611-A");
   });
 });
 

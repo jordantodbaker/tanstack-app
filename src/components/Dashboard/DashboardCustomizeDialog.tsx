@@ -1,3 +1,4 @@
+import { toggleInSet } from "~/lib/utils";
 import * as React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -66,9 +67,7 @@ export function DashboardCustomizeDialog({
   );
   React.useEffect(() => {
     if (open) {
-      setDraftOrder(
-        orderedWidgets(currentPrefs.widgetOrder).map((w) => w.id),
-      );
+      setDraftOrder(orderedWidgets(currentPrefs.widgetOrder).map((w) => w.id));
       setHidden(new Set(currentPrefs.hiddenWidgets));
     }
   }, [open, currentPrefs.hiddenWidgets, currentPrefs.widgetOrder]);
@@ -111,12 +110,7 @@ export function DashboardCustomizeDialog({
   }
 
   const toggleVisible = (id: string) => {
-    setHidden((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setHidden((prev) => toggleInSet(prev, id));
   };
 
   function resetDefaults() {
@@ -292,11 +286,7 @@ function SortableRow({
             : "text-slate-400 hover:bg-slate-100"
         }`}
       >
-        {visible ? (
-          <Eye className="size-4" />
-        ) : (
-          <EyeOff className="size-4" />
-        )}
+        {visible ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
       </button>
     </li>
   );

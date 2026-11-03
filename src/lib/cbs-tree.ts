@@ -2,7 +2,7 @@
  * The CBS hierarchy — public surface.
  *
  * This was one 916-line module covering seven unrelated jobs. It is now a
- * barrel over `cbs/`, so the 24 call sites are unchanged and the split is an
+ * barrel over `cbs/`, so its call sites are unchanged and the split is an
  * implementation detail:
  *
  *   cbs/types      the row and node shapes, and the display code's segments
@@ -11,7 +11,6 @@
  *   cbs/selection  tri-state checkbox arithmetic for the Setup editor
  *   cbs/filter     what a view filters BY, asked one row at a time
  *   cbs/prune      applying a filter to a built tree
- *   cbs/badges     the markers shown beside a row's name
  *   cbs/expansion  which nodes to open
  *
  * Re-exported by name rather than with `export *`: the group shares a few
@@ -67,7 +66,6 @@ export {
   cbsCriteriaFor,
   cbsItemMatches,
   type CbsCriteria,
-  CBS_NO_CLASSIFICATION,
   CBS_BLANK_VALUE,
   CBS_ROW_TYPE_FILTERS,
   cbsMatchesRowType,
@@ -82,6 +80,7 @@ export {
   type CbsCostType,
   type CbsCostTypeKey,
   type CbsRowFilter,
+  type CbsRowFilterState,
   type CbsRowTypeFilter,
   type CbsStatusKey,
 } from "./cbs/filter";

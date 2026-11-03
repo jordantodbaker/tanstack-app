@@ -47,6 +47,7 @@ import { GlobalSearch } from "~/components/GlobalSearch";
 import { TopNav } from "~/components/TopNav";
 import { AppSwitcher } from "~/components/AppSwitcher";
 import { appForPath } from "~/config/apps";
+import { isCbsFullscreenPath } from "~/lib/cbs-fullscreen";
 import { HelpButton } from "~/components/Help/HelpButton";
 
 export const Route = createRootRouteWithContext<{
@@ -190,6 +191,13 @@ function SignedInLayout({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   const closeSidebar = React.useCallback(() => setMobileSidebarOpen(false), []);
+
+  // The full-screen CBS tab: no header, no sidebar, no project guard — the
+  // route is the whole window and gates itself. After every hook above, so
+  // the hook order is the same on both paths.
+  if (isCbsFullscreenPath(pathname)) {
+    return <main className="min-h-screen bg-slate-50">{children}</main>;
+  }
 
   return (
     <>

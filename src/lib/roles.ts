@@ -1,0 +1,89 @@
+/**
+ * Roles and the checks on them. Pure — no server functions, no React Query —
+ * so the workflow tables, the help guide and the dialogs can read a role
+ * without pulling in `utils/users`, whose server functions drag the whole
+ * entity graph behind them. `utils/users` re-exports everything here, so
+ * either import works; new code should take this one.
+ */
+
+/**
+ * Privilege levels, ordered low → high. Extensible: add a value to the
+ * `UserRole` enum in schema.prisma and a matching entry in ROLE_RANK.
+ *
+ * APPROVER sits between USER and ADMINISTRATOR — it can action approval
+ * workflow transitions (see workflow.ts) but has no admin access.
+ */
+export type UserRole = "USER" | "APPROVER" | "ADMINISTRATOR";
+
+/**
+ * Privilege ranking. Higher number = more privilege. To add another
+ * intermediate level, add the enum value in schema.prisma and slot a rank
+ * between the neighbors (renumbering as needed).
+ */
+export const ROLE_RANK: Record<UserRole, number> = {
+  USER: 0,
+  APPROVER: 1,
+  ADMINISTRATOR: 2,
+};
+
+/** True when `role` holds at least `minimum` privilege. */
+export function hasAtLeastRole(role: UserRole, minimum: UserRole): boolean {
+  return ROLE_RANK[role] >= ROLE_RANK[minimum];
+}
+
+/**
+ * Throws "Forbidden: <action> requires <ROLE> privilege" unless `actor` holds
+ * at least `minimum`. `action` reads as a gerund: "freezing rates".
+ */
+export function assertRole(
+  actor: { role: UserRole },
+  minimum: UserRole,
+  action: string,
+): void {
+  if (!hasAtLeastRole(actor.role, minimum)) {
+    throw new Error(`Forbidden: ${action} requires ${minimum} privilege`);
+  }
+}
+
+/**
+ * Guards the update branch of a project-scoped upsert against a cross-project
+ * move. The generic upsert may edit a record in place but must never relocate
+ * it to a different project — callers verify access to the *existing* project
+ * separately (see `assertProjectAccess`); this rejects the reassignment itself
+ * so a confused (or malicious) client can't rewrite the row against the wrong
+ * project. `label` names the entity in the error, e.g. "RFI" or "change item".
+ */
+export function assertProjectUnchanged(
+  label: string,
+  incomingProjectId: number,
+  existingProjectId: number,
+): void {
+  if (incomingProjectId !== existingProjectId) {
+    throw new Error(`Cannot move this ${label} to a different project.`);
+  }
+}
+
+/** Human-readable labels. Add an entry when adding a new UserRole. */
+export const ROLE_LABELS: Record<UserRole, string> = {
+  USER: "User",
+  APPROVER: "Approver",
+  ADMINISTRATOR: "Administrator",
+};
+
+export type CurrentUser = {
+  id: number;
+  clerkId: string;
+  email: string;
+  role: UserRole;
+};
+
+/** A synced user as shown in the admin Users table. */
+export type AdminUser = {
+  id: number;
+  email: string;
+  role: UserRole;
+  /** Projects this user is assigned to. Admins implicitly access every
+   *  project regardless of this list. */
+  projects: { id: number; displayId: string; name: string }[];
+  createdAt: string;
+};

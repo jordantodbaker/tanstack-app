@@ -1,5 +1,5 @@
-import { availableTransitions, type Transition } from "~/utils/workflow";
-import type { UserRole } from "~/utils/users";
+import { availableTransitions, type Transition } from "~/lib/workflow";
+import type { UserRole } from "~/lib/roles";
 
 /**
  * Client-side bulk-action helpers for the log views. Bulk operations reuse the

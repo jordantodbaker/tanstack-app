@@ -8,7 +8,7 @@ import {
   type FlatSection,
 } from "~/lib/help-visibility";
 import { useCurrentUser } from "~/lib/use-current-user";
-import type { UserRole } from "~/utils/users";
+import type { UserRole } from "~/lib/roles";
 
 /**
  * Shared guide state for both entry points — the header dialog and the `/help`

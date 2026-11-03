@@ -1,5 +1,5 @@
 import type { Prisma } from "../generated/prisma/client";
-import type { CurrentUser } from "./users";
+import type { CurrentUser } from "~/lib/roles";
 import { allocateEntityNumber } from "./entityNumbers.server";
 import { recordCreate } from "./audit.server";
 

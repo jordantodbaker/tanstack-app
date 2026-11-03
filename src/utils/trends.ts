@@ -1,3 +1,12 @@
+import type { z } from "zod";
+import type { UpsertTrendSchema } from "~/lib/validators";
+import {
+  PRIORITIES,
+  TREND_STATUSES,
+  type Priority,
+  type TrendStatus,
+} from "~/config/entity-enums";
+import { formatRecordRef, recordNumber } from "~/config/change-entities";
 import { type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
@@ -39,20 +48,16 @@ import { TREND_STATUS_LABELS } from "./trendLabels";
  * trend in the same transaction so the link is always consistent.
  */
 
-export const TREND_STATUSES = [
-  "IDENTIFIED",
-  "PROBABLE",
-  "CONVERTED",
-  "REJECTED",
-  "VOID",
-] as const;
-export type TrendStatus = (typeof TREND_STATUSES)[number];
-
-export const TREND_PRIORITIES = ["LOW", "NORMAL", "HIGH", "URGENT"] as const;
-export type TrendPriority = (typeof TREND_PRIORITIES)[number];
+// The enums live in `~/config/entity-enums`, shared with the validators;
+// re-exported here so callers keep reading them from the entity module. The
+// priority scale is the one every record shares.
+export { TREND_STATUSES, type TrendStatus };
+export const TREND_PRIORITIES = PRIORITIES;
+export type TrendPriority = Priority;
 
 /** Trends still affecting the forecast — drive AFC math and stats cards. */
-export const TREND_ACTIVE_STATUSES: TrendStatus[] = ["IDENTIFIED", "PROBABLE"];
+import { TREND_ACTIVE_STATUSES } from "~/config/entity-enums";
+export { TREND_ACTIVE_STATUSES };
 
 /**
  * Slim shape used by the list-page table and the dashboard rollups. Drops
@@ -192,29 +197,8 @@ export const fetchTrend = createServerFn({ method: "GET" })
 export const trendQueryOptions = (id: number | null) =>
   recordQueryOptions(qk.trends.single(id), id, fetchTrend);
 
-export type UpsertTrendInput = {
-  id?: number;
-  projectId: number;
-  trendNumber: string;
-  title: string;
-  description: string;
-  priority: TrendPriority;
-  discipline: string;
-  cbsCodes: string[];
-  locationArea: string;
-  probability: number;
-  costLow: number;
-  costLikely: number;
-  costHigh: number;
-  scheduleDaysImpact: number;
-  reasonNarrative: string;
-  notes: string;
-  identifiedAt: string;
-  neededBy: string | null;
-  linkedRfiId: number | null;
-  linkedFcoId: number | null;
-  initiatedBy: string;
-};
+/** What the dialog submits, as the validator parses it. */
+export type UpsertTrendInput = z.infer<typeof UpsertTrendSchema>;
 
 const TREND_AUDIT_FIELDS = [
   "trendNumber",
@@ -241,12 +225,13 @@ const TREND_AUDIT_FIELDS = [
   "initiatedBy",
 ] as const satisfies readonly (keyof TrendScalarRow)[];
 
-function clampProbability(p: number): number {
-  if (!Number.isFinite(p)) return 0;
-  if (p < 0) return 0;
-  if (p > 1) return 1;
-  return p;
-}
+// The forecast rule is pure and lives in `~/lib/trend-forecast`; re-exported
+// here so callers keep reading it from the entity module.
+import {
+  clampProbability,
+  trendForecastContribution,
+} from "~/lib/trend-forecast";
+export { trendForecastContribution };
 
 export const upsertTrend = createServerFn({ method: "POST" })
   .inputValidator(parseUpsertTrend)
@@ -328,7 +313,7 @@ export const transitionTrend = createServerFn({ method: "POST" })
         statusLabels: TREND_STATUS_LABELS,
         statusesNeedingReview: TREND_STATUSES_NEEDING_REVIEW,
         auditFields: ["status", "closedAt"],
-        buildTitle: (r) => `${r.trendNumber || `Trend #${r.id}`} — ${r.title}`,
+        buildTitle: (r) => formatRecordRef("Trend", r),
         // Stamp closedAt when landing in a terminal state so list views can
         // show "closed on" without a separate UPDATE round-trip.
         extraUpdateData: (transition) =>
@@ -398,7 +383,7 @@ export const promoteTrendToCvr = createServerFn({ method: "POST" })
         riskLevel: "MEDIUM",
         reasonCode: "",
         dueDate: trend.neededBy,
-        notes: `Promoted from Trend ${trend.trendNumber || `#${trend.id}`}`,
+        notes: `Promoted from ${recordNumber("Trend", trend)}`,
         area: trend.locationArea,
       });
       // Convert only if still unconverted — see `claimPromotion`.
@@ -450,30 +435,6 @@ export const deleteTrend = createServerFn({ method: "POST" })
       pickDelegate: (tx) => tx.trend,
     }),
   );
-
-/**
- * The AFC contribution from a single trend. Pure so reporting + dashboard
- * can both call it without duplicating the rule. Only IDENTIFIED + PROBABLE
- * trends contribute; CONVERTED ones are already in `currentBudget` via the
- * linked CVR, and REJECTED/VOID drop out of the forecast entirely.
- *
- * Lives in this client-safe module so the dialog can render a live preview
- * without pulling in any server-only code. The DB-fed bucketed roll-up
- * (`loadTrendForecastByBucket`) lives in `reporting.ts` because mixing
- * prisma calls into a module imported by the client breaks tree-shaking —
- * every other prisma access in this file is wrapped in `createServerFn`
- * so the client bundle stays clean.
- */
-export function trendForecastContribution(trend: {
-  status: TrendStatus;
-  probability: number;
-  costLikely: number;
-}): number {
-  if (!TREND_ACTIVE_STATUSES.includes(trend.status)) return 0;
-  const p = clampProbability(trend.probability);
-  const cost = Number.isFinite(trend.costLikely) ? trend.costLikely : 0;
-  return p * cost;
-}
 
 /**
  * Cache-bust set fired after every Trend mutation. Trends drive AFC, so the

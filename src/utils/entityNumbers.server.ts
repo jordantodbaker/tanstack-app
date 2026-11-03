@@ -1,3 +1,8 @@
+import {
+  CHANGE_ENTITIES,
+  CHANGE_ENTITY_TYPES,
+  type ChangeEntityType,
+} from "~/config/change-entities";
 import type { Prisma } from "../generated/prisma/client";
 
 /**
@@ -12,13 +17,7 @@ import type { Prisma } from "../generated/prisma/client";
 
 /** Entity types that get an auto-generated, per-project sequential number. The
  *  string matches the `entityType` discriminator used by the audit log. */
-export type NumberedEntityType =
-  | "ChangeLog"
-  | "FieldChangeOrder"
-  | "Rfi"
-  | "Pco"
-  | "Trend"
-  | "EstimateVersion";
+export type NumberedEntityType = ChangeEntityType | "EstimateVersion";
 
 /**
  * Default prefix + zero-pad width per entity, used to seed a project's
@@ -35,11 +34,10 @@ export const NUMBER_DEFAULTS: Record<
   NumberedEntityType,
   { prefix: string; padWidth: number }
 > = {
-  ChangeLog: { prefix: "CVR-", padWidth: 3 },
-  FieldChangeOrder: { prefix: "FCO-", padWidth: 3 },
-  Rfi: { prefix: "RFI-", padWidth: 3 },
-  Pco: { prefix: "PCO-", padWidth: 3 },
-  Trend: { prefix: "TR-", padWidth: 3 },
+  // The five records take theirs from the registry.
+  ...(Object.fromEntries(
+    CHANGE_ENTITY_TYPES.map((t) => [t, CHANGE_ENTITIES[t].number]),
+  ) as Record<ChangeEntityType, { prefix: string; padWidth: number }>),
   // Estimate versions use the raw integer `lastValue` (see
   // `allocateEntityNumberValue`); prefix/pad are only used if a formatted
   // string is ever needed ("v1", "v2", …).

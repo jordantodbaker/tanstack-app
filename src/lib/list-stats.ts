@@ -1,13 +1,17 @@
 import { isPast } from "./dates";
-import { CVR_OPEN_STATUSES, type ChangeStatus } from "~/utils/changelog";
-import { FCO_OPEN_STATUSES, type FcoStatus } from "~/utils/fcoLog";
-import { RFI_OPEN_STATUSES, type RfiStatus } from "~/utils/rfis";
-import { PCO_OPEN_STATUSES, type PcoStatus } from "~/utils/pco";
 import {
+  CVR_OPEN_STATUSES,
+  FCO_OPEN_STATUSES,
+  PCO_OPEN_STATUSES,
+  RFI_OPEN_STATUSES,
   TREND_ACTIVE_STATUSES,
-  trendForecastContribution,
+  type ChangeStatus,
+  type FcoStatus,
+  type PcoStatus,
+  type RfiStatus,
   type TrendStatus,
-} from "~/utils/trends";
+} from "~/config/entity-enums";
+import { trendForecastContribution } from "~/lib/trend-forecast";
 
 /**
  * Stat-card roll-ups for the five change-pipeline list pages.

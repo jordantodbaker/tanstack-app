@@ -1,3 +1,4 @@
+import { getRequest } from "@tanstack/react-start/server";
 import { auth, clerkClient } from "@clerk/tanstack-react-start/server";
 import { prisma } from "../server/db";
 import {
@@ -71,6 +72,37 @@ function isBootstrapAdmin(email: string): boolean {
  * existing row to the new id repairs it on the next sign-in instead.
  */
 export async function resolveCurrentUser(): Promise<CurrentUser | null> {
+  // Once per request. Every guard resolves the user from scratch, and one
+  // SSR page load runs a dozen guarded server functions, so a discipline page
+  // was spending more queries on "who is this" than on its data. The memo is
+  // the promise, so concurrent callers in a `Promise.all` share one lookup,
+  // and it lives on the Request object, so it cannot outlive the request —
+  // a role or project revocation is seen by the very next one. Outside a
+  // request (tests, scripts, the cron) there is nothing to key on, and the
+  // lookup simply runs.
+  const request = currentRequest();
+  if (!request) return loadCurrentUser();
+  let pending = USER_BY_REQUEST.get(request);
+  if (!pending) {
+    pending = loadCurrentUser();
+    USER_BY_REQUEST.set(request, pending);
+  }
+  return pending;
+}
+
+const USER_BY_REQUEST = new WeakMap<Request, Promise<CurrentUser | null>>();
+const ACCESS_BY_REQUEST = new WeakMap<Request, Map<string, Promise<void>>>();
+
+/** The current request, or null when there is no request context. */
+function currentRequest(): Request | null {
+  try {
+    return getRequest() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function loadCurrentUser(): Promise<CurrentUser | null> {
   const { userId } = await auth();
   if (!userId) return null;
 
@@ -230,8 +262,30 @@ export async function assertProjectAccess(
   projectId: number,
 ): Promise<void> {
   if (hasAtLeastRole(actor.role, "ADMINISTRATOR")) return;
+  // Once per (user, project) per request, for the same reason as
+  // `resolveCurrentUser`: a page load checks the same membership many times.
+  const request = currentRequest();
+  if (!request) return checkProjectMembership(actor.id, projectId);
+  let checks = ACCESS_BY_REQUEST.get(request);
+  if (!checks) {
+    checks = new Map();
+    ACCESS_BY_REQUEST.set(request, checks);
+  }
+  const key = `${actor.id}:${projectId}`;
+  let pending = checks.get(key);
+  if (!pending) {
+    pending = checkProjectMembership(actor.id, projectId);
+    checks.set(key, pending);
+  }
+  return pending;
+}
+
+async function checkProjectMembership(
+  userId: number,
+  projectId: number,
+): Promise<void> {
   const link = await prisma.user.findFirst({
-    where: { id: actor.id, projects: { some: { id: projectId } } },
+    where: { id: userId, projects: { some: { id: projectId } } },
     select: { id: true },
   });
   if (!link) {

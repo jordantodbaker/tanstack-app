@@ -1,4 +1,11 @@
 import { prisma } from "../server/db";
+import {
+  CHANGE_ENTITIES,
+  CHANGE_ENTITY_TYPES,
+  formatRecordRef,
+  isChangeEntityType,
+  type ChangeEntityType,
+} from "~/config/change-entities";
 
 /**
  * SERVER-ONLY. Single source of truth for "look up the parent record" of a
@@ -13,26 +20,17 @@ import { prisma } from "../server/db";
  * defaulted to the RFI table for Trend/PCO.
  *
  * Every caller now goes through `lookupParentRecord` (or
- * `assertParentInProject` over it), which default-DENIES
- * any unknown entity type. Adding a new pollable entity (the next RFI/PCO/
- * Trend-shaped record) requires exactly one switch arm here, and the
- * downstream callers get correct behavior for free.
+ * `assertParentInProject` over it), which default-DENIES any unknown entity
+ * type. The record types are `CHANGE_ENTITIES`; the one thing this module
+ * adds is which Prisma delegate each one lives in.
  */
 
-/** Every entity type that can host child records (attachments, comments).
- *  Adding to this list requires a matching switch arm in
- *  `lookupParentRecord` below — the type narrowing forces it. */
-export const PARENTABLE_ENTITY_TYPES = [
-  "ChangeLog",
-  "FieldChangeOrder",
-  "Rfi",
-  "Trend",
-  "Pco",
-] as const;
-export type ParentableEntityType = (typeof PARENTABLE_ENTITY_TYPES)[number];
+/** Every entity type that can host child records (attachments, comments). */
+export const PARENTABLE_ENTITY_TYPES = CHANGE_ENTITY_TYPES;
+export type ParentableEntityType = ChangeEntityType;
 
 export function isParentableEntityType(s: string): s is ParentableEntityType {
-  return (PARENTABLE_ENTITY_TYPES as readonly string[]).includes(s);
+  return isChangeEntityType(s);
 }
 
 /**
@@ -50,6 +48,26 @@ export type ParentRecord = {
 };
 
 /**
+ * The delegate each record type lives in. Loosely typed on purpose: the
+ * `select` is built from the registry's column names, which Prisma's
+ * per-model types cannot follow, and the row is read back by those same
+ * names.
+ */
+type ParentDelegate = {
+  findUnique: (args: {
+    where: { id: number };
+    select: Record<string, true>;
+  }) => Promise<Record<string, unknown> | null>;
+};
+const DELEGATES: Record<ChangeEntityType, () => ParentDelegate> = {
+  ChangeLog: () => prisma.changeLog as unknown as ParentDelegate,
+  FieldChangeOrder: () => prisma.fieldChangeOrder as unknown as ParentDelegate,
+  Rfi: () => prisma.rfi as unknown as ParentDelegate,
+  Trend: () => prisma.trend as unknown as ParentDelegate,
+  Pco: () => prisma.pco as unknown as ParentDelegate,
+};
+
+/**
  * Looks up the parent record. Throws when the entity type isn't recognized
  * (default-deny) and when no record exists with that id.
  *
@@ -61,99 +79,29 @@ export async function lookupParentRecord(
   entityType: string,
   entityId: number,
 ): Promise<ParentRecord> {
-  switch (entityType) {
-    case "ChangeLog": {
-      const row = await prisma.changeLog.findUnique({
-        where: { id: entityId },
-        select: {
-          projectId: true,
-          createdById: true,
-          cvrNumber: true,
-          title: true,
-        },
-      });
-      if (!row) throw new Error(`ChangeLog #${entityId} not found.`);
-      return {
-        projectId: row.projectId,
-        originatorId: row.createdById,
-        title: `${row.cvrNumber || `CVR #${entityId}`} — ${row.title}`,
-      };
-    }
-    case "FieldChangeOrder": {
-      const row = await prisma.fieldChangeOrder.findUnique({
-        where: { id: entityId },
-        select: {
-          projectId: true,
-          createdById: true,
-          fcoNumber: true,
-          title: true,
-        },
-      });
-      if (!row) throw new Error(`FieldChangeOrder #${entityId} not found.`);
-      return {
-        projectId: row.projectId,
-        originatorId: row.createdById,
-        title: `${row.fcoNumber || `FCO #${entityId}`} — ${row.title}`,
-      };
-    }
-    case "Rfi": {
-      const row = await prisma.rfi.findUnique({
-        where: { id: entityId },
-        select: {
-          projectId: true,
-          createdById: true,
-          rfiNumber: true,
-          subject: true,
-        },
-      });
-      if (!row) throw new Error(`Rfi #${entityId} not found.`);
-      return {
-        projectId: row.projectId,
-        originatorId: row.createdById,
-        title: `${row.rfiNumber || `RFI #${entityId}`} — ${row.subject}`,
-      };
-    }
-    case "Trend": {
-      const row = await prisma.trend.findUnique({
-        where: { id: entityId },
-        select: {
-          projectId: true,
-          createdById: true,
-          trendNumber: true,
-          title: true,
-        },
-      });
-      if (!row) throw new Error(`Trend #${entityId} not found.`);
-      return {
-        projectId: row.projectId,
-        originatorId: row.createdById,
-        title: `${row.trendNumber || `Trend #${entityId}`} — ${row.title}`,
-      };
-    }
-    case "Pco": {
-      const row = await prisma.pco.findUnique({
-        where: { id: entityId },
-        select: {
-          projectId: true,
-          createdById: true,
-          pcoNumber: true,
-          title: true,
-        },
-      });
-      if (!row) throw new Error(`Pco #${entityId} not found.`);
-      return {
-        projectId: row.projectId,
-        originatorId: row.createdById,
-        title: `${row.pcoNumber || `PCO #${entityId}`} — ${row.title}`,
-      };
-    }
-    default:
-      // Default-DENY. The agent-audit finding that motivated this module: the
-      // previous in-place switches silently fell through to a default
-      // `prisma.fieldChangeOrder` / `prisma.rfi` lookup for unknown types,
-      // which could "pass" an existence check against the wrong table.
-      throw new Error(`Unknown parent entity type: ${entityType}.`);
+  if (!isChangeEntityType(entityType)) {
+    // Default-DENY. The agent-audit finding that motivated this module: the
+    // previous in-place switches silently fell through to a default
+    // `prisma.fieldChangeOrder` / `prisma.rfi` lookup for unknown types,
+    // which could "pass" an existence check against the wrong table.
+    throw new Error(`Unknown parent entity type: ${entityType}.`);
   }
+  const def = CHANGE_ENTITIES[entityType];
+  const row = await DELEGATES[entityType]().findUnique({
+    where: { id: entityId },
+    select: {
+      projectId: true,
+      createdById: true,
+      [def.numberField]: true,
+      [def.titleField]: true,
+    },
+  });
+  if (!row) throw new Error(`${entityType} #${entityId} not found.`);
+  return {
+    projectId: row.projectId as number,
+    originatorId: (row.createdById as number | null) ?? null,
+    title: formatRecordRef(entityType, { ...row, id: entityId }),
+  };
 }
 
 /**

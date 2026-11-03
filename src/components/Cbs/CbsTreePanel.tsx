@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { useViewportFillHeight } from "~/lib/use-viewport-fill-height";
 import { ChevronRight } from "lucide-react";
 import {
   CBS_COST_TYPES,
@@ -245,10 +246,16 @@ export function CbsTreePanel({
   emptyMessage,
   emptyAction,
   scrollToKey = null,
+  fill = false,
   children,
 }: {
   /** The visible rows — see `flattenVisibleCbsNodes`. */
   flat: CbsTreeNode[];
+  /**
+   * Size the list to the bottom of the viewport instead of capping it at a
+   * share of it — the full-screen tab, where the tree is the whole window.
+   */
+  fill?: boolean;
   expanded: Set<string>;
   /** Treat every node as open (while searching). */
   forceOpen: boolean;
@@ -269,6 +276,12 @@ export function CbsTreePanel({
   children?: React.ReactNode;
 }) {
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
+  // Full screen: the list runs to the bottom of the window, less a little
+  // breathing room, and follows the toolbar as it wraps.
+  const fillHeight = useViewportFillHeight(scrollRef, {
+    enabled: fill,
+    reserve: 16,
+  });
   const rowVirtualizer = useVirtualizer({
     count: flat.length,
     getScrollElement: () => scrollRef.current,
@@ -326,7 +339,12 @@ export function CbsTreePanel({
           ref={scrollRef}
           role="tree"
           aria-label="CBS hierarchy"
-          className="max-h-[70vh] overflow-auto"
+          className={fill ? "overflow-auto" : "max-h-[70vh] overflow-auto"}
+          style={
+            fill && fillHeight !== undefined
+              ? { maxHeight: fillHeight }
+              : undefined
+          }
         >
           <div
             style={{

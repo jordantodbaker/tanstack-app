@@ -6,7 +6,6 @@ import {
   CBS_FILTER_NONE,
   type CbsRowFilter,
   cbsAncestorCodes,
-  CBS_NO_CLASSIFICATION,
   cbsValueFilterOptions,
   CBS_BLANK_VALUE,
   cbsFilterIsEmpty,
@@ -1266,13 +1265,13 @@ describe("cost classification filter", () => {
     expect(cbsFilterIsEmpty(by())).toBe(true);
     expect(cbsFilterIsEmpty(by("INDIRECT"))).toBe(false);
     // Picking the blank entry is still a filter.
-    expect(cbsFilterIsEmpty(by(CBS_NO_CLASSIFICATION))).toBe(false);
+    expect(cbsFilterIsEmpty(by(CBS_BLANK_VALUE))).toBe(false);
   });
 
   it("keeps rows of any classification picked", () => {
     const { nodes, matches } = pruneCbsTree(
       buildCbsTree(ROWS),
-      by("INDIRECT", CBS_NO_CLASSIFICATION),
+      by("INDIRECT", CBS_BLANK_VALUE),
     );
     expect(names(nodes)).toEqual(["Civil", "Site"]);
     expect(matches).toBe(2);
@@ -1282,7 +1281,7 @@ describe("cost classification filter", () => {
     expect(cbsValueFilterOptions(ROWS).classifications).toEqual([
       { value: "DIRECT LABOR", count: 2 },
       { value: "INDIRECT", count: 1 },
-      { value: CBS_NO_CLASSIFICATION, count: 1 },
+      { value: CBS_BLANK_VALUE, count: 1 },
     ]);
   });
 
@@ -1309,10 +1308,7 @@ describe("cost classification filter", () => {
   });
 
   it("matches blank cells with the blank entry", () => {
-    const { nodes } = pruneCbsTree(
-      buildCbsTree(ROWS),
-      by(CBS_NO_CLASSIFICATION),
-    );
+    const { nodes } = pruneCbsTree(buildCbsTree(ROWS), by(CBS_BLANK_VALUE));
     expect(names(nodes)).toEqual(["Civil"]);
   });
 

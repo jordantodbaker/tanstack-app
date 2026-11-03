@@ -79,14 +79,36 @@ function MaterialsTotalCostCell({
 
 const fieldEstimateColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("id", { header: "ID", cell: ReadOnlyCell, size: 150 }),
-  columnHelper.accessor("name", { header: "Name", cell: CbsNameCell, size: 300 }),
-  columnHelper.accessor("role", { header: "Role", cell: ReadOnlyCell, size: 180 }),
-  columnHelper.accessor("schedule", { header: "Schedule", cell: ReadOnlyCell, size: 150 }),
+  columnHelper.accessor("name", {
+    header: "Name",
+    cell: CbsNameCell,
+    size: 300,
+  }),
+  columnHelper.accessor("role", {
+    header: "Role",
+    cell: ReadOnlyCell,
+    size: 180,
+  }),
+  columnHelper.accessor("schedule", {
+    header: "Schedule",
+    cell: ReadOnlyCell,
+    size: 150,
+  }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: ReadOnlyCell }),
-  columnHelper.accessor("sub", { header: "Sub", cell: SubCheckboxCell, size: 60 }),
+  columnHelper.accessor("sub", {
+    header: "Sub",
+    cell: SubCheckboxCell,
+    size: 60,
+  }),
   columnHelper.accessor("unit", { header: "Unit", cell: CbsUomCell }),
-  columnHelper.accessor("laborHours", { header: "Labor Hours", cell: ReadOnlyCell }),
-  columnHelper.accessor("laborRate", { header: "Labor Rate ($)", cell: ReadOnlyCell }),
+  columnHelper.accessor("laborHours", {
+    header: "Labor Hours",
+    cell: ReadOnlyCell,
+  }),
+  columnHelper.accessor("laborRate", {
+    header: "Labor Rate ($)",
+    cell: ReadOnlyCell,
+  }),
   columnHelper.display({
     id: "totalCost",
     header: "Total Cost ($)",
@@ -97,34 +119,107 @@ const fieldEstimateColumns: ColumnDef<FefRow, string>[] = [
 ];
 
 const takeOffColumns: ColumnDef<FefRow, string>[] = [
-  columnHelper.accessor("id", { header: "ID", cell: TakeOffIdReadOnlyCell, size: 150 }),
-  columnHelper.accessor("name", { header: "Name", cell: CbsSearchSelectCell, size: 300 }),
-  columnHelper.accessor("description", { header: "Description", cell: EditableCell, size: 250 }),
-  columnHelper.accessor("area", { header: "Area", cell: AreaSelectCell, size: 200 }),
+  columnHelper.accessor("id", {
+    header: "ID",
+    cell: TakeOffIdReadOnlyCell,
+    size: 150,
+  }),
+  columnHelper.accessor("name", {
+    header: "Name",
+    cell: CbsSearchSelectCell,
+    size: 300,
+  }),
+  columnHelper.accessor("description", {
+    header: "Description",
+    cell: EditableCell,
+    size: 250,
+  }),
+  columnHelper.accessor("area", {
+    header: "Area",
+    cell: AreaSelectCell,
+    size: 200,
+  }),
   // ── Reference (universal) ──
-  columnHelper.accessor("projectPhase", { header: "Project Phase", cell: DisplayEditCell, size: 130 }),
-  columnHelper.accessor("drawingNumber", { header: "Drawing Number", cell: DisplayEditCell, size: 140 }),
-  columnHelper.accessor("drawingRev", { header: "Rev#", cell: DisplayEditCell, size: 70 }),
-  columnHelper.accessor("areaName", { header: "Area Name", cell: DisplayEditCell, size: 140 }),
-  columnHelper.accessor("systemName", { header: "System", cell: DisplayEditCell, size: 120 }),
-  columnHelper.accessor("tagNumber", { header: "Tag Number", cell: DisplayEditCell, size: 120 }),
+  columnHelper.accessor("projectPhase", {
+    header: "Project Phase",
+    cell: DisplayEditCell,
+    size: 130,
+  }),
+  columnHelper.accessor("drawingNumber", {
+    header: "Drawing Number",
+    cell: DisplayEditCell,
+    size: 140,
+  }),
+  columnHelper.accessor("drawingRev", {
+    header: "Rev#",
+    cell: DisplayEditCell,
+    size: 70,
+  }),
+  columnHelper.accessor("areaName", {
+    header: "Area Name",
+    cell: DisplayEditCell,
+    size: 140,
+  }),
+  columnHelper.accessor("systemName", {
+    header: "System",
+    cell: DisplayEditCell,
+    size: 120,
+  }),
+  columnHelper.accessor("tagNumber", {
+    header: "Tag Number",
+    cell: DisplayEditCell,
+    size: 120,
+  }),
   // ── Labor Adjustments (universal) ──
-  columnHelper.accessor("feetAboveGrade", { header: "Feet above grade", cell: DisplayEditCell, size: 120 }),
-  columnHelper.accessor("efficAdjust", { header: "Effic Adjust", cell: DisplayEditCell, size: 110 }),
-  columnHelper.accessor("role", { header: "Role", cell: RoleSelectCell, size: 180 }),
-  columnHelper.accessor("crewMixId", { header: "Crew Mix", cell: CrewMixSelectCell, size: 180 }),
-  columnHelper.accessor("schedule", { header: "Schedule", cell: ScheduleSelectCell, size: 150 }),
-  columnHelper.accessor("quantity", { header: "Quantity", cell: LaborFactorQuantityCell }),
-  columnHelper.accessor("sub", { header: "Sub", cell: SubCheckboxCell, size: 60 }),
+  columnHelper.accessor("feetAboveGrade", {
+    header: "Feet above grade",
+    cell: DisplayEditCell,
+    size: 120,
+  }),
+  columnHelper.accessor("efficAdjust", {
+    header: "Effic Adjust",
+    cell: DisplayEditCell,
+    size: 110,
+  }),
+  columnHelper.accessor("role", {
+    header: "Role",
+    cell: RoleSelectCell,
+    size: 180,
+  }),
+  columnHelper.accessor("crewMixId", {
+    header: "Crew Mix",
+    cell: CrewMixSelectCell,
+    size: 180,
+  }),
+  columnHelper.accessor("schedule", {
+    header: "Schedule",
+    cell: ScheduleSelectCell,
+    size: 150,
+  }),
+  columnHelper.accessor("quantity", {
+    header: "Quantity",
+    cell: LaborFactorQuantityCell,
+  }),
+  columnHelper.accessor("sub", {
+    header: "Sub",
+    cell: SubCheckboxCell,
+    size: 60,
+  }),
   columnHelper.accessor("unit", { header: "Unit", cell: ReadOnlyCell }),
-  columnHelper.accessor("laborHours", { header: "Labor Hours", cell: ComputedLaborHoursCell }),
+  columnHelper.accessor("laborHours", {
+    header: "Labor Hours",
+    cell: ComputedLaborHoursCell,
+  }),
   columnHelper.display({
     id: "unitHours",
     header: "Unit Rate (HRS)",
     cell: UnitHoursCell,
     size: 130,
   }),
-  columnHelper.accessor("laborRate", { header: "Labor Rate ($)", cell: ReadOnlyCell }),
+  columnHelper.accessor("laborRate", {
+    header: "Labor Rate ($)",
+    cell: ReadOnlyCell,
+  }),
   columnHelper.display({
     id: "totalCost",
     header: "Total Cost ($)",
@@ -214,9 +309,21 @@ const equipmentMaterialTypeColumn = columnHelper.accessor("materialType", {
 // H / W are plain text; L and "# of Shapes" recompute the derived Quantity
 // (Quantity = # of shapes × L) on edit.
 const steelDimensionColumns: ColumnDef<FefRow, string>[] = [
-  columnHelper.accessor("height", { header: "H", cell: DisplayEditCell, size: 70 }),
-  columnHelper.accessor("width", { header: "W", cell: DisplayEditCell, size: 70 }),
-  columnHelper.accessor("length", { header: "L", cell: SteelLengthCell, size: 70 }),
+  columnHelper.accessor("height", {
+    header: "H",
+    cell: DisplayEditCell,
+    size: 70,
+  }),
+  columnHelper.accessor("width", {
+    header: "W",
+    cell: DisplayEditCell,
+    size: 70,
+  }),
+  columnHelper.accessor("length", {
+    header: "L",
+    cell: SteelLengthCell,
+    size: 70,
+  }),
   columnHelper.accessor("shapeCount", {
     header: "# of Shapes",
     cell: ShapeCountCell,
@@ -264,7 +371,11 @@ function insertColumnsAfter(
 
 const materialsColumns: ColumnDef<FefRow, string>[] = [
   columnHelper.accessor("id", { header: "ID", cell: ReadOnlyCell, size: 150 }),
-  columnHelper.accessor("name", { header: "Name", cell: ReadOnlyCell, size: 300 }),
+  columnHelper.accessor("name", {
+    header: "Name",
+    cell: ReadOnlyCell,
+    size: 300,
+  }),
   columnHelper.accessor("quantity", { header: "Quantity", cell: EditableCell }),
   columnHelper.accessor("unit", { header: "Unit", cell: ReadOnlyCell }),
   columnHelper.accessor("materialCost", {
@@ -284,16 +395,6 @@ const materialsColumns: ColumnDef<FefRow, string>[] = [
     size: 40,
   }),
 ];
-
-export function FefTable({ title }: { title: string }) {
-  const state = useFefTableState();
-  return (
-    <main className="p-3 md:p-4">
-      <h1 className="text-xl md:text-2xl font-bold mb-3 md:mb-4">{title}</h1>
-      <FefTableContent state={state} columns={fieldEstimateColumns} />
-    </main>
-  );
-}
 
 export function DisciplinePage({
   title,

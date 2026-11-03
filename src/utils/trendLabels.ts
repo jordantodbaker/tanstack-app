@@ -1,3 +1,4 @@
+import { PRIORITY_LABELS } from "~/config/entity-enums";
 import type { TrendPriority, TrendStatus } from "./trends";
 
 /**
@@ -14,9 +15,6 @@ export const TREND_STATUS_LABELS: Record<TrendStatus, string> = {
   VOID: "Void",
 };
 
-export const TREND_PRIORITY_LABELS: Record<TrendPriority, string> = {
-  LOW: "Low",
-  NORMAL: "Normal",
-  HIGH: "High",
-  URGENT: "Urgent",
-};
+/** The shared priority scale's labels — see `~/config/entity-enums`. */
+export const TREND_PRIORITY_LABELS: Record<TrendPriority, string> =
+  PRIORITY_LABELS;

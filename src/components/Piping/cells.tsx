@@ -1,67 +1,63 @@
 import React from "react";
-import type { CbsOption, FefRow } from "~/lib/types";
 import {
   CellSelect,
   editableCellClass,
   readOnlyCellClass,
   TextCell,
+  writeCtxOf,
   type CellProps,
 } from "~/lib/table-utils";
+import { deriveRowPatch } from "~/lib/grid-range";
 import { computeBoreSize } from "~/lib/utils";
 import {
   computeTotalCost,
   computeUnitCost,
   computeUnitHours,
 } from "~/lib/fef-derive";
-import {
-  deriveLaborHours,
-  fabricationHint,
-  laborFactorFor,
-  resolveCbsStamp,
-} from "~/lib/piping-derive";
-import { crewMixAverageRate } from "~/lib/crew-mix-rate";
+import { laborFactorFor } from "~/lib/piping-derive";
 import { SearchableSelect } from "~/components/SearchableSelect";
 
-export { ReadOnlyCell, TakeOffIdCell } from "~/lib/table-utils";
+export { ReadOnlyCell } from "~/lib/table-utils";
 // Re-exported so existing importers (and cells.test.ts) keep their import path
 // while the derivation itself lives in the React-free lib module.
 export { deriveLaborHours } from "~/lib/piping-derive";
 
-/** Resolves a composed piping cost code against a cell's CBS option list. */
-const finder = (cbsOptions: CbsOption[]) => (costCode: string) =>
-  cbsOptions.find((o) => o.costCode === costCode);
+/**
+ * The piping take-off's cells.
+ *
+ * Every editor here writes through `deriveRowPatch` — the same step a range
+ * paste runs after parsing its text — so the fields coupled to the one being
+ * edited (the bore size, the labor hours, the metallurgy code, the CBS stamp,
+ * the labor rate) are derived in exactly one place. Until 2026-11-03 each
+ * editor carried its own copy of that derivation, and the two drifted.
+ *
+ * The derivation reads the grid's `WriteCtx` off the table meta (see
+ * `writeCtxOf`), so the lookups are indexed once per grid rather than
+ * scanned per edit.
+ */
 
+/** Store `value` in `colId`, with everything coupled to it. */
+function commit(
+  { row, table }: Pick<CellProps, "row" | "table">,
+  colId: string,
+  value: string,
+): void {
+  const patch = deriveRowPatch(colId, value, row.original, writeCtxOf(table));
+  if (patch) table.options.meta?.updateRow?.(row.index, patch);
+}
+
+/**
+ * Shop / Field. Selecting one re-derives the metallurgy code from the weld
+ * group and re-resolves the CBS item from it, so the sheet never asserts a
+ * code that contradicts the inputs beside it.
+ */
 export function ShopFieldSelectCell({ getValue, row, table }: CellProps) {
   const value = getValue() as string;
   return (
     <select
       className={editableCellClass}
       value={value}
-      onChange={(e) => {
-        const newShopField = e.target.value;
-        const rowData = row.original;
-        const map = table.options.meta?.weldGroupMaterialMap ?? {};
-        const entry = rowData.weldGroupDescription
-          ? map[rowData.weldGroupDescription]
-          : undefined;
-        const metallurgyCode =
-          entry && newShopField
-            ? newShopField === "Shop"
-              ? entry.shopCode
-              : entry.installCode
-            : "";
-        const stamp = resolveCbsStamp(
-          metallurgyCode,
-          rowData.boreSize,
-          finder(table.options.meta?.cbsOptions ?? []),
-          fabricationHint(rowData),
-        );
-        table.options.meta?.updateRow?.(row.index, {
-          shopField: newShopField,
-          metallurgyCode,
-          ...(stamp ?? {}),
-        });
-      }}
+      onChange={(e) => commit({ row, table }, "shopField", e.target.value)}
     >
       <option value="">-- Select --</option>
       <option value="Shop">Shop</option>
@@ -75,11 +71,7 @@ export function ShopFieldSelectCell({ getValue, row, table }: CellProps) {
  * catalog fuses the choice onto a NOMINAL SIZE inside segment 3
  * (640-LB-12ER-00-L, 640-LB-12FB-00-L), so it only sharpens the CBS match on a
  * row that also has a size; without one the row keeps resolving to its bore
- * rollup.
- *
- * Re-resolves the item on change for the same reason Shop/Field does: leaving
- * the old item in place would have the sheet asserting a code that contradicts
- * the inputs shown beside it.
+ * rollup. Re-resolves the item on change for the same reason Shop/Field does.
  */
 export function FabricateErectSelectCell({ getValue, row, table }: CellProps) {
   const value = getValue() as string;
@@ -88,21 +80,7 @@ export function FabricateErectSelectCell({ getValue, row, table }: CellProps) {
       aria-label="Fabricate / Erect"
       className={editableCellClass}
       value={value}
-      onChange={(e) => {
-        const fabricateErect = e.target.value;
-        const rowData = row.original;
-        const next = { ...rowData, fabricateErect };
-        const stamp = resolveCbsStamp(
-          rowData.metallurgyCode,
-          rowData.boreSize,
-          finder(table.options.meta?.cbsOptions ?? []),
-          fabricationHint(next),
-        );
-        table.options.meta?.updateRow?.(row.index, {
-          fabricateErect,
-          ...(stamp ?? {}),
-        });
-      }}
+      onChange={(e) => commit({ row, table }, "fabricateErect", e.target.value)}
     >
       <option value="">-- Select --</option>
       <option value="Fabricate">Fabricate</option>
@@ -113,37 +91,15 @@ export function FabricateErectSelectCell({ getValue, row, table }: CellProps) {
 
 export function WeldGroupSelectCell({ getValue, row, table }: CellProps) {
   const value = getValue() as string;
-  const { weldGroupMaterialMap = {} } = table.options.meta ?? {};
   // Pre-mapped once per grid (see FefTableContent).
   const options = table.options.meta?.weldGroupSelectOptions ?? [];
-
   return (
     <SearchableSelect
       value={value}
       options={options}
-      onSelect={(classification) => {
-        const rowData = row.original;
-        const entry = classification
-          ? weldGroupMaterialMap[classification]
-          : undefined;
-        const metallurgyCode =
-          entry && rowData.shopField
-            ? rowData.shopField === "Shop"
-              ? entry.shopCode
-              : entry.installCode
-            : "";
-        const stamp = resolveCbsStamp(
-          metallurgyCode,
-          rowData.boreSize,
-          finder(table.options.meta?.cbsOptions ?? []),
-          fabricationHint(rowData),
-        );
-        table.options.meta?.updateRow?.(row.index, {
-          weldGroupDescription: classification,
-          metallurgyCode,
-          ...(stamp ?? {}),
-        });
-      }}
+      onSelect={(classification) =>
+        commit({ row, table }, "weldGroupDescription", classification)
+      }
     />
   );
 }
@@ -226,44 +182,19 @@ export function UnitHoursCell({ row }: CellProps) {
   );
 }
 
-type RoleRate = { roleName: string; schedule: string; rate: number };
-
 /**
- * Looks up the composite labor rate for the (role, schedule) pair on a Take
- * Off row. Returns the updates to apply: the field the user just changed,
- * plus the freshly resolved `laborRate` (or `""` when no matching rate row
- * exists). Centralizes the lookup so the Role and Schedule cells stay in
- * sync — change one, the rate snaps to the matching cell of the rate matrix.
+ * Role. Changing it snaps the Labor Rate to the matching cell of the rate
+ * matrix for the row's schedule, or clears it when there is none.
  */
-function applyRoleRate(
-  changed: { role?: string; schedule?: string },
-  current: { role: string; schedule: string },
-  roleRates: RoleRate[],
-): Record<string, string> {
-  const role = changed.role ?? current.role;
-  const schedule = changed.schedule ?? current.schedule;
-  const match = roleRates.find(
-    (r) => r.roleName === role && r.schedule === schedule,
-  );
-  return { ...changed, laborRate: match ? String(match.rate) : "" };
-}
-
 export function RoleSelectCell({ getValue, row, table }: CellProps) {
   const value = getValue() as string;
-  const { roleRates = [] } = table.options.meta ?? {};
   const options = table.options.meta?.roleSelectOptions ?? [];
   return (
     <CellSelect
       value={value}
       options={options}
       ariaLabel="Role"
-      onValueChange={(v) => {
-        const rowData = row.original;
-        table.options.meta?.updateRow?.(
-          row.index,
-          applyRoleRate({ role: v }, rowData, roleRates),
-        );
-      }}
+      onValueChange={(v) => commit({ row, table }, "role", v)}
     />
   );
 }
@@ -271,45 +202,19 @@ export function RoleSelectCell({ getValue, row, table }: CellProps) {
 /**
  * "Use Crew Mix" mode of the labor-rate input. Stores the selected crew
  * mix's id (as a string) on `crewMixId` and snapshots the average wage onto
- * `laborRate`. Like `RoleSelectCell`, the rate is frozen at edit time —
- * editing the crew mix's members later won't retroactively touch existing
- * rows.
+ * `laborRate`, clearing Role and Schedule so the row's rate source is
+ * unambiguous. Like `RoleSelectCell`, the rate is frozen at edit time —
+ * editing the crew mix's members later won't retroactively touch rows.
  */
 export function CrewMixSelectCell({ row, table }: CellProps) {
   const value = row.original.crewMixId;
-  const { crewMixOptions = [], roleRates = [] } = table.options.meta ?? {};
   const options = table.options.meta?.crewMixSelectOptions ?? [];
   return (
     <CellSelect
       value={value}
       options={options}
       ariaLabel="Crew Mix"
-      onValueChange={(id) => {
-        if (id === "") {
-          table.options.meta?.updateRow?.(row.index, {
-            crewMixId: "",
-            laborRate: "",
-          });
-          return;
-        }
-        const match = crewMixOptions.find((m) => String(m.id) === id);
-        if (!match) return;
-        // Rate = head-count-weighted average of the mix's member-role rates at
-        // its schedule.
-        const avg = crewMixAverageRate(
-          match.members,
-          match.schedule,
-          roleRates,
-        );
-        table.options.meta?.updateRow?.(row.index, {
-          crewMixId: id,
-          laborRate: avg > 0 ? avg.toFixed(2) : "",
-          // Clear role + schedule so the row's mode is unambiguous and
-          // sidebar tooltips don't show stale picker values.
-          role: "",
-          schedule: "",
-        });
-      }}
+      onValueChange={(id) => commit({ row, table }, "crewMixId", id)}
     />
   );
 }
@@ -337,74 +242,30 @@ export function LaborHoursCell({ row }: CellProps) {
   return <span className={readOnlyCellClass}>{row.original.laborHours}</span>;
 }
 
+/**
+ * Task code. Re-derives Labor Hours from the factor table, re-resolves the
+ * CBS item from the row's other inputs, and takes the Unit from the item
+ * when one resolved, else from the task code's own factor-table entry.
+ */
 export function TaskCodeSelectCell({ getValue, row, table }: CellProps) {
   const value = getValue() as string;
-  const { pipingFactorLookup } = table.options.meta ?? {};
   // Pre-mapped once per grid (see FefTableContent).
   const options = table.options.meta?.taskCodeSelectOptions ?? [];
-
   return (
     <SearchableSelect
       value={value}
       options={options}
-      onSelect={(newCode) => {
-        const unit = newCode
-          ? (pipingFactorLookup?.get(newCode)?.unit ?? "")
-          : "";
-        const rowData = row.original;
-        const laborHours = deriveLaborHours(
-          { ...rowData, taskCode: newCode },
-          pipingFactorLookup,
-        );
-        // Re-resolve CBS from the row's current metallurgy + bore. The task
-        // code is not itself part of the cost code, so this can only pick up a
-        // match the row's *other* inputs have since made available — or drop
-        // one they have invalidated.
-        const stamp = resolveCbsStamp(
-          rowData.metallurgyCode,
-          rowData.boreSize,
-          finder(table.options.meta?.cbsOptions ?? []),
-          fabricationHint(rowData),
-        );
-        table.options.meta?.updateRow?.(row.index, {
-          taskCode: newCode,
-          laborHours,
-          ...(stamp ?? {}),
-          // A resolved CBS item's UoM wins; with no item to take one from,
-          // the unit falls back to the task code's own from the factor table
-          // rather than being cleared along with the rest of the stamp.
-          unit: stamp?.id ? stamp.unit : unit,
-        });
-      }}
+      onSelect={(newCode) => commit({ row, table }, "taskCode", newCode)}
     />
   );
 }
 
+/** Size. Drives the bore size, the factor lookup and the CBS match. */
 export function PipingSizeCell({ getValue, row, table }: CellProps) {
   return (
     <TextCell
       value={getValue() as string}
-      onCommit={(value) => {
-        const boreSize = computeBoreSize(value);
-        const rowData = row.original;
-        const stamp = resolveCbsStamp(
-          rowData.metallurgyCode,
-          boreSize,
-          finder(table.options.meta?.cbsOptions ?? []),
-          // The new size/bore, not the row's stale pair.
-          fabricationHint({ ...rowData, size: value, boreSize }),
-        );
-        const laborHours = deriveLaborHours(
-          { ...rowData, size: value },
-          table.options.meta?.pipingFactorLookup,
-        );
-        table.options.meta?.updateRow?.(row.index, {
-          size: value,
-          boreSize,
-          laborHours,
-          ...(stamp ?? {}),
-        });
-      }}
+      onCommit={(value) => commit({ row, table }, "size", value)}
     />
   );
 }
@@ -413,44 +274,27 @@ export function PipingSizeCell({ getValue, row, table }: CellProps) {
  * Quantity cell that keeps `laborHours` in sync when the user types a new
  * quantity. Replaces the generic `EditableCell` on the piping take-off's
  * quantity column — without this, changing quantity would update `quantity`
- * alone and leave `laborHours` stale (the view-time auto-recompute loop is
- * gone now).
+ * alone and leave `laborHours` stale.
  */
 export function PipingQuantityCell({ getValue, row, table }: CellProps) {
   return (
     <TextCell
       value={getValue() as string}
-      onCommit={(value) => {
-        const rowData = row.original;
-        const laborHours = deriveLaborHours(
-          { ...rowData, quantity: value },
-          table.options.meta?.pipingFactorLookup,
-        );
-        table.options.meta?.updateRow?.(row.index, {
-          quantity: value,
-          laborHours,
-        });
-      }}
+      onCommit={(value) => commit({ row, table }, "quantity", value)}
     />
   );
 }
 
+/** Schedule. Snaps the Labor Rate the way `RoleSelectCell` does. */
 export function ScheduleSelectCell({ getValue, row, table }: CellProps) {
   const value = getValue() as string;
-  const { roleRates = [] } = table.options.meta ?? {};
   const options = table.options.meta?.scheduleSelectOptions ?? [];
   return (
     <CellSelect
       value={value}
       options={options}
       ariaLabel="Schedule"
-      onValueChange={(v) => {
-        const rowData = row.original;
-        table.options.meta?.updateRow?.(
-          row.index,
-          applyRoleRate({ schedule: v }, rowData, roleRates),
-        );
-      }}
+      onValueChange={(v) => commit({ row, table }, "schedule", v)}
     />
   );
 }

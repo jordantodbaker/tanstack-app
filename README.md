@@ -91,8 +91,9 @@ point it anywhere real.
 The CBS scripts run **in a specific order** after a new workbook lands; that
 sequence, and the hard-coded tables a CBS renumbering invalidates, are in
 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) §11a and
-[scripts/README.md](scripts/README.md). The one-off data migrations and
-`npm run backfill-numbers` are cataloged there too.
+[scripts/README.md](scripts/README.md). The one-off data migrations,
+`npm run backfill-numbers` and `npm run snapshots:backfill` are cataloged
+there too.
 
 ## Layout
 
@@ -102,8 +103,11 @@ src/routes/       File-based routes. `x.tsx` holds the route + loader;
                   chunk. Not every route is split yet.
 src/utils/        Server functions (`createServerFn`) and their query options.
                   `*.server.ts` is server-only and never enters the client graph.
-src/lib/          Pure logic — no Prisma, no React Query. Most of the test suite
-                  lives against this layer.
+src/lib/          Logic and hooks — no Prisma. Mostly pure modules (where most
+                  of the test suite lives), plus the React hooks and contexts
+                  that wrap them. lib never imports a value from utils; the
+                  few hooks that wrap a server function's query are allowlisted
+                  in `src/lib/import-direction.test.ts`, which holds the line.
 src/components/   UI. Per-domain folders (Cbs/, Changelog/, Piping/, …) plus
                   shared primitives in ui/.
 src/config/       Data that drives the UI: the app registry, disciplines, CBS

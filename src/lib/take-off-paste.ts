@@ -1,3 +1,4 @@
+import { isBlankId, isUntouchedBlankRow } from "~/lib/fef-helpers";
 /**
  * Parse a block of spreadsheet cells (tab-separated, as produced by copying
  * from Excel / Google Sheets) into Take Off rows. Pure — no React/DOM — so the
@@ -17,7 +18,7 @@
 import type { CbsOption, FefRow } from "./types";
 import { makeFefRow } from "./fef-helpers";
 import { cleanNumber, computeLaborHours, normalizeCode } from "./fef-derive";
-import { disciplineForL1 } from "~/utils/cvr-bucket";
+import { disciplineForL1 } from "~/lib/cvr-bucket";
 
 /** Column headers, in the order the parser reads them. Shown in the dialog. */
 export const TAKE_OFF_PASTE_COLUMNS = [
@@ -64,7 +65,9 @@ type RawPastedRow = {
 
 /** Map an area cell (its id OR its label, case-insensitive) to the stored area
  *  id. Empty / unrecognized area cells resolve to "" (unassigned). */
-function buildAreaResolver(areaOptions: AreaMatchOption[]): Map<string, string> {
+function buildAreaResolver(
+  areaOptions: AreaMatchOption[],
+): Map<string, string> {
   const map = new Map<string, string>();
   const norm = (s: string) => s.trim().toLowerCase();
   for (const o of areaOptions) {
@@ -171,7 +174,11 @@ function tokenize(text: string): RawPastedRow[] {
  *  server to resolve against the full catalog. */
 export function extractTakeOffCodes(text: string): string[] {
   return [
-    ...new Set(tokenize(text).map((r) => r.code).filter((c) => c !== "")),
+    ...new Set(
+      tokenize(text)
+        .map((r) => r.code)
+        .filter((c) => c !== ""),
+    ),
   ];
 }
 
@@ -196,7 +203,7 @@ export function splitRowsByDiscipline(
   const local: FefRow[] = [];
   const byDiscipline = new Map<string, FefRow[]>();
   for (const r of rows) {
-    const code = r.id && !r.id.startsWith("__fe-blank-") ? r.id : "";
+    const code = r.id && !isBlankId(r.id) ? r.id : "";
     const disc = code ? disciplineForL1(code.slice(0, 3)) : "";
     if (disc && disc !== currentDiscipline) {
       const arr = byDiscipline.get(disc) ?? [];

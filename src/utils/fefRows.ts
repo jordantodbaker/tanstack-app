@@ -1,3 +1,11 @@
+import {
+  compactFefRow,
+  expandFefRow,
+  type FefSaveResult,
+  type SparseFefRow,
+} from "~/lib/fef-wire";
+import { loadInvalidByDiscipline } from "./fef-invalid.server";
+import { isBlankId, isUntouchedBlankRow } from "~/lib/fef-helpers";
 import { queryOptions } from "@tanstack/react-query";
 import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
@@ -28,12 +36,15 @@ const FefRowsInputSchema = z.object({
 // Cast via unknown: the dynamically-built shape is provably `Record<string,
 // string>` to TS but matches the FefRow shape at runtime (FEF_ROW_STRING_FIELDS
 // IS the FefRow key set minus `id`).
+// Every field but `id` is optional on the wire: the grid sends a row sparsely
+// (see `~/lib/fef-wire`), and the handlers put the blanks back with
+// `expandFefRow`. A full row still validates.
 const FefRowSchema = z.object(
   Object.fromEntries([
     ["id", z.string()],
-    ...FEF_ROW_STRING_FIELDS.map((f) => [f, z.string()] as const),
+    ...FEF_ROW_STRING_FIELDS.map((f) => [f, z.string().optional()] as const),
   ]),
-) as unknown as z.ZodType<FefRow>;
+) as unknown as z.ZodType<SparseFefRow>;
 
 const SaveFefRowsSchema = z.object({
   versionId: VersionId,
@@ -221,6 +232,14 @@ export const fefRowsQueryOptions = (input: {
             },
           }),
     enabled: input.versionId !== null,
+    // Never stale on its own: the grid is the writer of record for its sheet,
+    // and every save writes the cache (`setQueryData` in the persistence
+    // hook). Under the 30 s default, tabbing back to the window re-downloaded
+    // the whole sheet — ~450 KB on a piping take-off — for nothing. Anything
+    // that rewrites rows on the server (a rate refresh, a custom column
+    // clear) invalidates this key explicitly, which refetches regardless.
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   });
 
 export const saveFefRows = createServerFn({ method: "POST" })
@@ -230,12 +249,19 @@ export const saveFefRows = createServerFn({ method: "POST" })
     // denormalized projectId column (NOT NULL), so writes need it.
     const { projectId } = await requireVersionAccess(data.versionId);
     {
-      const { versionId, discipline, section, rows } = data;
+      const { versionId, discipline, section } = data;
+      // Sparse on the wire; full rows from here on.
+      const rows = data.rows.map(expandFefRow);
+      // What the save hands back: the sheet as persisted, compacted again,
+      // plus the sidebar's invalid-row counts so the client updates that
+      // badge from this response rather than with a second request.
+      const result = async (saved: FefRowDb[]): Promise<FefSaveResult> => ({
+        rows: saved.map((r) => compactFefRow(toFefRow(r))),
+        invalidByDiscipline: await loadInvalidByDiscipline(versionId),
+      });
       try {
         const persistable = rows
-          .filter(
-            (r) => !r.id.startsWith("__fe-blank-") || fefRowHasUserData(r),
-          )
+          .filter((r) => !isUntouchedBlankRow(r))
           .map((r, i) => {
             const { id, ...fields } = r;
             return {
@@ -244,7 +270,7 @@ export const saveFefRows = createServerFn({ method: "POST" })
               discipline,
               section,
               position: i,
-              cbsCode: id.startsWith("__fe-blank-") ? "" : id,
+              cbsCode: isBlankId(id) ? "" : id,
               ...fields,
             };
           });
@@ -282,7 +308,7 @@ export const saveFefRows = createServerFn({ method: "POST" })
               section,
               existingRows: existing.length,
             });
-            return existing.map(toFefRow);
+            return result(existing);
           }
           if (existing.length > 0) {
             logger.warn("saveFefRows clearing a sheet", {
@@ -295,7 +321,7 @@ export const saveFefRows = createServerFn({ method: "POST" })
           await prisma.fefRow.deleteMany({
             where: { versionId, discipline, section },
           });
-          return [];
+          return result([]);
         }
 
         // Single round-trip upsert keyed by the (projectId, discipline,
@@ -332,7 +358,7 @@ export const saveFefRows = createServerFn({ method: "POST" })
           });
         });
 
-        return saved.map(toFefRow);
+        return result(saved);
       } catch (err) {
         logger.error("saveFefRows failed", {
           projectId,
@@ -365,11 +391,11 @@ export const appendTakeOffRows = createServerFn({ method: "POST" })
     await prisma.$transaction(async (tx) => {
       for (const group of groups) {
         const { discipline } = group;
-        const rows = group.rows.filter(
-          (r) =>
-            (!r.id.startsWith("__fe-blank-") && r.id !== "") ||
-            fefRowHasUserData(r),
-        );
+        const rows = group.rows
+          .map(expandFefRow)
+          .filter(
+            (r) => (!isBlankId(r.id) && r.id !== "") || fefRowHasUserData(r),
+          );
         if (rows.length === 0) continue;
 
         // Positions are contiguous 0..count-1 (saveFefRows keeps them so), so
@@ -386,7 +412,7 @@ export const appendTakeOffRows = createServerFn({ method: "POST" })
             discipline,
             section: "TAKE_OFF",
             position: start + i,
-            cbsCode: id.startsWith("__fe-blank-") ? "" : id,
+            cbsCode: isBlankId(id) ? "" : id,
             ...fields,
           });
         });

@@ -1,5 +1,5 @@
 import type { HelpBlock, HelpSection } from "~/config/help-guide";
-import { hasAtLeastRole, type UserRole } from "~/utils/users";
+import { hasAtLeastRole, type UserRole } from "~/lib/roles";
 
 /**
  * Role filtering and search for the in-app guide (`help-guide.ts`).

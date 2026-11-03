@@ -16,6 +16,7 @@ import {
   replaceInCell,
   replaceAll,
   sortRows,
+  writeCtxFromMeta,
   type RangeSelection,
   type WriteCtx,
 } from "./grid-range";
@@ -42,10 +43,13 @@ export function useGridRangeEditing({
   setData,
   table,
   meta,
+  writeCtx: sharedWriteCtx,
   serverPagination,
   setLocalPageIndex,
   frozenColumnCount,
 }: {
+  /** The grid's own `WriteCtx`, the one on its table meta — see below. */
+  writeCtx?: WriteCtx;
   enableRangeEditing: boolean;
   data: FefRow[];
   setData: React.Dispatch<React.SetStateAction<FefRow[]>>;
@@ -120,20 +124,11 @@ export function useGridRangeEditing({
     dir: "asc" | "desc";
   } | null>(null);
 
-  const writeCtx = React.useMemo<WriteCtx>(
-    () => ({
-      roleOptions: meta?.roleOptions ?? [],
-      scheduleOptions: meta?.scheduleOptions ?? [],
-      roleRates: meta?.roleRates ?? [],
-      areaOptions: meta?.areaOptions ?? [],
-      cbsOptions: meta?.cbsOptions ?? [],
-      crewMixOptions: meta?.crewMixOptions ?? [],
-      // Sheet-specific lookups; present only on the sheet that uses them, which
-      // is also how a range write tells a piping row from a steel one.
-      pipingFactorLookup: meta?.pipingFactorLookup,
-      weldGroupMaterialMap: meta?.weldGroupMaterialMap,
-      steelMemberUomLookup: meta?.steelMemberUomLookup,
-    }),
+  // The grid hands in the ctx it also put on the table meta, so the range
+  // operations and the cell editors share one index. Built here only when a
+  // caller (a test) does not supply one.
+  const ownCtx = React.useMemo<WriteCtx>(
+    () => writeCtxFromMeta(meta),
     [
       meta?.roleOptions,
       meta?.scheduleOptions,
@@ -146,6 +141,7 @@ export function useGridRangeEditing({
       meta?.steelMemberUomLookup,
     ],
   );
+  const writeCtx = sharedWriteCtx ?? ownCtx;
 
   // Snapshot of everything a deferred (drag mouseup) handler needs, refreshed
   // after every render so those closures never read stale state.
@@ -168,13 +164,16 @@ export function useGridRangeEditing({
     };
   });
 
-  const onCellFocus = React.useCallback((rowIndex: number, colIndex: number) => {
-    // Plain focus/click collapses the selection to the focused cell.
-    setSelection({
-      anchor: { row: rowIndex, col: colIndex },
-      focus: { row: rowIndex, col: colIndex },
-    });
-  }, []);
+  const onCellFocus = React.useCallback(
+    (rowIndex: number, colIndex: number) => {
+      // Plain focus/click collapses the selection to the focused cell.
+      setSelection({
+        anchor: { row: rowIndex, col: colIndex },
+        focus: { row: rowIndex, col: colIndex },
+      });
+    },
+    [],
+  );
 
   const onCellPointerDown = React.useCallback(
     (rowIndex: number, colIndex: number, e: React.MouseEvent) => {
@@ -258,8 +257,11 @@ export function useGridRangeEditing({
     [focusGrid],
   );
   const onSelectAll = React.useCallback(() => {
-    const { firstRowIndex: fr, lastRowIndex: lr, columnIds: cids } =
-      latest.current;
+    const {
+      firstRowIndex: fr,
+      lastRowIndex: lr,
+      columnIds: cids,
+    } = latest.current;
     focusGrid();
     setSelection({
       anchor: { row: fr, col: 0 },
@@ -317,13 +319,20 @@ export function useGridRangeEditing({
       setSelection((prev) => {
         if (!prev) return prev;
         const top = Math.min(prev.anchor.row, prev.focus.row);
-        return { ...prev, focus: { row: Math.max(top, r), col: prev.focus.col } };
+        return {
+          ...prev,
+          focus: { row: Math.max(top, r), col: prev.focus.col },
+        };
       });
     };
     const onUp = () => {
       setFilling(false);
-      const { data: d, columnIds: cids, writeCtx: c, selection: sel } =
-        latest.current;
+      const {
+        data: d,
+        columnIds: cids,
+        writeCtx: c,
+        selection: sel,
+      } = latest.current;
       if (sel && rangeSpansMultiple(sel)) {
         setData(applyFillDown(d, cids, sel, c));
       }
@@ -362,7 +371,14 @@ export function useGridRangeEditing({
   ) => {
     const { minRow, minCol } = normalizeRange(sel);
     setData(
-      applyPaste(d, cids, { row: minRow, col: minCol }, matrix, ctx, newBlankRow),
+      applyPaste(
+        d,
+        cids,
+        { row: minRow, col: minCol },
+        matrix,
+        ctx,
+        newBlankRow,
+      ),
     );
   };
 
@@ -380,8 +396,12 @@ export function useGridRangeEditing({
     void clip
       .readText()
       .then((text) => {
-        const { data: d, columnIds: cids, writeCtx: c, selection: sel } =
-          latest.current;
+        const {
+          data: d,
+          columnIds: cids,
+          writeCtx: c,
+          selection: sel,
+        } = latest.current;
         if (!sel) return;
         const matrix = parseClipboardMatrix(text);
         if (gate && !gate(matrix, sel)) return;
@@ -511,7 +531,10 @@ export function useGridRangeEditing({
       return;
     }
 
-    if ((key === "Delete" || key === "Backspace") && rangeSpansMultiple(selection)) {
+    if (
+      (key === "Delete" || key === "Backspace") &&
+      rangeSpansMultiple(selection)
+    ) {
       e.preventDefault();
       e.stopPropagation();
       clearRange(selection);
@@ -521,7 +544,9 @@ export function useGridRangeEditing({
     if (key === "Escape" && rangeSpansMultiple(selection)) {
       e.preventDefault();
       e.stopPropagation();
-      setSelection((prev) => (prev ? { anchor: prev.focus, focus: prev.focus } : prev));
+      setSelection((prev) =>
+        prev ? { anchor: prev.focus, focus: prev.focus } : prev,
+      );
     }
   };
 
@@ -540,7 +565,8 @@ export function useGridRangeEditing({
     pasteMatrixInto(data, columnIds, writeCtx, selection, matrix);
   };
 
-  const rangeSel = enableRangeEditing && selection ? normalizeRange(selection) : null;
+  const rangeSel =
+    enableRangeEditing && selection ? normalizeRange(selection) : null;
 
   // Stable value-key for `columnIds` (a fresh array each render) so the memos
   // below don't recompute on every render just because its reference changed.
@@ -625,11 +651,15 @@ export function useGridRangeEditing({
   const doReplaceOne = () => {
     if (!find || matches.length === 0) return;
     const m = matches[Math.min(findIndex, matches.length - 1)];
-    setData(replaceInCell(data, columnIds, m, find.query, find.replace, writeCtx));
+    setData(
+      replaceInCell(data, columnIds, m, find.query, find.replace, writeCtx),
+    );
   };
   const doReplaceAll = () => {
     if (!find) return;
-    setData(replaceAll(data, columnIds, find.query, find.replace, writeCtx).data);
+    setData(
+      replaceAll(data, columnIds, find.query, find.replace, writeCtx).data,
+    );
   };
 
   // Click-header sort. Physically reorders the rows (persisted, undoable) so the
@@ -643,10 +673,33 @@ export function useGridRangeEditing({
 
   return {
     gridRef,
-    rows, frozen, rangeSel, rangeHandlers, onGridKeyDown, onGridPaste, stats,
-    fmtStat, menu, menuCopy, menuCut, menuPaste, menuClear, menuInsert,
-    menuDeleteRows, selectedRowCount, find, setFind, findIndex, setFindIndex,
-    matches, goToMatch, doReplaceOne, doReplaceAll, sortState, onColSort,
-    onColHeaderClick, onSelectAll,
+    rows,
+    frozen,
+    rangeSel,
+    rangeHandlers,
+    onGridKeyDown,
+    onGridPaste,
+    stats,
+    fmtStat,
+    menu,
+    menuCopy,
+    menuCut,
+    menuPaste,
+    menuClear,
+    menuInsert,
+    menuDeleteRows,
+    selectedRowCount,
+    find,
+    setFind,
+    findIndex,
+    setFindIndex,
+    matches,
+    goToMatch,
+    doReplaceOne,
+    doReplaceAll,
+    sortState,
+    onColSort,
+    onColHeaderClick,
+    onSelectAll,
   };
 }

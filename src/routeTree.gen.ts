@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as DisciplineRouteImport } from './routes/$discipline'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as BasisRouteImport } from './routes/basis'
+import { Route as CbsFullscreenRouteImport } from './routes/cbs-fullscreen'
 import { Route as ChangelogRouteImport } from './routes/changelog'
 import { Route as CodeUsageRouteImport } from './routes/code-usage'
 import { Route as DashboardRouteImport } from './routes/dashboard'
@@ -64,6 +65,11 @@ const AdminRoute = AdminRouteImport.update({
 const BasisRoute = BasisRouteImport.update({
   id: '/basis',
   path: '/basis',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CbsFullscreenRoute = CbsFullscreenRouteImport.update({
+  id: '/cbs-fullscreen',
+  path: '/cbs-fullscreen',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChangelogRoute = ChangelogRouteImport.update({
@@ -232,6 +238,7 @@ export interface FileRoutesByFullPath {
   '/$discipline': typeof DisciplineRoute
   '/admin': typeof AdminRouteWithChildren
   '/basis': typeof BasisRoute
+  '/cbs-fullscreen': typeof CbsFullscreenRoute
   '/changelog': typeof ChangelogRoute
   '/code-usage': typeof CodeUsageRoute
   '/dashboard': typeof DashboardRoute
@@ -270,6 +277,7 @@ export interface FileRoutesByTo {
   '/$discipline': typeof DisciplineRoute
   '/admin': typeof AdminRouteWithChildren
   '/basis': typeof BasisRoute
+  '/cbs-fullscreen': typeof CbsFullscreenRoute
   '/changelog': typeof ChangelogRoute
   '/code-usage': typeof CodeUsageRoute
   '/dashboard': typeof DashboardRoute
@@ -309,6 +317,7 @@ export interface FileRoutesById {
   '/$discipline': typeof DisciplineRoute
   '/admin': typeof AdminRouteWithChildren
   '/basis': typeof BasisRoute
+  '/cbs-fullscreen': typeof CbsFullscreenRoute
   '/changelog': typeof ChangelogRoute
   '/code-usage': typeof CodeUsageRoute
   '/dashboard': typeof DashboardRoute
@@ -349,6 +358,7 @@ export interface FileRouteTypes {
     | '/$discipline'
     | '/admin'
     | '/basis'
+    | '/cbs-fullscreen'
     | '/changelog'
     | '/code-usage'
     | '/dashboard'
@@ -387,6 +397,7 @@ export interface FileRouteTypes {
     | '/$discipline'
     | '/admin'
     | '/basis'
+    | '/cbs-fullscreen'
     | '/changelog'
     | '/code-usage'
     | '/dashboard'
@@ -425,6 +436,7 @@ export interface FileRouteTypes {
     | '/$discipline'
     | '/admin'
     | '/basis'
+    | '/cbs-fullscreen'
     | '/changelog'
     | '/code-usage'
     | '/dashboard'
@@ -464,6 +476,7 @@ export interface RootRouteChildren {
   DisciplineRoute: typeof DisciplineRoute
   AdminRoute: typeof AdminRouteWithChildren
   BasisRoute: typeof BasisRoute
+  CbsFullscreenRoute: typeof CbsFullscreenRoute
   ChangelogRoute: typeof ChangelogRoute
   CodeUsageRoute: typeof CodeUsageRoute
   DashboardRoute: typeof DashboardRoute
@@ -513,6 +526,13 @@ declare module '@tanstack/react-router' {
       path: '/basis'
       fullPath: '/basis'
       preLoaderRoute: typeof BasisRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cbs-fullscreen': {
+      id: '/cbs-fullscreen'
+      path: '/cbs-fullscreen'
+      fullPath: '/cbs-fullscreen'
+      preLoaderRoute: typeof CbsFullscreenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/changelog': {
@@ -781,6 +801,7 @@ const rootRouteChildren: RootRouteChildren = {
   DisciplineRoute: DisciplineRoute,
   AdminRoute: AdminRouteWithChildren,
   BasisRoute: BasisRoute,
+  CbsFullscreenRoute: CbsFullscreenRoute,
   ChangelogRoute: ChangelogRoute,
   CodeUsageRoute: CodeUsageRoute,
   DashboardRoute: DashboardRoute,

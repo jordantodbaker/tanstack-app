@@ -1,3 +1,8 @@
+import {
+  AreaField,
+  type EntityDialogCallbacks,
+} from "~/components/EntityDialog/EntityFields";
+import { CHANGE_ENTITIES } from "~/config/change-entities";
 import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, X } from "lucide-react";
@@ -49,19 +54,13 @@ import {
   PrintPdfLink,
 } from "~/components/EntityDialog/EntityDialogActions";
 import { CbsSelect } from "~/components/CbsSelect";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from "~/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
 import {
   EntityAuxTabTriggers,
   EntityAuxTabPanels,
 } from "~/components/EntityDialog/EntityAuxTabs";
 import { useRecordDialogForm } from "~/lib/use-record-dialog-form";
 import { useSelectedProject } from "~/lib/selected-project";
-import { areasByProjectQueryOptions } from "~/utils/areas";
 import { TemplatePicker } from "~/components/EntityDialog/TemplatePicker";
 import {
   cvrTemplatePickerQueryOptions,
@@ -136,23 +135,13 @@ type ChangelogDialogProps = {
    * blank form.
    */
   draft?: Partial<FormState>;
-  onSubmit: (form: FormState) => Promise<unknown>;
-  onDelete?: (id: number) => Promise<unknown>;
-  /**
-   * Run a workflow status transition. Only meaningful in edit mode; the dialog
-   * renders one button per transition allowed by the current user's role and
-   * originator status. See `CVR_TRANSITIONS` in workflow.ts.
-   */
-  onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
-};
+} & EntityDialogCallbacks<FormState>;
 
 export function ChangelogDialog({
   trigger,
   initial,
   draft,
-  onSubmit,
-  onDelete,
-  onTransition,
+  ...callbacks
 }: ChangelogDialogProps) {
   return (
     <EntityDialogShell
@@ -169,9 +158,7 @@ export function ChangelogDialog({
         <ChangelogDialogBody
           initial={full}
           draft={draft}
-          onSubmit={onSubmit}
-          onDelete={onDelete}
-          onTransition={onTransition}
+          {...callbacks}
           closeDialog={closeDialog}
         />
       )}
@@ -189,11 +176,8 @@ function ChangelogDialogBody({
 }: {
   initial?: ChangeLogDetail;
   draft?: Partial<FormState>;
-  onSubmit: (form: FormState) => Promise<unknown>;
-  onDelete?: (id: number) => Promise<unknown>;
-  onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
   closeDialog: () => void;
-}) {
+} & EntityDialogCallbacks<FormState>) {
   const {
     form,
     setForm,
@@ -290,16 +274,10 @@ function ChangelogDialogBody({
     closeDialog,
   });
 
-
   // Areas for the selected project — populates the Area dropdown. CVRs may
   // be project-wide, so "— None —" is the default. Legacy rows that pre-date
   // this field default to "" and naturally land on "— None —".
   const { projectId } = useSelectedProject();
-  const { data: areas = [] } = useQuery({
-    ...areasByProjectQueryOptions(projectId),
-    enabled: projectId !== null,
-  });
-
   // Cost buildup. With ≥1 line, `costImpact` is the sum of line totals and the
   // manual Cost Impact field goes read-only. Keep `form.costImpact` synced so
   // template-save and the submit payload carry the rolled-up number (the
@@ -351,266 +329,256 @@ function ChangelogDialogBody({
   return (
     <>
       <div className="flex min-h-0 flex-1 flex-col gap-4">
-          <EntityDialogHeader
-            title={initial ? "Edit Change Item" : "New Change Item"}
-            subtitle="Track a CVR or scope change with cost, schedule, and CBS impact"
-            className="shrink-0"
-          >
-            {initial?.id && <PrintPdfLink href={`/cvr-print/${initial.id}`} />}
-            {isAdmin && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSaveAsTemplate}
-                disabled={busy || !form.title.trim()}
-                title="Snapshot the current form as a new CVR template"
-                className="text-violet-700 hover:bg-violet-50"
-              >
-                Save as Template
-              </Button>
-            )}
-            {initial && onDelete && (
-              <DeleteEntityButton onClick={handleDelete} disabled={busy} />
-            )}
-          </EntityDialogHeader>
+        <EntityDialogHeader
+          title={initial ? "Edit Change Item" : "New Change Item"}
+          subtitle="Track a CVR or scope change with cost, schedule, and CBS impact"
+          className="shrink-0"
+        >
+          {initial?.id && (
+            <PrintPdfLink
+              href={`${CHANGE_ENTITIES.ChangeLog.printPath}/${initial.id}`}
+            />
+          )}
+          {isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSaveAsTemplate}
+              disabled={busy || !form.title.trim()}
+              title="Snapshot the current form as a new CVR template"
+              className="text-violet-700 hover:bg-violet-50"
+            >
+              Save as Template
+            </Button>
+          )}
+          {initial && onDelete && (
+            <DeleteEntityButton onClick={handleDelete} disabled={busy} />
+          )}
+        </EntityDialogHeader>
 
-          <Tabs
-            defaultValue="details"
-            className="w-full flex-1 flex flex-col min-h-0"
-          >
-            <TabsList className="shrink-0">
-              <TabsTrigger value="details">Details</TabsTrigger>
-              <TabsTrigger value="buildup">
-                Cost Buildup
-                {hasLineItems ? ` (${form.lineItems.length})` : ""}
-              </TabsTrigger>
-              <EntityAuxTabTriggers />
-            </TabsList>
-            {/* Single scroll region shared by every panel — its fixed flex
+        <Tabs
+          defaultValue="details"
+          className="w-full flex-1 flex flex-col min-h-0"
+        >
+          <TabsList className="shrink-0">
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="buildup">
+              Cost Buildup
+              {hasLineItems ? ` (${form.lineItems.length})` : ""}
+            </TabsTrigger>
+            <EntityAuxTabTriggers />
+          </TabsList>
+          {/* Single scroll region shared by every panel — its fixed flex
                 height is what keeps the dialog from resizing per tab. */}
-            <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="flex-1 min-h-0 overflow-y-auto">
             <TabsContent value="details" className="space-y-4 mt-3">
-
-          {!initial && (
-            <TemplatePicker<CvrTemplateFieldSet>
-              pickerQueryOptions={cvrTemplatePickerQueryOptions}
-              instantiate={instantiateCvrTemplate}
-              currentDiscipline={form.discipline}
-              onSelect={applyTemplate}
-              noun="CVR"
-            />
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Labeled label="CVR Number">
-              <Input
-                value={form.cvrNumber}
-                placeholder="Auto-assigned if blank"
-                onChange={(e) => update("cvrNumber", e.target.value)}
-              />
-            </Labeled>
-            <Labeled label="Title">
-              <Input
-                value={form.title}
-                placeholder="Short description"
-                onChange={(e) => update("title", e.target.value)}
-              />
-            </Labeled>
-          </div>
-
-          <Labeled label="Description">
-            <Textarea
-              value={form.description}
-              placeholder="What is being changed and why"
-              rows={3}
-              onChange={(e) => update("description", e.target.value)}
-            />
-          </Labeled>
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <Labeled
-              label="Status"
-              help={
-                initial
-                  ? "Use the workflow actions below to advance status."
-                  : "New items start as Requested."
-              }
-            >
-              <div className="flex h-9 items-center">
-                <StatusBadge status={initial ? initial.status : "REQUESTED"} />
-              </div>
-            </Labeled>
-            <Labeled label="Type">
-              <NativeSelect
-                value={form.type}
-                onChange={(v) => update("type", v as ChangeType)}
-                options={CHANGE_TYPES.map((s) => ({
-                  value: s,
-                  label: TYPE_LABELS[s],
-                }))}
-              />
-            </Labeled>
-            <Labeled label="Risk">
-              <NativeSelect
-                value={form.riskLevel}
-                onChange={(v) => update("riskLevel", v as RiskLevel)}
-                options={RISK_LEVELS.map((s) => ({
-                  value: s,
-                  label: RISK_LABELS[s],
-                }))}
-              />
-            </Labeled>
-            <DisciplineField
-              value={form.discipline}
-              onChange={(v) => update("discipline", v)}
-            />
-          </div>
-
-          {initial && onTransition && (
-            <WorkflowActions
-              transitions={transitions}
-              busy={busy}
-              setBusy={setBusy}
-              onTransition={onTransition}
-              entityId={initial.id}
-              entityNoun="CVR"
-              onSuccess={closeDialog}
-            />
-          )}
-
-          <Labeled
-            label="Area"
-            help={
-              projectId === null
-                ? "Select a project first."
-                : areas.length === 0
-                  ? "No areas defined. Optional — leave as None for project-wide changes."
-                  : "Optional — leave as None for project-wide changes."
-            }
-          >
-            <NativeSelect
-              value={form.area}
-              onChange={(v) => update("area", v)}
-              options={[
-                { value: "", label: "— None (project-wide) —" },
-                ...areas.map((a) => ({
-                  value: String(a.id),
-                  label: a.name ? `${a.displayId} — ${a.name}` : a.displayId,
-                })),
-              ]}
-            />
-          </Labeled>
-
-          <Labeled
-            label="Affected CBS Codes"
-            help="Search and select one or more CBS items"
-          >
-            <CbsMultiSelect
-              values={form.cbsCodes}
-              placeholder="Search CBS items…"
-              onChange={(v) => update("cbsCodes", v)}
-            />
-          </Labeled>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Labeled
-              label="Cost Impact ($)"
-              help={
-                hasLineItems
-                  ? "Derived from the Cost Buildup tab."
-                  : undefined
-              }
-            >
-              {hasLineItems ? (
-                <Input
-                  type="text"
-                  readOnly
-                  value={`$${formatMoney(derivedCost)}`}
-                  className="bg-slate-50 text-slate-600"
-                  title="Edit the Cost Buildup tab to change this."
-                />
-              ) : (
-                <NumberInput
-                  step="0.01"
-                  value={form.costImpact}
-                  onChange={(n) => update("costImpact", n)}
+              {!initial && (
+                <TemplatePicker<CvrTemplateFieldSet>
+                  pickerQueryOptions={cvrTemplatePickerQueryOptions}
+                  instantiate={instantiateCvrTemplate}
+                  currentDiscipline={form.discipline}
+                  onSelect={applyTemplate}
+                  noun="CVR"
                 />
               )}
-            </Labeled>
-            <Labeled label="Schedule Impact (days)">
-              <NumberInput
-                step="1"
-                value={form.scheduleDaysImpact}
-                integer
-                onChange={(n) => update("scheduleDaysImpact", n)}
-              />
-            </Labeled>
-            <Labeled label="Labor Hours Impact">
-              <NumberInput
-                step="0.1"
-                value={form.laborHoursImpact}
-                onChange={(n) => update("laborHoursImpact", n)}
-              />
-            </Labeled>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Labeled label="Originator">
-              <Input
-                value={form.originator}
-                placeholder="Requesting party"
-                onChange={(e) => update("originator", e.target.value)}
-              />
-            </Labeled>
-            <Labeled label="Approver">
-              <Input
-                value={form.approver}
-                placeholder="Approving party"
-                onChange={(e) => update("approver", e.target.value)}
-              />
-            </Labeled>
-            <Labeled label="Reason Code">
-              <Input
-                value={form.reasonCode}
-                placeholder="e.g. OWNER_REQUEST, SITE_CONDITION"
-                onChange={(e) => update("reasonCode", e.target.value)}
-              />
-            </Labeled>
-          </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Labeled label="CVR Number">
+                  <Input
+                    value={form.cvrNumber}
+                    placeholder="Auto-assigned if blank"
+                    onChange={(e) => update("cvrNumber", e.target.value)}
+                  />
+                </Labeled>
+                <Labeled label="Title">
+                  <Input
+                    value={form.title}
+                    placeholder="Short description"
+                    onChange={(e) => update("title", e.target.value)}
+                  />
+                </Labeled>
+              </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Labeled label="Requested Date">
-              <DateInput
-                value={form.requestedAt}
-                // Required: a cleared box falls back to today.
-                onChange={(iso) =>
-                  update("requestedAt", iso ?? new Date().toISOString())
-                }
-              />
-            </Labeled>
-            <Labeled label="Due Date">
-              <DateInput
-                value={form.dueDate}
-                onChange={(iso) => update("dueDate", iso)}
-              />
-            </Labeled>
-            <Labeled label="Approved Date">
-              <DateInput
-                value={form.approvedAt}
-                onChange={(iso) => update("approvedAt", iso)}
-              />
-            </Labeled>
-          </div>
+              <Labeled label="Description">
+                <Textarea
+                  value={form.description}
+                  placeholder="What is being changed and why"
+                  rows={3}
+                  onChange={(e) => update("description", e.target.value)}
+                />
+              </Labeled>
 
-          <Labeled label="Notes">
-            <Textarea
-              value={form.notes}
-              rows={2}
-              placeholder="Internal notes, links, references"
-              onChange={(e) => update("notes", e.target.value)}
-            />
-          </Labeled>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <Labeled
+                  label="Status"
+                  help={
+                    initial
+                      ? "Use the workflow actions below to advance status."
+                      : "New items start as Requested."
+                  }
+                >
+                  <div className="flex h-9 items-center">
+                    <StatusBadge
+                      status={initial ? initial.status : "REQUESTED"}
+                    />
+                  </div>
+                </Labeled>
+                <Labeled label="Type">
+                  <NativeSelect
+                    value={form.type}
+                    onChange={(v) => update("type", v as ChangeType)}
+                    options={CHANGE_TYPES.map((s) => ({
+                      value: s,
+                      label: TYPE_LABELS[s],
+                    }))}
+                  />
+                </Labeled>
+                <Labeled label="Risk">
+                  <NativeSelect
+                    value={form.riskLevel}
+                    onChange={(v) => update("riskLevel", v as RiskLevel)}
+                    options={RISK_LEVELS.map((s) => ({
+                      value: s,
+                      label: RISK_LABELS[s],
+                    }))}
+                  />
+                </Labeled>
+                <DisciplineField
+                  value={form.discipline}
+                  onChange={(v) => update("discipline", v)}
+                />
+              </div>
 
+              {initial && onTransition && (
+                <WorkflowActions
+                  transitions={transitions}
+                  busy={busy}
+                  setBusy={setBusy}
+                  onTransition={onTransition}
+                  entityId={initial.id}
+                  entityNoun={CHANGE_ENTITIES.ChangeLog.noun}
+                  onSuccess={closeDialog}
+                />
+              )}
+
+              <AreaField
+                projectId={projectId}
+                value={form.area}
+                onChange={(v) => update("area", v)}
+                noneLabel="— None (project-wide) —"
+                help="Optional — leave as None for project-wide changes."
+                emptyHelp="No areas defined. Optional — leave as None for project-wide changes."
+              />
+
+              <Labeled
+                label="Affected CBS Codes"
+                help="Search and select one or more CBS items"
+              >
+                <CbsMultiSelect
+                  values={form.cbsCodes}
+                  placeholder="Search CBS items…"
+                  onChange={(v) => update("cbsCodes", v)}
+                />
+              </Labeled>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Labeled
+                  label="Cost Impact ($)"
+                  help={
+                    hasLineItems
+                      ? "Derived from the Cost Buildup tab."
+                      : undefined
+                  }
+                >
+                  {hasLineItems ? (
+                    <Input
+                      type="text"
+                      readOnly
+                      value={`$${formatMoney(derivedCost)}`}
+                      className="bg-slate-50 text-slate-600"
+                      title="Edit the Cost Buildup tab to change this."
+                    />
+                  ) : (
+                    <NumberInput
+                      step="0.01"
+                      value={form.costImpact}
+                      onChange={(n) => update("costImpact", n)}
+                    />
+                  )}
+                </Labeled>
+                <Labeled label="Schedule Impact (days)">
+                  <NumberInput
+                    step="1"
+                    value={form.scheduleDaysImpact}
+                    integer
+                    onChange={(n) => update("scheduleDaysImpact", n)}
+                  />
+                </Labeled>
+                <Labeled label="Labor Hours Impact">
+                  <NumberInput
+                    step="0.1"
+                    value={form.laborHoursImpact}
+                    onChange={(n) => update("laborHoursImpact", n)}
+                  />
+                </Labeled>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Labeled label="Originator">
+                  <Input
+                    value={form.originator}
+                    placeholder="Requesting party"
+                    onChange={(e) => update("originator", e.target.value)}
+                  />
+                </Labeled>
+                <Labeled label="Approver">
+                  <Input
+                    value={form.approver}
+                    placeholder="Approving party"
+                    onChange={(e) => update("approver", e.target.value)}
+                  />
+                </Labeled>
+                <Labeled label="Reason Code">
+                  <Input
+                    value={form.reasonCode}
+                    placeholder="e.g. OWNER_REQUEST, SITE_CONDITION"
+                    onChange={(e) => update("reasonCode", e.target.value)}
+                  />
+                </Labeled>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Labeled label="Requested Date">
+                  <DateInput
+                    value={form.requestedAt}
+                    // Required: a cleared box falls back to today.
+                    onChange={(iso) =>
+                      update("requestedAt", iso ?? new Date().toISOString())
+                    }
+                  />
+                </Labeled>
+                <Labeled label="Due Date">
+                  <DateInput
+                    value={form.dueDate}
+                    onChange={(iso) => update("dueDate", iso)}
+                  />
+                </Labeled>
+                <Labeled label="Approved Date">
+                  <DateInput
+                    value={form.approvedAt}
+                    onChange={(iso) => update("approvedAt", iso)}
+                  />
+                </Labeled>
+              </div>
+
+              <Labeled label="Notes">
+                <Textarea
+                  value={form.notes}
+                  rows={2}
+                  placeholder="Internal notes, links, references"
+                  onChange={(e) => update("notes", e.target.value)}
+                />
+              </Labeled>
             </TabsContent>
             <TabsContent value="buildup" className="mt-3">
               <CostBuildupEditor
@@ -626,17 +594,17 @@ function ChangelogDialogBody({
               entityId={initial?.id ?? null}
               projectId={initial?.projectId ?? null}
             />
-            </div>
-          </Tabs>
+          </div>
+        </Tabs>
 
-          <DialogFooterActions
-            busy={busy}
-            disabled={busy || !form.title.trim()}
-            submitLabel={initial ? "Save Changes" : "Create"}
-            onSubmit={handleSubmit}
-            error={error}
-            className="shrink-0"
-          />
+        <DialogFooterActions
+          busy={busy}
+          disabled={busy || !form.title.trim()}
+          submitLabel={initial ? "Save Changes" : "Create"}
+          onSubmit={handleSubmit}
+          error={error}
+          className="shrink-0"
+        />
       </div>
     </>
   );
@@ -780,4 +748,3 @@ function CostBuildupEditor({
     </div>
   );
 }
-

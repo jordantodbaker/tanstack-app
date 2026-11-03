@@ -1,3 +1,4 @@
+import { toggleInSet } from "~/lib/utils";
 import * as React from "react";
 import {
   collectExpandableKeys,
@@ -22,12 +23,7 @@ export function useCbsTreeExpansion(nodes: CbsTreeNode[]) {
 
   const toggle = React.useCallback((pathKey: string) => {
     setLevelShown(null);
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(pathKey)) next.delete(pathKey);
-      else next.add(pathKey);
-      return next;
-    });
+    setExpanded((prev) => toggleInSet(prev, pathKey));
   }, []);
 
   const expandableKeys = React.useMemo(

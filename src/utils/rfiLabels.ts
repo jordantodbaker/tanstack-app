@@ -1,3 +1,4 @@
+import { PRIORITY_LABELS } from "~/config/entity-enums";
 import type { RfiPriority, RfiStatus } from "./rfis";
 
 /**
@@ -15,9 +16,5 @@ export const RFI_STATUS_LABELS: Record<RfiStatus, string> = {
   VOID: "Void",
 };
 
-export const RFI_PRIORITY_LABELS: Record<RfiPriority, string> = {
-  LOW: "Low",
-  NORMAL: "Normal",
-  HIGH: "High",
-  URGENT: "Urgent",
-};
+/** The shared priority scale's labels — see `~/config/entity-enums`. */
+export const RFI_PRIORITY_LABELS: Record<RfiPriority, string> = PRIORITY_LABELS;

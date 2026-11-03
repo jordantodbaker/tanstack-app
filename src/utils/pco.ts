@@ -1,3 +1,11 @@
+import type { UpsertPcoSchema } from "~/lib/validators";
+import {
+  PCO_STATUSES,
+  PRIORITIES,
+  type PcoStatus,
+  type Priority,
+} from "~/config/entity-enums";
+import { formatRecordRef } from "~/config/change-entities";
 import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
@@ -41,28 +49,17 @@ import { PCO_STATUS_LABELS } from "./pcoLabels";
  * a join table.
  */
 
-export const PCO_STATUSES = [
-  "DRAFT",
-  "SUBMITTED",
-  "NEGOTIATING",
-  "APPROVED",
-  "INVOICED",
-  "CLOSED",
-  "REJECTED",
-  "VOID",
-] as const;
-export type PcoStatus = (typeof PCO_STATUSES)[number];
-
-export const PCO_PRIORITIES = ["LOW", "NORMAL", "HIGH", "URGENT"] as const;
-export type PcoPriority = (typeof PCO_PRIORITIES)[number];
+// The enums live in `~/config/entity-enums`, shared with the validators;
+// re-exported here so callers keep reading them from the entity module. The
+// priority scale is the one every record shares.
+export { PCO_STATUSES, type PcoStatus };
+export const PCO_PRIORITIES = PRIORITIES;
+export type PcoPriority = Priority;
 
 /** Statuses where the PCO is still in negotiation / pre-billing — drives
  *  the "open PCO" stat card and dashboard count. */
-export const PCO_OPEN_STATUSES: PcoStatus[] = [
-  "DRAFT",
-  "SUBMITTED",
-  "NEGOTIATING",
-];
+import { PCO_OPEN_STATUSES } from "~/config/entity-enums";
+export { PCO_OPEN_STATUSES };
 
 /** Statuses where the owner has agreed to the amount but cash hasn't
  *  arrived — what AR is chasing. */
@@ -298,27 +295,12 @@ export const pcoEligibleCvrsQueryOptions = (
     staleTime: 30 * 1000,
   });
 
-export type UpsertPcoInput = {
-  id?: number;
-  projectId: number;
-  pcoNumber: string;
-  ownerReference: string;
-  title: string;
-  description: string;
-  priority: PcoPriority;
-  requestedAmount: number;
-  approvedAmount: number;
-  scheduleDaysImpact: number;
-  ownerRepName: string;
-  ownerRepEmail: string;
-  reasonNarrative: string;
-  notes: string;
-  invoiceNumber: string;
-  initiatedBy: string;
-  /** CVR ids the user has selected on the dialog. The server resolves the
-   *  diff against current `linkedCvrs` and updates ChangeLog rows. */
-  linkedCvrIds: number[];
-};
+/**
+ * What the dialog submits, as the validator parses it. `linkedCvrIds` are
+ * the CVRs selected on the dialog; the server resolves the diff against the
+ * current `linkedCvrs` and updates the ChangeLog rows.
+ */
+export type UpsertPcoInput = z.infer<typeof UpsertPcoSchema>;
 
 const PCO_AUDIT_FIELDS = [
   "pcoNumber",
@@ -499,8 +481,7 @@ export const transitionPco = createServerFn({ method: "POST" })
           "paidAt",
           "closedAt",
         ],
-        buildTitle: (r) =>
-          r.pcoNumber ? `${r.pcoNumber} — ${r.title}` : r.title,
+        buildTitle: (r) => formatRecordRef("Pco", r),
         // Stamp the matching timestamp on each transition so list views can
         // show "submitted on" / "approved on" / etc. without a separate
         // UPDATE round-trip. `approvedAmount` is also initialized to

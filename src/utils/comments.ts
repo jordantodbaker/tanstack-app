@@ -1,3 +1,4 @@
+import { CHANGE_ENTITY_TYPES } from "~/config/change-entities";
 import { queryOptions } from "@tanstack/react-query";
 import { qk } from "../lib/query-keys";
 import { createServerFn } from "@tanstack/react-start";
@@ -36,13 +37,8 @@ const PostCommentSchema = z.object({
  * author edit window later if users push back on typos.
  */
 
-export const COMMENT_ENTITY_TYPES = [
-  "ChangeLog",
-  "FieldChangeOrder",
-  "Rfi",
-  "Trend",
-  "Pco",
-] as const;
+// The change-pipeline records — see `~/config/change-entities`.
+export const COMMENT_ENTITY_TYPES = CHANGE_ENTITY_TYPES;
 export type CommentEntityType = (typeof COMMENT_ENTITY_TYPES)[number];
 
 function isCommentEntityType(s: string): s is CommentEntityType {

@@ -248,3 +248,32 @@ export function isTakeOffRowInvalid(row: TakeOffValidationInput): boolean {
  */
 export const tabTriggerClass =
   "cursor-pointer select-none rounded-md border border-slate-300 bg-white px-3 md:px-4 py-1 text-sm font-medium text-slate-700 shadow-sm transition-colors duration-150 ease-out hover:border-slate-400 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a63434]/40 data-active:border-[#a63434] data-active:bg-[#a63434] data-active:text-white data-active:shadow data-active:hover:bg-[#8d2a2a] data-active:hover:border-[#8d2a2a] data-active:hover:text-white";
+
+/**
+ * How an equipment line item is procured: in bulk, or as a tagged item with
+ * its own equipment number. Blank means "not classified yet" — an estimator
+ * types quantities long before that decision is made, so an unset value is a
+ * normal state rather than a missing one.
+ *
+ * A fixed vocabulary rather than free text: it drives how the line is reported,
+ * and "tagged"/"Tagged "/"TAG" would fragment that. Lives here, React-free,
+ * so the cell editor and the range-paste validator read one list.
+ */
+export const MATERIAL_TYPE_OPTIONS = [
+  { value: "Bulk", label: "Bulk" },
+  { value: "Tagged", label: "Tagged" },
+] as const;
+
+/** Valid stored values, blank included. Shared with the range-paste validator
+ *  so typing and pasting accept exactly the same set. */
+export const MATERIAL_TYPES: readonly string[] = MATERIAL_TYPE_OPTIONS.map(
+  (o) => o.value,
+);
+
+/**
+ * A blank template row the user has not typed into: not saved, not counted,
+ * not undone. The two halves were paired by hand in a dozen places.
+ */
+export function isUntouchedBlankRow(row: FefRow): boolean {
+  return isBlankId(row.id) && !fefRowHasUserData(row);
+}

@@ -1,3 +1,4 @@
+import { loadInvalidByDiscipline } from "./fef-invalid.server";
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
@@ -52,37 +53,6 @@ const TOTALS_SELECT = {
   laborRate: true,
   materialCost: true,
 } satisfies Prisma.FefRowSelect;
-
-/**
- * Take Off rows per discipline that the user started but whose Total Cost
- * can't be computed — `isTakeOffRowInvalid`, split in two:
- *   1. SQL `WHERE` keeps only TAKE_OFF rows the user has touched (cbsCode or
- *      any free-text field non-empty), so empty template rows never load.
- *   2. JS checks the "not computable" half on just the two inputs it reads.
- * Module-private for the same client-stripping reason as `loadProjectTotals`.
- */
-async function loadInvalidByDiscipline(
-  versionId: number,
-): Promise<Record<string, number>> {
-  const rows = await prisma.fefRow.findMany({
-    where: {
-      versionId,
-      section: "TAKE_OFF",
-      OR: [
-        { cbsCode: { not: "" } },
-        ...FEF_ROW_STRING_FIELDS.map((f) => ({ [f]: { not: "" } })),
-      ],
-    },
-    select: { discipline: true, laborHours: true, laborRate: true },
-  });
-  const out: Record<string, number> = {};
-  for (const r of rows) {
-    if (!isTotalCostComputable(r.laborHours, r.laborRate) && r.discipline) {
-      out[r.discipline] = (out[r.discipline] ?? 0) + 1;
-    }
-  }
-  return out;
-}
 
 /**
  * Plain (no-auth) loader: every FefRow for the project → aggregated totals.

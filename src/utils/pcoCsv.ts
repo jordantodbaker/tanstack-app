@@ -1,3 +1,4 @@
+import { recordNumber } from "~/config/change-entities";
 import { fmtDate, type CsvColumn } from "~/lib/csv-export";
 import type { PcoItem } from "./pco";
 import { PCO_PRIORITY_LABELS, PCO_STATUS_LABELS } from "./pcoLabels";
@@ -29,7 +30,7 @@ export function pcoCsvColumns(): CsvColumn<PcoItem>[] {
     {
       header: "Linked CVRs",
       get: (p) =>
-        p.linkedCvrs.map((c) => c.cvrNumber || `CVR #${c.id}`).join("; "),
+        p.linkedCvrs.map((c) => recordNumber("ChangeLog", c)).join("; "),
     },
     {
       header: "Linked CVR Total Cost Impact ($)",

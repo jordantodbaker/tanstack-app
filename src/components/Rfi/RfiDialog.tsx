@@ -1,3 +1,9 @@
+import {
+  AreaField,
+  CommaListInput,
+  type EntityDialogCallbacks,
+} from "~/components/EntityDialog/EntityFields";
+import { CHANGE_ENTITIES, recordNumber } from "~/config/change-entities";
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link as LinkIcon } from "lucide-react";
@@ -8,7 +14,6 @@ import { Textarea } from "~/components/ui/textarea";
 import { Checkbox } from "~/components/ui/checkbox";
 import { DateInput, Labeled, NativeSelect } from "~/components/ui/form-helpers";
 import { useRecordDialogForm } from "~/lib/use-record-dialog-form";
-import { areasByProjectQueryOptions } from "~/utils/areas";
 import {
   RFI_PRIORITIES,
   rfiQueryOptions,
@@ -89,19 +94,7 @@ type RfiDialogProps = {
    *  so heavy text fields (`question`, `response`) populate correctly. */
   initial?: RfiListItem;
   projectId: number | null;
-  onSubmit: (form: FormState) => Promise<unknown>;
-  onDelete?: (id: number) => Promise<unknown>;
-  /**
-   * Run a workflow transition. Renders one button per transition allowed by
-   * the current user's role + originator status. See `RFI_TRANSITIONS`.
-   */
-  onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
-  /**
-   * Promote this RFI to a new FCO. Pre-populates the FCO from the RFI's
-   * discipline / area / drawings and links it back via `linkedRfiId`.
-   */
-  onPromote?: (id: number) => Promise<unknown>;
-};
+} & EntityDialogCallbacks<FormState>;
 
 /**
  * Outer wrapper. Owns the Dialog open state and runs the lazy full-record
@@ -113,10 +106,7 @@ export function RfiDialog({
   trigger,
   initial,
   projectId,
-  onSubmit,
-  onDelete,
-  onTransition,
-  onPromote,
+  ...callbacks
 }: RfiDialogProps) {
   return (
     <EntityDialogShell
@@ -130,10 +120,7 @@ export function RfiDialog({
         <RfiDialogBody
           initial={full}
           projectId={projectId}
-          onSubmit={onSubmit}
-          onDelete={onDelete}
-          onTransition={onTransition}
-          onPromote={onPromote}
+          {...callbacks}
           closeDialog={closeDialog}
         />
       )}
@@ -152,12 +139,8 @@ function RfiDialogBody({
 }: {
   initial?: RfiItem;
   projectId: number | null;
-  onSubmit: (form: FormState) => Promise<unknown>;
-  onDelete?: (id: number) => Promise<unknown>;
-  onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
-  onPromote?: (id: number) => Promise<unknown>;
   closeDialog: () => void;
-}) {
+} & EntityDialogCallbacks<FormState>) {
   const { form, busy, setBusy, error, update, handleSubmit, handleDelete } =
     useRecordDialogForm<RfiItem, FormState>({
       initial,
@@ -192,28 +175,6 @@ function RfiDialogBody({
 
   // `open` is implicitly true — this component only mounts when the outer
   // dialog is open and the full record has loaded.
-  const { data: areas = [] } = useQuery({
-    ...areasByProjectQueryOptions(projectId),
-    enabled: projectId !== null,
-  });
-
-  // Comma-separated text fields for the string-array columns. Commit on
-  // blur so the user can type freely without per-keystroke parsing churn.
-  const [drawingRefsText, setDrawingRefsText] = React.useState("");
-  const [specRefsText, setSpecRefsText] = React.useState("");
-  React.useEffect(() => {
-    setDrawingRefsText(form.drawingRefs.join(", "));
-    setSpecRefsText(form.specRefs.join(", "));
-  }, [form.drawingRefs, form.specRefs]);
-
-  function commitList(raw: string, key: "drawingRefs" | "specRefs") {
-    const items = raw
-      .split(/[,\n]/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    update(key, items);
-  }
-
   return (
     <>
       <div className="space-y-4">
@@ -221,7 +182,11 @@ function RfiDialogBody({
           title={initial ? "Edit RFI" : "New RFI"}
           subtitle="Question to the designer/engineer — drawings, specs, field conditions. Promote to an FCO if the answer drives new scope."
         >
-          {initial?.id && <PrintPdfLink href={`/rfi-print/${initial.id}`} />}
+          {initial?.id && (
+            <PrintPdfLink
+              href={`${CHANGE_ENTITIES.Rfi.printPath}/${initial.id}`}
+            />
+          )}
           {canPromote && (
             <PromoteButton
               label="Promote to FCO"
@@ -245,7 +210,7 @@ function RfiDialogBody({
               {initial.linkedFcos.map((f) => (
                 <li key={f.id}>
                   <span className="font-mono text-xs">
-                    {f.fcoNumber || `FCO #${f.id}`}
+                    {recordNumber("FieldChangeOrder", f)}
                   </span>
                   {f.title && (
                     <span className="text-violet-700"> — {f.title}</span>
@@ -323,7 +288,7 @@ function RfiDialogBody({
                 setBusy={setBusy}
                 onTransition={onTransition}
                 entityId={initial.id}
-                entityNoun="RFI"
+                entityNoun={CHANGE_ENTITIES.Rfi.noun}
                 onSuccess={closeDialog}
               />
             )}
@@ -334,30 +299,11 @@ function RfiDialogBody({
                 Field context
               </legend>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <Labeled
-                  label="Area"
-                  help={
-                    projectId === null
-                      ? "Select a project first."
-                      : areas.length === 0
-                        ? "No areas defined. Add some in Admin → Areas."
-                        : undefined
-                  }
-                >
-                  <NativeSelect
-                    value={form.locationArea}
-                    onChange={(v) => update("locationArea", v)}
-                    options={[
-                      { value: "", label: "— None —" },
-                      ...areas.map((a) => ({
-                        value: String(a.id),
-                        label: a.name
-                          ? `${a.displayId} — ${a.name}`
-                          : a.displayId,
-                      })),
-                    ]}
-                  />
-                </Labeled>
+                <AreaField
+                  projectId={projectId}
+                  value={form.locationArea}
+                  onChange={(v) => update("locationArea", v)}
+                />
                 <Labeled label="Initiated by">
                   <Input
                     value={form.initiatedBy}
@@ -381,10 +327,9 @@ function RfiDialogBody({
                   label="Drawing references"
                   help="Comma-separated (e.g. P-101-A, M-303-B)"
                 >
-                  <Input
-                    value={drawingRefsText}
-                    onChange={(e) => setDrawingRefsText(e.target.value)}
-                    onBlur={(e) => commitList(e.target.value, "drawingRefs")}
+                  <CommaListInput
+                    value={form.drawingRefs}
+                    onChange={(items) => update("drawingRefs", items)}
                     placeholder="P-101-A, M-303-B"
                   />
                 </Labeled>
@@ -392,10 +337,9 @@ function RfiDialogBody({
                   label="Spec references"
                   help="Comma-separated spec sections"
                 >
-                  <Input
-                    value={specRefsText}
-                    onChange={(e) => setSpecRefsText(e.target.value)}
-                    onBlur={(e) => commitList(e.target.value, "specRefs")}
+                  <CommaListInput
+                    value={form.specRefs}
+                    onChange={(items) => update("specRefs", items)}
                     placeholder="03 30 00, 05 12 00"
                   />
                 </Labeled>

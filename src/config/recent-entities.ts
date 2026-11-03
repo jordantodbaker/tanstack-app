@@ -1,36 +1,28 @@
+import {
+  CHANGE_ENTITIES,
+  CHANGE_ENTITY_TYPES,
+  type ChangeEntityType,
+} from "./change-entities";
+
 /**
- * Catalog of entity types that can show up in the user's Recently Viewed
- * sidebar. Single source of truth for:
- *   - the runtime string set (Zod validators read this)
- *   - the display label per entity (sidebar rows)
- *   - the list route per entity (clicking a recent navigates here with `?q=…`)
+ * The entity types that can show up in the user's Recently Viewed sidebar:
+ * the five change-pipeline records, read off `CHANGE_ENTITIES` so the set,
+ * the labels and the routes cannot drift from the comments, attachments and
+ * numbering catalogs that derive from the same table.
  *
- * Adding a new entity to the recents flow:
- *   1. Add it to `RECENT_ENTITY_TYPES` below.
- *   2. Add the matching label + route entries.
- *   3. Wire `useRecordRecentView` into that entity's dialog body component.
- *   4. The drift-guard test pins this list against the audit/comment/
- *      attachment entity-type catalogs so the four stay aligned.
+ * Adding a new entity to the recents flow is adding it to `CHANGE_ENTITIES`
+ * and wiring `useRecordRecentView` into that entity's dialog body.
  */
 
-export const RECENT_ENTITY_TYPES = [
-  "ChangeLog",
-  "FieldChangeOrder",
-  "Rfi",
-  "Trend",
-  "Pco",
-] as const;
+export const RECENT_ENTITY_TYPES = CHANGE_ENTITY_TYPES;
 
-export type RecentEntityType = (typeof RECENT_ENTITY_TYPES)[number];
+export type RecentEntityType = ChangeEntityType;
 
 /** Short noun shown in the sidebar (e.g. "CVR-014" / "FCO-098"). */
-export const RECENT_ENTITY_LABELS: Record<RecentEntityType, string> = {
-  ChangeLog: "CVR",
-  FieldChangeOrder: "FCO",
-  Rfi: "RFI",
-  Trend: "Trend",
-  Pco: "PCO",
-};
+export const RECENT_ENTITY_LABELS: Record<RecentEntityType, string> =
+  Object.fromEntries(
+    CHANGE_ENTITY_TYPES.map((t) => [t, CHANGE_ENTITIES[t].noun]),
+  ) as Record<RecentEntityType, string>;
 
 /** List route a click on a recent item navigates to. The destination route
  *  reads `?q` via its `validateSearch` and pre-filters the table to that
@@ -38,13 +30,12 @@ export const RECENT_ENTITY_LABELS: Record<RecentEntityType, string> = {
 export const RECENT_ENTITY_ROUTES: Record<
   RecentEntityType,
   "/changelog" | "/fco-log" | "/rfis" | "/trends" | "/pco"
-> = {
-  ChangeLog: "/changelog",
-  FieldChangeOrder: "/fco-log",
-  Rfi: "/rfis",
-  Trend: "/trends",
-  Pco: "/pco",
-};
+> = Object.fromEntries(
+  CHANGE_ENTITY_TYPES.map((t) => [t, CHANGE_ENTITIES[t].listPath]),
+) as Record<
+  RecentEntityType,
+  "/changelog" | "/fco-log" | "/rfis" | "/trends" | "/pco"
+>;
 
 /** Most we ever store in the user's prefs. Keeping headroom past the
  *  display cap so project-filtering doesn't run out of items immediately. */

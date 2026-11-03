@@ -1,3 +1,4 @@
+import { snapshotTotals, snapshotTotalsById } from "./snapshot-totals.server";
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { prisma } from "../server/db";
@@ -110,38 +111,6 @@ function bacByDiscipline(totals: ProjectFefRowTotals): Record<string, number> {
   return bacByBucket(
     totals,
     (l1) => L1_TO_DISCIPLINE[l1] ?? DIGIT_TO_DISCIPLINE[l1[0]],
-  );
-}
-
-/** A cached snapshot total is usable only if it carries the L1 buckets the
- *  discipline aggregation needs; pre-`byL1` caches fall back to a recompute. */
-function hasL1Buckets(totals: unknown): totals is ProjectFefRowTotals {
-  return (
-    totals !== null &&
-    typeof totals === "object" &&
-    "laborByL1" in (totals as Record<string, unknown>)
-  );
-}
-
-/**
- * The L1-bucketed totals for a baseline snapshot: its cached `totals` when they
- * carry the L1 buckets, otherwise a recompute from the snapshot's frozen
- * `fefRows` (legacy / pre-`byL1` caches). New snapshots never hit the recompute.
- *
- * For a single snapshot only — `fetchEvmTimeSeries` batches the recompute across
- * many periods in one query instead of calling this per row.
- */
-async function resolveBaselineTotals(snapshot: {
-  id: number;
-  totals: unknown;
-}): Promise<ProjectFefRowTotals> {
-  if (hasL1Buckets(snapshot.totals)) return snapshot.totals;
-  const legacy = await prisma.estimateSnapshot.findUniqueOrThrow({
-    where: { id: snapshot.id },
-    select: { fefRows: true },
-  });
-  return accumulateProjectTotals(
-    (legacy.fefRows as unknown as ProjectTotalsRow[]) ?? [],
   );
 }
 
@@ -426,7 +395,7 @@ export const fetchBudgetReconciliation = createServerFn({ method: "GET" })
         if (snap && snap.projectId === data.projectId) {
           baselineSnapshotId = snap.id;
           baselineLabel = snap.label;
-          asBidTotals = await resolveBaselineTotals(snap);
+          asBidTotals = await snapshotTotals(snap);
         } else {
           // No snapshot — reconcile against the live estimate. Inlined here (rather
           // than importing a shared loader from projectTotals.ts) to keep this
@@ -643,10 +612,9 @@ export const fetchPeriodWithEvm = createServerFn({ method: "GET" })
     });
     await requireProjectAccess(period.projectId);
 
-    // 1. BAC by bucket — the cached aggregator output, or a recompute from the
-    // frozen rows for legacy snapshots (created before the `totals` column).
-    // New snapshots never hit the recompute.
-    const baselineTotals = await resolveBaselineTotals(period.baselineSnapshot);
+    // 1. BAC by bucket — the snapshot's cached aggregator output (see
+    // `snapshot-totals.server` for the one place old snapshots are recomputed).
+    const baselineTotals = await snapshotTotals(period.baselineSnapshot);
 
     // 2/3. CVR-driven budget revisions + probability-weighted pending-trend
     //    forecast, per bucket. Independent reads — run them in parallel.
@@ -790,34 +758,16 @@ export const fetchEvmTimeSeries = createServerFn({ method: "GET" })
             loadTrendForecastByBucket(projectId),
           ]);
 
-        // Resolve any legacy snapshots (no cached `totals`) up front — one extra
-        // query each. Almost always empty; only matters for snapshots created
-        // before the cache column existed.
-        const missingTotalsIds = Array.from(
-          new Set(
-            periods
-              .filter((p) => !hasL1Buckets(p.baselineSnapshot.totals))
-              .map((p) => p.baselineSnapshot.id),
-          ),
+        // Every period's baseline totals, from the snapshots' caches (old
+        // snapshots are recomputed in one query — see snapshot-totals.server).
+        const totalsById = await snapshotTotalsById(
+          periods.map((p) => p.baselineSnapshot),
         );
-        const legacyTotalsById = new Map<number, ProjectFefRowTotals>();
-        if (missingTotalsIds.length > 0) {
-          const legacy = await prisma.estimateSnapshot.findMany({
-            where: { id: { in: missingTotalsIds } },
-            select: { id: true, fefRows: true },
-          });
-          for (const s of legacy) {
-            const rows = (s.fefRows as unknown as ProjectTotalsRow[]) ?? [];
-            legacyTotalsById.set(s.id, accumulateProjectTotals(rows));
-          }
-        }
 
         return periods.map((p) => {
-          const baselineTotals: ProjectFefRowTotals = hasL1Buckets(
-            p.baselineSnapshot.totals,
-          )
-            ? p.baselineSnapshot.totals
-            : (legacyTotalsById.get(p.baselineSnapshot.id) ?? EMPTY_TOTALS);
+          const baselineTotals =
+            totalsById.get(p.baselineSnapshot.id) ??
+            accumulateProjectTotals([]);
           const { total } = computePeriodEvm({
             bacByBucket: bacByDiscipline(baselineTotals),
             revisionsByBucket,
@@ -837,29 +787,6 @@ export const fetchEvmTimeSeries = createServerFn({ method: "GET" })
       },
     ),
   );
-
-// Local empty-totals constant for the legacy-snapshot fallback in
-// `fetchEvmTimeSeries`. Same shape `EMPTY_TOTALS` in projectTotals.ts uses,
-// duplicated here to avoid cross-module import (projectTotals.ts is its own
-// server module and the file boundary keeps the dependency one-way).
-const EMPTY_TOTALS: ProjectFefRowTotals = {
-  laborByDigit: {},
-  laborHoursByDigit: {},
-  quantityByDigit: {},
-  craftSupportLabor: 0,
-  craftSupportLaborHours: 0,
-  materialsByDigit: {},
-  laborByL1: {},
-  laborHoursByL1: {},
-  quantityByL1: {},
-  materialsByL1: {},
-  laborByL1L2: {},
-  laborHoursByL1L2: {},
-  quantityByL1L2: {},
-  materialsByL1L2: {},
-  byArea: [],
-  invalidByDiscipline: {},
-};
 
 export const evmTimeSeriesQueryOptions = (projectId: number | null) =>
   queryOptions({

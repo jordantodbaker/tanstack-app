@@ -27,69 +27,23 @@
  * the dialog's submit button is also gated on those.
  */
 import { z } from "zod";
+// The enums come from an import-free module the entity utils read too, so
+// a status added there is in the schema as well. (The entity utils import
+// the schemas FROM this file, which is why they could never be the source.)
+import {
+  CHANGE_STATUSES,
+  CHANGE_TYPES,
+  CVR_COST_TYPES,
+  FCO_ORIGIN_TYPES,
+  FCO_STATUSES,
+  PRIORITIES,
+  RISK_LEVELS,
+} from "~/config/entity-enums";
 
-// Status / type / priority enums are inlined here (rather than imported from
-// the entity utils) because the entity utils import the schemas FROM this
-// file — a real import-time cycle would form. The lists are intentionally
-// duplicated; if an entity adds a status, both this list and the entity's
-// own constant must update. `z.enum` narrows to the literal union at compile
-// time, so a forgotten value still wouldn't typecheck against the rest of
-// the entity module's handler logic.
-
-const CHANGE_STATUSES = [
-  "REQUESTED",
-  "IN_REVIEW",
-  "PENDING_APPROVAL",
-  "APPROVED",
-  "REJECTED",
-  "EXECUTED",
-  "VOID",
-] as const;
-const CHANGE_TYPES = [
-  "SCOPE",
-  "COST",
-  "SCHEDULE",
-  "ENGINEERING",
-  "CONSTRUCTION",
-  "PROCUREMENT",
-  "REGULATORY",
-  "OTHER",
-] as const;
-const RISK_LEVELS = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
-const CVR_COST_TYPES = [
-  "LABOR",
-  "MATERIAL",
-  "EQUIPMENT",
-  "SUBCONTRACT",
-  "OTHER",
-] as const;
-const FCO_STATUSES = [
-  "DRAFT",
-  "SUBMITTED",
-  "IN_REVIEW",
-  "LINKED_TO_CVR",
-  "APPROVED",
-  "REJECTED",
-  "IMPLEMENTED",
-  "CLOSED",
-  "VOID",
-] as const;
-const FCO_ORIGIN_TYPES = [
-  "FIELD_CONDITION",
-  "RFI_RESPONSE",
-  "DESIGN_OMISSION",
-  "DESIGN_CONFLICT",
-  "OWNER_DIRECTIVE",
-  "SAFETY",
-  "REGULATORY",
-  "WEATHER",
-  "SUBCONTRACTOR",
-  "OTHER",
-] as const;
-const FCO_PRIORITIES = ["LOW", "NORMAL", "HIGH", "URGENT"] as const;
-const RFI_PRIORITIES = ["LOW", "NORMAL", "HIGH", "URGENT"] as const;
-const TREND_PRIORITIES = ["LOW", "NORMAL", "HIGH", "URGENT"] as const;
-const PCO_PRIORITIES = ["LOW", "NORMAL", "HIGH", "URGENT"] as const;
+const FCO_PRIORITIES = PRIORITIES;
+const RFI_PRIORITIES = PRIORITIES;
+const TREND_PRIORITIES = PRIORITIES;
+const PCO_PRIORITIES = PRIORITIES;
 
 // ── Primitives ──────────────────────────────────────────────────────────────
 
@@ -291,7 +245,8 @@ export const SearchInputSchema = z.object({
   projectId: ProjectId,
   query: z.string().trim().min(2).max(100),
 });
-export const parseSearchInput = (input: unknown) => SearchInputSchema.parse(input);
+export const parseSearchInput = (input: unknown) =>
+  SearchInputSchema.parse(input);
 
 // ── Promotion / cross-entity action inputs ──────────────────────────────────
 

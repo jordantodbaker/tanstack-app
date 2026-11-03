@@ -1,3 +1,9 @@
+import {
+  AreaField,
+  LinkedRecordSelect,
+  type EntityDialogCallbacks,
+} from "~/components/EntityDialog/EntityFields";
+import { CHANGE_ENTITIES, formatRecordRef } from "~/config/change-entities";
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link as LinkIcon } from "lucide-react";
@@ -12,7 +18,6 @@ import {
   NumberInput,
 } from "~/components/ui/form-helpers";
 import { useRecordDialogForm } from "~/lib/use-record-dialog-form";
-import { areasByProjectQueryOptions } from "~/utils/areas";
 import {
   TREND_PRIORITIES,
   trendForecastContribution,
@@ -103,23 +108,13 @@ type TrendDialogProps = {
    *  so heavy text fields populate correctly. */
   initial?: TrendListItem;
   projectId: number | null;
-  onSubmit: (form: FormState) => Promise<unknown>;
-  onDelete?: (id: number) => Promise<unknown>;
-  /** Run a workflow transition. See `TREND_TRANSITIONS`. */
-  onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
-  /** Promote this trend to a CVR. Creates the CVR and moves the trend to
-   *  CONVERTED in one transaction. APPROVER+ only on the server. */
-  onPromote?: (id: number) => Promise<unknown>;
-};
+} & EntityDialogCallbacks<FormState>;
 
 export function TrendDialog({
   trigger,
   initial,
   projectId,
-  onSubmit,
-  onDelete,
-  onTransition,
-  onPromote,
+  ...callbacks
 }: TrendDialogProps) {
   return (
     <EntityDialogShell
@@ -133,10 +128,7 @@ export function TrendDialog({
         <TrendDialogBody
           initial={full}
           projectId={projectId}
-          onSubmit={onSubmit}
-          onDelete={onDelete}
-          onTransition={onTransition}
-          onPromote={onPromote}
+          {...callbacks}
           closeDialog={closeDialog}
         />
       )}
@@ -155,12 +147,8 @@ function TrendDialogBody({
 }: {
   initial?: TrendItem;
   projectId: number | null;
-  onSubmit: (form: FormState) => Promise<unknown>;
-  onDelete?: (id: number) => Promise<unknown>;
-  onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
-  onPromote?: (id: number) => Promise<unknown>;
   closeDialog: () => void;
-}) {
+} & EntityDialogCallbacks<FormState>) {
   const { form, busy, setBusy, error, update, handleSubmit, handleDelete } =
     useRecordDialogForm<TrendItem, FormState>({
       initial,
@@ -200,10 +188,6 @@ function TrendDialogBody({
     (initial.status === "IDENTIFIED" || initial.status === "PROBABLE");
 
   // `open` is implicitly true — only mounted when outer is open + full loaded.
-  const { data: areas = [] } = useQuery({
-    ...areasByProjectQueryOptions(projectId),
-    enabled: projectId !== null,
-  });
   const { data: rfiList = [] } = useQuery({
     ...rfiListQueryOptions(projectId),
     enabled: projectId !== null,
@@ -330,7 +314,7 @@ function TrendDialogBody({
                 setBusy={setBusy}
                 onTransition={onTransition}
                 entityId={initial.id}
-                entityNoun="Trend"
+                entityNoun={CHANGE_ENTITIES.Trend.noun}
                 onSuccess={closeDialog}
               />
             )}
@@ -418,30 +402,11 @@ function TrendDialogBody({
                 Context
               </legend>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <Labeled
-                  label="Area"
-                  help={
-                    projectId === null
-                      ? "Select a project first."
-                      : areas.length === 0
-                        ? "No areas defined. Add some in Admin → Areas."
-                        : undefined
-                  }
-                >
-                  <NativeSelect
-                    value={form.locationArea}
-                    onChange={(v) => update("locationArea", v)}
-                    options={[
-                      { value: "", label: "— None —" },
-                      ...areas.map((a) => ({
-                        value: String(a.id),
-                        label: a.name
-                          ? `${a.displayId} — ${a.name}`
-                          : a.displayId,
-                      })),
-                    ]}
-                  />
-                </Labeled>
+                <AreaField
+                  projectId={projectId}
+                  value={form.locationArea}
+                  onChange={(v) => update("locationArea", v)}
+                />
                 <Labeled label="Initiated by">
                   <Input
                     value={form.initiatedBy}
@@ -462,40 +427,26 @@ function TrendDialogBody({
                   label="Linked RFI"
                   help="Optional. Use when this trend tracks the cost risk on an open RFI."
                 >
-                  <NativeSelect
-                    value={
-                      form.linkedRfiId === null ? "" : String(form.linkedRfiId)
-                    }
-                    onChange={(v) =>
-                      update("linkedRfiId", v === "" ? null : Number(v))
-                    }
-                    options={[
-                      { value: "", label: "— None —" },
-                      ...rfiList.map((r) => ({
-                        value: String(r.id),
-                        label: `${r.rfiNumber || `RFI #${r.id}`} — ${r.subject}`,
-                      })),
-                    ]}
+                  <LinkedRecordSelect
+                    value={form.linkedRfiId}
+                    onChange={(id) => update("linkedRfiId", id)}
+                    options={rfiList.map((r) => ({
+                      id: r.id,
+                      label: formatRecordRef("Rfi", r),
+                    }))}
                   />
                 </Labeled>
                 <Labeled
                   label="Linked FCO"
                   help="Optional. Use when this trend tracks the cost risk on an in-flight FCO."
                 >
-                  <NativeSelect
-                    value={
-                      form.linkedFcoId === null ? "" : String(form.linkedFcoId)
-                    }
-                    onChange={(v) =>
-                      update("linkedFcoId", v === "" ? null : Number(v))
-                    }
-                    options={[
-                      { value: "", label: "— None —" },
-                      ...fcoList.map((f) => ({
-                        value: String(f.id),
-                        label: `${f.fcoNumber || `FCO #${f.id}`} — ${f.title}`,
-                      })),
-                    ]}
+                  <LinkedRecordSelect
+                    value={form.linkedFcoId}
+                    onChange={(id) => update("linkedFcoId", id)}
+                    options={fcoList.map((f) => ({
+                      id: f.id,
+                      label: formatRecordRef("FieldChangeOrder", f),
+                    }))}
                   />
                 </Labeled>
               </div>

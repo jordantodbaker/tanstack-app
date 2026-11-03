@@ -56,6 +56,7 @@ import {
   type CbsTreeRow,
 } from "~/utils/cbs";
 import { parseCbsDisplayCode } from "~/lib/cbs-tree";
+import { defaultParseSearch } from "@tanstack/react-router";
 
 afterEach(cleanup);
 afterEach(() => exportCall.mockClear());
@@ -808,5 +809,36 @@ describe("ProjectCostCodeListView ?code= deep link", () => {
     expect(
       within(tree).getByText("Tube Banks / Coils (L)"),
     ).toBeInTheDocument();
+  });
+});
+
+describe("ProjectCostCodeListView Full screen", () => {
+  it("links to the full-screen tab carrying the filters in force and the selected row", () => {
+    renderView(LINES);
+    fireEvent.click(screen.getByRole("button", { name: "Labor" }));
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "pipe" },
+    });
+    fireEvent.click(
+      within(screen.getByRole("tree")).getByText("Pipe Labor (L)"),
+    );
+
+    const link = screen.getByRole("link", { name: /Full screen/ });
+    expect(link).toHaveAttribute("target", "_blank");
+    const href = link.getAttribute("href")!;
+    expect(href.startsWith("/cbs-fullscreen?")).toBe(true);
+    expect(defaultParseSearch(href.slice(href.indexOf("?")))).toEqual({
+      view: "project",
+      q: "pipe",
+      types: ["labor"],
+      code: "600-00-0000-00-L",
+    });
+  });
+
+  it("links to a bare view when nothing is filtering", () => {
+    renderView(LINES);
+    expect(
+      screen.getByRole("link", { name: /Full screen/ }).getAttribute("href"),
+    ).toBe("/cbs-fullscreen?view=project");
   });
 });

@@ -1,13 +1,19 @@
 import * as React from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Maximize2 } from "lucide-react";
 import type { CbsBrowserRow } from "~/utils/cbs";
 import {
   buildCbsTree,
   CBS_COST_TYPES,
   cbsIsBackbone,
   pruneCbsTree,
+  type CbsRowFilterState,
   type CbsTreeNode,
 } from "~/lib/cbs-tree";
+import {
+  cbsFullscreenHref,
+  cbsFullscreenSearch,
+  type CbsFullscreenView,
+} from "~/lib/cbs-fullscreen";
 import {
   CbsLevelLegend,
   CbsTreePanel,
@@ -157,6 +163,10 @@ export function CbsDictionaryBrowser({
   linkPath = null,
   statusFilter = false,
   rowTypeFilter = false,
+  fullscreenView = null,
+  fill = false,
+  initialFilter,
+  initialHideContext = false,
 }: {
   items: CbsBrowserRow[];
   sourceNote: string;
@@ -166,6 +176,22 @@ export function CbsDictionaryBrowser({
    * `?code=`, such as "/project-cost-codes". Omit to leave the button out.
    */
   linkPath?: string | null;
+  /**
+   * Which tree this is, for the toolbar's "Full screen" button: it opens
+   * `/cbs-fullscreen` in a new tab on the same view, carrying the filters,
+   * the ungranted-parents choice and the selected row. Omit to leave the
+   * button out. See `~/lib/cbs-fullscreen`.
+   */
+  fullscreenView?: CbsFullscreenView | null;
+  /**
+   * The full-screen tab itself: the list runs to the bottom of the window,
+   * and there is no "Full screen" button since this already is.
+   */
+  fill?: boolean;
+  /** Start with these filters in force — see `useCbsRowFilter`. */
+  initialFilter?: CbsRowFilterState;
+  /** Start with "Hide ungranted parents" ticked. */
+  initialHideContext?: boolean;
   /**
    * Offer the Active / Inactive / Retired buttons. Only the CBS Dictionary
    * does: Cost Accounts and the Project Cost Code List are active-only by
@@ -190,7 +216,7 @@ export function CbsDictionaryBrowser({
   // happens before the tree is built: `buildCbsTree` already collapses a row
   // whose intermediate code is absent up to the nearest ancestor that exists,
   // which is exactly the shape wanted once the ungranted parents are gone.
-  const [hideContext, setHideContext] = React.useState(false);
+  const [hideContext, setHideContext] = React.useState(initialHideContext);
   const hasContext = React.useMemo(() => items.some((i) => i.context), [items]);
   const shown = React.useMemo(
     () => (hideContext && hasContext ? items.filter((i) => !i.context) : items),
@@ -242,12 +268,15 @@ export function CbsDictionaryBrowser({
   // rows as a matter of course.
   // The search filters a deferred copy of the text, as Setup does: the
   // catalog views re-prune ~14,000 rows per keystroke otherwise.
-  const { filter, filtering, searchPending, controls } = useCbsRowFilter({
-    items,
-    statusFilter,
-    rowTypeFilter,
-    deferQuery: true,
-  });
+  const { filter, state, filtering, searchPending, controls } = useCbsRowFilter(
+    {
+      items,
+      statusFilter,
+      rowTypeFilter,
+      deferQuery: true,
+      initial: initialFilter,
+    },
+  );
   const { nodes: visibleNodes, matches } = React.useMemo(
     () => pruneCbsTree(nodes, filter),
     [filter, nodes],
@@ -296,6 +325,32 @@ export function CbsDictionaryBrowser({
             disabled={items.length === 0}
           />
         )}
+        {/* A plain link, not a navigation: the new tab must start from the
+            URL, and a link is what the browser's "open in new tab" and
+            middle-click already understand. Left off the full-screen tab
+            itself. */}
+        {fullscreenView && !fill && (
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            title="Open this tree in a new tab with these filters and no navigation around it"
+          >
+            <a
+              href={cbsFullscreenHref(
+                cbsFullscreenSearch(fullscreenView, state, {
+                  hideContext: hideContext && hasContext,
+                  code: selected?.item.displayCode ?? null,
+                }),
+              )}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Maximize2 className="size-3.5" />
+              Full screen
+            </a>
+          </Button>
+        )}
         {filtering && (
           <span className="text-xs text-slate-500">
             {matches.toLocaleString()} match{matches === 1 ? "" : "es"}
@@ -309,6 +364,7 @@ export function CbsDictionaryBrowser({
           expanded={expanded}
           forceOpen={filtering}
           scrollToKey={focusCode}
+          fill={fill}
           selectedKey={selected?.pathKey ?? null}
           onToggle={toggle}
           onSelect={setSelected}

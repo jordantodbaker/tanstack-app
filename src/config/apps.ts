@@ -181,6 +181,9 @@ export const APPS: readonly AppDef[] = [
         adminOnly: true,
       },
     ],
+    // The full-screen tree tab, which has no nav entry — and renders with no
+    // nav at all; see `__root.tsx`.
+    ownedPaths: ["/cbs-fullscreen"],
   },
   {
     id: "reports",

@@ -19,7 +19,7 @@ import { FCO_STATUS_LABELS } from "~/utils/fcoLogLabels";
 import { RFI_STATUS_LABELS } from "~/utils/rfiLabels";
 import { TREND_STATUS_LABELS } from "~/utils/trendLabels";
 import { PCO_STATUS_LABELS } from "~/utils/pcoLabels";
-import type { UserRole } from "~/utils/users";
+import type { UserRole } from "~/lib/roles";
 
 /**
  * Renders the guide's block content. Shared by the help dialog and the
@@ -170,7 +170,10 @@ function Block({ block, role }: { block: HelpBlock; role: UserRole }) {
         <ul className="my-3 space-y-1.5 text-sm text-slate-600">
           {block.items.map((item, i) => (
             <li key={i} className="flex gap-2">
-              <span aria-hidden="true" className="mt-2 size-1 shrink-0 rounded-full bg-slate-300" />
+              <span
+                aria-hidden="true"
+                className="mt-2 size-1 shrink-0 rounded-full bg-slate-300"
+              />
               <span>{item}</span>
             </li>
           ))}
@@ -282,7 +285,9 @@ export function HelpSectionView({
     <section
       id={`help-${section.id}`}
       data-help-section={section.id}
-      className={depth === 0 ? "scroll-mt-4 pt-6 first:pt-0" : "scroll-mt-4 pt-5"}
+      className={
+        depth === 0 ? "scroll-mt-4 pt-6 first:pt-0" : "scroll-mt-4 pt-5"
+      }
     >
       {depth === 0 ? (
         <h2 className="border-b border-slate-200 pb-2 text-lg font-bold text-slate-800">

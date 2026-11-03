@@ -27,7 +27,6 @@
  */
 import type { CbsOption, FefRow } from "./types";
 import { crewMixAverageRate } from "./crew-mix-rate";
-import { MATERIAL_TYPES } from "./fef-cells";
 import {
   cleanNumber,
   computeLaborHours,
@@ -46,7 +45,13 @@ import {
   type PipingFactorLookup,
 } from "./piping-derive";
 import { computeBoreSize } from "./utils";
-import { CUSTOM_FIELD_SLOTS, fefRowHasUserData, isBlankId } from "./fef-helpers";
+import {
+  CUSTOM_FIELD_SLOTS,
+  fefRowHasUserData,
+  isBlankId,
+  isUntouchedBlankRow,
+  MATERIAL_TYPES,
+} from "./fef-helpers";
 
 export type CellCoord = { row: number; col: number };
 export type RangeSelection = { anchor: CellCoord; focus: CellCoord };
@@ -93,10 +98,52 @@ export type WriteCtx = {
   /** Piping (task code, size) → labor factor; absent on non-piping sheets. */
   pipingFactorLookup?: PipingFactorLookup;
   /** Piping weld-group classification → shop/install metallurgy codes. */
-  weldGroupMaterialMap?: Record<string, { shopCode: string; installCode: string }>;
+  weldGroupMaterialMap?: Record<
+    string,
+    { shopCode: string; installCode: string }
+  >;
   /** Structural-steel member designation → QTO UoM (SLTO_Data). */
   steelMemberUomLookup?: Record<string, string>;
 };
+
+/** The shape of a table meta this can read — `FefTableMeta`, structurally. */
+type WriteCtxSource = {
+  roleOptions?: string[];
+  scheduleOptions?: string[];
+  roleRates?: RoleRate[];
+  areaOptions?: AreaOption[];
+  cbsOptions?: CbsOption[];
+  crewMixOptions?: CrewMixLookup[];
+  pipingFactorLookup?: PipingFactorLookup;
+  weldGroupMaterialMap?: Record<
+    string,
+    { shopCode: string; installCode: string }
+  >;
+  steelMemberUomLookup?: Record<string, string>;
+};
+
+/**
+ * A `WriteCtx` over a table meta's option lists. `FefTableContent` builds one
+ * per grid, memoised on those lists, and both the range operations and the
+ * cell editors derive through it — so the index below is built once and the
+ * two paths read the same tables. Build a fresh one only when there is no
+ * grid to take it from (a cell rendered on its own in a test).
+ */
+export function writeCtxFromMeta(meta: WriteCtxSource | undefined): WriteCtx {
+  return {
+    roleOptions: meta?.roleOptions ?? [],
+    scheduleOptions: meta?.scheduleOptions ?? [],
+    roleRates: meta?.roleRates ?? [],
+    areaOptions: meta?.areaOptions ?? [],
+    cbsOptions: meta?.cbsOptions ?? [],
+    crewMixOptions: meta?.crewMixOptions ?? [],
+    // Sheet-specific lookups; present only on the sheet that uses them, which
+    // is also how a write tells a piping row from a steel one.
+    pipingFactorLookup: meta?.pipingFactorLookup,
+    weldGroupMaterialMap: meta?.weldGroupMaterialMap,
+    steelMemberUomLookup: meta?.steelMemberUomLookup,
+  };
+}
 
 /** Free-text / numeric columns that store exactly what's written, with no
  *  coupled field to recompute. Shared by the generic and piping take-offs
@@ -403,183 +450,95 @@ function parseSub(raw: string): string | null {
 }
 
 /**
- * Compute the field patch for writing `raw` text into `colId` of `row`.
- * Returns `null` for a non-writable column or an unresolvable select value
- * (so the cell is left untouched rather than corrupted). An empty `raw`
- * clears the cell (and any coupled derived field).
+ * Writing a cell is two steps, and the cell editors and the range operations
+ * share the second:
+ *
+ * 1. `parseCellValue` turns text (pasted, filled, typed into Find/Replace)
+ *    into the value the column stores — a number cleaned up, a picker option
+ *    matched case-insensitively, "Yes" read as a ticked box — or `null` when
+ *    the text resolves to nothing the column's editor could have produced.
+ * 2. `deriveRowPatch` turns that stored value into the whole patch: the
+ *    field itself plus everything coupled to it — Labor Hours from Quantity,
+ *    the steel Quantity from # of Shapes × L, the Labor Rate from Role and
+ *    Schedule, the CBS stamp from the piping inputs.
+ *
+ * A cell editor already holds a stored value (its dropdown option, its typed
+ * number), so it calls `deriveRowPatch` directly; a paste goes through both.
+ * Until 2026-11-03 the editors carried their own copies of step 2, and the
+ * two drifted.
  */
-export function resolveCellWrite(
+
+/** Canonical Shop / Field, or `null` for anything else. */
+function parseShopField(raw: string): string | null {
+  const t = raw.trim().toLowerCase();
+  return t === "" ? "" : t === "shop" ? "Shop" : t === "field" ? "Field" : null;
+}
+
+/** Canonical Fabricate / Erect, or `null` for anything else. */
+function parseFabricateErect(raw: string): string | null {
+  const t = raw.trim().toLowerCase();
+  return t === ""
+    ? ""
+    : t === "fabricate"
+      ? "Fabricate"
+      : t === "erect"
+        ? "Erect"
+        : null;
+}
+
+/**
+ * The stored value `raw` text resolves to in `colId`, or `null` when it does
+ * not resolve (an unknown picker option, a non-writable column). Blank always
+ * resolves to blank: clearing is a write.
+ */
+export function parseCellValue(
   colId: string,
   raw: string,
-  row: FefRow,
   ctx: WriteCtx,
-): Partial<FefRow> | null {
+): string | null {
   const idx = indexFor(ctx);
+  const t = raw.trim();
   switch (colId) {
-    case "sub": {
-      const parsed = parseSub(raw);
-      return parsed === null ? null : { sub: parsed };
-    }
-    case "quantity": {
-      const q = cleanNumber(raw);
-      return { quantity: q, laborHours: laborHoursFor({ ...row, quantity: q }, ctx) };
-    }
+    case "sub":
+      return parseSub(raw);
+    case "quantity":
     case "length":
-    case "shapeCount": {
-      // Steel: Quantity is derived (# of shapes × L), so writing either input
-      // recomputes it — and Labor Hours with it. Mirrors SteelLengthCell /
-      // ShapeCountCell.
-      const v = cleanNumber(raw);
-      const next = { ...row, [colId]: v } as FefRow;
-      const quantity = computeSteelQuantity(next.shapeCount, next.length);
-      return {
-        [colId]: v,
-        quantity,
-        laborHours: laborHoursFor({ ...next, quantity }, ctx),
-      } as Partial<FefRow>;
-    }
-    case "size": {
-      // Piping: Size drives the bore size, the factor lookup (Labor Hours) and
-      // the CBS match. Mirrors PipingSizeCell.
-      const v = cleanNumber(raw);
-      const boreSize = computeBoreSize(v);
-      return {
-        size: v,
-        boreSize,
-        laborHours: laborHoursFor({ ...row, size: v }, ctx),
-        ...cbsStamp(
-          row.metallurgyCode,
-          boreSize,
-          idx,
-          fabricationHint({ ...row, size: v, boreSize }),
-        ),
-      };
-    }
-    case "taskCode": {
-      const code = raw.trim();
-      if (code === "")
-        return { taskCode: "", unit: "", laborHours: laborHoursFor({ ...row, taskCode: "" }, ctx) };
-      // "taskCode" is the piping task code on the piping sheet and the SLTO
-      // member designation on structural steel; both stamp Unit from their own
-      // lookup. Reject a code neither table knows rather than writing a value
-      // the picker itself could never have produced.
-      const pipingEntry = ctx.pipingFactorLookup?.get(code);
-      if (pipingEntry) {
-        const stamp = cbsStamp(
-          row.metallurgyCode,
-          row.boreSize,
-          idx,
-          fabricationHint(row),
-        );
-        return {
-          taskCode: code,
-          laborHours: deriveLaborHours({ ...row, taskCode: code }, ctx.pipingFactorLookup),
-          ...stamp,
-          // Mirrors TaskCodeSelectCell: the CBS item's UoM wins when one
-          // resolved, otherwise the task code's own unit stands.
-          unit: stamp.id ? (stamp.unit ?? pipingEntry.unit) : pipingEntry.unit,
-        };
-      }
-      const steelUom = ctx.steelMemberUomLookup?.[code];
-      return steelUom === undefined ? null : { taskCode: code, unit: steelUom };
-    }
-    case "shopField": {
-      const v = raw.trim() === "" ? "" : raw.trim().toLowerCase() === "shop" ? "Shop" : raw.trim().toLowerCase() === "field" ? "Field" : null;
-      if (v === null) return null;
-      const metallurgyCode = metallurgyFor(row.weldGroupDescription, v, ctx);
-      return {
-        shopField: v,
-        metallurgyCode,
-        ...cbsStamp(
-          metallurgyCode,
-          row.boreSize,
-          idx,
-          fabricationHint(row),
-        ),
-      };
-    }
-    case "fabricateErect": {
-      // Same shape as shopField: a two-option picker, so a paste has to land on
-      // one of them or resolve to nothing rather than writing free text the
-      // dropdown itself could never have produced.
-      const t = raw.trim().toLowerCase();
-      const v =
-        t === "" ? "" : t === "fabricate" ? "Fabricate" : t === "erect" ? "Erect" : null;
-      if (v === null) return null;
-      // Fabricate/Erect selects between the catalog's -FB-/-ER- variants, so it
-      // re-resolves the CBS item exactly as Shop/Field and Size do. Clearing it
-      // re-resolves too, dropping the row back to the rollup it came from.
-      return {
-        fabricateErect: v,
-        ...cbsStamp(
-          row.metallurgyCode,
-          row.boreSize,
-          idx,
-          fabricationHint({ ...row, fabricateErect: v }),
-        ),
-      };
-    }
-    case "weldGroupDescription": {
-      const t = raw.trim();
-      if (t === "")
-        return { weldGroupDescription: "", metallurgyCode: "" };
+    case "shapeCount":
+    case "size":
+      return cleanNumber(raw);
+    case "laborFactor":
+      return cleanNumber(raw).trim();
+    case "taskCode":
+      // Trimmed only: `deriveRowPatch` decides whether either lookup knows it.
+      return t;
+    case "shopField":
+      return parseShopField(raw);
+    case "fabricateErect":
+      return parseFabricateErect(raw);
+    case "weldGroupDescription":
       // Match the stored classification case-insensitively; an unknown one is
       // unresolvable (the picker only offers mapped classifications).
-      const match = idx.weldGroupByLowerName.get(t.toLowerCase());
-      if (match === undefined) return null;
-      const metallurgyCode = metallurgyFor(match, row.shopField, ctx);
-      return {
-        weldGroupDescription: match,
-        metallurgyCode,
-        ...cbsStamp(
-          metallurgyCode,
-          row.boreSize,
-          idx,
-          fabricationHint(row),
-        ),
-      };
-    }
-    case "laborFactor": {
-      const f = cleanNumber(raw).trim();
-      // Storing the default verbatim is wasteful — leave it "" so a future
-      // change to the default still flows through, matching LaborFactorInputCell.
-      const persisted = f === DEFAULT_LABOR_FACTOR ? "" : f;
-      return {
-        laborFactor: persisted,
-        laborHours: laborHoursFor({ ...row, laborFactor: persisted }, ctx),
-      };
-    }
-    case "area": {
-      if (raw.trim() === "") return { area: "" };
-      const match = idx.areaIdByText.get(raw.trim().toLowerCase());
-      return match !== undefined ? { area: match } : null;
-    }
-    case "role": {
-      if (raw.trim() === "") return applyRoleRate({ role: "" }, row, idx);
-      const match = idx.roleByLowerName.get(raw.trim().toLowerCase());
-      return match !== undefined
-        ? applyRoleRate({ role: match }, row, idx)
-        : null;
-    }
-    case "schedule": {
-      if (raw.trim() === "") return applyRoleRate({ schedule: "" }, row, idx);
-      const match = idx.scheduleByLowerName.get(raw.trim().toLowerCase());
-      return match !== undefined
-        ? applyRoleRate({ schedule: match }, row, idx)
-        : null;
-    }
+      return t === ""
+        ? ""
+        : (idx.weldGroupByLowerName.get(t.toLowerCase()) ?? null);
+    case "area":
+      return t === "" ? "" : (idx.areaIdByText.get(t.toLowerCase()) ?? null);
+    case "role":
+      return t === "" ? "" : (idx.roleByLowerName.get(t.toLowerCase()) ?? null);
+    case "schedule":
+      return t === ""
+        ? ""
+        : (idx.scheduleByLowerName.get(t.toLowerCase()) ?? null);
     case "materialType": {
       // A fixed vocabulary, so a paste has to resolve to one of the options
       // rather than being taken verbatim — otherwise a stray spreadsheet value
       // ("BULK ", "tag") lands in a field that reporting groups on. Blank
       // clears, matching the dropdown's placeholder row; anything else is
       // refused (the cell keeps its value) rather than silently blanked.
-      const t = raw.trim();
-      if (t === "") return { materialType: "" };
-      const match = MATERIAL_TYPES.find(
-        (m) => m.toLowerCase() === t.toLowerCase(),
+      if (t === "") return "";
+      return (
+        MATERIAL_TYPES.find((m) => m.toLowerCase() === t.toLowerCase()) ?? null
       );
-      return match ? { materialType: match } : null;
     }
     case "name": {
       // On piping the CBS item is DERIVED from Weld Group + Shop/Field + Size
@@ -590,20 +549,176 @@ export function resolveCellWrite(
       // "Paste from Excel" dialog reads a CBS Code column, not this one.
       if (isPipingSheet(ctx)) return null;
       // Elsewhere the Name column IS the CBS-item picker; its stored identity
-      // is the CBS code in `id`. Clearing removes the whole item; a resolvable
-      // code/name stamps id + name + unit (matching CbsSearchSelectCell).
-      if (raw.trim() === "") return { id: "", name: "", unit: "" };
-      const match = resolveCbs(raw, idx);
+      // is the CBS code in `id`: a display code, a cost code or an item name
+      // all resolve to it.
+      if (t === "") return "";
+      return resolveCbs(raw, idx)?.displayCode ?? null;
+    }
+    case "crewMixId":
+      // Its id, or its name; stored as the id.
+      if (t === "") return "";
+      return resolveCrewMix(raw, idx)?.id.toString() ?? null;
+    default:
+      return PLAIN_TEXT_COLUMNS.has(colId) ? raw : null;
+  }
+}
+
+/**
+ * The patch for storing `value` in `colId` of `row`: the field itself and
+ * every field coupled to it. `value` is a stored value — what a picker
+ * offers, what `parseCellValue` returns — never raw pasted text. Returns
+ * `null` for a non-writable column, or a value the column's lookups do not
+ * know (so the cell is left untouched rather than corrupted).
+ */
+export function deriveRowPatch(
+  colId: string,
+  value: string,
+  row: FefRow,
+  ctx: WriteCtx,
+): Partial<FefRow> | null {
+  const idx = indexFor(ctx);
+  switch (colId) {
+    case "sub":
+      return { sub: value };
+    case "quantity":
+      return {
+        quantity: value,
+        laborHours: laborHoursFor({ ...row, quantity: value }, ctx),
+      };
+    case "length":
+    case "shapeCount": {
+      // Steel: Quantity is derived (# of shapes × L), so writing either input
+      // recomputes it — and Labor Hours with it.
+      const next = { ...row, [colId]: value } as FefRow;
+      const quantity = computeSteelQuantity(next.shapeCount, next.length);
+      return {
+        [colId]: value,
+        quantity,
+        laborHours: laborHoursFor({ ...next, quantity }, ctx),
+      } as Partial<FefRow>;
+    }
+    case "size": {
+      // Piping: Size drives the bore size, the factor lookup (Labor Hours) and
+      // the CBS match.
+      const boreSize = computeBoreSize(value);
+      return {
+        size: value,
+        boreSize,
+        laborHours: laborHoursFor({ ...row, size: value }, ctx),
+        ...cbsStamp(
+          row.metallurgyCode,
+          boreSize,
+          idx,
+          // The new size/bore, not the row's stale pair.
+          fabricationHint({ ...row, size: value, boreSize }),
+        ),
+      };
+    }
+    case "taskCode": {
+      if (value === "") {
+        return {
+          taskCode: "",
+          unit: "",
+          laborHours: laborHoursFor({ ...row, taskCode: "" }, ctx),
+        };
+      }
+      // "taskCode" is the piping task code on the piping sheet and the SLTO
+      // member designation on structural steel; both stamp Unit from their own
+      // lookup. Reject a code neither table knows rather than writing a value
+      // the picker itself could never have produced.
+      const pipingEntry = ctx.pipingFactorLookup?.get(value);
+      if (pipingEntry) {
+        // Re-resolve CBS from the row's current metallurgy + bore. The task
+        // code is not itself part of the cost code, so this can only pick up
+        // a match the row's *other* inputs have since made available — or
+        // drop one they have invalidated.
+        const stamp = cbsStamp(
+          row.metallurgyCode,
+          row.boreSize,
+          idx,
+          fabricationHint(row),
+        );
+        return {
+          taskCode: value,
+          laborHours: deriveLaborHours(
+            { ...row, taskCode: value },
+            ctx.pipingFactorLookup,
+          ),
+          ...stamp,
+          // A resolved CBS item's UoM wins; with no item to take one from,
+          // the unit falls back to the task code's own from the factor table
+          // rather than being cleared along with the rest of the stamp.
+          unit: stamp.id ? (stamp.unit ?? pipingEntry.unit) : pipingEntry.unit,
+        };
+      }
+      const steelUom = ctx.steelMemberUomLookup?.[value];
+      return steelUom === undefined
+        ? null
+        : { taskCode: value, unit: steelUom };
+    }
+    case "shopField": {
+      const metallurgyCode = metallurgyFor(
+        row.weldGroupDescription,
+        value,
+        ctx,
+      );
+      return {
+        shopField: value,
+        metallurgyCode,
+        ...cbsStamp(metallurgyCode, row.boreSize, idx, fabricationHint(row)),
+      };
+    }
+    case "fabricateErect":
+      // Fabricate/Erect selects between the catalog's -FB-/-ER- variants, so it
+      // re-resolves the CBS item exactly as Shop/Field and Size do. Clearing it
+      // re-resolves too, dropping the row back to the rollup it came from.
+      return {
+        fabricateErect: value,
+        ...cbsStamp(
+          row.metallurgyCode,
+          row.boreSize,
+          idx,
+          fabricationHint({ ...row, fabricateErect: value }),
+        ),
+      };
+    case "weldGroupDescription": {
+      const metallurgyCode = metallurgyFor(value, row.shopField, ctx);
+      return {
+        weldGroupDescription: value,
+        metallurgyCode,
+        ...cbsStamp(metallurgyCode, row.boreSize, idx, fabricationHint(row)),
+      };
+    }
+    case "laborFactor": {
+      // Storing the default verbatim is wasteful — leave it "" so a future
+      // change to the default still flows through.
+      const persisted = value === DEFAULT_LABOR_FACTOR ? "" : value;
+      return {
+        laborFactor: persisted,
+        laborHours: laborHoursFor({ ...row, laborFactor: persisted }, ctx),
+      };
+    }
+    case "area":
+      return { area: value };
+    case "role":
+      return applyRoleRate({ role: value }, row, idx);
+    case "schedule":
+      return applyRoleRate({ schedule: value }, row, idx);
+    case "materialType":
+      return { materialType: value };
+    case "name": {
+      // Clearing removes the whole item; a code stamps id + name + unit.
+      if (value === "") return { id: "", name: "", unit: "" };
+      const match = idx.cbsByDisplayCode.get(normalizeCode(value));
       return match
         ? { id: match.displayCode, name: match.name, unit: match.uom }
         : null;
     }
     case "crewMixId": {
-      // Mirrors CrewMixSelectCell: snapshot the average of the mix's member-role
-      // rates at its schedule and clear role/schedule so the row's rate source
-      // is unambiguous.
-      if (raw.trim() === "") return { crewMixId: "", laborRate: "" };
-      const match = resolveCrewMix(raw, idx);
+      // Snapshot the average of the mix's member-role rates at its schedule
+      // and clear role/schedule so the row's rate source is unambiguous.
+      if (value === "") return { crewMixId: "", laborRate: "" };
+      const match = idx.crewById.get(value);
       if (!match) return null;
       return {
         crewMixId: String(match.id),
@@ -614,9 +729,26 @@ export function resolveCellWrite(
     }
     default:
       return PLAIN_TEXT_COLUMNS.has(colId)
-        ? ({ [colId]: raw } as Partial<FefRow>)
+        ? ({ [colId]: value } as Partial<FefRow>)
         : null;
   }
+}
+
+/**
+ * Compute the field patch for writing `raw` text into `colId` of `row`:
+ * `parseCellValue`, then `deriveRowPatch`. Returns `null` for a non-writable
+ * column or an unresolvable select value (so the cell is left untouched
+ * rather than corrupted). An empty `raw` clears the cell (and any coupled
+ * derived field).
+ */
+export function resolveCellWrite(
+  colId: string,
+  raw: string,
+  row: FefRow,
+  ctx: WriteCtx,
+): Partial<FefRow> | null {
+  const value = parseCellValue(colId, raw, ctx);
+  return value === null ? null : deriveRowPatch(colId, value, row, ctx);
 }
 
 /**
@@ -624,7 +756,11 @@ export function resolveCellWrite(
  * Every column serializes (so a whole row exports to Excel) even though only
  * some are writable on paste. Select columns emit their display label.
  */
-export function readCellText(colId: string, row: FefRow, ctx: WriteCtx): string {
+export function readCellText(
+  colId: string,
+  row: FefRow,
+  ctx: WriteCtx,
+): string {
   const idx = indexFor(ctx);
   switch (colId) {
     case "__select":
@@ -795,7 +931,7 @@ export function sortRows(
   dir: "asc" | "desc",
   ctx: WriteCtx,
 ): FefRow[] {
-  const isBlank = (r: FefRow) => isBlankId(r.id) && !fefRowHasUserData(r);
+  const isBlank = isUntouchedBlankRow;
   const real = data.filter((r) => !isBlank(r));
   const blanks = data.filter(isBlank);
   const sign = dir === "asc" ? 1 : -1;
@@ -865,7 +1001,12 @@ export function replaceInCell(
   if (!row || query === "" || !RANGE_WRITABLE_COLUMNS.has(colId)) return data;
   const text = readCellText(colId, row, ctx);
   if (!text.toLowerCase().includes(query.toLowerCase())) return data;
-  const patch = resolveCellWrite(colId, replaceCI(text, query, replacement), row, ctx);
+  const patch = resolveCellWrite(
+    colId,
+    replaceCI(text, query, replacement),
+    row,
+    ctx,
+  );
   if (!patch) return data;
   return data.map((r, i) => (i === coord.row ? { ...r, ...patch } : r));
 }
@@ -892,7 +1033,12 @@ export function replaceAll(
       const base = patch ? { ...row, ...patch } : row;
       const text = readCellText(colId, base, ctx);
       if (!text.toLowerCase().includes(q)) continue;
-      const p = resolveCellWrite(colId, replaceCI(text, query, replacement), base, ctx);
+      const p = resolveCellWrite(
+        colId,
+        replaceCI(text, query, replacement),
+        base,
+        ctx,
+      );
       if (p) {
         patch = { ...(patch ?? {}), ...p };
         count++;

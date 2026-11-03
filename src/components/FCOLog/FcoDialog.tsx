@@ -1,3 +1,14 @@
+import {
+  AreaField,
+  CommaListInput,
+  LinkedRecordSelect,
+  type EntityDialogCallbacks,
+} from "~/components/EntityDialog/EntityFields";
+import {
+  CHANGE_ENTITIES,
+  formatRecordRef,
+  recordNumber,
+} from "~/config/change-entities";
 import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
@@ -23,7 +34,6 @@ import {
   NumberInput,
 } from "~/components/ui/form-helpers";
 import { useRecordDialogForm } from "~/lib/use-record-dialog-form";
-import { areasByProjectQueryOptions } from "~/utils/areas";
 import {
   FCO_ORIGIN_TYPES,
   FCO_PRIORITIES,
@@ -51,12 +61,7 @@ import {
   FCO_PRIORITY_LABELS,
   FcoStatusBadge,
 } from "~/components/FCOLog/FcoBadges";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from "~/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
 import {
   EntityAuxTabTriggers,
   EntityAuxTabPanels,
@@ -130,16 +135,7 @@ type FcoDialogProps = {
    *  `photosUrl`) on open and gates the form body until it arrives. */
   initial?: FcoListItem;
   projectId: number | null;
-  onSubmit: (form: FormState) => Promise<unknown>;
-  onDelete?: (id: number) => Promise<unknown>;
-  onPromote?: (id: number) => Promise<unknown>;
-  /**
-   * Run a workflow status transition. Only meaningful in edit mode; the dialog
-   * renders one button per transition allowed by the current user's role and
-   * originator status. See `FCO_TRANSITIONS` in workflow.ts.
-   */
-  onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
-};
+} & EntityDialogCallbacks<FormState>;
 
 /**
  * Outer wrapper. Delegates dialog state + lazy-fetch boilerplate to
@@ -152,10 +148,7 @@ export function FcoDialog({
   trigger,
   initial,
   projectId,
-  onSubmit,
-  onDelete,
-  onPromote,
-  onTransition,
+  ...callbacks
 }: FcoDialogProps) {
   return (
     <EntityDialogShell
@@ -168,10 +161,7 @@ export function FcoDialog({
         <FcoDialogBody
           initial={full}
           projectId={projectId}
-          onSubmit={onSubmit}
-          onDelete={onDelete}
-          onPromote={onPromote}
-          onTransition={onTransition}
+          {...callbacks}
           closeDialog={closeDialog}
         />
       )}
@@ -191,12 +181,8 @@ function FcoDialogBody({
   /** Full record (loaded by the outer) or undefined for new-mode. */
   initial?: FcoItem;
   projectId: number | null;
-  onSubmit: (form: FormState) => Promise<unknown>;
-  onDelete?: (id: number) => Promise<unknown>;
-  onPromote?: (id: number) => Promise<unknown>;
-  onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
   closeDialog: () => void;
-}) {
+} & EntityDialogCallbacks<FormState>) {
   const {
     form,
     setForm,
@@ -308,31 +294,10 @@ function FcoDialogBody({
     enabled: projectId !== null,
   });
 
-
   // Areas for the selected project — populates the Area dropdown. We store
   // the area id as a string in `locationArea`, mirroring the FefRow.area
   // convention, so legacy free-text values gracefully fall back to "— None —"
   // (and the user can re-pick on save).
-  const { data: areas = [] } = useQuery({
-    ...areasByProjectQueryOptions(projectId),
-    enabled: projectId !== null,
-  });
-
-  const [drawingRefsText, setDrawingRefsText] = React.useState("");
-  const [rfiNumbersText, setRfiNumbersText] = React.useState("");
-  React.useEffect(() => {
-    setDrawingRefsText(form.drawingRefs.join(", "));
-    setRfiNumbersText(form.rfiNumbers.join(", "));
-  }, [form.drawingRefs, form.rfiNumbers]);
-
-  function commitList(raw: string, key: "drawingRefs" | "rfiNumbers") {
-    const items = raw
-      .split(/[,\n]/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    update(key, items);
-  }
-
   // Mirrors the server's refusals in `promoteFcoToCvr`.
   const canPromote =
     initial &&
@@ -345,377 +310,364 @@ function FcoDialogBody({
   return (
     <>
       <div className="space-y-4">
-          <EntityDialogHeader
-            title={initial ? "Edit Field Change Order" : "New Field Change Order"}
-            subtitle="Capture a change originating in the field — drawings, conditions, cost impact, and CVR linkage"
-          >
-            {initial?.id && <PrintPdfLink href={`/fco-print/${initial.id}`} />}
-            {canPromote && (
-              <PromoteButton
-                label="Promote to CVR"
-                onClick={handlePromote}
-                disabled={busy}
-              />
-            )}
-            {isAdmin && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSaveAsTemplate}
-                disabled={busy || !form.title.trim()}
-                title="Snapshot the current form as a new FCO template"
-                className="text-violet-700 hover:bg-violet-50"
-              >
-                Save as Template
-              </Button>
-            )}
-            {initial && onDelete && (
-              <DeleteEntityButton onClick={handleDelete} disabled={busy} />
-            )}
-          </EntityDialogHeader>
-
-          {initial?.linkedCvrId && (
-            <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-900 flex items-center gap-2">
-              <ExternalLink className="size-4" />
-              <span>
-                Linked to CVR{" "}
-                <span className="font-mono font-semibold">
-                  {initial.linkedCvrNumber || `#${initial.linkedCvrId}`}
-                </span>
-                {initial.linkedCvrTitle && (
-                  <span className="text-violet-700"> — {initial.linkedCvrTitle}</span>
-                )}
-              </span>
-            </div>
-          )}
-
-          {initial?.linkedRfiId && (
-            <div className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm text-indigo-900 flex items-center gap-2">
-              <ExternalLink className="size-4" />
-              <span>
-                Promoted from RFI{" "}
-                <span className="font-mono font-semibold">
-                  {initial.linkedRfiNumber || `#${initial.linkedRfiId}`}
-                </span>
-                {initial.linkedRfiSubject && (
-                  <span className="text-indigo-700">
-                    {" "}
-                    — {initial.linkedRfiSubject}
-                  </span>
-                )}
-              </span>
-            </div>
-          )}
-
-          <Tabs defaultValue="details" className="w-full">
-            <TabsList>
-              <TabsTrigger value="details">Details</TabsTrigger>
-              <EntityAuxTabTriggers />
-            </TabsList>
-            <TabsContent value="details" className="space-y-4 mt-3">
-
-          {!initial && (
-            <TemplatePicker<FcoTemplateFieldSet>
-              pickerQueryOptions={fcoTemplatePickerQueryOptions}
-              instantiate={instantiateFcoTemplate}
-              currentDiscipline={form.discipline}
-              onSelect={applyTemplate}
-              noun="FCO"
+        <EntityDialogHeader
+          title={initial ? "Edit Field Change Order" : "New Field Change Order"}
+          subtitle="Capture a change originating in the field — drawings, conditions, cost impact, and CVR linkage"
+        >
+          {initial?.id && (
+            <PrintPdfLink
+              href={`${CHANGE_ENTITIES.FieldChangeOrder.printPath}/${initial.id}`}
             />
           )}
-
-          {/* Identity */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Labeled label="FCO Number">
-              <Input
-                value={form.fcoNumber}
-                placeholder="Auto-assigned if blank"
-                onChange={(e) => update("fcoNumber", e.target.value)}
-              />
-            </Labeled>
-            <Labeled label="Title" className="md:col-span-2">
-              <Input
-                value={form.title}
-                placeholder="Short description"
-                onChange={(e) => update("title", e.target.value)}
-              />
-            </Labeled>
-          </div>
-
-          {/* State row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Labeled
-              label="Status"
-              help={
-                initial
-                  ? "Use the workflow actions below to advance status."
-                  : "New FCOs start as Draft."
-              }
+          {canPromote && (
+            <PromoteButton
+              label="Promote to CVR"
+              onClick={handlePromote}
+              disabled={busy}
+            />
+          )}
+          {isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSaveAsTemplate}
+              disabled={busy || !form.title.trim()}
+              title="Snapshot the current form as a new FCO template"
+              className="text-violet-700 hover:bg-violet-50"
             >
-              <div className="flex h-9 items-center">
-                <FcoStatusBadge status={initial ? initial.status : "DRAFT"} />
-              </div>
-            </Labeled>
-            <Labeled label="Origin">
-              <NativeSelect
-                value={form.originType}
-                onChange={(v) => update("originType", v as FcoOriginType)}
-                options={FCO_ORIGIN_TYPES.map((s) => ({
-                  value: s,
-                  label: FCO_ORIGIN_LABELS[s],
-                }))}
-              />
-            </Labeled>
-            <Labeled label="Priority">
-              <NativeSelect
-                value={form.priority}
-                onChange={(v) => update("priority", v as FcoPriority)}
-                options={FCO_PRIORITIES.map((s) => ({
-                  value: s,
-                  label: FCO_PRIORITY_LABELS[s],
-                }))}
-              />
-            </Labeled>
-            <DisciplineField
-              value={form.discipline}
-              onChange={(v) => update("discipline", v)}
-            />
-          </div>
-
-          {initial && onTransition && (
-            <WorkflowActions
-              transitions={transitions}
-              busy={busy}
-              setBusy={setBusy}
-              onTransition={onTransition}
-              entityId={initial.id}
-              entityNoun="FCO"
-              onSuccess={closeDialog}
-            />
+              Save as Template
+            </Button>
           )}
+          {initial && onDelete && (
+            <DeleteEntityButton onClick={handleDelete} disabled={busy} />
+          )}
+        </EntityDialogHeader>
 
-          {/* Field context */}
-          <fieldset className="rounded-lg border border-slate-200 p-3 space-y-3">
-            <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Field Context
-            </legend>
+        {initial?.linkedCvrId && (
+          <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-900 flex items-center gap-2">
+            <ExternalLink className="size-4" />
+            <span>
+              Linked to CVR{" "}
+              <span className="font-mono font-semibold">
+                {recordNumber("ChangeLog", {
+                  id: initial.linkedCvrId,
+                  cvrNumber: initial.linkedCvrNumber,
+                })}
+              </span>
+              {initial.linkedCvrTitle && (
+                <span className="text-violet-700">
+                  {" "}
+                  — {initial.linkedCvrTitle}
+                </span>
+              )}
+            </span>
+          </div>
+        )}
+
+        {initial?.linkedRfiId && (
+          <div className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm text-indigo-900 flex items-center gap-2">
+            <ExternalLink className="size-4" />
+            <span>
+              Promoted from RFI{" "}
+              <span className="font-mono font-semibold">
+                {recordNumber("Rfi", {
+                  id: initial.linkedRfiId,
+                  rfiNumber: initial.linkedRfiNumber,
+                })}
+              </span>
+              {initial.linkedRfiSubject && (
+                <span className="text-indigo-700">
+                  {" "}
+                  — {initial.linkedRfiSubject}
+                </span>
+              )}
+            </span>
+          </div>
+        )}
+
+        <Tabs defaultValue="details" className="w-full">
+          <TabsList>
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <EntityAuxTabTriggers />
+          </TabsList>
+          <TabsContent value="details" className="space-y-4 mt-3">
+            {!initial && (
+              <TemplatePicker<FcoTemplateFieldSet>
+                pickerQueryOptions={fcoTemplatePickerQueryOptions}
+                instantiate={instantiateFcoTemplate}
+                currentDiscipline={form.discipline}
+                onSelect={applyTemplate}
+                noun="FCO"
+              />
+            )}
+
+            {/* Identity */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Labeled label="FCO Number">
+                <Input
+                  value={form.fcoNumber}
+                  placeholder="Auto-assigned if blank"
+                  onChange={(e) => update("fcoNumber", e.target.value)}
+                />
+              </Labeled>
+              <Labeled label="Title" className="md:col-span-2">
+                <Input
+                  value={form.title}
+                  placeholder="Short description"
+                  onChange={(e) => update("title", e.target.value)}
+                />
+              </Labeled>
+            </div>
+
+            {/* State row */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <Labeled
-                label="Area"
+                label="Status"
                 help={
-                  projectId === null
-                    ? "Select a project first."
-                    : areas.length === 0
-                      ? "No areas defined. Add some in Admin → Areas."
-                      : undefined
+                  initial
+                    ? "Use the workflow actions below to advance status."
+                    : "New FCOs start as Draft."
                 }
               >
+                <div className="flex h-9 items-center">
+                  <FcoStatusBadge status={initial ? initial.status : "DRAFT"} />
+                </div>
+              </Labeled>
+              <Labeled label="Origin">
                 <NativeSelect
+                  value={form.originType}
+                  onChange={(v) => update("originType", v as FcoOriginType)}
+                  options={FCO_ORIGIN_TYPES.map((s) => ({
+                    value: s,
+                    label: FCO_ORIGIN_LABELS[s],
+                  }))}
+                />
+              </Labeled>
+              <Labeled label="Priority">
+                <NativeSelect
+                  value={form.priority}
+                  onChange={(v) => update("priority", v as FcoPriority)}
+                  options={FCO_PRIORITIES.map((s) => ({
+                    value: s,
+                    label: FCO_PRIORITY_LABELS[s],
+                  }))}
+                />
+              </Labeled>
+              <DisciplineField
+                value={form.discipline}
+                onChange={(v) => update("discipline", v)}
+              />
+            </div>
+
+            {initial && onTransition && (
+              <WorkflowActions
+                transitions={transitions}
+                busy={busy}
+                setBusy={setBusy}
+                onTransition={onTransition}
+                entityId={initial.id}
+                entityNoun={CHANGE_ENTITIES.FieldChangeOrder.noun}
+                onSuccess={closeDialog}
+              />
+            )}
+
+            {/* Field context */}
+            <fieldset className="rounded-lg border border-slate-200 p-3 space-y-3">
+              <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Field Context
+              </legend>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <AreaField
+                  projectId={projectId}
                   value={form.locationArea}
                   onChange={(v) => update("locationArea", v)}
-                  options={[
-                    { value: "", label: "— None —" },
-                    ...areas.map((a) => ({
-                      value: String(a.id),
-                      label: a.name ? `${a.displayId} — ${a.name}` : a.displayId,
-                    })),
-                  ]}
                 />
-              </Labeled>
-              <Labeled label="Initiated By">
-                <Input
-                  value={form.initiatedBy}
-                  placeholder="Foreman / field engineer"
-                  onChange={(e) => update("initiatedBy", e.target.value)}
-                />
-              </Labeled>
-              <Labeled label="Field Contact (phone)">
-                <Input
-                  value={form.fieldContact}
-                  placeholder="555-123-4567"
-                  onChange={(e) => update("fieldContact", e.target.value)}
-                />
-              </Labeled>
-            </div>
-            <Labeled label="Reason / Field Conditions">
-              <Textarea
-                value={form.reasonNarrative}
-                rows={2}
-                placeholder="What was discovered in the field that prompted this change"
-                onChange={(e) => update("reasonNarrative", e.target.value)}
-              />
-            </Labeled>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <Labeled
-                label="Drawing References"
-                help="Comma-separated (e.g. P-101-A, M-303-B)"
-              >
-                <Input
-                  value={drawingRefsText}
-                  onChange={(e) => setDrawingRefsText(e.target.value)}
-                  onBlur={(e) => commitList(e.target.value, "drawingRefs")}
-                  placeholder="P-101-A, M-303-B"
-                />
-              </Labeled>
-              <Labeled label="Related RFIs" help="Comma-separated RFI numbers">
-                <Input
-                  value={rfiNumbersText}
-                  onChange={(e) => setRfiNumbersText(e.target.value)}
-                  onBlur={(e) => commitList(e.target.value, "rfiNumbers")}
-                  placeholder="RFI-042, RFI-049"
-                />
-              </Labeled>
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={form.workStopped}
-                onCheckedChange={(v) => update("workStopped", v === true)}
-              />
-              <span className="font-medium text-slate-700">
-                Work currently stopped on this scope
-              </span>
-            </label>
-          </fieldset>
-
-          {/* Description */}
-          <Labeled label="Description of Change">
-            <Textarea
-              value={form.description}
-              placeholder="What scope is being added, removed, or revised"
-              rows={3}
-              onChange={(e) => update("description", e.target.value)}
-            />
-          </Labeled>
-
-          <Labeled
-            label="Affected CBS Codes"
-            help="Search and select one or more CBS items"
-          >
-            <CbsMultiSelect
-              values={form.cbsCodes}
-              placeholder="Search CBS items…"
-              onChange={(v) => update("cbsCodes", v)}
-            />
-          </Labeled>
-
-          {/* Impact */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Labeled label="Estimated Cost Impact ($)">
-              <NumberInput
-                step="0.01"
-                value={form.estimatedCost}
-                onChange={(n) => update("estimatedCost", n)}
-              />
-            </Labeled>
-            <Labeled label="Estimated Labor Hours">
-              <NumberInput
-                step="0.1"
-                value={form.estimatedHours}
-                onChange={(n) => update("estimatedHours", n)}
-              />
-            </Labeled>
-          </div>
-
-          {/* Dates */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Labeled label="Initiated Date">
-              <DateInput
-                value={form.initiatedAt}
-                // Required: a cleared box falls back to today.
-                onChange={(iso) =>
-                  update("initiatedAt", iso ?? new Date().toISOString())
-                }
-              />
-            </Labeled>
-            <Labeled label="Needed By">
-              <DateInput
-                value={form.neededBy}
-                onChange={(iso) => update("neededBy", iso)}
-              />
-            </Labeled>
-            <Labeled label="Closed Date">
-              <DateInput
-                value={form.closedAt}
-                onChange={(iso) => update("closedAt", iso)}
-              />
-            </Labeled>
-          </div>
-
-          {/* CVR link */}
-          <fieldset className="rounded-lg border border-slate-200 p-3 space-y-3">
-            <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              CVR Linkage
-            </legend>
-            <Labeled
-              label="Link to existing CVR"
-              help="Optional — pick a CVR from the Change Log to attach this FCO to. Use Promote to CVR above to create a new one instead."
-            >
-              <NativeSelect
-                value={form.linkedCvrId === null ? "" : String(form.linkedCvrId)}
-                onChange={(v) =>
-                  update("linkedCvrId", v === "" ? null : Number(v))
-                }
-                options={[
-                  { value: "", label: "— Not linked —" },
-                  ...cvrOptions.map((c) => ({
-                    value: String(c.id),
-                    label: `${c.cvrNumber || `#${c.id}`} — ${c.title}`.slice(
-                      0,
-                      80,
-                    ),
-                  })),
-                ]}
-              />
-            </Labeled>
-          </fieldset>
-
-          <Labeled label="Resolution">
-            <Textarea
-              value={form.resolution}
-              rows={2}
-              placeholder="How the change was resolved in the field"
-              onChange={(e) => update("resolution", e.target.value)}
-            />
-          </Labeled>
-
-          <Labeled label="Internal Notes">
-            <Textarea
-              value={form.notes}
-              rows={2}
-              placeholder="Internal notes, references"
-              onChange={(e) => update("notes", e.target.value)}
-            />
-          </Labeled>
-
-            </TabsContent>
-            <EntityAuxTabPanels
-              entityType="FieldChangeOrder"
-              entityId={initial?.id ?? null}
-              projectId={initial?.projectId ?? null}
-              attachmentsExtra={
-                <Labeled
-                  label="External link"
-                  help="Optional — link to an external doc store (Procore, SharePoint, etc.) when the source of truth lives outside this app."
-                >
+                <Labeled label="Initiated By">
                   <Input
-                    value={form.photosUrl}
-                    placeholder="https://..."
-                    onChange={(e) => update("photosUrl", e.target.value)}
+                    value={form.initiatedBy}
+                    placeholder="Foreman / field engineer"
+                    onChange={(e) => update("initiatedBy", e.target.value)}
                   />
                 </Labeled>
-              }
-            />
-          </Tabs>
+                <Labeled label="Field Contact (phone)">
+                  <Input
+                    value={form.fieldContact}
+                    placeholder="555-123-4567"
+                    onChange={(e) => update("fieldContact", e.target.value)}
+                  />
+                </Labeled>
+              </div>
+              <Labeled label="Reason / Field Conditions">
+                <Textarea
+                  value={form.reasonNarrative}
+                  rows={2}
+                  placeholder="What was discovered in the field that prompted this change"
+                  onChange={(e) => update("reasonNarrative", e.target.value)}
+                />
+              </Labeled>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Labeled
+                  label="Drawing References"
+                  help="Comma-separated (e.g. P-101-A, M-303-B)"
+                >
+                  <CommaListInput
+                    value={form.drawingRefs}
+                    onChange={(items) => update("drawingRefs", items)}
+                    placeholder="P-101-A, M-303-B"
+                  />
+                </Labeled>
+                <Labeled
+                  label="Related RFIs"
+                  help="Comma-separated RFI numbers"
+                >
+                  <CommaListInput
+                    value={form.rfiNumbers}
+                    onChange={(items) => update("rfiNumbers", items)}
+                    placeholder="RFI-042, RFI-049"
+                  />
+                </Labeled>
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={form.workStopped}
+                  onCheckedChange={(v) => update("workStopped", v === true)}
+                />
+                <span className="font-medium text-slate-700">
+                  Work currently stopped on this scope
+                </span>
+              </label>
+            </fieldset>
 
-          <DialogFooterActions
-            busy={busy}
-            disabled={busy || !form.title.trim()}
-            submitLabel={initial ? "Save Changes" : "Create FCO"}
-            onSubmit={handleSubmit}
-            error={error}
+            {/* Description */}
+            <Labeled label="Description of Change">
+              <Textarea
+                value={form.description}
+                placeholder="What scope is being added, removed, or revised"
+                rows={3}
+                onChange={(e) => update("description", e.target.value)}
+              />
+            </Labeled>
+
+            <Labeled
+              label="Affected CBS Codes"
+              help="Search and select one or more CBS items"
+            >
+              <CbsMultiSelect
+                values={form.cbsCodes}
+                placeholder="Search CBS items…"
+                onChange={(v) => update("cbsCodes", v)}
+              />
+            </Labeled>
+
+            {/* Impact */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Labeled label="Estimated Cost Impact ($)">
+                <NumberInput
+                  step="0.01"
+                  value={form.estimatedCost}
+                  onChange={(n) => update("estimatedCost", n)}
+                />
+              </Labeled>
+              <Labeled label="Estimated Labor Hours">
+                <NumberInput
+                  step="0.1"
+                  value={form.estimatedHours}
+                  onChange={(n) => update("estimatedHours", n)}
+                />
+              </Labeled>
+            </div>
+
+            {/* Dates */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Labeled label="Initiated Date">
+                <DateInput
+                  value={form.initiatedAt}
+                  // Required: a cleared box falls back to today.
+                  onChange={(iso) =>
+                    update("initiatedAt", iso ?? new Date().toISOString())
+                  }
+                />
+              </Labeled>
+              <Labeled label="Needed By">
+                <DateInput
+                  value={form.neededBy}
+                  onChange={(iso) => update("neededBy", iso)}
+                />
+              </Labeled>
+              <Labeled label="Closed Date">
+                <DateInput
+                  value={form.closedAt}
+                  onChange={(iso) => update("closedAt", iso)}
+                />
+              </Labeled>
+            </div>
+
+            {/* CVR link */}
+            <fieldset className="rounded-lg border border-slate-200 p-3 space-y-3">
+              <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                CVR Linkage
+              </legend>
+              <Labeled
+                label="Link to existing CVR"
+                help="Optional — pick a CVR from the Change Log to attach this FCO to. Use Promote to CVR above to create a new one instead."
+              >
+                <LinkedRecordSelect
+                  value={form.linkedCvrId}
+                  onChange={(id) => update("linkedCvrId", id)}
+                  noneLabel="— Not linked —"
+                  options={cvrOptions.map((c) => ({
+                    id: c.id,
+                    label: formatRecordRef("ChangeLog", c).slice(0, 80),
+                  }))}
+                />
+              </Labeled>
+            </fieldset>
+
+            <Labeled label="Resolution">
+              <Textarea
+                value={form.resolution}
+                rows={2}
+                placeholder="How the change was resolved in the field"
+                onChange={(e) => update("resolution", e.target.value)}
+              />
+            </Labeled>
+
+            <Labeled label="Internal Notes">
+              <Textarea
+                value={form.notes}
+                rows={2}
+                placeholder="Internal notes, references"
+                onChange={(e) => update("notes", e.target.value)}
+              />
+            </Labeled>
+          </TabsContent>
+          <EntityAuxTabPanels
+            entityType="FieldChangeOrder"
+            entityId={initial?.id ?? null}
+            projectId={initial?.projectId ?? null}
+            attachmentsExtra={
+              <Labeled
+                label="External link"
+                help="Optional — link to an external doc store (Procore, SharePoint, etc.) when the source of truth lives outside this app."
+              >
+                <Input
+                  value={form.photosUrl}
+                  placeholder="https://..."
+                  onChange={(e) => update("photosUrl", e.target.value)}
+                />
+              </Labeled>
+            }
           />
+        </Tabs>
+
+        <DialogFooterActions
+          busy={busy}
+          disabled={busy || !form.title.trim()}
+          submitLabel={initial ? "Save Changes" : "Create FCO"}
+          onSubmit={handleSubmit}
+          error={error}
+        />
       </div>
     </>
   );
 }
-

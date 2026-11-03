@@ -1,3 +1,4 @@
+import { PRIORITY_LABELS } from "~/config/entity-enums";
 import type { PcoPriority, PcoStatus } from "./pco";
 
 /**
@@ -17,9 +18,5 @@ export const PCO_STATUS_LABELS: Record<PcoStatus, string> = {
   VOID: "Void",
 };
 
-export const PCO_PRIORITY_LABELS: Record<PcoPriority, string> = {
-  LOW: "Low",
-  NORMAL: "Normal",
-  HIGH: "High",
-  URGENT: "Urgent",
-};
+/** The shared priority scale's labels — see `~/config/entity-enums`. */
+export const PCO_PRIORITY_LABELS: Record<PcoPriority, string> = PRIORITY_LABELS;

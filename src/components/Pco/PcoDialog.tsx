@@ -1,3 +1,5 @@
+import type { EntityDialogCallbacks } from "~/components/EntityDialog/EntityFields";
+import { CHANGE_ENTITIES, recordNumber } from "~/config/change-entities";
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "~/components/ui/button";
@@ -86,18 +88,13 @@ type PcoDialogProps = {
   /** Slim list-item shape. Dialog lazy-fetches the full record on open. */
   initial?: PcoListItem;
   projectId: number | null;
-  onSubmit: (form: FormState) => Promise<unknown>;
-  onDelete?: (id: number) => Promise<unknown>;
-  onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
-};
+} & EntityDialogCallbacks<FormState>;
 
 export function PcoDialog({
   trigger,
   initial,
   projectId,
-  onSubmit,
-  onDelete,
-  onTransition,
+  ...callbacks
 }: PcoDialogProps) {
   return (
     <EntityDialogShell
@@ -110,9 +107,7 @@ export function PcoDialog({
         <PcoDialogBody
           initial={full}
           projectId={projectId}
-          onSubmit={onSubmit}
-          onDelete={onDelete}
-          onTransition={onTransition}
+          {...callbacks}
           closeDialog={closeDialog}
         />
       )}
@@ -130,11 +125,8 @@ function PcoDialogBody({
 }: {
   initial?: PcoItem;
   projectId: number | null;
-  onSubmit: (form: FormState) => Promise<unknown>;
-  onDelete?: (id: number) => Promise<unknown>;
-  onTransition?: (input: { id: number; action: string }) => Promise<unknown>;
   closeDialog: () => void;
-}) {
+} & EntityDialogCallbacks<FormState>) {
   const { form, busy, setBusy, error, update, handleSubmit, handleDelete } =
     useRecordDialogForm<PcoItem, FormState>({
       initial,
@@ -282,7 +274,7 @@ function PcoDialogBody({
                 setBusy={setBusy}
                 onTransition={onTransition}
                 entityId={initial.id}
-                entityNoun="PCO"
+                entityNoun={CHANGE_ENTITIES.Pco.noun}
                 onSuccess={closeDialog}
               />
             )}
@@ -507,7 +499,7 @@ function PcoDialogBody({
                             />
                           </td>
                           <td className="px-2 py-1.5 font-mono text-xs text-slate-700">
-                            {c.cvrNumber || `CVR #${c.id}`}
+                            {recordNumber("ChangeLog", c)}
                           </td>
                           <td className="px-2 py-1.5 text-slate-800">
                             {c.title}

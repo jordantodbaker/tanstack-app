@@ -40,11 +40,11 @@ import type {
 } from "./fef-table-types";
 export * from "./fef-table-types";
 import { useGridRangeEditing } from "./use-grid-range-editing";
+import { writeCtxFromMeta } from "./grid-range";
 import { useViewportFillHeight } from "./use-viewport-fill-height";
 export { useGridRangeEditing } from "./use-grid-range-editing";
 
 const debug = createDebug("fef");
-
 
 // ── Shared FEF table state + content ────────────────────────────────────────
 
@@ -111,9 +111,9 @@ export const __columnWidthStorage = {
  * size, and whether resizing is enabled at all (off when no key is given).
  */
 function useColumnWidths(columnWidthKey: string | undefined) {
-  const [columnSizing, setColumnSizing] = React.useState<Record<string, number>>(
-    () => readStoredWidths(columnWidthKey),
-  );
+  const [columnSizing, setColumnSizing] = React.useState<
+    Record<string, number>
+  >(() => readStoredWidths(columnWidthKey));
   const resizable = columnWidthKey !== undefined;
   const handleColumnSizingChange = React.useCallback(
     (updater: React.SetStateAction<Record<string, number>>) => {
@@ -137,7 +137,12 @@ function useColumnWidths(columnWidthKey: string | undefined) {
     },
     [handleColumnSizingChange],
   );
-  return { columnSizing, handleColumnSizingChange, resetColumnWidth, resizable };
+  return {
+    columnSizing,
+    handleColumnSizingChange,
+    resetColumnWidth,
+    resizable,
+  };
 }
 
 /**
@@ -259,11 +264,14 @@ const FefTableRow = React.memo(
               className={`relative border border-gray-300${
                 fz ? ` ${baseBg}` : ""
               }${
-                inSel ? " outline outline-1 -outline-offset-1 outline-blue-500" : ""
+                inSel
+                  ? " outline outline-1 -outline-offset-1 outline-blue-500"
+                  : ""
               }`}
               onMouseDown={
                 rangeHandlers
-                  ? (e) => rangeHandlers.onCellPointerDown(row.index, colIndex, e)
+                  ? (e) =>
+                      rangeHandlers.onCellPointerDown(row.index, colIndex, e)
                   : undefined
               }
               onFocusCapture={
@@ -273,7 +281,8 @@ const FefTableRow = React.memo(
               }
               onContextMenu={
                 rangeHandlers
-                  ? (e) => rangeHandlers.onCellContextMenu(row.index, colIndex, e)
+                  ? (e) =>
+                      rangeHandlers.onCellContextMenu(row.index, colIndex, e)
                   : undefined
               }
             >
@@ -325,11 +334,13 @@ const FefTableRow = React.memo(
     prev.frozen === next.frozen,
 );
 
-export function useFefTableState(opts: {
-  initialRows?: FefRow[];
-  /** Persists row data in the materials store under this key when set. */
-  sectionKey?: string;
-} = {}): FefTableState {
+export function useFefTableState(
+  opts: {
+    initialRows?: FefRow[];
+    /** Persists row data in the materials store under this key when set. */
+    sectionKey?: string;
+  } = {},
+): FefTableState {
   const { initialRows, sectionKey } = opts;
 
   const [data, setDataState] = React.useState<FefRow[]>(() => {
@@ -339,8 +350,9 @@ export function useFefTableState(opts: {
     }
     return initialRows ?? TAKE_OFF_INITIAL_ROWS;
   });
-  const [columnFilters, setColumnFilters] =
-    React.useState<ColumnFiltersState>([]);
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
+    [],
+  );
 
   const setData = React.useCallback<
     React.Dispatch<React.SetStateAction<FefRow[]>>
@@ -533,7 +545,9 @@ export function FefTableContent({
   onToggleGroup?: (label: string) => void;
   serverPagination?: ServerPagination;
   columnVisibility?: VisibilityState;
-  onColumnVisibilityChange?: React.Dispatch<React.SetStateAction<VisibilityState>>;
+  onColumnVisibilityChange?: React.Dispatch<
+    React.SetStateAction<VisibilityState>
+  >;
   /** Pads the table with blank visual rows so it always appears at least
    *  this many rows tall. Useful for keeping the Take Off table close to
    *  viewport height even when only a few real rows exist. */
@@ -584,8 +598,12 @@ export function FefTableContent({
     setLocalPageIndex(0);
   }, [columnFilters]);
 
-  const { columnSizing, handleColumnSizingChange, resetColumnWidth, resizable } =
-    useColumnWidths(columnWidthKey);
+  const {
+    columnSizing,
+    handleColumnSizingChange,
+    resetColumnWidth,
+    resizable,
+  } = useColumnWidths(columnWidthKey);
 
   // Identity that flips when any non-row-data input that affects cell
   // rendering changes reference: query-derived meta arrays (e.g. an admin
@@ -683,6 +701,25 @@ export function FefTableContent({
     [meta?.weldGroupOptions],
   );
 
+  // The lookups a write derives through, shared by the cell editors (via the
+  // table meta) and the range operations (via the hook below). One object
+  // per set of option lists, so `grid-range`'s index is built once per grid.
+  const writeCtx = React.useMemo(
+    () => writeCtxFromMeta(meta),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      meta?.roleOptions,
+      meta?.scheduleOptions,
+      meta?.roleRates,
+      meta?.areaOptions,
+      meta?.cbsOptions,
+      meta?.crewMixOptions,
+      meta?.pipingFactorLookup,
+      meta?.weldGroupMaterialMap,
+      meta?.steelMemberUomLookup,
+    ],
+  );
+
   const table = useReactTable({
     data,
     columns,
@@ -713,7 +750,12 @@ export function FefTableContent({
     columnResizeMode: "onEnd",
     defaultColumn: { minSize: MIN_COL_WIDTH, maxSize: MAX_COL_WIDTH },
     onColumnSizingChange: handleColumnSizingChange,
-    state: { columnFilters, pagination, columnSizing, ...(columnVisibility !== undefined && { columnVisibility }) },
+    state: {
+      columnFilters,
+      pagination,
+      columnSizing,
+      ...(columnVisibility !== undefined && { columnVisibility }),
+    },
     meta: {
       // Pass every caller-supplied field through untouched — the option lists,
       // the steel/piping lookups, areaOptions, and the selection state all live
@@ -721,6 +763,8 @@ export function FefTableContent({
       // per-field defaults are needed here: a new `FefTableMeta` field flows
       // through automatically without editing this literal.
       ...meta,
+      // The write context the cell editors derive through — see above.
+      writeCtx,
       // Option lists pre-mapped to `{ value, label }` once per grid (computed
       // just above) so a page of dropdown cells doesn't each re-map the source.
       roleSelectOptions,
@@ -766,17 +810,41 @@ export function FefTableContent({
 
   const {
     gridRef,
-    rows, frozen, rangeSel, rangeHandlers, onGridKeyDown, onGridPaste, stats,
-    fmtStat, menu, menuCopy, menuCut, menuPaste, menuClear, menuInsert,
-    menuDeleteRows, selectedRowCount, find, setFind, findIndex, setFindIndex,
-    matches, goToMatch, doReplaceOne, doReplaceAll, sortState, onColSort,
-    onColHeaderClick, onSelectAll,
+    rows,
+    frozen,
+    rangeSel,
+    rangeHandlers,
+    onGridKeyDown,
+    onGridPaste,
+    stats,
+    fmtStat,
+    menu,
+    menuCopy,
+    menuCut,
+    menuPaste,
+    menuClear,
+    menuInsert,
+    menuDeleteRows,
+    selectedRowCount,
+    find,
+    setFind,
+    findIndex,
+    setFindIndex,
+    matches,
+    goToMatch,
+    doReplaceOne,
+    doReplaceAll,
+    sortState,
+    onColSort,
+    onColHeaderClick,
+    onSelectAll,
   } = useGridRangeEditing({
     enableRangeEditing: !!enableRangeEditing,
     data,
     setData,
     table,
     meta,
+    writeCtx,
     serverPagination,
     setLocalPageIndex,
     frozenColumnCount: frozenCount,
@@ -833,261 +901,272 @@ export function FefTableContent({
           doReplaceAll={doReplaceAll}
         />
       )}
-    <div
-      ref={gridRef}
-      // Focusable but not a tab stop, so the header/gutter click and
-      // fill-handle handlers can park focus here and keep the range shortcuts
-      // (Ctrl+D fill down, Ctrl+C/V, Delete) inside the grid instead of
-      // letting the browser take them.
-      tabIndex={enableRangeEditing ? -1 : undefined}
-      // Capped to the space between here and the bottom of the viewport, so
-      // the horizontal scrollbar stays on screen instead of sitting below the
-      // last row. The cap is also what gives the `sticky` header row (and the
-      // frozen columns' `sticky left`) a container with room to scroll —
-      // without it they had nothing to stick to. A sheet shorter than the cap
-      // is unaffected: `max-height` only ever clips.
-      style={{ maxHeight: gridMaxHeight }}
-      className="overflow-auto focus:outline-none"
-      onKeyDownCapture={enableRangeEditing ? onGridKeyDown : undefined}
-      onPaste={enableRangeEditing ? onGridPaste : undefined}
-    >
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          {bannerSegments && (
-            <tr className="bg-gray-200">
-              <th
-                style={{
-                  width: 44,
-                  minWidth: 44,
-                  height: BANNER_HEIGHT,
-                  top: 0,
-                }}
-                className="sticky left-0 z-30 bg-gray-200 border border-gray-300"
-              />
-              {bannerSegments.map((seg) => {
-                const fz = seg.frozen ? (frozen?.[seg.startIndex] ?? null) : null;
-                const clickable = !!seg.label && !!onToggleGroup;
-                return (
-                  <th
-                    key={seg.startIndex}
-                    colSpan={seg.span}
-                    onClick={
-                      clickable ? () => onToggleGroup(seg.label) : undefined
-                    }
-                    title={clickable ? `Collapse ${seg.label}` : undefined}
-                    style={
-                      fz
-                        ? {
-                            position: "sticky",
-                            top: 0,
-                            left: fz.left,
-                            width: fz.width,
-                            minWidth: fz.width,
-                            height: BANNER_HEIGHT,
-                            zIndex: 30,
-                          }
-                        : { top: 0, height: BANNER_HEIGHT }
-                    }
-                    className={`sticky z-20 bg-gray-200 border border-gray-300 px-2 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-600${
-                      clickable ? " cursor-pointer hover:bg-gray-300" : ""
-                    }`}
-                  >
-                    {seg.label}
-                    {clickable && <span className="ml-1 text-slate-400">▾</span>}
-                  </th>
-                );
-              })}
-            </tr>
-          )}
-          {table.getHeaderGroups().map((headerGroup) => (
-            <tr key={headerGroup.id} className="bg-gray-100">
-              <th
-                onClick={enableRangeEditing ? onSelectAll : undefined}
-                title={enableRangeEditing ? "Select all" : undefined}
-                style={{ width: 44, minWidth: 44, top: headerTop }}
-                className={`sticky left-0 z-30 select-none bg-gray-100 border border-gray-300 px-1 align-bottom${
-                  enableRangeEditing ? " cursor-pointer" : ""
-                }`}
-              />
-              {headerGroup.headers.map((header, colIndex) => {
-                const fz = frozen?.[colIndex] ?? null;
-                return (
+      <div
+        ref={gridRef}
+        // Focusable but not a tab stop, so the header/gutter click and
+        // fill-handle handlers can park focus here and keep the range shortcuts
+        // (Ctrl+D fill down, Ctrl+C/V, Delete) inside the grid instead of
+        // letting the browser take them.
+        tabIndex={enableRangeEditing ? -1 : undefined}
+        // Capped to the space between here and the bottom of the viewport, so
+        // the horizontal scrollbar stays on screen instead of sitting below the
+        // last row. The cap is also what gives the `sticky` header row (and the
+        // frozen columns' `sticky left`) a container with room to scroll —
+        // without it they had nothing to stick to. A sheet shorter than the cap
+        // is unaffected: `max-height` only ever clips.
+        style={{ maxHeight: gridMaxHeight }}
+        className="overflow-auto focus:outline-none"
+        onKeyDownCapture={enableRangeEditing ? onGridKeyDown : undefined}
+        onPaste={enableRangeEditing ? onGridPaste : undefined}
+      >
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            {bannerSegments && (
+              <tr className="bg-gray-200">
                 <th
-                  key={header.id}
-                  style={
-                    fz
-                      ? {
-                          position: "sticky",
-                          top: headerTop,
-                          left: fz.left,
-                          width: fz.width,
-                          minWidth: fz.width,
-                          zIndex: 30,
-                        }
-                      : {
-                          top: headerTop,
-                          minWidth: header.column.getSize(),
-                          // A resizable column also pins `width`. `minWidth`
-                          // alone only ever grows a column: with the table at
-                          // w-full the browser hands out slack space, so
-                          // dragging an edge left would change the number and
-                          // nothing on screen.
-                          ...(resizable && { width: header.column.getSize() }),
-                        }
-                  }
-                  className="sticky z-20 bg-gray-100 border border-gray-300 px-2 py-2 text-left font-semibold align-bottom"
-                >
-                  {resizable && header.column.getCanResize() && (
-                    <div
-                      role="separator"
-                      aria-orientation="vertical"
-                      aria-label={`Resize ${header.column.id}`}
-                      title="Drag to resize · double-click to reset"
-                      onMouseDown={header.getResizeHandler()}
-                      onTouchStart={header.getResizeHandler()}
-                      onDoubleClick={() => resetColumnWidth(header.column.id)}
-                      // Keep the drag off the header's own click handlers —
-                      // the column-select span sits right beside it.
-                      onClick={(e) => e.stopPropagation()}
-                      style={{
-                        transform: header.column.getIsResizing()
-                          ? `translateX(${
-                              table.getState().columnSizingInfo.deltaOffset ?? 0
-                            }px)`
-                          : undefined,
-                      }}
-                      className={`absolute right-0 top-0 z-40 h-full w-1.5 cursor-col-resize touch-none select-none ${
-                        header.column.getIsResizing()
-                          ? "bg-blue-500"
-                          : "hover:bg-blue-400/60"
+                  style={{
+                    width: 44,
+                    minWidth: 44,
+                    height: BANNER_HEIGHT,
+                    top: 0,
+                  }}
+                  className="sticky left-0 z-30 bg-gray-200 border border-gray-300"
+                />
+                {bannerSegments.map((seg) => {
+                  const fz = seg.frozen
+                    ? (frozen?.[seg.startIndex] ?? null)
+                    : null;
+                  const clickable = !!seg.label && !!onToggleGroup;
+                  return (
+                    <th
+                      key={seg.startIndex}
+                      colSpan={seg.span}
+                      onClick={
+                        clickable ? () => onToggleGroup(seg.label) : undefined
+                      }
+                      title={clickable ? `Collapse ${seg.label}` : undefined}
+                      style={
+                        fz
+                          ? {
+                              position: "sticky",
+                              top: 0,
+                              left: fz.left,
+                              width: fz.width,
+                              minWidth: fz.width,
+                              height: BANNER_HEIGHT,
+                              zIndex: 30,
+                            }
+                          : { top: 0, height: BANNER_HEIGHT }
+                      }
+                      className={`sticky z-20 bg-gray-200 border border-gray-300 px-2 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-600${
+                        clickable ? " cursor-pointer hover:bg-gray-300" : ""
                       }`}
-                    />
-                  )}
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-1 leading-tight">
-                      <span
-                        className={
-                          enableRangeEditing
-                            ? "cursor-pointer hover:text-blue-700"
-                            : undefined
-                        }
-                        onClick={
-                          enableRangeEditing
-                            ? () => onColHeaderClick(colIndex)
-                            : undefined
-                        }
-                        title={enableRangeEditing ? "Select column" : undefined}
-                      >
-                        {flexRender(
-                          header.column.columnDef.header,
-                          header.getContext(),
-                        )}
-                      </span>
-                      {header.column.id !== "__select" &&
-                        header.column.id !== "delete" && (
-                          <button
-                            type="button"
-                            onClick={() => onColSort(header.column.id)}
-                            title="Sort by this column"
-                            aria-label="Sort by this column"
-                            // A 24px hit area around the glyph; the negative
-                            // margins keep the header row the height it was.
-                            className="ml-auto -my-1 -mr-1 inline-flex size-6 shrink-0 items-center justify-center rounded text-xs text-gray-400 hover:bg-slate-100 hover:text-blue-700"
-                          >
-                            {sortState?.colId === header.column.id
-                              ? sortState.dir === "asc"
-                                ? "▲"
-                                : "▼"
-                              : "⇅"}
-                          </button>
-                        )}
-                    </div>
-                    <ColumnFilter column={header.column} data={data} />
-                  </div>
-                </th>
-                );
-              })}
-            </tr>
-          ))}
-        </thead>
-        <tbody>
-          {rows.map((row, i) => {
-            const inRange =
-              rangeSel != null &&
-              row.index >= rangeSel.minRow &&
-              row.index <= rangeSel.maxRow;
-            return (
-              <FefTableRow
-                key={row.id}
-                row={row}
-                rowIndex={i}
-                // `row.index`, not the loop counter: the memo comparator uses
-                // this to decide whether the row's checkbox needs repainting,
-                // and the cell itself reads selection by `row.index`. They
-                // diverge whenever the visible rows aren't the whole sheet —
-                // page 2, or any active filter — and a stale hint means a
-                // click that doesn't visibly tick the box.
-                selected={meta?.selectedRowIndices?.has(row.index) ?? false}
-                metaRev={metaRev}
-                getRowInvalid={getRowInvalid}
-                selMin={inRange ? rangeSel!.minCol : -1}
-                selMax={inRange ? rangeSel!.maxCol : -1}
-                selBottom={inRange && row.index === rangeSel!.maxRow}
-                rangeHandlers={enableRangeEditing ? rangeHandlers : undefined}
-                frozen={frozen}
-              />
-            );
-          })}
-          {minRows !== undefined &&
-            Array.from(
-              {
-                length: Math.max(
-                  0,
-                  minRows - table.getRowModel().rows.length,
-                ),
-              },
-              (_, i) => {
-                const overallIdx = table.getRowModel().rows.length + i;
-                const visibleColumns = table.getVisibleLeafColumns();
-                return (
-                  <tr
-                    key={`__filler-${i}`}
-                    aria-hidden="true"
-                    className={
-                      overallIdx % 2 === 0 ? "bg-white" : "bg-gray-50"
-                    }
-                  >
-                    <td
-                      style={{ width: 44, minWidth: 44 }}
-                      className="sticky left-0 z-10 border border-gray-300 bg-gray-100 px-1 text-center text-xs text-gray-400"
                     >
-                      {overallIdx + 1}
-                    </td>
-                    {visibleColumns.map((col, colIndex) => {
-                      const fz = frozen?.[colIndex] ?? null;
-                      return (
-                        <td
-                          key={col.id}
-                          style={cellFreezeStyle(fz, col.getSize())}
-                          className={`border border-gray-300 px-3 py-2${
-                            fz
-                              ? overallIdx % 2 === 0
-                                ? " bg-white"
-                                : " bg-gray-50"
-                              : ""
-                          }`}
-                        >
-                          &nbsp;
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              },
+                      {seg.label}
+                      {clickable && (
+                        <span className="ml-1 text-slate-400">▾</span>
+                      )}
+                    </th>
+                  );
+                })}
+              </tr>
             )}
-        </tbody>
-      </table>
-    </div>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <tr key={headerGroup.id} className="bg-gray-100">
+                <th
+                  onClick={enableRangeEditing ? onSelectAll : undefined}
+                  title={enableRangeEditing ? "Select all" : undefined}
+                  style={{ width: 44, minWidth: 44, top: headerTop }}
+                  className={`sticky left-0 z-30 select-none bg-gray-100 border border-gray-300 px-1 align-bottom${
+                    enableRangeEditing ? " cursor-pointer" : ""
+                  }`}
+                />
+                {headerGroup.headers.map((header, colIndex) => {
+                  const fz = frozen?.[colIndex] ?? null;
+                  return (
+                    <th
+                      key={header.id}
+                      style={
+                        fz
+                          ? {
+                              position: "sticky",
+                              top: headerTop,
+                              left: fz.left,
+                              width: fz.width,
+                              minWidth: fz.width,
+                              zIndex: 30,
+                            }
+                          : {
+                              top: headerTop,
+                              minWidth: header.column.getSize(),
+                              // A resizable column also pins `width`. `minWidth`
+                              // alone only ever grows a column: with the table at
+                              // w-full the browser hands out slack space, so
+                              // dragging an edge left would change the number and
+                              // nothing on screen.
+                              ...(resizable && {
+                                width: header.column.getSize(),
+                              }),
+                            }
+                      }
+                      className="sticky z-20 bg-gray-100 border border-gray-300 px-2 py-2 text-left font-semibold align-bottom"
+                    >
+                      {resizable && header.column.getCanResize() && (
+                        <div
+                          role="separator"
+                          aria-orientation="vertical"
+                          aria-label={`Resize ${header.column.id}`}
+                          title="Drag to resize · double-click to reset"
+                          onMouseDown={header.getResizeHandler()}
+                          onTouchStart={header.getResizeHandler()}
+                          onDoubleClick={() =>
+                            resetColumnWidth(header.column.id)
+                          }
+                          // Keep the drag off the header's own click handlers —
+                          // the column-select span sits right beside it.
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            transform: header.column.getIsResizing()
+                              ? `translateX(${
+                                  table.getState().columnSizingInfo
+                                    .deltaOffset ?? 0
+                                }px)`
+                              : undefined,
+                          }}
+                          className={`absolute right-0 top-0 z-40 h-full w-1.5 cursor-col-resize touch-none select-none ${
+                            header.column.getIsResizing()
+                              ? "bg-blue-500"
+                              : "hover:bg-blue-400/60"
+                          }`}
+                        />
+                      )}
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1 leading-tight">
+                          <span
+                            className={
+                              enableRangeEditing
+                                ? "cursor-pointer hover:text-blue-700"
+                                : undefined
+                            }
+                            onClick={
+                              enableRangeEditing
+                                ? () => onColHeaderClick(colIndex)
+                                : undefined
+                            }
+                            title={
+                              enableRangeEditing ? "Select column" : undefined
+                            }
+                          >
+                            {flexRender(
+                              header.column.columnDef.header,
+                              header.getContext(),
+                            )}
+                          </span>
+                          {header.column.id !== "__select" &&
+                            header.column.id !== "delete" && (
+                              <button
+                                type="button"
+                                onClick={() => onColSort(header.column.id)}
+                                title="Sort by this column"
+                                aria-label="Sort by this column"
+                                // A 24px hit area around the glyph; the negative
+                                // margins keep the header row the height it was.
+                                className="ml-auto -my-1 -mr-1 inline-flex size-6 shrink-0 items-center justify-center rounded text-xs text-gray-400 hover:bg-slate-100 hover:text-blue-700"
+                              >
+                                {sortState?.colId === header.column.id
+                                  ? sortState.dir === "asc"
+                                    ? "▲"
+                                    : "▼"
+                                  : "⇅"}
+                              </button>
+                            )}
+                        </div>
+                        <ColumnFilter column={header.column} data={data} />
+                      </div>
+                    </th>
+                  );
+                })}
+              </tr>
+            ))}
+          </thead>
+          <tbody>
+            {rows.map((row, i) => {
+              const inRange =
+                rangeSel != null &&
+                row.index >= rangeSel.minRow &&
+                row.index <= rangeSel.maxRow;
+              return (
+                <FefTableRow
+                  key={row.id}
+                  row={row}
+                  rowIndex={i}
+                  // `row.index`, not the loop counter: the memo comparator uses
+                  // this to decide whether the row's checkbox needs repainting,
+                  // and the cell itself reads selection by `row.index`. They
+                  // diverge whenever the visible rows aren't the whole sheet —
+                  // page 2, or any active filter — and a stale hint means a
+                  // click that doesn't visibly tick the box.
+                  selected={meta?.selectedRowIndices?.has(row.index) ?? false}
+                  metaRev={metaRev}
+                  getRowInvalid={getRowInvalid}
+                  selMin={inRange ? rangeSel!.minCol : -1}
+                  selMax={inRange ? rangeSel!.maxCol : -1}
+                  selBottom={inRange && row.index === rangeSel!.maxRow}
+                  rangeHandlers={enableRangeEditing ? rangeHandlers : undefined}
+                  frozen={frozen}
+                />
+              );
+            })}
+            {minRows !== undefined &&
+              Array.from(
+                {
+                  length: Math.max(
+                    0,
+                    minRows - table.getRowModel().rows.length,
+                  ),
+                },
+                (_, i) => {
+                  const overallIdx = table.getRowModel().rows.length + i;
+                  const visibleColumns = table.getVisibleLeafColumns();
+                  return (
+                    <tr
+                      key={`__filler-${i}`}
+                      aria-hidden="true"
+                      className={
+                        overallIdx % 2 === 0 ? "bg-white" : "bg-gray-50"
+                      }
+                    >
+                      <td
+                        style={{ width: 44, minWidth: 44 }}
+                        className="sticky left-0 z-10 border border-gray-300 bg-gray-100 px-1 text-center text-xs text-gray-400"
+                      >
+                        {overallIdx + 1}
+                      </td>
+                      {visibleColumns.map((col, colIndex) => {
+                        const fz = frozen?.[colIndex] ?? null;
+                        return (
+                          <td
+                            key={col.id}
+                            style={cellFreezeStyle(fz, col.getSize())}
+                            className={`border border-gray-300 px-3 py-2${
+                              fz
+                                ? overallIdx % 2 === 0
+                                  ? " bg-white"
+                                  : " bg-gray-50"
+                                : ""
+                            }`}
+                          >
+                            &nbsp;
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                },
+              )}
+          </tbody>
+        </table>
+      </div>
       {/* Outside the scroll pane: the pager used to live inside it, so on a
           wide sheet it slid off to the right along with the columns. */}
       <TablePagination
@@ -1130,9 +1209,18 @@ export function FefTableContent({
               ["Copy", menuCopy],
               ["Paste", menuPaste],
               ["divider", null],
-              [`Insert ${selectedRowCount} row${selectedRowCount === 1 ? "" : "s"} above`, () => menuInsert("above")],
-              [`Insert ${selectedRowCount} row${selectedRowCount === 1 ? "" : "s"} below`, () => menuInsert("below")],
-              [`Delete ${selectedRowCount} row${selectedRowCount === 1 ? "" : "s"}`, menuDeleteRows],
+              [
+                `Insert ${selectedRowCount} row${selectedRowCount === 1 ? "" : "s"} above`,
+                () => menuInsert("above"),
+              ],
+              [
+                `Insert ${selectedRowCount} row${selectedRowCount === 1 ? "" : "s"} below`,
+                () => menuInsert("below"),
+              ],
+              [
+                `Delete ${selectedRowCount} row${selectedRowCount === 1 ? "" : "s"}`,
+                menuDeleteRows,
+              ],
               ["divider", null],
               ["Clear contents", menuClear],
             ] as [string, (() => void) | null][]
@@ -1155,4 +1243,3 @@ export function FefTableContent({
     </div>
   );
 }
-

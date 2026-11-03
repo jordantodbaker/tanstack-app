@@ -2,6 +2,7 @@ import "@tanstack/react-table";
 import type { FefTableMeta } from "./table-utils";
 import type { CbsOption } from "~/lib/types";
 import type { SearchableSelectOption } from "~/components/SearchableSelect";
+import type { WriteCtx } from "./grid-range";
 
 declare module "@tanstack/react-table" {
   // The grid's table meta = the caller-supplied `FefTableMeta` (option lists,
@@ -14,6 +15,10 @@ declare module "@tanstack/react-table" {
   interface TableMeta<TData extends RowData> extends FefTableMeta {
     updateData?: (rowIndex: number, columnId: string, value: string) => void;
     updateRow?: (rowIndex: number, updates: Record<string, string>) => void;
+    // The lookups a cell editor derives through — the same `WriteCtx` the
+    // range paste uses, built once per grid by FefTableContent. See
+    // `writeCtxOf` in fef-cells.
+    writeCtx?: WriteCtx;
     // Pre-mapped `{ value, label }` lists for the dropdown cells, computed once
     // per grid (see FefTableContent) so each cell doesn't re-map its source.
     roleSelectOptions?: { value: string; label: string }[];

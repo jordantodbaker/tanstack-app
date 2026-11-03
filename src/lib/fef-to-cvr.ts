@@ -1,3 +1,4 @@
+import { isBlankId, isUntouchedBlankRow } from "~/lib/fef-helpers";
 /**
  * Build a CVR draft from selected Field Estimate Form take-off rows — the
  * "convert these estimate rows into a change" bridge.
@@ -19,7 +20,7 @@ import {
   buildupCbsCodes,
   sumLineItems,
   type CvrLineItemDto,
-} from "~/utils/cvrLineItems";
+} from "~/lib/cvr-line-items";
 
 /** The subset of the CVR form a converted draft pre-fills. Assignable to the
  *  dialog's create-mode form state. */
@@ -37,7 +38,7 @@ export type FefCvrDraft = {
 /** A take-off row's CBS code lives in `id` unless it's a blank-template
  *  sentinel; return the real code or "". */
 function realCbsCode(row: FefRow): string {
-  return row.id && !row.id.startsWith("__fe-blank-") ? row.id : "";
+  return row.id && !isBlankId(row.id) ? row.id : "";
 }
 
 const numOr0 = (s: string): number => {
@@ -79,9 +80,7 @@ export function buildCvrDraftFromFefRows(
   const laborHoursImpact = lineItems.reduce((sum, li) => sum + li.quantity, 0);
 
   // Common area only if every converted row carries the same non-empty area.
-  const nonEmptyAreas = convertible
-    .map((r) => r.area)
-    .filter((a) => a !== "");
+  const nonEmptyAreas = convertible.map((r) => r.area).filter((a) => a !== "");
   const areaSet = new Set(nonEmptyAreas);
   const area =
     areaSet.size === 1 && nonEmptyAreas.length === convertible.length

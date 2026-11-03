@@ -1,3 +1,4 @@
+import { isBlankId, isUntouchedBlankRow } from "~/lib/fef-helpers";
 import * as React from "react";
 import type { FefRow } from "~/lib/types";
 import type { FefTableState } from "~/lib/table-utils";
@@ -23,7 +24,7 @@ function isTrailingBlankAppend(prev: FefRow[], next: FefRow[]): boolean {
   }
   for (let i = prev.length; i < next.length; i++) {
     const r = next[i];
-    if (!r.id.startsWith("__fe-blank-") || fefRowHasUserData(r)) return false;
+    if (!isUntouchedBlankRow(r)) return false;
   }
   return true;
 }

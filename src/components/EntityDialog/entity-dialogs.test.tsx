@@ -58,14 +58,15 @@ import { RfiDialog } from "~/components/Rfi/RfiDialog";
 import { TrendDialog } from "~/components/Trend/TrendDialog";
 import { FcoDialog } from "~/components/FCOLog/FcoDialog";
 import { ChangelogDialog } from "~/components/Changelog/ChangelogDialog";
+import {
+  CHANGE_ENTITIES,
+  type ChangeEntityType,
+} from "~/config/change-entities";
 import { pcoQueryOptions, type PcoItem } from "~/utils/pco";
 import { rfiQueryOptions, type RfiItem } from "~/utils/rfis";
 import { trendQueryOptions, type TrendItem } from "~/utils/trends";
 import { fcoQueryOptions, type FcoItem } from "~/utils/fcoLog";
-import {
-  changeLogQueryOptions,
-  type ChangeLogDetail,
-} from "~/utils/changelog";
+import { changeLogQueryOptions, type ChangeLogDetail } from "~/utils/changelog";
 
 afterEach(cleanup);
 
@@ -103,7 +104,12 @@ type Case = {
 };
 
 const trigger = <button type="button">Open</button>;
-const common = { projectId: 1, status: "DRAFT", createdAt: STAMP, updatedAt: STAMP };
+const common = {
+  projectId: 1,
+  status: "DRAFT",
+  createdAt: STAMP,
+  updatedAt: STAMP,
+};
 
 const pco = {
   ...common,
@@ -301,8 +307,7 @@ const CASES: Case[] = [
   {
     name: "ChangelogDialog",
     record: cvr,
-    seed: (qc) =>
-      qc.setQueryData(changeLogQueryOptions(cvr.id).queryKey, cvr),
+    seed: (qc) => qc.setQueryData(changeLogQueryOptions(cvr.id).queryKey, cvr),
     titleField: "title",
     titleLabel: "Title",
     title: cvr.title,
@@ -435,5 +440,27 @@ describe.each(CASES)("$name", (c) => {
     mount(c, "new");
     await heading(c.newHeading);
     expect(recordRecentView).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The print link is built from the registry's print path and the record's
+ * id. Pinned because a substitution once turned all three hrefs into "/"
+ * without a test noticing; the records with no printable page offer none.
+ */
+describe.each(CASES)("$name print link", (c) => {
+  it("points at the record's printable page, or is absent", async () => {
+    mount(c, "edit");
+    await heading(c.editHeading);
+    const printPath =
+      CHANGE_ENTITIES[c.recent.entityType as ChangeEntityType].printPath;
+    const links = Array.from(document.querySelectorAll("a[href]")).map((a) =>
+      a.getAttribute("href"),
+    );
+    if (printPath) {
+      expect(links).toContain(`${printPath}/${c.record.id}`);
+    } else {
+      expect(links.some((h) => h?.includes("-print/"))).toBe(false);
+    }
   });
 });

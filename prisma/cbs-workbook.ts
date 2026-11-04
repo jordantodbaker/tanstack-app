@@ -72,8 +72,8 @@ const DISPLAY_CODE_RE =
 const SUMMARY_CODE_RE = /^[0-9A-Z]{3}-[0-9A-Z]{2}-[0-9A-Z]{4}-[0-9A-Z]{2}$/;
 
 /**
- * The workbook writes a summary row without a cost type and marks it "(*)" in
- * the name; everything downstream — the tree, the color-by-level scheme, the
+ * The workbook writes a summary row without a cost type and marks it with a
+ * trailing "*" in the name; everything downstream — the tree, the color-by-level scheme, the
  * ancestor walk — is built on the five-segment form where "0" IS the summary
  * cost type. Normalizing here keeps that single code shape, so nothing below
  * the loader has to learn a second one.
@@ -186,9 +186,9 @@ export async function loadCbsWorkbook(
     const displayCode = normalizeDisplayCode(
       text("Display Code").toUpperCase(),
     );
-    // Kept as written, cost-type marker and all ("Executive (L)"): the
-    // dictionary shows which cost type each line is. The Cost Accounts list,
-    // which has badges for that, strips it on display.
+    // Kept as written, the roll-up's trailing "*" included ("Piping*"). A
+    // typed line carries the account's name unchanged; its cost type is the
+    // last segment of its code.
     const name = text("Name");
     if (!displayCode && !name) continue;
     report.sheetRows++;

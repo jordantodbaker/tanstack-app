@@ -114,19 +114,20 @@ describe("expandCbsWorkbook", () => {
     ]);
     const byCode = new Map(items.map((i) => [i.displayCode, i]));
 
-    // The roll-up: marked (*), flagged original, G/L and classification kept.
+    // The roll-up: name ending in *, flagged original, G/L and classification kept.
     expect(byCode.get("600-00-0000-00-0")).toMatchObject({
-      name: "Piping (*)",
+      name: "Piping*",
       isOriginal: true,
       gl: "5000",
       costClassification: "INDIRECT",
       costCode: "600000000000",
       description: "Roll-up code for Piping (summarizes all cost types).",
     });
-    // A typed line: its own G/L, the rule's classification where it sets one,
-    // the Original Row flag read back as FALSE from a real Excel boolean.
+    // A typed line: the account's name unchanged, its own G/L, the rule's
+    // classification where it sets one, and the Original Row flag read back
+    // as FALSE from a real Excel boolean.
     expect(byCode.get("600-00-0000-00-S")).toMatchObject({
-      name: "Piping (S)",
+      name: "Piping",
       isOriginal: false,
       gl: "5200",
       costClassification: "DIRECT SUBCONTRACT",
@@ -159,7 +160,7 @@ describe("expandCbsWorkbook", () => {
     expect(report.duplicates).toEqual([
       expect.objectContaining({
         displayCode: "601-05-0000-00-M",
-        name: "Fittings (M)",
+        name: "Fittings",
         kept: false,
       }),
     ]);

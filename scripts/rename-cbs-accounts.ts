@@ -7,7 +7,7 @@
 // only the first is why "Structural Steel" kept reverting.
 //
 // The master has one row per account, so a rename there reaches every typed
-// line ("(L)", "(S)", …) at the next expand; the database half renames just
+// line (-L, -S, …) at the next expand; the database half renames just
 // the account's own "-0" row, and the import catches the rest up.
 //
 //   npx tsx scripts/rename-cbs-accounts.ts --dry-run    see both halves
@@ -178,7 +178,7 @@ async function main() {
       );
       continue;
     }
-    // Renames are written without the " (*)" / " (L)" cost-type marker, so
+    // Renames are written without the roll-up's trailing "*", so
     // compare on the stem rather than demanding an exact match.
     const stem = stripCostTypeSuffix(at.value);
     // The recorded cell is a hand-written note; say so when it has drifted.
@@ -191,7 +191,7 @@ async function main() {
     console.log(
       `  EDIT "${at.sheet}" ${at.cell}: "${at.value}" → "${r.to}"${note}`,
     );
-    // Keep whatever cost-type marker the cell carried — "(*)" marks the
+    // Keep whatever marker the cell carried — "*" marks the
     // account's own row and the import stores it, so dropping it would be a
     // second, silent edit.
     pending.push({

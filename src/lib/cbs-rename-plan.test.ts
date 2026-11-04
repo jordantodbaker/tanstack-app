@@ -146,6 +146,22 @@ describe("planCbsRenames", () => {
     ]);
   });
 
+  it("keeps the roll-up's trailing * through a rename", () => {
+    // What the expanded workbook writes since 2026-11-04: "Piping*".
+    const [outcome] = planCbsRenames(
+      [rename()],
+      [row({ name: "Structural Steel Shop Fabrication*" })],
+    );
+    expect(outcome).toMatchObject({
+      kind: "rename",
+      from: "Structural Steel Shop Fabrication*",
+      to: "Structural Steel*",
+    });
+    expect(
+      planCbsRenames([rename()], [row({ name: "Structural Steel*" })])[0].kind,
+    ).toBe("current");
+  });
+
   it("plans nothing for an empty rename table", () => {
     expect(planCbsRenames([], [row()])).toEqual([]);
   });

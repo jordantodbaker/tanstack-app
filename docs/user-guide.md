@@ -191,8 +191,9 @@ and, beneath it, one row per cost type the account carries — **L** labor,
 **S** subcontract, **M** material, **E** equipment, **O** other, **R** rental —
 each with its own code. The letter at the end of a row's code is its cost type,
 and a small colored **chip** beside the code repeats it so the tree scans at a
-glance; the roll-up row has no chip. Names keep the marker the workbook writes
-("Executive (L)", "Piping (*)"). An account that carries a single cost type
+glance; the roll-up row has no chip. A typed line carries the account's name
+unchanged, and a roll-up row's name ends in `*` ("Piping*"). An account that
+carries a single cost type
 and has no accounts beneath it has no roll-up row: its one typed row is the
 account.
 

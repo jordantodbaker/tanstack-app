@@ -428,7 +428,7 @@ export function runCbsQcChecks(rows: QcRow[]): HealthCheck[] {
   const uomVsName: HealthFinding[] = [];
   for (const r of rows) {
     if (hasChildren.has(r.displayCode) || blank(r.uom)) continue;
-    // The words only: a "(L)" marker is not a unit hint.
+    // The words only: a roll-up's trailing "*" is not a unit hint.
     const name = stripCostTypeSuffix(r.name).toLowerCase();
     const unit = r.uom.trim().toUpperCase();
     for (const rule of UOM_RULES) {

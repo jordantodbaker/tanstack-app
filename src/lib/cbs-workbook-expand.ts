@@ -9,6 +9,11 @@
  * an account with exactly one YES flag and no account beneath it gets its
  * typed row alone, since a roll-up over a single row says nothing. An
  * account with no YES flag at all keeps its roll-up, or it would vanish.
+ *
+ * Names: a typed row keeps the account's name exactly as the master writes
+ * it — its cost type is the last segment of its code, not a suffix on the
+ * name — and the roll-up row's name ends in "*" ("Piping*"), flush against
+ * the words. (Until 2026-11-04 the rows carried " (L)" / " (*)" markers.)
  * This module is that rule, kept free of Excel so it can be tested on plain
  * objects; `scripts/expand-cbs-workbook.ts` does the reading and writing.
  *
@@ -138,8 +143,14 @@ const MASTER_CODE_RE = /^[0-9A-Z]{3}-[0-9A-Z]{2}-[0-9A-Z]{4}-[0-9A-Z]{2}$/;
 /** An expanded code: the file is already what this produces. */
 const EXPANDED_CODE_RE =
   /^[0-9A-Z]{3}-[0-9A-Z]{2}-[0-9A-Z]{4}-[0-9A-Z]{2}-[0-9A-Z]$/;
-/** "(S)" / "(*)" on a name, the marker this module adds. */
-const NAME_MARKER_RE = /\((\*|[A-Z])\)\s*$/;
+/** Appended to a roll-up row's name: "Piping" → "Piping*". */
+export const ROLLUP_NAME_MARKER = "*";
+/**
+ * The marker this module adds (a trailing "*"), or the " (S)" / " (*)" ones it
+ * used to, on a master name — a sign the master was pasted from an expanded
+ * sheet rather than written as accounts.
+ */
+const NAME_MARKER_RE = /(\((\*|[A-Z])\)|\*)\s*$/;
 
 export type ExpansionStats = {
   masterRows: number;
@@ -366,7 +377,7 @@ export function planCbsWorkbookExpansion(
     } else {
       emit(
         typed(ROLLUP_TYPE, {
-          [COL.name]: `${name} (*)`,
+          [COL.name]: `${name}${ROLLUP_NAME_MARKER}`,
           [COL.description]: rollupDescription(name),
           [COL.rowType]: "Original",
           [COL.originalRow]: true,
@@ -379,7 +390,9 @@ export function planCbsWorkbookExpansion(
     for (const rule of COST_TYPE_RULES) {
       if (!flags[rule.type]) continue;
       const base: Record<string, CellValue> = {
-        [COL.name]: `${name} (${rule.type})`,
+        // The account's name as written: the cost type is the code's last
+        // segment (and the chip beside it on screen), not part of the name.
+        [COL.name]: name,
         [COL.gl]: rule.gl,
         [COL.description]: costTypeDescription(rule.noun, name),
         [COL.rowType]: rule.rowType,

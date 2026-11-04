@@ -21,7 +21,8 @@ import { SUMMARY_ADMIN_HOME_OFFICE, SUMMARY_ENGINEERING } from "./summary-rows";
  * for. A renumber that leaves the key valid but pointing elsewhere lands here.
  */
 const ACCOUNT_FOR_KEY: Record<string, string> = {
-  "012": "Home Office Construction Support",
+  // 2026-11-04: the master abbreviated several names (HO, Eng, Cx, Matls).
+  "012": "HO Construction Support",
   // 2026-11-03: Legal inserted at 032-05, the rest moved up five.
   "03205": "Legal",
   "03210": "Project Bonds",
@@ -32,10 +33,10 @@ const ACCOUNT_FOR_KEY: Record<string, string> = {
   "03235": "Project Licenses",
   "022": "Combined Phase (D23)",
   "024": "Concept Design (D1)",
-  "025": "Preliminary Design – FEED (D2)",
+  "025": "Preliminary Design - FEED",
   "026": "Detailed Design (D3)",
-  "027": "Engineering Construction Support (D4)",
-  "028": "Engineering Commissioning & Startup Support (D5)",
+  "027": "Eng Construction Support",
+  "028": "Eng Cx & Startup Support",
 };
 
 /** A key's account code: "012" → 012-00-0000-00, "03205" → 032-05-0000-00. */

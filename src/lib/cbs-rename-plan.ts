@@ -52,7 +52,7 @@ export function planCbsRenames(
   return renames.map((r): CbsRenameOutcome => {
     const row = byCode.get(r.displayCode);
     if (!row) return { kind: "missing", displayCode: r.displayCode };
-    // Stored names carry the workbook's cost-type marker ("Piping (*)");
+    // A stored roll-up name carries the workbook's marker ("Piping*");
     // renames are written without it. Compare the stems, and keep whatever
     // marker the row had, so the rename changes the words and nothing else.
     const stem = stripCostTypeSuffix(row.name);

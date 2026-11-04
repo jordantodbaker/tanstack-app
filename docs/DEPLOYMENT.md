@@ -548,9 +548,10 @@ item per sheet row (its own `S`/`M` twin generation, and the `rowType` /
 `generatedFrom` columns that recorded it, were removed on 2026-10-29). On
 every row it normalizes a summary code written with four segments
 (`012-05-0000-00`) by adding the `-0` backbone segment.
-Names are stored as the workbook writes them, cost-type marker included
-(`Executive (L)`), so every CBS view shows each line's cost type in its name
-and in the last segment of its code. Level segments are derived from the
+Names are stored as the workbook writes them: a typed line carries the
+account's name unchanged and a roll-up row's name ends in `*` (`Piping*`);
+a line's cost type is the last segment of its code, and the chip beside it on
+screen. (Until 2026-11-04 the rows carried ` (L)` / ` (*)` markers.) Level segments are derived from the
 Display Code,
 not from the workbook's L1–L6 helper columns. See `prisma/cbs-workbook.ts`.
 

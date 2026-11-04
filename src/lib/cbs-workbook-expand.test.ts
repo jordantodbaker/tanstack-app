@@ -66,7 +66,7 @@ describe("planCbsWorkbookExpansion", () => {
     expect(plan.rows[0].cells).toMatchObject({
       "Display Code": "012-05-1000-00-0",
       "Cost Code": "012051000000",
-      Name: "Home Office Executive (*)",
+      Name: "Home Office Executive*",
       Description:
         "Roll-up code for Home Office Executive (summarizes all cost types).",
       "G/L": 5000,
@@ -187,7 +187,7 @@ describe("planCbsWorkbookExpansion", () => {
       "01205100000R",
     ],
   ])(
-    "the %s row carries its name marker, G/L, classification and description",
+    "the %s row keeps the account's name and carries its G/L, classification and description",
     (type, rowType, gl, classification, description, costCode) => {
       const rule = COST_TYPE_RULES.find((r) => r.type === type)!;
       const plan = planCbsWorkbookExpansion(HEADERS, [
@@ -200,7 +200,7 @@ describe("planCbsWorkbookExpansion", () => {
       expect(plan.rows[0].cells).toMatchObject({
         "Display Code": `012-05-1000-00-${type}`,
         "Cost Code": costCode,
-        Name: `Pipe (${type})`,
+        Name: "Pipe",
         "G/L": gl,
         "Cost Classification": classification,
         Description: description,
@@ -405,8 +405,8 @@ describe("planCbsWorkbookExpansion", () => {
 
   it("refuses a file that is already expanded", () => {
     const plan = planCbsWorkbookExpansion(HEADERS, [
-      master(2, "012-05-1000-00-0", "Pipe (*)"),
-      master(3, "012-05-1000-00-L", "Pipe (L)"),
+      master(2, "012-05-1000-00-0", "Pipe*"),
+      master(3, "012-05-1000-00-L", "Pipe"),
     ]);
     expect(plan.rows).toEqual([]);
     expect(plan.problems[0]).toMatch(/already expanded/);
@@ -440,8 +440,14 @@ describe("planCbsWorkbookExpansion", () => {
     const plan = planCbsWorkbookExpansion(HEADERS, [
       { row: 2, cells: { Name: "", "Display Code": "" } },
       master(3, "012-05-1000-00", "Pipe (S)"),
+      master(4, "012-05-2000-00", "Pipe*"),
     ]);
-    expect(plan.stats.masterRows).toBe(1);
+    expect(plan.stats.masterRows).toBe(2);
+    // The older "(S)" marker and the current trailing "*" are both noticed.
+    expect(plan.warnings).toHaveLength(2);
     expect(plan.warnings[0]).toMatch(/already ends in a cost-type marker/);
+    expect(plan.warnings[1]).toMatch(
+      /"Pipe\*" already ends in a cost-type marker/,
+    );
   });
 });

@@ -5,7 +5,8 @@
 // Material / Equipment / Other / Rental). The loader, the CBS Health report
 // and `cbs:import` all expect the expanded dictionary the sheet used to ship
 // as: a "-0" roll-up row per account plus one typed row per YES flag, each
-// with its own code, G/L, name marker and description. An account with one
+// with its own code, G/L and description — a typed row keeps the account's
+// name, a roll-up's name ends in "*". An account with one
 // YES flag and no account beneath it gets its typed row alone, with no
 // roll-up over a single line. This script produces that file. The rules live in `src/lib/cbs-workbook-expand.ts`; the Excel
 // around them in `prisma/cbs-expand.ts`.

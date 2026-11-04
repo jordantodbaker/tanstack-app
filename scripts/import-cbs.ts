@@ -18,7 +18,7 @@
 // Other / Rental Code already has its typed companion in the sheet, so the
 // loader generates nothing and stores one item per sheet row. What it does to
 // every row is normalize a four-segment summary code to the "-0" backbone;
-// names keep their "(L)" / "(*)" cost-type marker. See `prisma/cbs-workbook.ts`.
+// names keep the roll-up's trailing "*". See `prisma/cbs-workbook.ts`.
 //
 // Existing rows are compared column-by-column against the workbook and only
 // the ones that actually differ are written, a whole batch per statement
@@ -130,14 +130,16 @@ async function main() {
   // where it left off.
   const sql = cbsBulkUpdateSql();
   for (let i = 0; i < toUpdate.length; i += CHUNK) {
-    const chunk = toUpdate.slice(i, i + CHUNK).map(({ row }) =>
-      Object.fromEntries(
-        ["costCode", ...CBS_IMPORT_FIELDS].map((f) => [
-          f,
-          row[f as keyof CbsDictionaryRow],
-        ]),
-      ),
-    );
+    const chunk = toUpdate
+      .slice(i, i + CHUNK)
+      .map(({ row }) =>
+        Object.fromEntries(
+          ["costCode", ...CBS_IMPORT_FIELDS].map((f) => [
+            f,
+            row[f as keyof CbsDictionaryRow],
+          ]),
+        ),
+      );
     const n = await prisma.$executeRawUnsafe(sql, JSON.stringify(chunk));
     if (n !== chunk.length) {
       throw new Error(

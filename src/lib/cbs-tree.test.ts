@@ -1227,6 +1227,16 @@ describe("stripCostTypeSuffix / costTypeSuffixOf", () => {
     expect(costTypeSuffixOf("Specialty Services  (*) ")).toBe(" (*)");
   });
 
+  it("reads the trailing * the expanded workbook now puts on a roll-up", () => {
+    expect(stripCostTypeSuffix("Piping*")).toBe("Piping");
+    expect(stripCostTypeSuffix("Piping * ")).toBe("Piping");
+    // Re-attached flush against the words, the way it is written.
+    expect(costTypeSuffixOf("Piping*")).toBe("*");
+    // A typed line carries the account's name unchanged: nothing to strip.
+    expect(stripCostTypeSuffix("Piping")).toBe("Piping");
+    expect(costTypeSuffixOf("Piping")).toBe("");
+  });
+
   it("leaves a name that only looks parenthesized alone", () => {
     // Only a one-letter or "*" marker at the very end is a cost type.
     expect(stripCostTypeSuffix("Hot Tap (reserved)")).toBe(
@@ -1238,6 +1248,7 @@ describe("stripCostTypeSuffix / costTypeSuffixOf", () => {
 
   it("never empties a name that is nothing but a marker", () => {
     expect(stripCostTypeSuffix("(*)")).toBe("(*)");
+    expect(stripCostTypeSuffix("*")).toBe("*");
   });
 });
 

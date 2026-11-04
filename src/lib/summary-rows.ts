@@ -105,11 +105,11 @@ export const SUMMARY_ENGINEERING: {
 }[] = [
   { label: "Combined Phase (D23)", uom: "HR", l1: "022" },
   { label: "Concept Design (D1)", uom: "HR", l1: "024" },
-  { label: "Preliminary Design – FEED (D2)", uom: "HR", l1: "025" },
+  { label: "Preliminary Design - FEED", uom: "HR", l1: "025" },
   { label: "Detailed Design (D3)", uom: "HR", l1: "026" },
-  { label: "Engineering Construction Support (D4)", uom: "HR", l1: "027" },
+  { label: "Eng Construction Support", uom: "HR", l1: "027" },
   {
-    label: "Engineering Commissioning & Startup Support (D5)",
+    label: "Eng Cx & Startup Support",
     uom: "HR",
     l1: "028",
   },

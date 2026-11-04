@@ -139,28 +139,35 @@ export function costType(item: CbsTreeItem): string {
 }
 
 /**
- * The cost-type marker the workbook ends every name with: "(*)" on an
- * account's own row, "(L)" / "(S)" / "(M)" / … on its typed variants. Only a
- * trailing marker of that shape — a name that genuinely ends in parentheses
- * keeps them.
+ * The marker the expanded workbook ends a roll-up row's name with: a trailing
+ * "*" ("Piping*"). Typed lines carry the account's name unchanged. Workbooks
+ * expanded before 2026-11-04 wrote " (*)" on the roll-up and " (L)" / " (S)" /
+ * … on the typed lines, so those are still recognized. Only a trailing marker
+ * of these shapes — a name that genuinely ends in parentheses keeps them.
  */
-const COST_TYPE_NAME_SUFFIX = /\s*\((?:\*|[A-Z])\)\s*$/;
+const COST_TYPE_NAME_SUFFIX = /\s*(?:\((?:\*|[A-Z])\)|\*)\s*$/;
 
 /**
- * A CBS name without its cost-type marker: "Executive (L)" → "Executive".
+ * A CBS name without its marker: "Piping*" → "Piping", "Executive (L)" →
+ * "Executive".
  *
- * Names are STORED with the marker, as the workbook writes them, so the
- * CBS views show which cost type each line is. Strip it only where comparing
- * names, so "Civil (*)" and "Civil" are the same account.
+ * Names are STORED as the workbook writes them. Strip the marker only where
+ * comparing names, so "Civil*" and "Civil" are the same account.
  */
 export function stripCostTypeSuffix(name: string): string {
   return name.replace(COST_TYPE_NAME_SUFFIX, "").trim() || name.trim();
 }
 
-/** The marker itself, with its leading space (" (S)"), or "" when there is none. */
+/**
+ * The marker itself, as it should be re-attached to a renamed stem: "*" flush
+ * against the words, an older "(S)" with its leading space; "" when there is
+ * none.
+ */
 export function costTypeSuffixOf(name: string): string {
   const m = COST_TYPE_NAME_SUFFIX.exec(name);
-  return m ? ` ${m[0].trim()}` : "";
+  if (!m) return "";
+  const marker = m[0].trim();
+  return marker === "*" ? "*" : ` ${marker}`;
 }
 
 /** The stored level segments of a display code `XXX-YY-ZZWW-VV-T`. */

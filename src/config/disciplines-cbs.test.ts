@@ -49,7 +49,8 @@ const DISCIPLINE_ROOT_NAME: Record<string, string> = {
   // Renamed from "Administration & Home Office Management" in the 2026-10-29
   // workbook, the one that moved Procurement to 04X and gave Special Project
   // Costs its own 030 division.
-  administration: "Home Office and Administration",
+  // Abbreviated to "HO & Administration" in the 2026-11-04 master.
+  administration: "HO & Administration",
   engineering: "Engineering & Design",
   procurement: "Procurement",
   indirects: "Field Indirects",
@@ -178,8 +179,8 @@ describe("disciplines-data against the CBS workbook", () => {
       .map((l1) => ({ l1, name: rootNameOf(l1) }))
       .filter(({ l1, name }) =>
         isMaterialL1(l1)
-          ? !/material/i.test(name)
-          : !/staff|support/i.test(name),
+          ? !/mat(?:erial|l)s?\b/i.test(name)
+          : !/staff|sup(?:port|t)\b/i.test(name),
       )
       .map(({ l1, name }) => `${l1} "${name}"`);
     expect(wrong).toEqual([]);

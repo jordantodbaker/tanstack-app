@@ -207,6 +207,18 @@ export const fetchCbsItemsByL1EndsWith = createServerFn({ method: "GET" })
   });
 
 /**
+ * Cached like the other catalog slices: the Materials page used to call the
+ * server function straight from its loader, so every visit re-downloaded the
+ * block. Reference data — a CBS import is the only thing that changes it.
+ */
+export const cbsItemsByL1EndsWithQueryOptions = (suffixes: string[]) =>
+  queryOptions({
+    queryKey: qk.cbs.itemsByL1EndsWith(suffixes),
+    queryFn: () => fetchCbsItemsByL1EndsWith({ data: suffixes }),
+    staleTime: Infinity,
+  });
+
+/**
  * The columns a `CbsItem` row needs to be placed and rendered in the CBS tree
  * (`CbsTreeItem` in ~/lib/cbs-tree). Shared by every tree query so they stay
  * aligned with the tree's type.

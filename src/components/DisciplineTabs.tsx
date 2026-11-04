@@ -40,8 +40,20 @@ import { useSelectedVersion } from "~/lib/selected-version";
 import { useFefRowPersistence } from "~/lib/use-fef-row-persistence";
 import { useFefUndo } from "~/lib/use-fef-undo";
 import { SaveIndicator, combineSaveStatus } from "~/components/SaveIndicator";
-import { TakeOffPasteDialog } from "~/components/TakeOffPasteDialog";
-import { ChangelogDialog } from "~/components/Changelog/ChangelogDialog";
+// Loaded on demand: the CVR dialog (its own chunk) only once rows are
+// selected, the paste dialog (and its parser) only on the first click of its
+// button. Neither is part of opening a take-off, and together they are a
+// fifth of this page's code.
+const TakeOffPasteDialog = React.lazy(() =>
+  import("~/components/TakeOffPasteDialog").then((m) => ({
+    default: m.TakeOffPasteDialog,
+  })),
+);
+const ChangelogDialog = React.lazy(() =>
+  import("~/components/Changelog/ChangelogDialog").then((m) => ({
+    default: m.ChangelogDialog,
+  })),
+);
 import { buildCvrDraftFromFefRows } from "~/lib/fef-to-cvr";
 import {
   upsertChangeLog,
@@ -223,6 +235,33 @@ export function DisciplineTabs({
   const [selectedRowIndices, setSelectedRowIndices] = React.useState<
     Set<number>
   >(() => new Set());
+  // The paste dialog is lazy (see the imports); its button stays eager so
+  // the first click fetches the chunk and opens it. Until then, and while the
+  // chunk is loading, the button is all there is.
+  const [pasteWanted, setPasteWanted] = React.useState(false);
+  const pasteButton = (loading: boolean) => (
+    <button
+      type="button"
+      disabled={loading}
+      onClick={() => setPasteWanted(true)}
+      className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer disabled:cursor-wait disabled:opacity-50"
+    >
+      Paste from Excel
+    </button>
+  );
+  // The CVR dialog's trigger, in both its states: disabled until rows are
+  // selected (and while its chunk loads), live once the lazy dialog mounts.
+  const cvrButton = (disabled: boolean) => (
+    <button
+      type="button"
+      disabled={disabled}
+      title="Create a CVR pre-filled from the selected take-off rows"
+      className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+    >
+      Create CVR from Selected
+    </button>
+  );
+
   const onToggleRowSelected = React.useCallback((rowIndex: number) => {
     setSelectedRowIndices((prev) => toggleInSet(prev, rowIndex));
   }, []);
@@ -591,22 +630,19 @@ export function DisciplineTabs({
                 {takeOffErrorCount}{" "}
                 {takeOffErrorCount === 1 ? "error" : "errors"}
               </button>
-              <ChangelogDialog
-                trigger={
-                  <button
-                    type="button"
-                    disabled={
-                      selectedRowIndices.size === 0 || projectId === null
-                    }
-                    title="Create a CVR pre-filled from the selected take-off rows"
-                    className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-100 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
-                  >
-                    Create CVR from Selected
-                  </button>
-                }
-                draft={cvrDraft}
-                onSubmit={handleCreateCvr}
-              />
+              {selectedRowIndices.size === 0 || projectId === null ? (
+                // Nothing to promote yet, so the CVR dialog's chunk is not
+                // fetched; selecting a row is what brings it in.
+                cvrButton(true)
+              ) : (
+                <React.Suspense fallback={cvrButton(true)}>
+                  <ChangelogDialog
+                    trigger={cvrButton(false)}
+                    draft={cvrDraft}
+                    onSubmit={handleCreateCvr}
+                  />
+                </React.Suspense>
+              )}
               {(takeOffColumnGroups ?? []).length > 0 && (
                 <span className="text-xs font-medium text-slate-400 self-center">
                   Columns:
@@ -650,11 +686,18 @@ export function DisciplineTabs({
                 >
                   {useCrewMix ? "Use Role" : "Use Crew Mix"}
                 </button>
-                <TakeOffPasteDialog
-                  cbsOptions={takeOffMeta?.cbsOptions ?? []}
-                  areaOptions={takeOffMeta?.areaOptions ?? []}
-                  onAppend={handlePasteAppend}
-                />
+                {pasteWanted ? (
+                  <React.Suspense fallback={pasteButton(true)}>
+                    <TakeOffPasteDialog
+                      cbsOptions={takeOffMeta?.cbsOptions ?? []}
+                      areaOptions={takeOffMeta?.areaOptions ?? []}
+                      onAppend={handlePasteAppend}
+                      initialOpen
+                    />
+                  </React.Suspense>
+                ) : (
+                  pasteButton(false)
+                )}
                 <button
                   type="button"
                   onClick={handleExportCsv}

@@ -397,12 +397,18 @@ export function projectIdScopedHandler<O>(
 export async function requireVersionAccess(
   versionId: number,
 ): Promise<{ actor: CurrentUser; projectId: number }> {
-  const user = await resolveCurrentUser();
+  // The user and the version are independent lookups, so they go out
+  // together; this guard sits on the hottest paths (every take-off read and
+  // save), where the serial round trip showed. The errors keep their order:
+  // signed-out, then not-found, then forbidden.
+  const [user, version] = await Promise.all([
+    resolveCurrentUser(),
+    prisma.estimateVersion.findUnique({
+      where: { id: versionId },
+      select: { projectId: true },
+    }),
+  ]);
   if (!user) throw new Error("Unauthorized: not signed in");
-  const version = await prisma.estimateVersion.findUnique({
-    where: { id: versionId },
-    select: { projectId: true },
-  });
   if (!version) throw new Error(`Estimate version ${versionId} not found`);
   await assertProjectAccess(user, version.projectId);
   return { actor: user, projectId: version.projectId };

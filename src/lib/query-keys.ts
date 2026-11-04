@@ -48,10 +48,8 @@ export const qk = {
   trends: entityKeys("trends"),
   pcos: {
     ...entityKeys("pcos"),
-    eligibleCvrs: (
-      projectId: number | null,
-      currentPcoId: number | null,
-    ) => ["pcos", "eligibleCvrs", projectId, currentPcoId] as const,
+    eligibleCvrs: (projectId: number | null, currentPcoId: number | null) =>
+      ["pcos", "eligibleCvrs", projectId, currentPcoId] as const,
     /** Prefix match — every cached `currentPcoId` variant for the project.
      *  A PCO upsert can attach/detach CVRs, changing what is eligible. */
     eligibleCvrsAll: (projectId: number | null) =>
@@ -105,11 +103,8 @@ export const qk = {
     /** Prefix match — every sheet of every version. Used when switching or
      *  deleting an estimate version, where per-sheet keys aren't enumerable. */
     all: () => ["fefRows"] as const,
-    sheet: (
-      versionId: number | null,
-      discipline: string,
-      section: string,
-    ) => ["fefRows", versionId, discipline, section] as const,
+    sheet: (versionId: number | null, discipline: string, section: string) =>
+      ["fefRows", versionId, discipline, section] as const,
   },
   /** Prefix match over every version's totals. */
   projectFefRowTotalsAll: () => ["projectFefRowTotals"] as const,
@@ -143,6 +138,8 @@ export const qk = {
       ["cbsCodeResolve", [...codes].sort()] as const,
     codeSearch: (query: string) => ["cbsCodeSearch", query] as const,
     itemsByL1: (l1Values: string[]) => ["cbsItemsByL1", l1Values] as const,
+    itemsByL1EndsWith: (suffixes: string[]) =>
+      ["cbsItemsByL1EndsWith", suffixes] as const,
     itemsByL1PagedAll: () => ["cbsItemsByL1Paged"] as const,
     itemsByL1Paged: (input: {
       l1Values: string[];
@@ -175,8 +172,7 @@ export const qk = {
     itemsByL1Filtered: (input: {
       l1Values: string[];
       projectId: number | null;
-    }) =>
-      ["cbsItemsByL1Filtered", input.l1Values, input.projectId] as const,
+    }) => ["cbsItemsByL1Filtered", input.l1Values, input.projectId] as const,
   },
 
   // ── Project setup (which CBS items a project may use) ────────────────────

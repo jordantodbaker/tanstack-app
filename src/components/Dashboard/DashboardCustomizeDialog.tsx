@@ -1,24 +1,15 @@
 import { toggleInSet } from "~/lib/utils";
 import * as React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-  arrayMove,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { Settings, RotateCcw, GripVertical, Eye, EyeOff } from "lucide-react";
+import { Settings, RotateCcw } from "lucide-react";
+
+// The drag-and-drop list and its dnd-kit dependencies load on the first open:
+// the dialog's content mounts only while open, so nothing is fetched before.
+const DashboardCustomizeList = React.lazy(() =>
+  import("./DashboardCustomizeList").then((m) => ({
+    default: m.DashboardCustomizeList,
+  })),
+);
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -84,31 +75,6 @@ export function DashboardCustomizeDialog({
     },
   });
 
-  // Drag-and-drop sensors. PointerSensor: standard mouse/touch drag.
-  // KeyboardSensor: tab to a row, press space to grab, arrows to reorder,
-  // space to drop — keyboard parity matters for an admin tool.
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      // 4px activation distance so a click-to-toggle-eye doesn't accidentally
-      // start a drag.
-      activationConstraint: { distance: 4 },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    }),
-  );
-
-  function onDragEnd(e: DragEndEvent) {
-    const { active, over } = e;
-    if (!over || active.id === over.id) return;
-    setDraftOrder((order) => {
-      const from = order.indexOf(String(active.id));
-      const to = order.indexOf(String(over.id));
-      if (from === -1 || to === -1) return order;
-      return arrayMove(order, from, to);
-    });
-  }
-
   const toggleVisible = (id: string) => {
     setHidden((prev) => toggleInSet(prev, id));
   };
@@ -159,31 +125,17 @@ export function DashboardCustomizeDialog({
             </p>
           </div>
 
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={onDragEnd}
+          <React.Suspense
+            fallback={<p className="text-xs text-slate-500">Loading…</p>}
           >
-            <SortableContext
-              items={draftOrder}
-              strategy={verticalListSortingStrategy}
-            >
-              <ul className="space-y-1.5">
-                {draftOrder.map((id) => {
-                  const w = widgetById.get(id);
-                  if (!w) return null; // stale id from removed widget — skip
-                  return (
-                    <SortableRow
-                      key={id}
-                      widget={w}
-                      visible={!hidden.has(id)}
-                      onToggle={() => toggleVisible(id)}
-                    />
-                  );
-                })}
-              </ul>
-            </SortableContext>
-          </DndContext>
+            <DashboardCustomizeList
+              order={draftOrder}
+              hidden={hidden}
+              widgetById={widgetById}
+              onReorder={setDraftOrder}
+              onToggle={toggleVisible}
+            />
+          </React.Suspense>
 
           <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200">
             <button
@@ -225,70 +177,6 @@ export function DashboardCustomizeDialog({
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function SortableRow({
-  widget,
-  visible,
-  onToggle,
-}: {
-  widget: DashboardWidget;
-  visible: boolean;
-  onToggle: () => void;
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: widget.id });
-
-  const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  return (
-    <li
-      ref={setNodeRef}
-      style={style}
-      className={`flex items-center gap-2 rounded-md border px-2 py-1.5 ${
-        visible
-          ? "border-slate-200 bg-white"
-          : "border-slate-200 bg-slate-50 text-slate-500"
-      }`}
-    >
-      <button
-        type="button"
-        {...attributes}
-        {...listeners}
-        className="cursor-grab touch-none text-slate-400 hover:text-slate-700 active:cursor-grabbing"
-        aria-label={`Drag to reorder ${widget.label}`}
-      >
-        <GripVertical className="size-4" />
-      </button>
-      <span className="flex-1 text-sm">{widget.label}</span>
-      <span className="text-[10px] uppercase tracking-wide text-slate-400">
-        {widget.category}
-      </span>
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-label={visible ? `Hide ${widget.label}` : `Show ${widget.label}`}
-        title={visible ? "Hide widget" : "Show widget"}
-        className={`rounded p-1 transition-colors ${
-          visible
-            ? "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-            : "text-slate-400 hover:bg-slate-100"
-        }`}
-      >
-        {visible ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
-      </button>
-    </li>
   );
 }
 

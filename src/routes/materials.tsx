@@ -4,11 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { DisciplinePage } from "~/components/FefTable";
 import type { CbsOption, FefRow } from "~/lib/types";
 import { disciplineById } from "~/config/disciplines";
-import {
-  isMaterialL1,
-  MATERIAL_L1_SUFFIXES,
-} from "~/config/disciplines-data";
-import { fetchCbsItemsByL1EndsWith } from "~/utils/cbs";
+import { isMaterialL1, MATERIAL_L1_SUFFIXES } from "~/config/disciplines-data";
+import { cbsItemsByL1EndsWithQueryOptions } from "~/utils/cbs";
 import {
   Accordion,
   AccordionItem,
@@ -20,11 +17,17 @@ import { allowedFefCbsItemIdsQueryOptions } from "~/utils/setup";
 import { makeFefRow, toCbsOption } from "~/lib/fef-helpers";
 
 export const Route = createFileRoute("/materials")({
-  loader: () => fetchCbsItemsByL1EndsWith({ data: MATERIAL_L1_SUFFIXES }),
+  // Through the query cache, so a return visit does not re-download the
+  // block; the page reads the same key.
+  loader: ({ context }) =>
+    context.queryClient.ensureQueryData(
+      cbsItemsByL1EndsWithQueryOptions(MATERIAL_L1_SUFFIXES),
+    ),
   component: MaterialsPage,
 });
 
 const MaterialsIcon = disciplineById.materials.icon;
+const NO_ITEMS: never[] = [];
 
 type MaterialSection = {
   key: string;
@@ -34,7 +37,9 @@ type MaterialSection = {
 };
 
 function MaterialsPage() {
-  const cbsItems = Route.useLoaderData();
+  const { data: cbsItems = NO_ITEMS } = useQuery(
+    cbsItemsByL1EndsWithQueryOptions(MATERIAL_L1_SUFFIXES),
+  );
   const { projectId } = useSelectedProject();
   const { data: allowedIds } = useQuery({
     ...allowedFefCbsItemIdsQueryOptions(projectId ?? 0),

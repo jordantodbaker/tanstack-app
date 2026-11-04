@@ -6,10 +6,7 @@ import { LoadMask } from "~/components/LoadMask";
 import type { CbsOption } from "~/lib/types";
 import { disciplineById } from "~/config/disciplines";
 import { isMaterialL1, isSupportL1 } from "~/config/disciplines-data";
-import {
-  cbsItemsByL1QueryOptions,
-  cbsItemsByL1FilteredQueryOptions,
-} from "~/utils/cbs";
+import { cbsItemsByL1FilteredQueryOptions } from "~/utils/cbs";
 import {
   pipingGroupsQueryOptions,
   pipingFactorDataQueryOptions,
@@ -18,9 +15,6 @@ import { roleDataQueryOptions } from "~/utils/roles";
 import { crewMixDataQueryOptions } from "~/utils/crewMixes";
 import { useSelectedProject } from "~/lib/selected-project";
 import { useSelectedVersion } from "~/lib/selected-version";
-import {
-  allowedFefCbsItemIdsQueryOptions,
-} from "~/utils/setup";
 import { fefRowsQueryOptions } from "~/utils/fefRows";
 import {
   readProjectIdForLoader,
@@ -47,8 +41,14 @@ export const Route = createFileRoute("/piping")({
 
     // Field-Estimate-only data — start fetching but don't block first paint.
     // useQuery on the client picks these up when they stream in.
+    // Filtered to the project's grants on the server, like the craft codes
+    // below: the whole support-labor block used to come down and be cut to
+    // the project in the browser.
     context.queryClient.prefetchQuery(
-      cbsItemsByL1QueryOptions(SUPPORT_LABOR_L1),
+      cbsItemsByL1FilteredQueryOptions({
+        l1Values: SUPPORT_LABOR_L1,
+        projectId,
+      }),
     );
     if (versionId !== null) {
       context.queryClient.prefetchQuery(
@@ -57,11 +57,6 @@ export const Route = createFileRoute("/piping")({
           discipline: "piping",
           section: "SUPPORT_LABOR",
         }),
-      );
-    }
-    if (projectId !== null) {
-      context.queryClient.prefetchQuery(
-        allowedFefCbsItemIdsQueryOptions(projectId),
       );
     }
 
@@ -128,8 +123,12 @@ function PipingPage() {
   const { versionId } = useSelectedVersion();
 
   const { data: pipingGroups = EMPTY } = useQuery(pipingGroupsQueryOptions());
-  const { data: supportLaborItems = EMPTY } = useQuery(
-    cbsItemsByL1QueryOptions(SUPPORT_LABOR_L1),
+  // Already cut to the project's grants on the server.
+  const { data: filteredSupportLaborItems = EMPTY } = useQuery(
+    cbsItemsByL1FilteredQueryOptions({
+      l1Values: SUPPORT_LABOR_L1,
+      projectId,
+    }),
   );
   const { data: roleData } = useQuery(
     roleDataQueryOptions({ disciplineId: "piping", projectId, versionId }),
@@ -142,22 +141,6 @@ function PipingPage() {
       l1Values: PIPING_CRAFT_L1,
       projectId,
     }),
-  );
-  const { data: allowedIds } = useQuery({
-    ...allowedFefCbsItemIdsQueryOptions(projectId ?? 0),
-    enabled: projectId !== null,
-  });
-  const allowedIdSet = React.useMemo(
-    () => new Set(allowedIds ?? EMPTY),
-    [allowedIds],
-  );
-
-  const filteredSupportLaborItems = React.useMemo(
-    () =>
-      projectId === null
-        ? supportLaborItems
-        : supportLaborItems.filter((item) => allowedIdSet.has(item.id)),
-    [projectId, supportLaborItems, allowedIdSet],
   );
 
   const cbsOptions: CbsOption[] = React.useMemo(

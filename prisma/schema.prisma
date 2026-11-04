@@ -197,6 +197,9 @@ model Rfi {
   linkedTrends           Trend[]
 
   @@index([projectId, initiatedAt])
+  /// The dashboard counts RFIs by status; the other four change tables
+  /// already carry this pair.
+  @@index([projectId, status])
   // Trigram GIN indexes for the global search.
   @@index([rfiNumber(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([subject(ops: raw("gin_trgm_ops"))], type: Gin)
@@ -1049,6 +1052,9 @@ model FieldChangeOrder {
   @@index([projectId, status])
   // Backs the FCO-log list: filter by project, sort by initiatedAt desc.
   @@index([projectId, initiatedAt])
+  /// The dashboard counts RFIs by status; the other four change tables
+  /// already carry this pair.
+  @@index([projectId, status])
   @@index([linkedCvrId])
   // Trigram GIN indexes for the global search — see ChangeLog for rationale.
   @@index([fcoNumber(ops: raw("gin_trgm_ops"))], type: Gin)
@@ -1393,6 +1399,9 @@ model CbsItem {
 
   // Hot path: discipline routes filter by `l1 IN (...)` on every load.
   @@index([l1])
+  /// Lookups by display code (ancestor pulls, CBS Health, code search). Only
+  /// trigram indexes existed, which a plain equality or IN cannot use.
+  @@index([displayCode])
   // `searchCbsCodeOptions` runs `WHERE displayCode ILIKE '%q%' OR name ILIKE
   // '%q%'` on every keystroke in the entity-dialog CBS pickers. A leading
   // wildcard can't use a B-tree, so without these the ~5k-row catalog is a

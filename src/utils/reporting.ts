@@ -1,3 +1,4 @@
+import { Prisma } from "../generated/prisma/client";
 import { snapshotTotals, snapshotTotalsById } from "./snapshot-totals.server";
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
@@ -449,13 +450,19 @@ export const fetchBudgetReconciliation = createServerFn({ method: "GET" })
         const l1Codes = l1.byBucket
           .map((r) => r.bucket)
           .filter((b): b is string => b !== "");
+        // Raw: Prisma applies `distinct` in memory after fetching, which here
+        // meant pulling every catalog row for the divisions in use (thousands)
+        // to keep one per L1. `DISTINCT ON` does it in the database, lowest
+        // id first — the same row Prisma's `orderBy: { id: "asc" }` kept.
         const nameRows = l1Codes.length
-          ? await prisma.cbsItem.findMany({
-              where: { l1: { in: l1Codes } },
-              select: { l1: true, accountDescription: true, name: true },
-              distinct: ["l1"],
-              orderBy: { id: "asc" },
-            })
+          ? await prisma.$queryRaw<
+              { l1: string; accountDescription: string | null; name: string }[]
+            >`
+              SELECT DISTINCT ON ("l1") "l1", "accountDescription", "name"
+              FROM "CbsItem"
+              WHERE "l1" IN (${Prisma.join(l1Codes)})
+              ORDER BY "l1", "id"
+            `
           : [];
         // Prefer the account description; fall back to the item name for the rare
         // L1 whose accountDescription is blank. null only when the L1 isn't in the
@@ -594,26 +601,44 @@ export const deleteReportingPeriod = createServerFn({ method: "POST" })
  * so a CVR or measurement referencing a discipline not in the snapshot still
  * surfaces in the table rather than being silently dropped.
  */
+/**
+ * What a period needs loaded to be priced. The cached `totals` rather than
+ * the heavy `fefRows` blob — snapshots are immutable, so the cache is always
+ * right (see `snapshot-totals.server` for the one place old snapshots are
+ * recomputed).
+ */
+const PERIOD_WITH_EVM_INCLUDE = {
+  baselineSnapshot: { select: { id: true, label: true, totals: true } },
+  measurements: true,
+  project: { select: { startDate: true, endDate: true } },
+} satisfies Prisma.ReportingPeriodInclude;
+type PeriodWithEvmRow = Prisma.ReportingPeriodGetPayload<{
+  include: typeof PERIOD_WITH_EVM_INCLUDE;
+}>;
+
 export const fetchPeriodWithEvm = createServerFn({ method: "GET" })
   .inputValidator(parseIdScalar)
   .handler(async ({ data: id }): Promise<PeriodWithEvm> => {
     const period = await prisma.reportingPeriod.findUniqueOrThrow({
       where: { id },
-      include: {
-        // Pull the cached `totals` instead of the heavy `fefRows` blob —
-        // snapshots are immutable so the cached value is always correct.
-        // `fefRows` is fetched only on the legacy-snapshot fallback below.
-        baselineSnapshot: {
-          select: { id: true, label: true, totals: true },
-        },
-        measurements: true,
-        project: { select: { startDate: true, endDate: true } },
-      },
+      include: PERIOD_WITH_EVM_INCLUDE,
     });
     await requireProjectAccess(period.projectId);
+    return periodWithEvmFrom(period);
+  });
 
-    // 1. BAC by bucket — the snapshot's cached aggregator output (see
-    // `snapshot-totals.server` for the one place old snapshots are recomputed).
+/**
+ * Price a loaded period. Module-private (not exported) so the client build
+ * strips it with the handlers that call it — the same rule as every other
+ * prisma-adjacent helper in this file. Shared by the by-id and the latest-
+ * period server functions; the latter used to call the former as a nested
+ * server function, re-running the middleware and the auth guard for nothing.
+ */
+async function periodWithEvmFrom(
+  period: PeriodWithEvmRow,
+): Promise<PeriodWithEvm> {
+  {
+    // 1. BAC by bucket — the snapshot's cached aggregator output.
     const baselineTotals = await snapshotTotals(period.baselineSnapshot);
 
     // 2/3. CVR-driven budget revisions + probability-weighted pending-trend
@@ -658,7 +683,8 @@ export const fetchPeriodWithEvm = createServerFn({ method: "GET" })
       buckets,
       total,
     };
-  });
+  }
+}
 
 export const reportingPeriodsQueryOptions = (projectId: number | null) =>
   queryOptions({
@@ -686,13 +712,15 @@ export const fetchLatestPeriodWithEvm = createServerFn({ method: "GET" })
   .handler(
     projectIdScopedHandler(
       async ({ data: projectId }): Promise<PeriodWithEvm | null> => {
+        // One read, with everything the pricing needs; the project access
+        // check already ran in the wrapper, so no second guard.
         const latest = await prisma.reportingPeriod.findFirst({
           where: { projectId },
           orderBy: { dataDate: "desc" },
-          select: { id: true },
+          include: PERIOD_WITH_EVM_INCLUDE,
         });
         if (!latest) return null;
-        return fetchPeriodWithEvm({ data: latest.id });
+        return periodWithEvmFrom(latest);
       },
     ),
   );

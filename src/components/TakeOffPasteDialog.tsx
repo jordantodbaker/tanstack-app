@@ -40,13 +40,20 @@ export function TakeOffPasteDialog({
   cbsOptions,
   areaOptions = [],
   onAppend,
+  initialOpen = false,
 }: {
   cbsOptions: CbsOption[];
   /** Area id + label pairs; an Area cell can be pasted as either. */
   areaOptions?: AreaMatchOption[];
   onAppend: (rows: FefRow[]) => void;
+  /**
+   * Start open. The take-off page loads this dialog lazily on the first
+   * click of its own "Paste from Excel" button, and that click should open
+   * it, not merely mount it.
+   */
+  initialOpen?: boolean;
 }) {
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = React.useState(initialOpen);
   const [text, setText] = React.useState("");
 
   // Resolve every pasted code against the full catalog (debounced).
@@ -104,8 +111,8 @@ export function TakeOffPasteDialog({
           <span className="font-medium text-slate-700">
             {TAKE_OFF_PASTE_COLUMNS.join(" · ")}
           </span>
-          . A CBS code (from any discipline) fills the row's name and unit; Labor
-          Hours is computed from Quantity × Labor Factor.
+          . A CBS code (from any discipline) fills the row's name and unit;
+          Labor Hours is computed from Quantity × Labor Factor.
         </DialogDescription>
 
         <textarea

@@ -151,8 +151,11 @@ describe("requireVersionAccess", () => {
     await expect(requireVersionAccess(5)).rejects.toThrow(
       "Unauthorized: not signed in",
     );
-    // Never even looks the version up if the caller isn't authenticated.
-    expect(estimateVersionFindUnique).not.toHaveBeenCalled();
+    // The version lookup runs alongside the user lookup now (it is on every
+    // take-off read and save), so an anonymous caller may cost one indexed
+    // read — but is still refused, and the refusal names sign-in, not the
+    // version.
+    expect(userFindFirst).not.toHaveBeenCalled();
   });
 
   it("throws when the version does not exist", async () => {

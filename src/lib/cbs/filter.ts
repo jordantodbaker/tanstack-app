@@ -393,17 +393,28 @@ export function cbsMatchesValueFilter(
  * "tn" finds the tonnage codes.
  */
 export function cbsSearchHaystack(item: CbsTreeItem): string {
-  return [
-    item.displayCode,
-    item.displayCode.replace(/-/g, ""),
-    item.name,
-    item.accountDescription,
-    item.uom,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
+  // Cached on the row object: the tree build computes this once per node,
+  // and the pickers' faceted counts then asked for it again for every one of
+  // the ~11k catalog rows on every filter change — a regex, a join and a
+  // lowercase each. Rows come from the query cache and are never mutated,
+  // so the text cannot go stale, and a WeakMap lets it die with the row.
+  let haystack = HAYSTACKS.get(item);
+  if (haystack === undefined) {
+    haystack = [
+      item.displayCode,
+      item.displayCode.replace(/-/g, ""),
+      item.name,
+      item.accountDescription,
+      item.uom,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    HAYSTACKS.set(item, haystack);
+  }
+  return haystack;
 }
+const HAYSTACKS = new WeakMap<CbsTreeItem, string>();
 
 /**
  * A filter, prepared for judging rows: everything derived from it ONCE rather

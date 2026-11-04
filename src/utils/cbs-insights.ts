@@ -38,19 +38,22 @@ export const fetchProjectCodeUsage = createServerFn({ method: "GET" })
   .inputValidator(parseProjectId)
   .handler(
     projectIdScopedHandler(async ({ data: projectId }): Promise<UsageModel> => {
-      const granted = await prisma.cbsItem.findMany({
-        where: { allowedInProjects: { some: { id: projectId } } },
-        select: { displayCode: true, name: true },
-        orderBy: { id: "asc" },
-      });
-      // Every version, not just the current one: a code dropped from the
-      // latest version is still why an earlier one reads as it does, so
-      // revoking it on that basis would be wrong.
-      const used = await prisma.fefRow.groupBy({
-        by: ["cbsCode"],
-        where: { projectId, NOT: { cbsCode: "" } },
-        _count: { _all: true },
-      });
+      // Independent reads, so they go out together.
+      const [granted, used] = await Promise.all([
+        prisma.cbsItem.findMany({
+          where: { allowedInProjects: { some: { id: projectId } } },
+          select: { displayCode: true, name: true },
+          orderBy: { id: "asc" },
+        }),
+        // Every version, not just the current one: a code dropped from the
+        // latest version is still why an earlier one reads as it does, so
+        // revoking it on that basis would be wrong.
+        prisma.fefRow.groupBy({
+          by: ["cbsCode"],
+          where: { projectId, NOT: { cbsCode: "" } },
+          _count: { _all: true },
+        }),
+      ]);
       // Which of the used codes are CBS rows at all. The take-off pages build
       // codes from an account plus the row's metallurgy, bore size and
       // fabricate/erect, so most estimate codes were never dictionary rows;

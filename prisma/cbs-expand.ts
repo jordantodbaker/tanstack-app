@@ -16,6 +16,7 @@ import { existsSync, statSync } from "node:fs";
 import {
   CBS_MASTER_PATH,
   CBS_WORKBOOK_PATH,
+  canonicalHeader,
   openCbsSheet,
   plainCellValue,
 } from "./cbs-sheet";
@@ -29,10 +30,20 @@ import {
 /** The output's sheet name — the one the loader looks for after "CBS". */
 export const CBS_EXPANDED_SHEET = "CBS Expanded";
 
+/**
+ * Master-only helper columns, left out of the expanded workbook: a formula
+ * over the master's own cells that would read wrong on a generated row.
+ */
+export const MASTER_ONLY_HEADERS: readonly string[] = ["Short Name Length"];
+
 export type CbsMaster = {
   path: string;
   sheet: string;
-  /** Headers in column order; a blank header cell is skipped. */
+  /**
+   * Headers in column order, under the labels the code reads them by
+   * (`canonicalHeader`: the master's "Short Name" is "Name" here and in the
+   * expanded workbook); a blank header cell or a master-only helper is skipped.
+   */
   headers: string[];
   rows: MasterRow[];
   /** Column widths by header position, carried onto the output. */
@@ -45,7 +56,10 @@ export async function readCbsMaster(
 ): Promise<CbsMaster> {
   const sheet = await openCbsSheet(path);
   const { ws, headerRow } = sheet;
-  const columns = Object.entries(sheet.column).sort((a, b) => a[1] - b[1]);
+  const columns = Object.entries(sheet.column)
+    .filter(([h]) => !MASTER_ONLY_HEADERS.includes(h))
+    .map(([h, n]) => [canonicalHeader(h), n] as const)
+    .sort((a, b) => a[1] - b[1]);
   const headers = columns.map(([h]) => h);
   const rows: MasterRow[] = [];
   for (let r = headerRow + 1; r <= ws.rowCount; r++) {

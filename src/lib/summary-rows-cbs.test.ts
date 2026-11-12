@@ -23,20 +23,22 @@ import { SUMMARY_ADMIN_HOME_OFFICE, SUMMARY_ENGINEERING } from "./summary-rows";
 const ACCOUNT_FOR_KEY: Record<string, string> = {
   // 2026-11-04: the master abbreviated several names (HO, Eng, Cx, Matls).
   "012": "HO Construction Support",
-  // 2026-11-03: Legal inserted at 032-05, the rest moved up five.
-  "03205": "Legal",
-  "03210": "Project Bonds",
-  "03215": "Project Insurance",
-  "03220": "Project Finance Charges",
-  "03225": "Project Taxes",
-  "03230": "Project Permitting",
-  "03235": "Project Licenses",
-  "022": "Combined Phase (D23)",
-  "024": "Concept Design (D1)",
-  "025": "Preliminary Design - FEED",
-  "026": "Detailed Design (D3)",
-  "027": "Eng Construction Support",
-  "028": "Eng Cx & Startup Support",
+  // 2026-11-03: Legal inserted at -05, the rest moved up five. 2026-11-12:
+  // the 02X and 03X divisions swapped — Special Project Costs to 020/022,
+  // Engineering to 030–038.
+  "02205": "Legal",
+  "02210": "Project Bonds",
+  "02215": "Project Insurance",
+  "02220": "Project Finance Charges",
+  "02225": "Project Taxes",
+  "02230": "Project Permitting",
+  "02235": "Project Licenses",
+  "032": "Combined Phase (D23)",
+  "034": "Concept Design (D1)",
+  "035": "Preliminary Design - FEED",
+  "036": "Detailed Design (D3)",
+  "037": "Eng Construction Support",
+  "038": "Eng Cx & Startup Support",
 };
 
 /** A key's account code: "012" → 012-00-0000-00, "03205" → 032-05-0000-00. */

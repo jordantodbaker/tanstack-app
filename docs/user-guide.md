@@ -246,8 +246,8 @@ is how many rows ticking that value would show given the other filters in
 force, so they move as you filter, and a value with nothing left shows **0**
 rather than vanishing, so a tick can always be undone.
 
-- **Discipline** — the workbook's Discipline column, each entry prefixed with
-  the discipline's L1 (its division root: "100 - Civil", "630 - Piping") and
+- **Discipline** — the workbook's Discipline column, each entry written behind
+  its division code ("10 - Civil", "60 - Piping") and
   listed in that order. It sits first because the other filters are usually
   asked within one discipline.
 - **Material type** — Tagged, Bulk, Consumable, … over the **Materials** lines

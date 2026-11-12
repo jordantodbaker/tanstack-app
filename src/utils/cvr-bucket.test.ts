@@ -9,9 +9,9 @@ import {
 describe("resolveCvrBucket", () => {
   describe("cbsCode L1 wins when present", () => {
     it("maps the first cbsCode's L1 (first 3 chars) to its discipline", () => {
-      expect(
-        resolveCvrBucket({ cbsCodes: ["601-A"], discipline: "" }),
-      ).toBe("piping");
+      expect(resolveCvrBucket({ cbsCodes: ["611-A"], discipline: "" })).toBe(
+        "piping",
+      );
     });
 
     it("separates Grout (29X) from Concrete though both are digit 2", () => {
@@ -19,45 +19,45 @@ describe("resolveCvrBucket", () => {
         resolveCvrBucket({ cbsCodes: ["293-10-2000-00-L"], discipline: "" }),
       ).toBe("grout");
       expect(
-        resolveCvrBucket({ cbsCodes: ["240-05-0000-00-L"], discipline: "" }),
+        resolveCvrBucket({ cbsCodes: ["250-05-0000-00-L"], discipline: "" }),
       ).toBe("concrete");
     });
 
     it("considers only the first cbsCode", () => {
       expect(
         resolveCvrBucket({
-          cbsCodes: ["601-A", "701-B", "801-C"],
+          cbsCodes: ["611-A", "741-B", "841-C"],
           discipline: "civil",
         }),
       ).toBe("piping");
     });
 
     it("prefers the cbsCode L1 over the discipline fallback", () => {
-      // cbsCode "601-A" → piping; discipline "civil" → civil. cbsCode wins so
+      // cbsCode "611-A" → piping; discipline "civil" → civil. cbsCode wins so
       // a misclassified-discipline CVR still buckets correctly.
       expect(
-        resolveCvrBucket({ cbsCodes: ["601-A"], discipline: "civil" }),
+        resolveCvrBucket({ cbsCodes: ["611-A"], discipline: "civil" }),
       ).toBe("piping");
     });
 
     it("falls through when the cbsCode L1 isn't a known discipline code", () => {
-      expect(
-        resolveCvrBucket({ cbsCodes: ["A01"], discipline: "civil" }),
-      ).toBe("civil");
+      expect(resolveCvrBucket({ cbsCodes: ["A01"], discipline: "civil" })).toBe(
+        "civil",
+      );
     });
   });
 
   describe("discipline fallback", () => {
     it("uses the discipline field when cbsCodes is empty", () => {
-      expect(
-        resolveCvrBucket({ cbsCodes: [], discipline: "piping" }),
-      ).toBe("piping");
+      expect(resolveCvrBucket({ cbsCodes: [], discipline: "piping" })).toBe(
+        "piping",
+      );
     });
 
     it("uses the fallback when cbsCodes[0] is too short to carry an L1", () => {
-      expect(
-        resolveCvrBucket({ cbsCodes: [""], discipline: "civil" }),
-      ).toBe("civil");
+      expect(resolveCvrBucket({ cbsCodes: [""], discipline: "civil" })).toBe(
+        "civil",
+      );
     });
   });
 
@@ -98,17 +98,21 @@ describe("attributeCvrCostByL1", () => {
 
   it("treats an empty line-items array as no buildup (uses costImpact)", () => {
     expect(
-      attributeCvrCostByL1({ cbsCodes: ["601-A"], costImpact: 200, lineItems: [] }),
+      attributeCvrCostByL1({
+        cbsCodes: ["601-A"],
+        costImpact: 200,
+        lineItems: [],
+      }),
     ).toEqual({ "601": 200 });
   });
 
   it("attributes blank/short codes to the '' unattributed key, never dropped", () => {
-    expect(
-      attributeCvrCostByL1({ cbsCodes: [], costImpact: 300 }),
-    ).toEqual({ "": 300 });
-    expect(
-      attributeCvrCostByL1({ cbsCodes: ["xy"], costImpact: 300 }),
-    ).toEqual({ "": 300 });
+    expect(attributeCvrCostByL1({ cbsCodes: [], costImpact: 300 })).toEqual({
+      "": 300,
+    });
+    expect(attributeCvrCostByL1({ cbsCodes: ["xy"], costImpact: 300 })).toEqual(
+      { "": 300 },
+    );
   });
 
   it("supports credit (negative) lines", () => {

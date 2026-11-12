@@ -26,31 +26,32 @@ export type DisciplineData = {
  * CBS L1 convention (prisma/data/CBS.xlsx): each discipline owns
  * a block XY0–XY9 of overhead accounts — XY0 summary, XY1 materials, XY2 field
  * staff, XY3 support services, XY4 equipment, XY5 facilities, XY6 mob/demob,
- * XY7 training, XY9 testing — followed by its direct-labor accounts. A shop
- * block sits at X00–X29 and a field block at X30 and up; since the 2026-10
- * renumber, field-only disciplines (civil, buildings, electrical, I&C,
- * coatings) keep just the X30 block (e.g. civil 131 materials, 140+ labor).
- * The materials and support-labor rules below rely on that layout. Re-check
- * these lists when the master changes — `disciplines-cbs.test.ts` does it
- * against the real workbook: an L1 missing here is invisible to its
- * discipline's take-off page.
+ * XY7 training, XY9 testing — followed by its direct-labor accounts. Since the
+ * 2026-11-12 master a shop block sits at X10–X39 and a field block at X40 and
+ * up (steel: 311 shop materials, 320 shop fabrication, 341 field materials,
+ * 350 erection); field-only disciplines (civil, buildings, electrical, I&C,
+ * coatings) keep just the X40 block (civil 141 materials, 150+ labor). The
+ * materials and support-labor rules below rely on that layout. Re-check these
+ * lists when the master changes — `disciplines-cbs.test.ts` does it against
+ * the real workbook: an L1 missing here is invisible to its discipline's
+ * take-off page.
  */
 
-/** L1 endings of a materials block (XY1): shop "01", field "31". */
-export const MATERIAL_L1_SUFFIXES = ["01", "31"];
-/** L1 endings of a field-staff / support-labor block (XY2): "02", "32". */
-export const SUPPORT_L1_SUFFIXES = ["02", "32"];
+/** L1 endings of a materials block (XY1): shop "11", field "41". */
+export const MATERIAL_L1_SUFFIXES = ["11", "41"];
+/** L1 endings of a field-staff / support-labor block (XY2): "12", "42". */
+export const SUPPORT_L1_SUFFIXES = ["12", "42"];
 
 /**
- * The suffixes only mean something inside a discipline's block. 00X is the
- * project root — 001 is Project Development, not a materials account — and
- * reading it by suffix put Project Development's only code on the Materials
- * page and off its own take-off. 03X is Special Project Costs (since
- * 2026-10-29: 030 is the division root, 032 its Bonds / Insurance / Finance
- * Charges / Taxes / Permitting / Licenses accounts), a division with no
- * overhead block at all, so 032 is not a support-labor account either.
+ * The suffixes only mean something inside a discipline's block, and no 0XX
+ * division has one: 00X is the project root (001 is Project Development, not
+ * a materials account — reading it by suffix once put its only code on the
+ * Materials page and off its own take-off), 01X Home Office (012 is HO
+ * Construction Support, a take-off), 02X Special Project Costs and 03X
+ * Engineering have no overhead block at all (032 is Combined Phase design,
+ * not field staff), and 04X Procurement's 041 / 042 are take-offs too.
  */
-const NON_DISCIPLINE_DIVISIONS = ["00", "03"];
+const NON_DISCIPLINE_DIVISIONS = ["0"];
 const inDisciplineBlock = (l1: string) =>
   !NON_DISCIPLINE_DIVISIONS.some((p) => l1.startsWith(p));
 
@@ -81,30 +82,32 @@ export const disciplinesData: DisciplineData[] = [
     id: "administration",
     label: "Administration & Home Office",
     to: "/administration",
-    // 030 Special Project Costs is a CBS division of its own since 2026-10-29
-    // (it was L1 013 "Project Costs" before), with 032 holding Bonds /
-    // Insurance / Finance Charges / Taxes / Permitting / Licenses — surfaced
-    // as L2 sub-account rows on the Summary page. Owned here, as the
-    // workbook's Discipline column says, so its CBS items show in this
+    // 020 Special Project Costs is a CBS division of its own (since
+    // 2026-10-29, at 030 until the 2026-11-12 master swapped it with
+    // Engineering), with 022 holding Legal / Bonds / Insurance / Finance
+    // Charges / Taxes / Permitting / Licenses — surfaced as L2 sub-account
+    // rows on the Summary page. Owned here so its CBS items show in this
     // discipline's Take Off picker and roll back up under "administration"
-    // via the auto-derived `L1_TO_DISCIPLINE` reverse map. 019 left the
-    // workbook at the same time.
-    l1Codes: ["010", "012", "013", "014", "015", "016", "017", "030", "032"],
+    // via the auto-derived `L1_TO_DISCIPLINE` reverse map.
+    l1Codes: ["010", "012", "013", "014", "015", "016", "017", "020", "022"],
   },
   {
     id: "engineering",
     label: "Engineering",
     to: "/engineering",
-    l1Codes: ["020", "022", "024", "025", "026", "027", "028"],
+    // 030 Engineering & Design (020 until 2026-11-12), with a design-phase
+    // block each: 032 Combined Phase (D23), 034 Concept (D1), 035 FEED, 036
+    // Detailed (D3), 037 Construction Support, 038 Cx & Startup Support.
+    l1Codes: ["030", "032", "034", "035", "036", "037", "038"],
   },
   {
     id: "procurement",
     label: "Procurement",
     to: "/procurement",
-    // Moved from 03X to 04X on 2026-10-29, when 030 became Special Project
-    // Costs: 040 summary, 041 bulk materials, 042 support labor, 043
-    // activities, 044 engineered equipment.
-    l1Codes: ["040", "041", "042", "043", "044"],
+    // Moved from 03X to 04X on 2026-10-29: 040 summary, 041 bulk materials,
+    // 042 support labor, 043 activities, 044 engineered equipment, 048
+    // engineered materials.
+    l1Codes: ["040", "041", "042", "043", "044", "048"],
   },
   {
     id: "indirects",
@@ -124,16 +127,16 @@ export const disciplinesData: DisciplineData[] = [
     to: "/civil",
     l1Codes: [
       "100",
-      "131",
-      "132",
-      "134",
-      "135",
-      "139",
-      "140",
       "141",
       "142",
-      "143",
+      "144",
+      "145",
+      "149",
       "150",
+      "151",
+      "152",
+      "153",
+      "154",
     ],
   },
   {
@@ -142,8 +145,8 @@ export const disciplinesData: DisciplineData[] = [
     // Summary reports concrete and grout as one digit-2 row.
     summaryLabel: "Concrete & Grout",
     to: "/concrete",
-    // "290" moved to the new Grout discipline below.
-    l1Codes: ["200", "231", "232", "233", "234", "239", "240", "250", "260"],
+    // "290" moved to the new Grout discipline below. 270 is Caissons / Piling.
+    l1Codes: ["200", "241", "242", "243", "244", "249", "250", "260", "270"],
   },
   {
     id: "grout",
@@ -157,49 +160,50 @@ export const disciplinesData: DisciplineData[] = [
     to: "/steel",
     l1Codes: [
       "300",
-      "301",
-      "302",
-      "303",
-      "304",
-      "307",
-      "309",
-      "310",
       "311",
       "312",
-      "330",
-      "331",
-      "332",
-      "334",
-      "339",
+      "313",
+      "314",
+      "317",
+      "319",
+      "320",
+      "321",
+      "329",
       "340",
       "341",
       "342",
-      "343",
       "344",
-      "345",
+      "349",
+      "350",
+      "351",
+      "352",
+      "353",
+      "354",
+      "355",
     ],
   },
   {
     id: "buildings",
     label: "Buildings",
     to: "/buildings",
-    // 441–449 are the building trades (Concrete, Metals, Doors & Windows,
+    // 451–459 are the building trades (Concrete, Metals, Doors & Windows,
     // Enclosure, Wood & Plastics, Finishes, Specialties, Mechanical,
-    // Electrical) under 440 Building Construction; 431 left the workbook.
+    // Electrical) under 450 Basic Site Materials & Methods.
     l1Codes: [
       "400",
-      "432",
-      "434",
-      "440",
-      "441",
       "442",
-      "443",
       "444",
-      "445",
-      "446",
-      "447",
-      "448",
       "449",
+      "450",
+      "451",
+      "452",
+      "453",
+      "454",
+      "455",
+      "456",
+      "457",
+      "458",
+      "459",
     ],
   },
   {
@@ -208,28 +212,28 @@ export const disciplinesData: DisciplineData[] = [
     to: "/equipment",
     l1Codes: [
       "500",
-      "501",
-      "502",
-      "503",
-      "504",
-      "507",
-      "509",
-      "510",
-      "530",
-      "531",
-      "532",
-      "534",
-      "539",
+      "511",
+      "512",
+      "513",
+      "514",
+      "517",
+      "519",
+      "520",
       "540",
       "541",
       "542",
-      "543",
       "544",
-      "545",
-      "546",
-      "547",
-      "548",
       "549",
+      "550",
+      "551",
+      "552",
+      "553",
+      "554",
+      "555",
+      "556",
+      "557",
+      "558",
+      "559",
     ],
   },
   {
@@ -238,41 +242,51 @@ export const disciplinesData: DisciplineData[] = [
     to: "/piping",
     l1Codes: [
       "600",
-      "601",
-      "602",
-      "603",
-      "604",
-      "607",
-      "609",
-      "610",
       "611",
       "612",
       "613",
       "614",
-      "615",
-      "616",
       "617",
-      "618",
       "619",
       "620",
+      "621",
+      "622",
+      "623",
+      "624",
       "625",
+      "626",
+      "627",
+      "628",
       "629",
       "630",
       "631",
       "632",
+      "633",
       "634",
+      "635",
+      "638",
       "639",
       "640",
       "641",
       "642",
-      "643",
       "644",
-      "645",
-      "646",
-      "647",
-      "648",
       "649",
       "650",
+      "651",
+      "652",
+      "653",
+      "654",
+      "655",
+      "656",
+      "657",
+      "658",
+      "659",
+      "660",
+      "661",
+      "662",
+      "663",
+      "664",
+      "665",
       "680",
     ],
   },
@@ -283,22 +297,22 @@ export const disciplinesData: DisciplineData[] = [
     to: "/electric",
     l1Codes: [
       "700",
-      "730",
-      "731",
-      "732",
-      "733",
-      "734",
-      "739",
       "740",
       "741",
       "742",
       "743",
       "744",
-      "745",
-      "746",
-      "747",
-      "748",
       "749",
+      "750",
+      "751",
+      "752",
+      "753",
+      "754",
+      "755",
+      "756",
+      "757",
+      "758",
+      "759",
     ],
   },
   {
@@ -308,69 +322,79 @@ export const disciplinesData: DisciplineData[] = [
     to: "/instruments",
     l1Codes: [
       "800",
-      "830",
-      "831",
-      "832",
-      "834",
-      "839",
       "840",
       "841",
       "842",
-      "843",
       "844",
+      "849",
+      "850",
+      "851",
+      "852",
+      "853",
+      "854",
     ],
   },
   {
     id: "coatings",
     label: "Coatings",
     to: "/coatings",
-    // 940–943 (Painting, Insulation, Fireproofing, Refractory) are the
-    // direct-labor accounts under 930 Coatings Installation.
+    // 950–953 (Painting, Insulation, Fireproofing, Refractory) are the
+    // direct-labor accounts under 940 Coatings Installation.
     l1Codes: [
       "900",
-      "930",
-      "931",
-      "932",
-      "934",
-      "939",
       "940",
       "941",
       "942",
-      "943",
+      "944",
+      "949",
+      "950",
+      "951",
+      "952",
+      "953",
     ],
   },
   {
     id: "specialty-services",
     label: "Specialty Services",
     to: "/specialty-services",
-    // 95 is a tens division: 950 is the summary, 951 Mechanical Services and
-    // 952 Industrial Cleaning Services its children. It arrived in the 2026-10
-    // workbook at 920 and moved to 950 when that renumber was repaired, which
-    // is why Commissioning used to list 951 and 952.
-    l1Codes: ["950", "951", "952"],
+    // 96 is a tens division: 960 is the summary, 961 Mechanical Services and
+    // 962 Industrial Cleaning Services its children. It arrived in the 2026-10
+    // workbook at 920, moved to 950 when that renumber was repaired, and to
+    // 960 in the 2026-11-12 master.
+    l1Codes: ["960", "961", "962"],
   },
   {
     id: "commissioning",
     label: "Commissioning",
     to: "/commissioning",
-    // 960 is the Startup & Commissioning root, not 950: the 2026-10 workbook
-    // put Specialty Services at 950 and moved this division to 960. 951 and
-    // 952 (Mechanical Services, Industrial Cleaning Services) went with
-    // Specialty Services and are listed in the drift guard's backlog until
-    // that division has an owner.
-    l1Codes: ["960", "961", "962", "963", "964", "969"],
+    // 970 is the Startup & Commissioning root (960 until the 2026-11-12
+    // master, 950 before the 2026-10 workbook put Specialty Services there).
+    l1Codes: ["970", "971", "972", "973", "974", "978", "979"],
   },
   {
     id: "operations",
     label: "Operations",
     to: "/operations",
-    l1Codes: ["970", "971", "972", "973", "974", "975", "976", "977", "979"],
+    // 988 Operations Craft Support is owned by its code: the master labels its
+    // rows "97 - Commissioning", but it sits in the 98X Operations division.
+    l1Codes: [
+      "980",
+      "981",
+      "982",
+      "983",
+      "984",
+      "985",
+      "986",
+      "987",
+      "988",
+      "989",
+    ],
   },
   {
     id: "contingency",
     label: "Contingency",
     to: "/contingency",
-    l1Codes: ["980"],
+    l1Codes: ["990"],
   },
   { id: "materials", label: "Materials", to: "/materials" },
   {

@@ -599,7 +599,7 @@ describe("ProjectCostCodeListView", () => {
         .map((r) => r.textContent ?? "")
         .join("|");
 
-    it("offers each discipline on the list under its L1, with counts, and keeps only the ones ticked", () => {
+    it("offers each discipline on the list with counts, and keeps only the ones ticked", () => {
       renderView(DISCIPLINED);
       expect(trigger()).toHaveTextContent("All disciplines");
       fireEvent.click(trigger());
@@ -607,9 +607,9 @@ describe("ProjectCostCodeListView", () => {
         within(group())
           .getAllByRole("checkbox")
           .map((c) => c.closest("label")!.textContent),
-      ).toEqual(["100 - Civil2", "600 - Piping1", "(none)1"]);
-      fireEvent.click(within(group()).getByLabelText("100 - Civil"));
-      expect(trigger()).toHaveTextContent("100 - Civil");
+      ).toEqual(["Civil2", "Piping1", "(none)1"]);
+      fireEvent.click(within(group()).getByLabelText("Civil"));
+      expect(trigger()).toHaveTextContent("Civil");
       expect(names()).toContain("Civil (*)");
       expect(names()).toContain("Grading (L)");
       expect(names()).not.toContain("Pipe (*)");
@@ -619,7 +619,7 @@ describe("ProjectCostCodeListView", () => {
     it("sends the disciplines with the export", async () => {
       renderView(DISCIPLINED);
       fireEvent.click(trigger());
-      fireEvent.click(within(group()).getByLabelText("600 - Piping"));
+      fireEvent.click(within(group()).getByLabelText("Piping"));
       fireEvent.click(screen.getByRole("button", { name: /Export Excel/ }));
       await vi.waitFor(() => expect(exportCall).toHaveBeenCalledTimes(1));
       expect(exportCall.mock.calls[0][0].data).toMatchObject({

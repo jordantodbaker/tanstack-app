@@ -10,19 +10,19 @@ import { isMaterialL1, isSupportL1 } from "./disciplines-data";
  */
 describe("isMaterialL1 / isSupportL1", () => {
   it("reads the shop and field materials blocks", () => {
-    for (const l1 of ["601", "631", "131", "731", "931"]) {
+    for (const l1 of ["611", "641", "141", "741", "941"]) {
       expect(isMaterialL1(l1), l1).toBe(true);
     }
   });
 
   it("reads the shop and field staff blocks", () => {
-    for (const l1 of ["602", "632", "132", "732", "932"]) {
+    for (const l1 of ["612", "642", "142", "742", "942"]) {
       expect(isSupportL1(l1), l1).toBe(true);
     }
   });
 
   it("leaves summary, labor and other overhead blocks on the take-off", () => {
-    for (const l1 of ["600", "610", "640", "240", "303", "534", "842"]) {
+    for (const l1 of ["600", "620", "650", "250", "313", "544", "852"]) {
       expect(isMaterialL1(l1), l1).toBe(false);
       expect(isSupportL1(l1), l1).toBe(false);
     }

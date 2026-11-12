@@ -24,16 +24,9 @@ import {
   type CbsStatusKey,
 } from "~/lib/cbs-tree";
 
-/** "(none)" for the blank cell; "100 - Civil" where the picker files by code. */
-const valueLabel = ({
-  value,
-  prefix,
-}: Pick<CbsValueOption, "value" | "prefix">) =>
-  value === CBS_BLANK_VALUE
-    ? "(none)"
-    : prefix === undefined
-      ? value
-      : `${prefix} - ${value}`;
+/** "(none)" for the blank cell. */
+const valueLabel = ({ value }: Pick<CbsValueOption, "value">) =>
+  value === CBS_BLANK_VALUE ? "(none)" : value;
 
 /**
  * A multi-select over one free-text column — one entry of

@@ -63,6 +63,23 @@ export function stripTables(bytes: Uint8Array): Uint8Array {
   return zipSync(out);
 }
 
+/**
+ * Headers the master has spelled differently over time, by the label the code
+ * reads them under. "Name" became "Short Name" on 2026-11-12, when the master
+ * gained a "Long Name" beside it; the app's name is the short one.
+ */
+export const HEADER_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  Name: ["Short Name"],
+};
+
+/** The label the code reads a header under: "Short Name" → "Name". */
+export function canonicalHeader(header: string): string {
+  for (const [label, aliases] of Object.entries(HEADER_ALIASES)) {
+    if (aliases.includes(header)) return label;
+  }
+  return header;
+}
+
 export type CbsSheet = {
   path: string;
   ws: ExcelJS.Worksheet;
@@ -71,9 +88,10 @@ export type CbsSheet = {
   /** 1-based column index by exact header text. */
   column: Record<string, number>;
   /**
-   * A column by header: the exact header, else the first one starting with
-   * `label` ("P6 Cost Account" finds "P6 Cost Account (L1-4)"). 0 when there
-   * is none, so `if (!col(label))` reads as "missing".
+   * A column by header: the exact header, else one of its `HEADER_ALIASES`
+   * ("Name" finds "Short Name"), else the first one starting with `label`
+   * ("P6 Cost Account" finds "P6 Cost Account (L1-4)"). 0 when there is none,
+   * so `if (!col(label))` reads as "missing".
    */
   col: (label: string) => number;
 };
@@ -118,6 +136,9 @@ export async function openCbsSheet(
   });
   const col = (label: string): number => {
     if (label in column) return column[label];
+    for (const alias of HEADER_ALIASES[label] ?? []) {
+      if (alias in column) return column[alias];
+    }
     const i = headers.findIndex((h) => h && h.startsWith(label));
     return i > 0 ? i : 0;
   };

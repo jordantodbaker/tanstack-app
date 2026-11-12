@@ -133,12 +133,8 @@ export type CbsRowTypeFilter = (typeof CBS_ROW_TYPE_FILTERS)[number]["key"];
  */
 export const CBS_BLANK_VALUE = "";
 
-/**
- * One picker entry: a value and how many rows carry it. `prefix` is the
- * code the picker files the value under, where it has one — see
- * `CbsValueFilter.prefixOf`.
- */
-export type CbsValueOption = { value: string; count: number; prefix?: string };
+/** One picker entry: a value and how many rows carry it. */
+export type CbsValueOption = { value: string; count: number };
 
 /**
  * The value pickers: multi-selects over one free-text workbook column each.
@@ -170,14 +166,6 @@ export type CbsValueFilter = {
   placement: "before-cost-types" | "after-cost-types";
   /** The cell the picker reads, trimmed; a blank is `CBS_BLANK_VALUE`. */
   valueOf: (item: CbsTreeItem) => string;
-  /**
-   * A code to file each value under: the picker shows it before the value
-   * ("100 - Civil") and lists in its order rather than alphabetically. A
-   * value's rows can carry several — a discipline spans many L1 accounts —
-   * so the lowest wins, which for a discipline is its division root. The
-   * blank entry has none and stays last.
-   */
-  prefixOf?: (item: CbsTreeItem) => string;
   /**
    * Which rows the picker judges and counts. Rows it does not apply to pass
    * regardless — a Labor line beside the Materials lines is not judged on its
@@ -211,11 +199,9 @@ export const CBS_VALUE_FILTERS: readonly CbsValueFilter[] = [
     plural: "disciplines",
     note: "discipline",
     placement: "before-cost-types",
+    // The master writes each discipline behind its two-digit code
+    // ("60 - Piping"), so the list reads in division order on its own.
     valueOf: cellOf((i) => i.discipline),
-    // The L1 — the three-digit division segment, which the workbook splits
-    // across its L1 and L2 columns. The lowest across a discipline's rows is
-    // its division root: 100 for Civil, 630 for Piping.
-    prefixOf: (i) => i.l1,
   },
   {
     key: "materialTypes",
@@ -476,23 +462,21 @@ export function cbsItemMatches(
 
 /**
  * Every picker's option list for one view, from the rows it lists —
- * alphabetical, or by code where the picker has a `prefixOf`, with the blank
- * entry last — so a picker never offers a value that could only filter to
- * nothing. Context rows are skipped, as they are in the row counts.
+ * alphabetical (numeric-aware, so "10 - Civil" precedes "60 - Piping"), with
+ * the blank entry last — so a picker never offers a value that could only
+ * filter to nothing. Context rows are skipped, as they are in the row counts.
  *
  * With `filter`, the counts are faceted: each picker counts only the rows
  * every OTHER filter leaves, so a count reads as "ticking this shows N rows".
  * The picker's own ticks are left out so its list stays steady while picking
  * from it, and a value with no rows left still appears, at 0, so a tick can
- * always be undone. A value's prefix is read off every row regardless, so the
- * list keeps its order and labels while the counts move. One pass over the
- * rows for all the pickers.
+ * always be undone. One pass over the rows for all the pickers.
  */
 export function cbsValueFilterOptions(
   items: Iterable<CbsTreeItem>,
   filter?: CbsRowFilter,
 ): Record<CbsValueFilterKey, CbsValueOption[]> {
-  type Tally = Map<string, { count: number; prefix?: string }>;
+  type Tally = Map<string, number>;
   const counts = new Map<CbsValueFilterKey, Tally>(
     CBS_VALUE_FILTERS.map((v) => [v.key, new Map()]),
   );
@@ -506,30 +490,21 @@ export function cbsValueFilterOptions(
       if (picker.appliesTo && !picker.appliesTo(item)) return;
       const tally = counts.get(picker.key)!;
       const value = picker.valueOf(item);
-      const entry = tally.get(value) ?? { count: 0 };
-      if (!facets || cbsItemMatches(item, haystack, facets[i])) entry.count++;
-      if (picker.prefixOf && value !== CBS_BLANK_VALUE) {
-        const prefix = picker.prefixOf(item);
-        if (entry.prefix === undefined || prefix < entry.prefix) {
-          entry.prefix = prefix;
-        }
-      }
-      tally.set(value, entry);
+      const hit = !facets || cbsItemMatches(item, haystack, facets[i]);
+      tally.set(value, (tally.get(value) ?? 0) + (hit ? 1 : 0));
     });
   }
   const text = (a: string, b: string) =>
     a.localeCompare(b, undefined, { sensitivity: "base", numeric: true });
   const sorted = (tally: Tally): CbsValueOption[] =>
     [...tally]
-      .map(([value, { count, prefix }]) =>
-        prefix === undefined ? { value, count } : { value, count, prefix },
-      )
+      .map(([value, count]) => ({ value, count }))
       .sort((a, b) =>
         a.value === CBS_BLANK_VALUE
           ? 1
           : b.value === CBS_BLANK_VALUE
             ? -1
-            : text(a.prefix ?? "", b.prefix ?? "") || text(a.value, b.value),
+            : text(a.value, b.value),
       );
   return Object.fromEntries(
     [...counts].map(([key, tally]) => [key, sorted(tally)]),

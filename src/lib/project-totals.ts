@@ -21,9 +21,9 @@ export type ProjectFefRowTotals = {
   materialsByDigit: Record<string, number>;
   /**
    * Same four direct-cost metrics as the `*ByDigit` maps, but keyed by the full
-   * 3-char L1 (parent CBS) code, e.g. "022". Lets a single digit-bucket (all of
+   * 3-char L1 (parent CBS) code, e.g. "032". Lets a single digit-bucket (all of
    * digit "0", say) be broken down by its parent CBS items — the Summary page's
-   * Engineering & Design section reads `…ByL1["022".."028"]`.
+   * Engineering & Design section reads `…ByL1["032".."038"]`.
    */
   laborByL1: Record<string, number>;
   laborHoursByL1: Record<string, number>;

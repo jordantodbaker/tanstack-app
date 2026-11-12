@@ -24,10 +24,10 @@ const CATALOG: CoreLinkRow[] = [
   row("052-00-0000-00-0", "Field Staff"),
   row("054-20-0000-00-0", "Third Party Rental Equipment"),
   // Excel drops the leading zero, so these arrive ten characters long.
-  row("132-00-0000-00-0", "Civil Field Staff", "5200000000"),
-  row("232-00-0000-00-0", "Concrete Field Staff", "5200000000"),
-  row("602-00-0000-00-0", "Pipe Shop Field Staff", "5200000000"),
-  row("134-20-0000-00-0", "Civil Equipment Rental", "5420000000"),
+  row("142-00-0000-00-0", "Civil Field Staff", "5200000000"),
+  row("242-00-0000-00-0", "Concrete Field Staff", "5200000000"),
+  row("612-00-0000-00-0", "Pipe Shop Field Staff", "5200000000"),
+  row("144-20-0000-00-0", "Civil Equipment Rental", "5420000000"),
   row("600-00-0000-00-0", "Piping"),
 ];
 
@@ -65,9 +65,9 @@ describe("buildCoreLinks", () => {
     expect(staff.disciplineCount).toBe(3);
     expect(staff.counts).toMatchObject({ civil: 1, concrete: 1, piping: 1 });
     expect(staff.items.map((i) => i.displayCode)).toEqual([
-      "132-00-0000-00-0",
-      "232-00-0000-00-0",
-      "602-00-0000-00-0",
+      "142-00-0000-00-0",
+      "242-00-0000-00-0",
+      "612-00-0000-00-0",
     ]);
   });
 
@@ -88,11 +88,11 @@ describe("buildCoreLinks", () => {
     // workbook no longer has. Silently ignoring them would hide the breakage.
     const { problems, totals } = buildCoreLinks([
       ...CATALOG,
-      row("401-05-0000-00-M", "Basic Site Materials", "03000000000I"),
+      row("450-05-0000-00-M", "Basic Site Materials", "03000000000I"),
     ]);
     const missing = problems.find((p) => p.raw === "03000000000I")!;
     expect(missing).toMatchObject({ reason: "missing", count: 1 });
-    expect(missing.sample).toContain("401-05-0000-00-M");
+    expect(missing.sample).toContain("450-05-0000-00-M");
     expect(totals.unresolved).toBe(1);
   });
 
@@ -101,7 +101,7 @@ describe("buildCoreLinks", () => {
       ...CATALOG,
       row("530-00-0000-00-0", "Electrical Materials"),
       row("053-00-0000-00-0", "Field Support Supplies"),
-      row("233-00-0000-00-0", "Concrete Support Supplies", "53000000000"),
+      row("243-00-0000-00-0", "Concrete Support Supplies", "53000000000"),
     ];
     const { problems } = buildCoreLinks(rows);
     const amb = problems.find((p) => p.raw === "53000000000")!;

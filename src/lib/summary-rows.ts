@@ -66,8 +66,9 @@ const INDIRECTS = [
 
 // Administration & Home Office rows. "Home Office Construction Support" sums
 // all of L1 012 (via the `byL1` bucket). The remaining rows are the L2 sub-
-// accounts of L1 032, under the 030 Special Project Costs division (they were
-// L1 013 "Project Costs" until 2026-10-29), and sum at that level + their
+// accounts of L1 022, under the 020 Special Project Costs division (L1 013
+// "Project Costs" until 2026-10-29, then 032 under 030 until the 2026-11-12
+// master swapped the 02X and 03X divisions), and sum at that level + their
 // children (via the `byL1L2` bucket, keyed by the de-dashed 5-char L1+L2
 // prefix). Exported for `summary-rows-cbs.test.ts`, which checks every key
 // against the workbook.
@@ -80,20 +81,21 @@ export const SUMMARY_ADMIN_HOME_OFFICE: {
   l1l2?: string;
 }[] = [
   { label: "Home Office Construction Support", uom: "HR", l1: "012" },
-  // The 2026-11-03 master inserted Legal at 032-05, moving the rest up five.
-  { label: "Legal", uom: "LS", l1l2: "03205" },
-  { label: "Bonds", uom: "LS", l1l2: "03210" },
-  { label: "Insurance", uom: "LS", l1l2: "03215" },
-  { label: "Finance Charges", uom: "LS", l1l2: "03220" },
-  { label: "Taxes", uom: "LS", l1l2: "03225" },
-  { label: "Permitting", uom: "LS", l1l2: "03230" },
-  { label: "Licenses", uom: "LS", l1l2: "03235" },
+  // The 2026-11-03 master inserted Legal at -05, moving the rest up five.
+  { label: "Legal", uom: "LS", l1l2: "02205" },
+  { label: "Bonds", uom: "LS", l1l2: "02210" },
+  { label: "Insurance", uom: "LS", l1l2: "02215" },
+  { label: "Finance Charges", uom: "LS", l1l2: "02220" },
+  { label: "Taxes", uom: "LS", l1l2: "02225" },
+  { label: "Permitting", uom: "LS", l1l2: "02230" },
+  { label: "Licenses", uom: "LS", l1l2: "02235" },
 ];
 
 // Each Engineering & Design row is a parent CBS item (L1 code) under the
 // Engineering discipline. Values are summarized from the Engineering Field
 // Estimate by L1 bucket (`…ByL1`), the same way the Disciplines section rolls
-// up by digit. `020` is the section parent itself, so it isn't a row.
+// up by digit. `030` is the section parent itself (020 until the 2026-11-12
+// master swapped the 02X and 03X divisions), so it isn't a row.
 //
 // Labels are the accounts' own CBS names, and `summary-rows-cbs.test.ts`
 // holds them to that: the 2026-10-29 workbook had made 022 "Combined Phase"
@@ -103,16 +105,12 @@ export const SUMMARY_ENGINEERING: {
   uom: string;
   l1: string;
 }[] = [
-  { label: "Combined Phase (D23)", uom: "HR", l1: "022" },
-  { label: "Concept Design (D1)", uom: "HR", l1: "024" },
-  { label: "Preliminary Design - FEED", uom: "HR", l1: "025" },
-  { label: "Detailed Design (D3)", uom: "HR", l1: "026" },
-  { label: "Eng Construction Support", uom: "HR", l1: "027" },
-  {
-    label: "Eng Cx & Startup Support",
-    uom: "HR",
-    l1: "028",
-  },
+  { label: "Combined Phase (D23)", uom: "HR", l1: "032" },
+  { label: "Concept Design (D1)", uom: "HR", l1: "034" },
+  { label: "Preliminary Design - FEED", uom: "HR", l1: "035" },
+  { label: "Detailed Design (D3)", uom: "HR", l1: "036" },
+  { label: "Eng Construction Support", uom: "HR", l1: "037" },
+  { label: "Eng Cx & Startup Support", uom: "HR", l1: "038" },
 ];
 
 const TIC_BEFORE_CONTINGENCY = ["Bond", "Insurance", "B&O Tax", "Contingency"];

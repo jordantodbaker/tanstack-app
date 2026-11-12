@@ -3,8 +3,10 @@
 //
 // These two columns are the metallurgy codes the Piping take-off composes CBS
 // cost codes from (see `pipingCostCodes` in src/lib/piping-derive.ts). The
-// The CBS renumbered the piping series — shop fabrication 603–613 → 610–620,
-// field install 633–643 → 640–650 — so a database seeded before that update
+// The CBS has renumbered the piping series more than once — shop fabrication
+// 603–613 → 610–620 → 620–635, field install 633–643 → 640–650 → 650–665 (the
+// 2026-11-12 master gave each alloy its own code; the CSV files a combined
+// group under its first-named alloy) — so a database seeded before an update
 // still holds codes that no longer resolve to anything, and piping rows stop
 // auto-populating their CBS id/name.
 //
@@ -47,14 +49,18 @@ async function main() {
 
   // Which rows are stale — see src/lib/piping-group-sync.ts, kept pure so the
   // matching rules are unit-tested without a database.
-  const { stale, current, unknown, changes } = planPipingGroupSync(wanted, groups);
+  const { stale, current, unknown, changes } = planPipingGroupSync(
+    wanted,
+    groups,
+  );
 
   console.log(
     `DB: ${groups.length} group(s) → ${stale.length} to update, ${current} already current` +
       (unknown.length ? `, ${unknown.length} not in the CSV` : ""),
   );
   for (const c of unknown) console.log(`  not in CSV: "${c}"`);
-  for (const c of changes) console.log(`  ${c.description}  ${c.classification}`);
+  for (const c of changes)
+    console.log(`  ${c.description}  ${c.classification}`);
 
   if (stale.length === 0) {
     console.log("\nNothing to do.");

@@ -1347,30 +1347,29 @@ describe("discipline filter", () => {
     disciplines,
   });
 
-  it("offers each discipline with its count, trimmed, blank last, filed under its lowest L1", () => {
+  it("offers each discipline with its count, trimmed, blank last", () => {
     expect(cbsValueFilterOptions(ROWS).disciplines).toEqual([
-      { value: "Civil", count: 3, prefix: "100" },
-      { value: "Piping", count: 1, prefix: "600" },
+      { value: "Civil", count: 3 },
+      { value: "Piping", count: 1 },
       { value: CBS_BLANK_VALUE, count: 1 },
     ]);
   });
 
-  it("lists disciplines in L1 order, not alphabetically, and files one under its division root", () => {
+  it("lists disciplines by the code the master writes before each name", () => {
     const rows = [
       item("630-00-0000-00-0", {
         name: "Install Piping",
-        discipline: "Piping",
+        discipline: "60 - Piping",
       }),
-      item("300-00-0000-00-0", { name: "Steel", discipline: "Steel" }),
-      item("100-00-0000-00-0", { name: "Civil", discipline: "Civil" }),
-      // Civil spans 100 and 150; the lowest names the root.
-      item("150-00-0000-00-0", { name: "Paving", discipline: "Civil" }),
+      item("300-00-0000-00-0", { name: "Steel", discipline: "30 - Steel" }),
+      item("100-00-0000-00-0", { name: "Civil", discipline: "10 - Civil" }),
+      item("150-00-0000-00-0", { name: "Paving", discipline: "10 - Civil" }),
+      // Numeric-aware: "9 - ..." before "10 - ...", not after.
+      item("090-00-0000-00-0", { name: "Demo", discipline: "9 - Demolition" }),
     ];
-    expect(cbsValueFilterOptions(rows).disciplines).toEqual([
-      { value: "Civil", count: 2, prefix: "100" },
-      { value: "Steel", count: 1, prefix: "300" },
-      { value: "Piping", count: 1, prefix: "630" },
-    ]);
+    expect(cbsValueFilterOptions(rows).disciplines.map((o) => o.value)).toEqual(
+      ["9 - Demolition", "10 - Civil", "30 - Steel", "60 - Piping"],
+    );
   });
 
   it("counts, given the filter, only the rows the other filters leave", () => {
@@ -1378,9 +1377,9 @@ describe("discipline filter", () => {
       cbsValueFilterOptions(ROWS, { ...CBS_FILTER_NONE, labor: true })
         .disciplines,
     ).toEqual([
-      { value: "Civil", count: 1, prefix: "100" },
-      // Nothing left to count, but still filed where it was.
-      { value: "Piping", count: 0, prefix: "600" },
+      { value: "Civil", count: 1 },
+      // Nothing left to count, but still listed where it was.
+      { value: "Piping", count: 0 },
       { value: CBS_BLANK_VALUE, count: 0 },
     ]);
     // A picker's own ticks are left out, so its list is steady while picking.

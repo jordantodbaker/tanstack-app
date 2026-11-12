@@ -3,43 +3,43 @@ import { buildCodeUsage, type UsageRow } from "./cbs-usage";
 
 const granted: UsageRow[] = [
   { displayCode: "600-00-0000-00-0", name: "Piping" },
-  { displayCode: "604-20-0000-00-0", name: "Third Party Rental" },
-  { displayCode: "604-20-1000-00-L", name: "Crane Rental" },
-  { displayCode: "604-20-2000-00-L", name: "Manlift Rental" },
-  { displayCode: "140-05-0000-00-0", name: "Earthwork & Trenching" },
+  { displayCode: "614-20-0000-00-0", name: "Third Party Rental" },
+  { displayCode: "614-20-1000-00-L", name: "Crane Rental" },
+  { displayCode: "614-20-2000-00-L", name: "Manlift Rental" },
+  { displayCode: "150-05-0000-00-0", name: "Earthwork & Trenching" },
 ];
 
 const usage = new Map([
-  ["604-20-1000-00-L", 12],
-  ["140-05-0000-00-0", 3],
+  ["614-20-1000-00-L", 12],
+  ["150-05-0000-00-0", 3],
 ]);
 
 describe("buildCodeUsage", () => {
   it("separates granted from actually used, per division", () => {
     const { divisions } = buildCodeUsage(granted, usage);
-    const six = divisions.find((d) => d.l1 === "604")!;
+    const six = divisions.find((d) => d.l1 === "614")!;
     expect(six).toMatchObject({ granted: 3, used: 1, rows: 12 });
-    const one = divisions.find((d) => d.l1 === "140")!;
+    const one = divisions.find((d) => d.l1 === "150")!;
     expect(one).toMatchObject({ granted: 1, used: 1, rows: 3 });
   });
 
   it("puts the biggest pruning opportunity first", () => {
     // 604 grants three and uses one; the others waste nothing.
     const { divisions } = buildCodeUsage(granted, usage);
-    expect(divisions[0].l1).toBe("604");
+    expect(divisions[0].l1).toBe("614");
   });
 
   it("lists unused codes before used ones, since that is what gets revoked", () => {
     const { divisions } = buildCodeUsage(granted, usage);
-    const six = divisions.find((d) => d.l1 === "604")!;
+    const six = divisions.find((d) => d.l1 === "614")!;
     expect(six.items.map((i) => i.rows)).toEqual([0, 0, 12]);
   });
 
   it("names a division from its summary row, whatever order it arrives in", () => {
     const { divisions } = buildCodeUsage(
       [
-        { displayCode: "604-20-1000-00-L", name: "Crane Rental" },
-        { displayCode: "604-00-0000-00-0", name: "Pipe Shop Equipment" },
+        { displayCode: "614-20-1000-00-L", name: "Crane Rental" },
+        { displayCode: "614-00-0000-00-0", name: "Pipe Shop Equipment" },
       ],
       new Map(),
     );
@@ -49,7 +49,7 @@ describe("buildCodeUsage", () => {
   it("falls back to a granted code's name when the summary is not granted", () => {
     // An allow-list need not include the summary above the codes it grants.
     const { divisions } = buildCodeUsage(
-      [{ displayCode: "604-20-1000-00-L", name: "Crane Rental" }],
+      [{ displayCode: "614-20-1000-00-L", name: "Crane Rental" }],
       new Map(),
     );
     expect(divisions[0].name).toBe("Crane Rental");
@@ -57,8 +57,8 @@ describe("buildCodeUsage", () => {
 
   it("attributes each division to the discipline that owns the block", () => {
     const { divisions } = buildCodeUsage(granted, usage);
-    expect(divisions.find((d) => d.l1 === "140")!.discipline).toBe("civil");
-    expect(divisions.find((d) => d.l1 === "604")!.discipline).toBe("piping");
+    expect(divisions.find((d) => d.l1 === "150")!.discipline).toBe("civil");
+    expect(divisions.find((d) => d.l1 === "614")!.discipline).toBe("piping");
   });
 
   it("separates a missing grant from a code the catalog never had", () => {
@@ -68,22 +68,22 @@ describe("buildCodeUsage", () => {
     // the segments) was never a dictionary row and never could be granted.
     const catalog = new Set([
       ...granted.map((g) => g.displayCode),
-      "233-10-0000-00-M",
+      "243-10-0000-00-M",
     ]);
     const { ungranted, unknown, totals } = buildCodeUsage(
       granted,
       new Map([
         ...usage,
-        ["233-10-0000-00-M", 7], // a real code, not granted here
-        ["604-MB-ST00-00-C", 9], // built by the piping take-off
+        ["243-10-0000-00-M", 7], // a real code, not granted here
+        ["614-MB-ST00-00-C", 9], // built by the piping take-off
       ]),
       catalog,
     );
     expect(ungranted).toEqual([
-      { displayCode: "233-10-0000-00-M", name: "", rows: 7 },
+      { displayCode: "243-10-0000-00-M", name: "", rows: 7 },
     ]);
     expect(unknown).toEqual([
-      { displayCode: "604-MB-ST00-00-C", name: "", rows: 9 },
+      { displayCode: "614-MB-ST00-00-C", name: "", rows: 9 },
     ]);
     expect(totals).toMatchObject({ ungranted: 1, unknown: 1 });
   });

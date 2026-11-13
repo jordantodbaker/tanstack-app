@@ -93,18 +93,20 @@ describe("getGroupL1", () => {
     expect(getGroupL1("101")).toBe("100");
     expect(getGroupL1("250")).toBe("200");
     expect(getGroupL1("601")).toBe("600");
-    expect(getGroupL1("999")).toBe("900");
+    expect(getGroupL1("959")).toBe("900");
   });
 
-  it("keeps 95X / 96X / 97X as their own divisions, not part of 900", () => {
-    // Startup & Commissioning, Operations & Maintenance and Contingency each
-    // have their own summary row beside Coatings & Insulation.
-    expect(getGroupL1("950")).toBe("950");
-    expect(getGroupL1("952")).toBe("950");
-    expect(getGroupL1("959")).toBe("950");
+  it("keeps 96X–99X as their own divisions, not part of 900", () => {
+    // Specialty Services, Startup & Commissioning, Operations & Maintenance
+    // and Contingency each have their own summary row beside Coatings.
     expect(getGroupL1("960")).toBe("960");
-    expect(getGroupL1("967")).toBe("960");
+    expect(getGroupL1("962")).toBe("960");
+    expect(getGroupL1("969")).toBe("960");
     expect(getGroupL1("970")).toBe("970");
+    expect(getGroupL1("978")).toBe("970");
+    expect(getGroupL1("980")).toBe("980");
+    expect(getGroupL1("988")).toBe("980");
+    expect(getGroupL1("990")).toBe("990");
   });
 
   it("keeps 29X Grout as its own division, not part of 200 Concrete", () => {
@@ -115,14 +117,16 @@ describe("getGroupL1", () => {
 
   it("still folds the rest of the 900 block into Coatings", () => {
     expect(getGroupL1("900")).toBe("900");
-    expect(getGroupL1("913")).toBe("900");
-    // 990 is "Coatings & Insulation Subcontracts" — it really is part of 900.
-    expect(getGroupL1("990")).toBe("900");
+    expect(getGroupL1("941")).toBe("900");
+    // 950–953 are Painting, Insulation, Fireproofing and Refractory — the
+    // install accounts under 940 Coatings Installation, part of 900.
+    expect(getGroupL1("950")).toBe("900");
+    expect(getGroupL1("953")).toBe("900");
   });
 
   it("still folds Concrete's own accounts into 200", () => {
     expect(getGroupL1("200")).toBe("200");
-    expect(getGroupL1("231")).toBe("200");
+    expect(getGroupL1("241")).toBe("200");
     expect(getGroupL1("240")).toBe("200");
     expect(getGroupL1("260")).toBe("200");
   });
@@ -167,9 +171,9 @@ describe("cbsAncestorCodes", () => {
 
   it("returns nothing for a division root itself", () => {
     expect(cbsAncestorCodes("600-00-0000-00-0")).toEqual([]);
-    // 290 and 950 are their own divisions, not children of 200 / 900.
+    // 290 and 960 are their own divisions, not children of 200 / 900.
     expect(cbsAncestorCodes("290-00-0000-00-0")).toEqual([]);
-    expect(cbsAncestorCodes("950-00-0000-00-0")).toEqual([]);
+    expect(cbsAncestorCodes("960-00-0000-00-0")).toEqual([]);
   });
 
   it("hangs a division root's cost-type twin off the root", () => {
@@ -320,73 +324,53 @@ describe("buildCbsTree", () => {
     expect(parentOf(tree, "295-00-0000-00-0")).toBe("290-00-0000-00-0");
   });
 
-  it("roots the whole 9-series beside 900 after the Specialty Services shift", () => {
-    // Inserting 950 Specialty Services pushed Startup & Commissioning to 960,
-    // Operations & Maintenance to 970 and Contingency to 980. Each is its own
-    // division, not an account inside Coatings & Insulation.
+  it("roots the whole 9-series beside 900 after the 2026-11-12 shift", () => {
+    // The 2026-11-12 master moved Coatings' install accounts to 95X and
+    // pushed Specialty Services to 960, Startup & Commissioning to 970,
+    // Operations & Maintenance to 980 and Contingency to 990. Each is its own
+    // division, not an account inside Coatings.
     const tree = buildCbsTree([
-      item("900-00-0000-00-0", { name: "Coatings & Insulation" }),
-      item("901-00-0000-00-0", { name: "Coatings Materials" }),
-      item("950-00-0000-00-0", { name: "Specialty Services" }),
-      item("951-00-0000-00-0", { name: "Mechanical Services" }),
-      item("960-00-0000-00-0", { name: "Startup & Commissioning" }),
-      item("962-00-0000-00-0", { name: "Startup Field Staff" }),
-      item("970-00-0000-00-0", { name: "Operations & Maintenance" }),
-      item("972-00-0000-00-0", { name: "Operations Field Staff" }),
-      item("980-00-0000-00-0", { name: "Contingency" }),
+      item("900-00-0000-00-0", { name: "Coatings" }),
+      item("941-00-0000-00-0", { name: "Coatings Matls (Reserved)" }),
+      item("950-00-0000-00-0", { name: "Painting" }),
+      item("960-00-0000-00-0", { name: "Specialty Services" }),
+      item("961-00-0000-00-0", { name: "Mechanical Services" }),
+      item("970-00-0000-00-0", { name: "Startup & Commissioning" }),
+      item("972-00-0000-00-0", { name: "SU & C Field Staff" }),
+      item("980-00-0000-00-0", { name: "Operations & Maintenance" }),
+      item("982-00-0000-00-0", { name: "Operations Field Staff" }),
+      item("990-00-0000-00-0", { name: "Contingency" }),
     ]);
     expect(tree.map((n) => n.item.name)).toEqual([
-      "Coatings & Insulation",
+      "Coatings",
       "Specialty Services",
       "Startup & Commissioning",
       "Operations & Maintenance",
       "Contingency",
     ]);
-    // Each keeps its own accounts; none of them leaks into 900.
+    // Coatings keeps its own accounts, the 95X install block included; none
+    // of the other divisions leaks into 900.
     expect(tree[0].children.map((c) => c.item.displayCode)).toEqual([
-      "901-00-0000-00-0",
-    ]);
-    expect(parentOf(tree, "951-00-0000-00-0")).toBe("950-00-0000-00-0");
-    expect(parentOf(tree, "962-00-0000-00-0")).toBe("960-00-0000-00-0");
-    expect(parentOf(tree, "972-00-0000-00-0")).toBe("970-00-0000-00-0");
-  });
-
-  it("keeps 93X inside Coatings & Insulation", () => {
-    // Deliberately NOT a tens division: Paint & Coatings reads as part of
-    // Coatings & Insulation. Pinned so the 9-series shift doesn't sweep it up.
-    const tree = buildCbsTree([
-      item("900-00-0000-00-0", { name: "Coatings & Insulation" }),
-      item("930-00-0000-00-0", { name: "Paint & Coatings" }),
-    ]);
-    expect(tree.map((n) => n.item.name)).toEqual(["Coatings & Insulation"]);
-    expect(parentOf(tree, "930-00-0000-00-0")).toBe("900-00-0000-00-0");
-  });
-
-  it("roots 950 / 960 / 970 beside 900 rather than inside it", () => {
-    const tree = buildCbsTree([
-      item("900-00-0000-00-0", { name: "Coatings & Insulation" }),
-      item("913-00-0000-00-0", { name: "Refractory" }),
-      item("990-00-0000-00-0", { name: "Coatings & Insulation Subcontracts" }),
-      item("950-00-0000-00-0", { name: "Startup & Commissioning" }),
-      item("952-00-0000-00-0", { name: "S&C Field Staff" }),
-      item("960-00-0000-00-0", { name: "Operations & Maintenance" }),
-      item("967-00-0000-00-0", { name: "Operations Training" }),
-      item("970-00-0000-00-0", { name: "Contingency" }),
-    ]);
-    expect(tree.map((n) => n.item.displayCode)).toEqual([
-      "900-00-0000-00-0",
+      "941-00-0000-00-0",
       "950-00-0000-00-0",
-      "960-00-0000-00-0",
-      "970-00-0000-00-0",
     ]);
-    // Coatings keeps its own accounts, including the subcontracts account.
-    expect(tree[0].children.map((c) => c.item.displayCode)).toEqual([
-      "913-00-0000-00-0",
-      "990-00-0000-00-0",
+    expect(parentOf(tree, "961-00-0000-00-0")).toBe("960-00-0000-00-0");
+    expect(parentOf(tree, "972-00-0000-00-0")).toBe("970-00-0000-00-0");
+    expect(parentOf(tree, "982-00-0000-00-0")).toBe("980-00-0000-00-0");
+  });
+
+  it("keeps 94X and 95X inside Coatings", () => {
+    // Deliberately NOT tens divisions: Coatings Installation and its Painting
+    // / Insulation / Fireproofing / Refractory accounts read as part of
+    // Coatings. Pinned so a 9-series shift doesn't sweep them up.
+    const tree = buildCbsTree([
+      item("900-00-0000-00-0", { name: "Coatings" }),
+      item("940-00-0000-00-0", { name: "Coatings Installation" }),
+      item("953-00-0000-00-0", { name: "Refractory" }),
     ]);
-    // The new divisions carry their own children.
-    expect(parentOf(tree, "952-00-0000-00-0")).toBe("950-00-0000-00-0");
-    expect(parentOf(tree, "967-00-0000-00-0")).toBe("960-00-0000-00-0");
+    expect(tree.map((n) => n.item.name)).toEqual(["Coatings"]);
+    expect(parentOf(tree, "940-00-0000-00-0")).toBe("900-00-0000-00-0");
+    expect(parentOf(tree, "953-00-0000-00-0")).toBe("900-00-0000-00-0");
   });
 
   it("keeps a 0x0 group root that is its own L1 as a single node", () => {

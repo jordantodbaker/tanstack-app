@@ -264,6 +264,7 @@ export const disciplinesData: DisciplineData[] = [
       "633",
       "634",
       "635",
+      "637",
       "638",
       "639",
       "640",
@@ -302,6 +303,7 @@ export const disciplinesData: DisciplineData[] = [
       "742",
       "743",
       "744",
+      "745",
       "749",
       "750",
       "751",
@@ -313,6 +315,7 @@ export const disciplinesData: DisciplineData[] = [
       "757",
       "758",
       "759",
+      "760",
     ],
   },
   {

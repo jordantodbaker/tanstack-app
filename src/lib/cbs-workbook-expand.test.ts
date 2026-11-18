@@ -89,6 +89,33 @@ describe("planCbsWorkbookExpansion", () => {
     expect(planCbsWorkbookExpansion(already, []).headers).toEqual(already);
   });
 
+  it("adds a G/L column when the master has none, derived from each row's cost type", () => {
+    // The 2026-11-18 master dropped G/L: it follows from the cost type, so
+    // the typed rows carry their type's account and the roll-up none.
+    const withoutGl = HEADERS.filter((h) => h !== "G/L");
+    const plan = planCbsWorkbookExpansion(withoutGl, [
+      master(2, "012-05-1000-00", "Pipe", {
+        "G/L": null,
+        "Labor Code": "YES",
+        "Material Code": "YES",
+      }),
+    ]);
+    expect(plan.problems).toEqual([]);
+    expect(plan.headers).toEqual([
+      ...withoutGl,
+      "G/L",
+      "Row Type",
+      "Original Row",
+    ]);
+    expect(
+      plan.rows.map((r) => [r.cells["Display Code"], r.cells["G/L"]]),
+    ).toEqual([
+      ["012-05-1000-00-0", null],
+      ["012-05-1000-00-L", 5000],
+      ["012-05-1000-00-M", 5100],
+    ]);
+  });
+
   it("generates one typed row per YES flag, in L S M E O R order after the roll-up", () => {
     const plan = planCbsWorkbookExpansion(HEADERS, [
       master(

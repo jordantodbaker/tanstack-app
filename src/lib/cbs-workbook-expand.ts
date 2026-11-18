@@ -231,8 +231,15 @@ export const costTypeDescription = (noun: string, name: string) =>
 
 /**
  * Plans the expanded sheet: `headers` is the master's header list with
- * "Row Type" and "Original Row" appended when the master lacks them, and each
- * row's `cells` is keyed by those headers.
+ * "G/L", "Row Type" and "Original Row" appended when the master lacks them,
+ * and each row's `cells` is keyed by those headers.
+ *
+ * G/L is derived, not copied: each typed row carries its cost type's account
+ * (5000 Labor, 5100 Material, 5200 Subcontract, 5300 Equipment, 5400 Other,
+ * 5500 Rental — `COST_TYPE_RULES`) and a roll-up, which summarizes several,
+ * carries none. The 2026-11-18 master dropped its G/L column on that basis;
+ * an older master that still has one passes its value through to the
+ * roll-up row only.
  */
 export function planCbsWorkbookExpansion(
   masterHeaders: string[],
@@ -241,7 +248,7 @@ export function planCbsWorkbookExpansion(
   const problems: string[] = [];
   const warnings: string[] = [];
   const headers = [...masterHeaders];
-  for (const h of [COL.rowType, COL.originalRow]) {
+  for (const h of [COL.gl, COL.rowType, COL.originalRow]) {
     if (!headers.includes(h)) headers.push(h);
   }
   const needed = [

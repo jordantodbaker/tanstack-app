@@ -52,6 +52,20 @@ type Node = CbsTreeNode;
  * account roll-ups are `accounts`, and any other trailing segment is counted
  * under `unknown` so the parts still add up to the total.
  */
+/** The "Hide … parents" toggle, worded for what the context rows are. */
+const CONTEXT_WORDING = {
+  ungranted: {
+    label: "Hide ungranted parents",
+    title:
+      "Hide the grayed-out parent summaries this project was not granted. The codes under them move up to the nearest parent it does have.",
+  },
+  inactive: {
+    label: "Hide inactive parents",
+    title:
+      "Hide the grayed-out parent summaries that are Inactive or Retired. The active codes under them move up to the nearest active parent.",
+  },
+} as const;
+
 type Counts = {
   total: number;
   accounts: number;
@@ -167,6 +181,7 @@ export function CbsDictionaryBrowser({
   fill = false,
   initialFilter,
   initialHideContext = false,
+  contextKind = "ungranted",
 }: {
   items: CbsBrowserRow[];
   sourceNote: string;
@@ -190,8 +205,14 @@ export function CbsDictionaryBrowser({
   fill?: boolean;
   /** Start with these filters in force — see `useCbsRowFilter`. */
   initialFilter?: CbsRowFilterState;
-  /** Start with "Hide ungranted parents" ticked. */
+  /** Start with "Hide … parents" ticked. */
   initialHideContext?: boolean;
+  /**
+   * What a context row IS here, for the toggle's wording: a parent the
+   * project was not granted (the Project Cost Code List) or one that is
+   * Inactive / Retired (Cost Accounts). Same muted treatment either way.
+   */
+  contextKind?: keyof typeof CONTEXT_WORDING;
   /**
    * Offer the Active / Inactive / Retired buttons. Only the CBS Dictionary
    * does: Cost Accounts and the Project Cost Code List are active-only by
@@ -307,14 +328,14 @@ export function CbsDictionaryBrowser({
         {hasContext && (
           <label
             className="flex items-center gap-1.5 text-xs text-slate-600"
-            title="Hide the grayed-out parent summaries this project was not granted. The codes under them move up to the nearest parent it does have."
+            title={CONTEXT_WORDING[contextKind].title}
           >
             <input
               type="checkbox"
               checked={hideContext}
               onChange={(e) => setHideContext(e.target.checked)}
             />
-            Hide ungranted parents
+            {CONTEXT_WORDING[contextKind].label}
           </label>
         )}
         {exportView && (

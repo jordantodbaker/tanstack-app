@@ -50,6 +50,7 @@ export {
   cbsIsBackbone,
   cbsIsBackboneCode,
   cbsIsActive,
+  cbsActiveRows,
   cbsHasStatus,
   cbsNoCostTypes,
   cbsNoStatuses,

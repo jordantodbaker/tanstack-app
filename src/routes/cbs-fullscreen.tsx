@@ -9,7 +9,7 @@ import {
   type CbsBrowserRow,
 } from "~/utils/cbs";
 import { useSelectedProject } from "~/lib/selected-project";
-import { cbsIsActive } from "~/lib/cbs-tree";
+import { cbsActiveRows } from "~/lib/cbs-tree";
 import {
   cbsRowFilterStateFromSearch,
   parseCbsFullscreenSearch,
@@ -180,12 +180,13 @@ function CatalogView({
   initialFilter,
 }: ViewProps & { view: Exclude<CbsFullscreenView, "project"> }) {
   const query = useQuery(cbsCatalogQueryOptions());
-  // Cost Accounts is the Dictionary minus anything Inactive or Retired — the
-  // same cut `CbsDictionarySections` makes.
+  // Cost Accounts is the Dictionary minus anything Inactive or Retired, with
+  // inactive parents kept as context — the same cut `CbsDictionarySections`
+  // makes.
   const items = React.useMemo(
     () =>
       view === "accounts" && query.data
-        ? query.data.filter((r) => cbsIsActive(r.status))
+        ? cbsActiveRows(query.data)
         : query.data,
     [view, query.data],
   );
@@ -204,6 +205,7 @@ function CatalogView({
       sourceNote={MASTER_SOURCE_NOTE}
       emptyMessage={MASTER_EMPTY}
       exportView={view === "accounts" ? "codeBook" : "dictionary"}
+      contextKind={view === "accounts" ? "inactive" : undefined}
       linkPath={ADMIN_MASTER_CBS_PATH}
       focusCode={focusCode}
       initialFilter={initialFilter}
@@ -225,6 +227,9 @@ function FullscreenBrowser(props: {
   initialHideContext?: boolean;
   statusFilter?: boolean;
   rowTypeFilter?: boolean;
+  contextKind?: React.ComponentProps<
+    typeof CbsDictionaryBrowser
+  >["contextKind"];
 }) {
   return <CbsDictionaryBrowser {...props} fill />;
 }

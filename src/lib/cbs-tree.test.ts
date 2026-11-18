@@ -13,6 +13,7 @@ import {
   cbsHasCostType,
   cbsIsCostType,
   cbsIsActive,
+  cbsActiveRows,
   cbsIsBackbone,
   cbsQueryTokens,
   cbsIsBackboneCode,
@@ -708,6 +709,55 @@ describe("cbsIsActive", () => {
     for (const s of ["Inactive", "inactive", "Retired", "Superseded"]) {
       expect(cbsIsActive(s)).toBe(false);
     }
+  });
+});
+
+describe("cbsActiveRows", () => {
+  it("keeps an inactive parent as context so an active block still nests", () => {
+    // The 2026-11-12 master: all of 040 Procurement is Inactive except the
+    // 044-50 Heavy Haul & Lift block. Filtered on status alone, 044-50 had
+    // nothing above it and sat at the top of the Cost Accounts tree at its
+    // own L2 level, beside the division roots.
+    const rows = cbsActiveRows([
+      item("040-00-0000-00-0", { name: "Procurement", status: "Inactive" }),
+      item("041-00-0000-00-0", { name: "Bulk Matls Proc", status: "Inactive" }),
+      item("044-00-0000-00-0", {
+        name: "Engineered Equipment",
+        status: "Inactive",
+      }),
+      item("044-50-0000-00-0", { name: "Heavy Haul & Lift", status: "Active" }),
+      item("044-50-1000-00-L", { name: "Heavy Lift Cranes", status: "Active" }),
+    ]);
+    expect(rows.map((r) => [r.name, r.context ?? false])).toEqual([
+      ["Heavy Haul & Lift", false],
+      ["Heavy Lift Cranes", false],
+      // Structure, not codes — and 041, which nothing active needs, stays out.
+      ["Procurement", true],
+      ["Engineered Equipment", true],
+    ]);
+    const tree = buildCbsTree(rows);
+    expect(tree.map((n) => n.item.name)).toEqual(["Procurement"]);
+    expect(tree[0].children.map((n) => n.item.name)).toEqual([
+      "Engineered Equipment",
+    ]);
+  });
+
+  it("returns the rows untouched when every row is active", () => {
+    const items = [
+      item("600-00-0000-00-0", { name: "Piping", status: "Active" }),
+      item("601-00-0000-00-0", { name: "Spool", status: null }),
+    ];
+    expect(cbsActiveRows(items)).toEqual(items);
+    expect(cbsActiveRows(items).some((r) => r.context)).toBe(false);
+  });
+
+  it("drops an inactive row nothing active hangs from", () => {
+    const rows = cbsActiveRows([
+      item("600-00-0000-00-0", { name: "Piping", status: "Active" }),
+      item("601-00-0000-00-0", { name: "Spool", status: "Inactive" }),
+      item("601-05-0000-00-0", { name: "Hot Tap", status: "Retired" }),
+    ]);
+    expect(rows.map((r) => r.name)).toEqual(["Piping"]);
   });
 });
 

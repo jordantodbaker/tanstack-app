@@ -4,7 +4,7 @@ import { prisma } from "../server/db";
 import { adminHandler, requireProjectAccess } from "./users.server";
 import {
   buildCbsTree,
-  cbsIsActive,
+  cbsActiveRows,
   describeCbsFilter,
   pruneCbsTree,
   withCbsLevels,
@@ -134,17 +134,19 @@ async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
       ? "Codes granted to this project on the Setup page — ungranted parents hidden"
       : "Codes granted to this project on the Setup page";
   } else {
-    // The Cost Accounts view lists only active rows, so the export applies the
-    // same filter the page does, or the file stops matching the screen. The
-    // Dictionary deliberately keeps everything, inactive and retired included.
+    // The Cost Accounts view lists only active rows (inactive parents kept as
+    // context), so the export applies the same cut the page does, or the file
+    // stops matching the screen. The Dictionary deliberately keeps everything,
+    // inactive and retired included.
     const catalog = await cbsCatalogRows();
-    rows =
-      input.view === "codeBook"
-        ? catalog.filter((r) => cbsIsActive(r.status))
-        : catalog;
+    rows = input.view === "codeBook" ? cbsActiveRows(catalog) : catalog;
+    const hidden = input.hideContext && rows.some((r) => r.context);
+    if (hidden) rows = rows.filter((r) => !r.context);
     // The catalog views ignore the allow-list, so the project below is there
     // for traceability — whose desk the file came from — not as a filter.
-    scope = "Whole catalog — no project allow-list applied";
+    scope = hidden
+      ? "Whole catalog — no project allow-list applied — inactive parents hidden"
+      : "Whole catalog — no project allow-list applied";
   }
 
   // Looked up rather than taken from the client: it ends up printed on a

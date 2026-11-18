@@ -1,7 +1,7 @@
 import * as React from "react";
 import { ChevronRight } from "lucide-react";
-import type { CbsTreeRow } from "~/utils/cbs";
-import { cbsIsActive } from "~/lib/cbs-tree";
+import type { CbsBrowserRow, CbsTreeRow } from "~/utils/cbs";
+import { cbsActiveRows } from "~/lib/cbs-tree";
 import type { CbsExportView } from "~/lib/cbs-export";
 import type { CbsFullscreenView } from "~/lib/cbs-fullscreen";
 import { CbsDictionaryBrowser } from "~/components/Cbs/CbsDictionaryBrowser";
@@ -26,10 +26,11 @@ function CbsSection({
   fullscreenView = null,
   statusFilter = false,
   rowTypeFilter = false,
+  contextKind,
 }: {
   title: string;
   description: string;
-  items: CbsTreeRow[];
+  items: CbsBrowserRow[];
   sourceNote: string;
   emptyMessage: string;
   defaultOpen?: boolean;
@@ -43,6 +44,10 @@ function CbsSection({
   statusFilter?: boolean;
   /** Offer the Row Type filter — see `CbsDictionaryBrowser`. */
   rowTypeFilter?: boolean;
+  /** What a muted parent row is here — see `CbsDictionaryBrowser`. */
+  contextKind?: React.ComponentProps<
+    typeof CbsDictionaryBrowser
+  >["contextKind"];
 }) {
   return (
     <CbsSectionShell
@@ -61,6 +66,7 @@ function CbsSection({
         fullscreenView={fullscreenView}
         statusFilter={statusFilter}
         rowTypeFilter={rowTypeFilter}
+        contextKind={contextKind}
       />
     </CbsSectionShell>
   );
@@ -135,10 +141,9 @@ export function CbsDictionarySections({
   // rows included — minus anything Inactive or Retired. This is the list
   // people pick codes from, and the Dictionary is the one place that still
   // shows everything, so nothing becomes unfindable by being hidden here.
-  const accounts = React.useMemo(
-    () => items.filter((r) => cbsIsActive(r.status)),
-    [items],
-  );
+  // Inactive parents of active rows stay, muted, so the hierarchy holds —
+  // see `cbsActiveRows`.
+  const accounts = React.useMemo(() => cbsActiveRows(items), [items]);
 
   // Both sections are open already, so this decides which one FOLLOWS the
   // deep link. Handing it to both would scroll two trees and select the row
@@ -164,6 +169,7 @@ export function CbsDictionarySections({
         focusCode={inAccounts ? focusCode : null}
         linkPath={ADMIN_MASTER_CBS_PATH}
         fullscreenView="accounts"
+        contextKind="inactive"
       />
       <CbsSection
         title="CBS Dictionary"

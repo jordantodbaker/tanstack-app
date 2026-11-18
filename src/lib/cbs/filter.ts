@@ -8,6 +8,7 @@
  * health checks all need to ask the questions without pruning anything.
  */
 import { BACKBONE_TYPE, type CbsTreeItem } from "./types";
+import { cbsAncestorCodes } from "./codes";
 
 /**
  * The cost types a row can carry a companion for.
@@ -316,6 +317,46 @@ export function cbsIsBackboneCode(displayCode: string): boolean {
 export function cbsIsActive(status: string | null | undefined): boolean {
   const value = status?.trim();
   return !value || value.toLowerCase() === "active";
+}
+
+/**
+ * The active rows of a catalog, plus any inactive ancestor an active row
+ * needs to hang from, flagged `context: true` — the cut the Cost Accounts
+ * view makes.
+ *
+ * Dropping the inactive rows alone is not enough. The 2026-11-12 master
+ * parks the whole 040 Procurement division as Inactive except its 044-50
+ * Heavy Haul & Lift block, so with 040 and 044 gone that block had nothing
+ * above it and surfaced at the top of the tree at its own (L2) level, beside
+ * the division roots. The same thing `projectCostCodeRows` guards against for
+ * a project's grants: the parent comes back muted, uncounted and unselectable
+ * — structure, not a code — and the children nest where their code says.
+ *
+ * Order is preserved: the catalog is read sorted, and `buildCbsTree` sorts
+ * again regardless.
+ */
+export function cbsActiveRows<
+  T extends Pick<CbsTreeItem, "displayCode" | "status">,
+>(items: readonly T[]): (T & { context?: boolean })[] {
+  const active = items.filter((r) => cbsIsActive(r.status));
+  if (active.length === items.length) return active;
+
+  const have = new Set(active.map((r) => r.displayCode));
+  const wanted = new Set<string>();
+  for (const r of active) {
+    for (const code of cbsAncestorCodes(r.displayCode)) {
+      if (!have.has(code)) wanted.add(code);
+    }
+  }
+  if (wanted.size === 0) return active;
+
+  const out: (T & { context?: boolean })[] = [...active];
+  for (const r of items) {
+    if (!have.has(r.displayCode) && wanted.has(r.displayCode)) {
+      out.push({ ...r, context: true });
+    }
+  }
+  return out;
 }
 
 /**

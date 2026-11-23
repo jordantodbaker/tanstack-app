@@ -1407,3 +1407,25 @@ model CbsItem {
   @@index([displayCode(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
 }
+
+/// One row per `cbs:import` run that wrote to `CbsItem` (dry runs record
+/// nothing). Nothing keys on it: the Code Book reads the latest row to say
+/// when the CBS last changed and by how much, because `CbsItem` itself has no
+/// timestamps and an import that changes nothing leaves no other trace.
+model CbsImport {
+  id               Int       @id @default(autoincrement())
+  importedAt       DateTime  @default(now())
+  /// The expanded workbook's last-modified time on disk, when the import had
+  /// it — the "as of" the rows came from, as distinct from when they landed.
+  workbookModified DateTime?
+  /// Dictionary rows the workbook loaded to (after the loader's drops).
+  workbookRows     Int
+  created          Int
+  updated          Int
+  unchanged        Int
+  deleted          Int
+  /// `CbsItem` rows after the run.
+  finalCount       Int
+
+  @@index([importedAt])
+}

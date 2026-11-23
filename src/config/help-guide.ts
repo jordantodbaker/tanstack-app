@@ -536,6 +536,7 @@ export const HELP_SECTIONS: HelpSection[] = [
           {
             kind: "ul",
             items: [
+              'Last CBS update, under the title, says when the CBS was last imported and what the import did — codes added, changed and removed, and when the workbook it came from was saved. It reads "not recorded" on a database whose imports all predate this note.',
               "Cost Accounts — the same rows as the Dictionary, each cost type on its own line, but Active codes only. It is the list to pick codes from.",
               "CBS Dictionary — every row, each cost type on its own line, Active, Inactive and Retired codes alike, with a Status filter to narrow them. It is the one view that hides nothing, so a code you cannot find anywhere else is findable here.",
               "The Dictionary also has a filter of its own. Row type: All, Original or Generated, read from the CBS workbook's Original Row column — TRUE for an original row (the accounts ending in 0), FALSE for a cost-type line generated from one. The detail panel shows the same TRUE / FALSE.",

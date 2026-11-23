@@ -1,7 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen } from "lucide-react";
-import { cbsCatalogQueryOptions } from "~/utils/cbs";
+import {
+  cbsCatalogQueryOptions,
+  cbsLastImportQueryOptions,
+  type CbsLastImport,
+} from "~/utils/cbs";
+import { formatDateTime } from "~/lib/dates";
 import { CbsDictionaryStatus } from "~/components/Cbs/CbsDictionaryBrowser";
 import { CbsDictionarySections } from "~/components/Cbs/CbsDictionarySections";
 
@@ -33,6 +38,53 @@ function AdminMasterCbsRoute() {
   return <AdminMasterCbsPage focusCode={code ?? null} />;
 }
 
+/**
+ * When the CBS last changed, under the page title: the latest `cbs:import`
+ * run and what it did. Says so plainly when there is no record — a database
+ * whose imports all predate the `CbsImport` table — rather than guessing
+ * from the rows, which carry no dates. Hidden while loading or on error: it
+ * is a footnote, and the sections below report their own failures.
+ */
+function CbsLastImportNote() {
+  const query = useQuery(cbsLastImportQueryOptions());
+  if (query.isPending || query.isError) return null;
+  return (
+    <p className="mt-2 text-xs text-slate-500" data-testid="cbs-last-import">
+      {query.data === null ? (
+        "Last CBS update: not recorded — no import has run since this was added."
+      ) : (
+        <LastImportSummary last={query.data} />
+      )}
+    </p>
+  );
+}
+
+function LastImportSummary({ last }: { last: CbsLastImport }) {
+  const n = (v: number) => v.toLocaleString("en-US");
+  const changes = [
+    last.created > 0 && `${n(last.created)} added`,
+    last.updated > 0 && `${n(last.updated)} changed`,
+    last.deleted > 0 && `${n(last.deleted)} removed`,
+  ].filter((s): s is string => typeof s === "string");
+  return (
+    <>
+      <span className="font-medium text-slate-600">Last CBS update:</span>{" "}
+      <time dateTime={last.importedAt}>{formatDateTime(last.importedAt)}</time>
+      {" — "}
+      {n(last.finalCount)} codes
+      {changes.length > 0 ? ` (${changes.join(", ")})` : " (no changes)"}
+      {last.workbookModified && (
+        <>
+          {"; workbook saved "}
+          <time dateTime={last.workbookModified}>
+            {formatDateTime(last.workbookModified)}
+          </time>
+        </>
+      )}
+    </>
+  );
+}
+
 export function AdminMasterCbsPage({
   focusCode = null,
 }: {
@@ -52,6 +104,7 @@ export function AdminMasterCbsPage({
           account before granting it to a project on the Setup page. Read-only —
           the code book itself changes only through a CBS import.
         </p>
+        <CbsLastImportNote />
       </header>
 
       {query.isPending || query.isError ? (

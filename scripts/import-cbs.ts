@@ -32,7 +32,9 @@
 // to write elsewhere. The database ends up the same; the canonical file still
 // needs regenerating afterwards, because CBS Health reads it.
 import "dotenv/config";
+import { statSync } from "node:fs";
 import { prisma } from "../src/server/db";
+import { CBS_WORKBOOK_PATH } from "../prisma/cbs-sheet";
 import {
   formatCbsWorkbookReport,
   loadCbsWorkbook,
@@ -94,6 +96,14 @@ async function main() {
     `Plan → create ${toCreate.length}, update ${toUpdate.length}, unchanged ${unchanged}, delete (stale) ${toDelete.length}`,
   );
   if (dryRun) {
+    if (toCreate.length) {
+      console.log(
+        `New codes (first 20): ${toCreate
+          .slice(0, 20)
+          .map((c) => c.costCode)
+          .join(", ")}`,
+      );
+    }
     if (toDelete.length) {
       console.log(
         `Stale codes (first 20): ${toDelete.slice(0, 20).join(", ")}`,
@@ -156,6 +166,24 @@ async function main() {
 
   const finalCount = await prisma.cbsItem.count();
   console.log(`\nFinal CbsItem count: ${finalCount}`);
+
+  // Leave a record: the Code Book reads the latest to say when the CBS last
+  // changed. Written after the rows, so a run that failed halfway is not
+  // recorded as an import — the re-run that finishes it is.
+  const record = await prisma.cbsImport.create({
+    data: {
+      workbookModified: statSync(workbookPath ?? CBS_WORKBOOK_PATH).mtime,
+      workbookRows: items.length,
+      created: toCreate.length,
+      updated: toUpdate.length,
+      unchanged,
+      deleted: toDelete.length,
+      finalCount,
+    },
+  });
+  console.log(
+    `Recorded as CBS import #${record.id} at ${record.importedAt.toISOString()}.`,
+  );
 
   const projs = await prisma.project.findMany({
     select: {

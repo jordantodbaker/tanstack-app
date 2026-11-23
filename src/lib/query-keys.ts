@@ -162,6 +162,8 @@ export const qk = {
     /** The whole catalog, ignoring project allow-lists — shared by Setup's
      *  allow-list editor and Admin → Master CBS. */
     catalog: () => ["cbsCatalog"] as const,
+    /** The most recent `cbs:import` run — Admin → Master CBS's "last updated". */
+    lastImport: () => ["cbsLastImport"] as const,
     /** The Core-code roll-up: which CBS items feed each core account. */
     coreLinks: () => ["cbsCoreLinks"] as const,
     /** Granted vs actually used codes, for one project. */

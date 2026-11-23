@@ -38,7 +38,12 @@ vi.mock("~/lib/selected-project", () => ({
 }));
 
 import { AdminMasterCbsPage } from "./admin.master-cbs";
-import { cbsCatalogQueryOptions, type CbsTreeRow } from "~/utils/cbs";
+import {
+  cbsCatalogQueryOptions,
+  cbsLastImportQueryOptions,
+  type CbsLastImport,
+  type CbsTreeRow,
+} from "~/utils/cbs";
 import { parseCbsDisplayCode } from "~/lib/cbs-tree";
 
 afterEach(cleanup);
@@ -87,8 +92,13 @@ function seeded() {
   return qc;
 }
 
-function renderPage() {
+function renderPage(lastImport?: CbsLastImport | null) {
   const qc = seeded();
+  // Left unseeded by default: the note stays hidden while its query is
+  // pending, so the rest of the page is tested without it.
+  if (lastImport !== undefined) {
+    qc.setQueryData(cbsLastImportQueryOptions().queryKey, lastImport);
+  }
   // The page, not the route component: the latter reads a search param and
   // would need a RouterProvider around it.
   const Page = AdminMasterCbsPage;
@@ -488,5 +498,60 @@ describe("Dictionary-only filters", () => {
     expect(
       within(dictionaryTree()).getByText("Welding Tagged"),
     ).toBeInTheDocument();
+  });
+});
+
+describe("last CBS update note", () => {
+  it("says when the CBS was last imported and what the import did", () => {
+    renderPage({
+      importedAt: "2026-11-18T20:58:00.000Z",
+      workbookModified: "2026-11-18T20:41:00.000Z",
+      workbookRows: 12992,
+      created: 479,
+      updated: 3887,
+      unchanged: 8626,
+      deleted: 126,
+      finalCount: 12992,
+    });
+    const note = screen.getByTestId("cbs-last-import");
+    expect(note.textContent).toContain("Last CBS update:");
+    expect(note.textContent).toContain(
+      "12,992 codes (479 added, 3,887 changed, 126 removed)",
+    );
+    expect(note.textContent).toContain("workbook saved");
+    // Machine-readable too, so the exact instant survives the locale format.
+    const times = within(note).getAllByRole("time", { hidden: true });
+    expect(times.map((t) => t.getAttribute("dateTime"))).toEqual([
+      "2026-11-18T20:58:00.000Z",
+      "2026-11-18T20:41:00.000Z",
+    ]);
+  });
+
+  it("reads 'no changes' for an import that found nothing to do", () => {
+    renderPage({
+      importedAt: "2026-11-18T21:30:00.000Z",
+      workbookModified: null,
+      workbookRows: 12992,
+      created: 0,
+      updated: 0,
+      unchanged: 12992,
+      deleted: 0,
+      finalCount: 12992,
+    });
+    const note = screen.getByTestId("cbs-last-import");
+    expect(note.textContent).toContain("12,992 codes (no changes)");
+    expect(note.textContent).not.toContain("workbook saved");
+  });
+
+  it("says so when no import has been recorded", () => {
+    renderPage(null);
+    expect(screen.getByTestId("cbs-last-import").textContent).toContain(
+      "not recorded",
+    );
+  });
+
+  it("shows nothing while the record is still loading", () => {
+    renderPage();
+    expect(screen.queryByTestId("cbs-last-import")).toBeNull();
   });
 });

@@ -349,7 +349,11 @@ and says so on its Scope line.
 
 ### CBS Code Book (administrators)
 
-The whole catalog, no project allow-list applied, in two sections:
+The whole catalog, no project allow-list applied. Under the title, **Last CBS
+update** says when the CBS was last imported and what that import did (how
+many codes were added, changed and removed, and when the workbook it came from
+was saved). It reads "not recorded" on a database whose imports all predate
+this note. Below it, two sections:
 
 - **Cost Accounts** — every **active** cost line, each cost type on its own
   row. It is the list to pick codes from.

@@ -321,6 +321,46 @@ export const cbsCatalogQueryOptions = () =>
     staleTime: Infinity,
   });
 
+/** What the Code Book says about the most recent CBS import. */
+export type CbsLastImport = {
+  importedAt: string;
+  workbookModified: string | null;
+  workbookRows: number;
+  created: number;
+  updated: number;
+  unchanged: number;
+  deleted: number;
+  finalCount: number;
+};
+
+/**
+ * The most recent `cbs:import` run, or null where none has been recorded —
+ * a database imported before the `CbsImport` table existed. Dates go over
+ * the wire as ISO strings, the shape `formatDateTime` reads.
+ */
+export const fetchCbsLastImport = createServerFn({ method: "GET" }).handler(
+  adminHandlerNoInput(async (): Promise<CbsLastImport | null> => {
+    const last = await prisma.cbsImport.findFirst({
+      orderBy: { importedAt: "desc" },
+    });
+    if (!last) return null;
+    const { id: _id, importedAt, workbookModified, ...counts } = last;
+    return {
+      ...counts,
+      importedAt: importedAt.toISOString(),
+      workbookModified: workbookModified?.toISOString() ?? null,
+    };
+  }),
+);
+
+export const cbsLastImportQueryOptions = () =>
+  queryOptions({
+    queryKey: qk.cbs.lastImport(),
+    queryFn: () => fetchCbsLastImport(),
+    // Changes only on a CBS re-import, like the catalog it describes.
+    staleTime: Infinity,
+  });
+
 export const projectCostCodesQueryOptions = (projectId: number) =>
   queryOptions({
     queryKey: qk.cbs.projectCostCodes(projectId),

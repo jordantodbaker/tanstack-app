@@ -29,9 +29,6 @@ export const cbsSelectableWhere = {
   ],
 } satisfies Prisma.CbsItemWhereInput;
 
-/** `cbsSelectableWhere` for raw SQL over "CbsItem". */
-export const cbsSelectableSql = Prisma.sql`lower(trim(coalesce("status", ''))) IN ('', 'active')`;
-
 /** A granted row, or an ancestor pulled in so the granted rows nest. */
 export type ProjectCostCodeRow = CbsWireRow & { context?: boolean };
 

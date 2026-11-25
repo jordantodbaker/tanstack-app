@@ -17,7 +17,6 @@ import { cbsLegacyTreeRow, withCbsLevels } from "~/lib/cbs-tree";
 import {
   cbsCatalogRows,
   cbsLegacyRows,
-  cbsSelectableSql,
   cbsSelectableWhere,
   projectCostCodeRows,
 } from "./cbs-rows.server";
@@ -32,35 +31,26 @@ const CbsItemsByL1FilteredSchema = z.object({
 
 /**
  * Resolve pasted CBS codes against the WHOLE catalog (not one discipline's
- * subset) so Excel paste can accept codes from any discipline. Matches each
- * input against a normalized display code OR cost code — hyphens and spaces
- * stripped, case-insensitive, active codes only — so "601-C0-0000-00-M", "601C0000000M", and
- * lowercased variants all resolve. Returns only the matched items.
+ * subset) so Excel paste can accept codes from any discipline. Matches a
+ * display code or a cost code, hyphens and spaces stripped, case-insensitive,
+ * active codes only — so "601-C0-0000-00-M", "601C0000000M", and lowercased
+ * variants all resolve. Returns only the matched items.
  */
 export const resolveCbsCodes = createServerFn({ method: "GET" })
   .inputValidator(StringArrParser)
   .handler(async ({ data }) => {
     await requireUser();
-    const normalized = [
-      ...new Set(
-        data
-          .map((c) => c.replace(/[-\s]/g, "").toLowerCase())
-          .filter((c) => c !== ""),
-      ),
-    ];
-    if (normalized.length === 0) return [];
-    const list = Prisma.join(normalized);
-    return prisma.$queryRaw<
-      { displayCode: string; costCode: string; name: string; uom: string }[]
-    >(Prisma.sql`
-      SELECT "displayCode", "costCode", "name", "uom"
-      FROM "CbsItem"
-      WHERE ${cbsSelectableSql}
-        AND (
-          lower(regexp_replace("displayCode", '[- ]', '', 'g')) IN (${list})
-          OR lower(regexp_replace("costCode", '[- ]', '', 'g')) IN (${list})
-        )
-    `);
+    // A cost code IS the display code without its dashes (the import derives
+    // one from the other), so stripping the input matches either form, on the
+    // cost code's unique index.
+    const costCodes = [
+      ...new Set(data.map((c) => c.replace(/[-\s]/g, "").toUpperCase())),
+    ].filter((c) => c !== "");
+    if (costCodes.length === 0) return [];
+    return prisma.cbsItem.findMany({
+      where: { AND: [cbsSelectableWhere, { costCode: { in: costCodes } }] },
+      select: { displayCode: true, costCode: true, name: true, uom: true },
+    });
   });
 
 export const cbsCodeResolveQueryOptions = (codes: string[]) =>

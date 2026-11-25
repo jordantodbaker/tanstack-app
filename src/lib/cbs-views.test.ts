@@ -19,6 +19,13 @@ describe("CBS_VIEWS", () => {
     ]);
   });
 
+  it("works out cost accounts once per catalog", () => {
+    expect(CBS_VIEWS.accounts.rows(ROWS)).toBe(CBS_VIEWS.accounts.rows(ROWS));
+    expect(CBS_VIEWS.accounts.rows([...ROWS])).not.toBe(
+      CBS_VIEWS.accounts.rows(ROWS),
+    );
+  });
+
   it("dictionary and project: every row they are given", () => {
     const all = ROWS.map((r) => r.displayCode);
     expect(listed("dictionary")).toEqual(all);

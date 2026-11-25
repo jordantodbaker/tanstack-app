@@ -168,6 +168,27 @@ const checkbox = (label: string) =>
   screen.getByRole("checkbox", { name: `Toggle ${label}` });
 
 describe("Setup page", () => {
+  it("does not load the catalog in a route loader", () => {
+    // A loader puts all ~5 MB of it in the HTML, and runs on nav-link hover.
+    expect(Route.options.loader).toBeUndefined();
+  });
+
+  it("shows a mask, not an empty tree, until the catalog is in", () => {
+    const qc = new QueryClient({
+      // Nothing is fetched, so the catalog stays pending.
+      defaultOptions: { queries: { retry: false, enabled: false } },
+    });
+    qc.setQueryData(allowedFefCbsItemIdsQueryOptions(1).queryKey, []);
+    const SetupPage = Route.options.component!;
+    render(
+      <QueryClientProvider client={qc}>
+        <SetupPage />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByText("Loading the CBS…")).toBeInTheDocument();
+    expect(screen.queryByText("No matches.")).toBeNull();
+  });
+
   it("never lists a retired code", () => {
     // Setup decides what a project may estimate against, so a retired account
     // must not be grantable at all.

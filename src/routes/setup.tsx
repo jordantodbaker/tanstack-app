@@ -45,13 +45,16 @@ export const Route = createFileRoute("/setup")({
       throw redirect({ to: "/changelog" });
     }
   },
-  loader: ({ context }) =>
-    context.queryClient.ensureQueryData(cbsCatalogQueryOptions()),
+  // No loader for the catalog: it would put ~5 MB of rows in the HTML of a
+  // direct load, and fetch them again on every first hover of the nav link.
   component: SetupPage,
 });
 
+const NO_ROWS: CbsTreeRow[] = [];
+
 function SetupPage() {
-  const { data: catalog = [] } = useQuery(cbsCatalogQueryOptions());
+  const catalogQuery = useQuery(cbsCatalogQueryOptions());
+  const catalog = catalogQuery.data ?? NO_ROWS;
   const { projectId } = useSelectedProject();
   // Setup decides which codes a project may estimate against, so a retired
   // account must not be grantable in the first place. Filtered here rather
@@ -92,6 +95,8 @@ function SetupPage() {
           projectId={projectId}
           tree={tree}
           items={items}
+          catalogPending={catalogQuery.isPending}
+          catalogError={catalogQuery.isError}
         />
       )}
     </main>
@@ -102,19 +107,30 @@ function CbsTreeEditorLoader({
   projectId,
   tree,
   items,
+  catalogPending,
+  catalogError,
 }: {
   projectId: number;
   tree: CbsTreeNode[];
+  catalogPending: boolean;
+  catalogError: boolean;
   /** The rows `tree` was built from — what the filter pickers offer values from. */
   items: CbsTreeRow[];
 }) {
   const allowedQuery = useQuery(allowedFefCbsItemIdsQueryOptions(projectId));
-  if (allowedQuery.isPending) {
-    return <div className="text-sm text-slate-500">Loading…</div>;
-  }
-  if (allowedQuery.isError) {
+  if (catalogError || allowedQuery.isError) {
     return (
-      <div className="text-sm text-red-600">Failed to load allowed items.</div>
+      <div className="text-sm text-red-600">
+        Failed to load {catalogError ? "the CBS" : "allowed items"}.
+      </div>
+    );
+  }
+  // Both at once, so neither waits on the other.
+  if (catalogPending || allowedQuery.isPending) {
+    return (
+      <div className="relative min-h-64">
+        <LoadMask label="Loading the CBS…" />
+      </div>
     );
   }
   return (

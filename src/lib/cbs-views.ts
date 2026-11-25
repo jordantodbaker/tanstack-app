@@ -81,6 +81,24 @@ export type CbsViewDef = {
   };
 };
 
+/**
+ * `cbsActiveRows`, remembered per input array: the Code Book asks for the same
+ * rows twice, for the section's count and for its tree. The array is the
+ * query cache's, which is replaced rather than mutated.
+ */
+const ACTIVE_ROWS = new WeakMap<object, unknown>();
+function activeRowsOnce<T extends ViewRow>(
+  items: T[],
+): (T & { context?: boolean })[] {
+  let rows = ACTIVE_ROWS.get(items) as
+    (T & { context?: boolean })[] | undefined;
+  if (!rows) {
+    rows = cbsActiveRows(items);
+    ACTIVE_ROWS.set(items, rows);
+  }
+  return rows;
+}
+
 const CATALOG = {
   sourceNote:
     "Source: the CBS Dictionary, in full — no project allow-list applied. Colors mirror the source workbook's outline levels.",
@@ -129,7 +147,7 @@ export const CBS_VIEWS: Record<CbsView, CbsViewDef> = {
     // The same rows as the Dictionary minus anything Inactive or Retired: the
     // list people pick codes from. Inactive parents of active rows stay,
     // muted, so the hierarchy holds.
-    rows: (items) => cbsActiveRows(items),
+    rows: activeRowsOnce,
     statusFilter: false,
     rowTypeFilter: false,
     legacyFilter: false,

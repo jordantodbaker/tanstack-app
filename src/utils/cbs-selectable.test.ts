@@ -4,12 +4,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * Every lookup that offers a code to pick leaves inactive ones out — the rule
  * Setup and the Project Cost Code List already apply.
  */
-const { findMany, queryRaw } = vi.hoisted(() => ({
-  findMany: vi.fn(),
-  queryRaw: vi.fn(),
-}));
+const { findMany } = vi.hoisted(() => ({ findMany: vi.fn() }));
 vi.mock("../server/db", () => ({
-  prisma: { cbsItem: { findMany }, $queryRaw: queryRaw },
+  prisma: { cbsItem: { findMany } },
 }));
 vi.mock("./users.server", () => ({
   adminHandler: (h: unknown) => h,
@@ -40,7 +37,6 @@ import { cbsSelectableWhere } from "./cbs-rows.server";
 beforeEach(() => {
   vi.clearAllMocks();
   findMany.mockResolvedValue([]);
-  queryRaw.mockResolvedValue([]);
 });
 
 const where = () => JSON.stringify(findMany.mock.calls.at(-1)![0].where);
@@ -63,7 +59,10 @@ describe("code lookups offer selectable codes only", () => {
   });
 
   it("pasted codes", async () => {
-    await resolveCbsCodes({ data: ["601-00-0000-00-L"] });
-    expect(queryRaw.mock.calls[0][0].sql).toContain("IN ('', 'active')");
+    await resolveCbsCodes({
+      data: ["601-c0-0000-00-m", "601C0000000M", " 602 00 0000 00 L ", "-"],
+    });
+    expect(where()).toContain(rule);
+    expect(where()).toContain('["601C0000000M","60200000000L"]');
   });
 });

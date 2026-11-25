@@ -24,11 +24,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # No lockfile is committed, so this resolves fresh. Runs `prisma generate`.
-      - run: npm install --no-audit --no-fund
+          cache: npm
+      # `npm ci`, not `npm install`: with no lockfile to follow, npm 10's resolver
+      # crashes on these dependencies. Also runs `prisma generate`.
+      - id: install
+        run: npm ci --no-audit --no-fund
       - run: npx tsc --noEmit
-      # The rest run even if an earlier check fails, so one push shows them all.
-      - if: ${{ !cancelled() }}
+      # The rest run even if an earlier check fails, so one push shows them all,
+      # but not after a failed install, where each would only say "not found".
+      - if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm test
-      - if: ${{ !cancelled() }}
+      - if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run check:client-leak

@@ -137,23 +137,8 @@ export const qk = {
     codeResolve: (codes: string[]) =>
       ["cbsCodeResolve", [...codes].sort()] as const,
     codeSearch: (query: string) => ["cbsCodeSearch", query] as const,
-    itemsByL1: (l1Values: string[]) => ["cbsItemsByL1", l1Values] as const,
     itemsByL1EndsWith: (suffixes: string[]) =>
       ["cbsItemsByL1EndsWith", suffixes] as const,
-    itemsByL1PagedAll: () => ["cbsItemsByL1Paged"] as const,
-    itemsByL1Paged: (input: {
-      l1Values: string[];
-      page: number;
-      pageSize: number;
-      projectId: number | null;
-    }) =>
-      [
-        "cbsItemsByL1Paged",
-        input.l1Values,
-        input.page,
-        input.pageSize,
-        input.projectId,
-      ] as const,
     /** The original rows a project has been granted in Setup. */
     projectCostCodes: (projectId: number) =>
       ["cbsProjectCostCodes", projectId] as const,

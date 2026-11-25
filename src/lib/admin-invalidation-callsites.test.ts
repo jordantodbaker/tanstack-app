@@ -143,7 +143,7 @@ describe("admin fan-out vs the query-key registry", () => {
     const roots = qkRoots();
     expect(roots.has("projects")).toBe(true); // top-level function
     expect(roots.has("areasByProject")).toBe(true); // nested one level
-    expect(roots.has("cbsItemsByL1Paged")).toBe(true); // nested, object arg
+    expect(roots.has("cbsItemsByL1Filtered")).toBe(true); // nested, object arg
     expect(roots.has("changeLog")).toBe(true); // built by entityKeys()
     expect(roots.has("definitelyNotAKey")).toBe(false);
   });

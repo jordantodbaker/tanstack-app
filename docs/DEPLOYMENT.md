@@ -588,7 +588,7 @@ When a new master arrives:
    duplicates you didn't expect.
 3. `DATABASE_URL=<env-url> npm run cbs:import` — upserts by cost code so
    existing rows keep their ids and every project's Setup allow-list
-   survives. Codes that no longer exist are deleted (and drop out of the
+   survives. One transaction, so a failed run changes nothing. Codes that no longer exist are deleted (and drop out of the
    allow-lists). Brand-new codes, including the typed lines `cbs:expand`
    produces for a newly flagged account, are NOT auto-added to any project —
    grant them on the Setup page.

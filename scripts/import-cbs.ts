@@ -120,69 +120,74 @@ async function main() {
     return;
   }
 
-  if (toDelete.length) {
-    const del = await prisma.cbsItem.deleteMany({
-      where: { costCode: { in: toDelete } },
-    });
-    console.log(`Deleted ${del.count} stale CbsItems.`);
-  }
+  // All or nothing: a failure partway — including writing the record at the
+  // end — leaves the catalog and every allow-list as they were. The timeout is
+  // explicit because Prisma's 5 s default is easy to pass on a remote pooler.
+  const finalCount = await prisma.$transaction(
+    async (tx) => {
+      if (toDelete.length) {
+        const del = await tx.cbsItem.deleteMany({
+          where: { costCode: { in: toDelete } },
+        });
+        console.log(`Deleted ${del.count} stale CbsItems.`);
+      }
 
-  for (let i = 0; i < toCreate.length; i += 500) {
-    await prisma.cbsItem.createMany({ data: toCreate.slice(i, i + 500) });
-  }
-  if (toCreate.length) console.log(`Created ${toCreate.length} new CbsItems.`);
+      for (let i = 0; i < toCreate.length; i += 500) {
+        await tx.cbsItem.createMany({ data: toCreate.slice(i, i + 500) });
+      }
+      if (toCreate.length)
+        console.log(`Created ${toCreate.length} new CbsItems.`);
 
-  // Update in place — keeps the row id, so allow-list join rows survive.
-  // One statement per batch, outside any interactive transaction (Prisma's
-  // 5 s limit is easy to hit against a remote pooler). Atomicity across
-  // batches isn't needed: each row is keyed by costCode and the change
-  // detection above makes a re-run after a partial failure pick up exactly
-  // where it left off.
-  const sql = cbsBulkUpdateSql();
-  for (let i = 0; i < toUpdate.length; i += CHUNK) {
-    const chunk = toUpdate
-      .slice(i, i + CHUNK)
-      .map(({ row }) =>
-        Object.fromEntries(
-          ["costCode", ...CBS_IMPORT_FIELDS].map((f) => [
-            f,
-            row[f as keyof CbsDictionaryRow],
-          ]),
-        ),
+      // Update in place — keeps the row id, so allow-list join rows survive.
+      // One statement per batch.
+      const sql = cbsBulkUpdateSql();
+      for (let i = 0; i < toUpdate.length; i += CHUNK) {
+        const chunk = toUpdate
+          .slice(i, i + CHUNK)
+          .map(({ row }) =>
+            Object.fromEntries(
+              ["costCode", ...CBS_IMPORT_FIELDS].map((f) => [
+                f,
+                row[f as keyof CbsDictionaryRow],
+              ]),
+            ),
+          );
+        const n = await tx.$executeRawUnsafe(sql, JSON.stringify(chunk));
+        if (n !== chunk.length) {
+          throw new Error(
+            `Bulk update wrote ${n} of ${chunk.length} rows — a costCode went missing mid-import.`,
+          );
+        }
+        console.log(
+          `  updated ${Math.min(i + CHUNK, toUpdate.length)}/${toUpdate.length}…`,
+        );
+      }
+      console.log(
+        `Updated ${toUpdate.length} changed CbsItems (${unchanged} unchanged).`,
       );
-    const n = await prisma.$executeRawUnsafe(sql, JSON.stringify(chunk));
-    if (n !== chunk.length) {
-      throw new Error(
-        `Bulk update wrote ${n} of ${chunk.length} rows — a costCode went missing mid-import.`,
+
+      const finalCount = await tx.cbsItem.count();
+      console.log(`\nFinal CbsItem count: ${finalCount}`);
+
+      // Leave a record: the Code Book reads the latest to say when the CBS last
+      // changed. In the same transaction as the rows, so the two cannot disagree.
+      const record = await tx.cbsImport.create({
+        data: {
+          workbookModified: statSync(workbookPath ?? CBS_WORKBOOK_PATH).mtime,
+          workbookRows: items.length,
+          created: toCreate.length,
+          updated: toUpdate.length,
+          unchanged,
+          deleted: toDelete.length,
+          finalCount,
+        },
+      });
+      console.log(
+        `Recorded as CBS import #${record.id} at ${record.importedAt.toISOString()}.`,
       );
-    }
-    console.log(
-      `  updated ${Math.min(i + CHUNK, toUpdate.length)}/${toUpdate.length}…`,
-    );
-  }
-  console.log(
-    `Updated ${toUpdate.length} changed CbsItems (${unchanged} unchanged).`,
-  );
-
-  const finalCount = await prisma.cbsItem.count();
-  console.log(`\nFinal CbsItem count: ${finalCount}`);
-
-  // Leave a record: the Code Book reads the latest to say when the CBS last
-  // changed. Written after the rows, so a run that failed halfway is not
-  // recorded as an import — the re-run that finishes it is.
-  const record = await prisma.cbsImport.create({
-    data: {
-      workbookModified: statSync(workbookPath ?? CBS_WORKBOOK_PATH).mtime,
-      workbookRows: items.length,
-      created: toCreate.length,
-      updated: toUpdate.length,
-      unchanged,
-      deleted: toDelete.length,
-      finalCount,
+      return finalCount;
     },
-  });
-  console.log(
-    `Recorded as CBS import #${record.id} at ${record.importedAt.toISOString()}.`,
+    { maxWait: 20_000, timeout: 300_000 },
   );
 
   const projs = await prisma.project.findMany({

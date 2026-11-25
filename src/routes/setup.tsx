@@ -159,7 +159,6 @@ function CbsTreeEditor({
         data: { projectId, addIds: vars.addIds, removeIds: vars.removeIds },
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: qk.cbs.itemsByL1PagedAll() });
       queryClient.invalidateQueries({
         queryKey: qk.cbs.itemsByL1FilteredAll(),
       });

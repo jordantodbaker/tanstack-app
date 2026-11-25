@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # `prisma generate` and module load read this; nothing here connects.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # No lockfile is committed, so this resolves fresh. Runs `prisma generate`.
+      - run: npm install --no-audit --no-fund
+      - run: npx tsc --noEmit
+      # The rest run even if an earlier check fails, so one push shows them all.
+      - if: ${{ !cancelled() }}
+        run: npm test
+      - if: ${{ !cancelled() }}
+        run: npm run check:client-leak

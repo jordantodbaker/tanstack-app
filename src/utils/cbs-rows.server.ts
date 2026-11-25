@@ -1,3 +1,4 @@
+import { Prisma } from "../generated/prisma/client";
 import { prisma } from "../server/db";
 import {
   cbsAncestorCodes,
@@ -13,6 +14,23 @@ import { cbsTreeRowSelect, type CbsWireRow } from "./cbs";
  * promise is that the file matches the screen — so the rule lives here once
  * rather than being copied into each caller.
  */
+
+/**
+ * The codes someone may newly pick: `cbsIsActive` as a query. What every code
+ * picker, search and paste lookup filters on, matching Setup and the Project
+ * Cost Code List. A row that already carries an inactive code keeps it; those
+ * show their stored code and name, not a lookup.
+ */
+export const cbsSelectableWhere = {
+  OR: [
+    { status: null },
+    { status: "" },
+    { status: { equals: "active", mode: "insensitive" } },
+  ],
+} satisfies Prisma.CbsItemWhereInput;
+
+/** `cbsSelectableWhere` for raw SQL over "CbsItem". */
+export const cbsSelectableSql = Prisma.sql`lower(trim(coalesce("status", ''))) IN ('', 'active')`;
 
 /** A granted row, or an ancestor pulled in so the granted rows nest. */
 export type ProjectCostCodeRow = CbsWireRow & { context?: boolean };

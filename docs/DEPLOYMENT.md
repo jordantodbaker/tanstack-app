@@ -568,7 +568,11 @@ type is the last Display Code segment. **Columns are matched by header name,
 never by position**, because columns have been inserted and removed before, and
 anything reading by column letter would have written into the wrong cell.
 
-When a new master arrives:
+When a new master arrives, `npm run cbs:release` does steps 1 to 4 below on
+both databases: it expands, runs the drift guards, shows every plan (with the
+project grants a deletion removes), and asks for each target by name before
+writing. `-- --dry-run` stops after the plans. It reads `CBS_DB_LOCAL` and
+`CBS_DB_STAGE` from `.env.cbs`, never `DATABASE_URL`. The steps by hand:
 
 1. Replace `prisma/data/CBS.master.xlsx` (same sheet/column layout), then
    `npm run cbs:expand -- --dry-run` to see the plan and `npm run cbs:expand`

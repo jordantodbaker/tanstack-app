@@ -26,6 +26,7 @@
 // a handful of round trips rather than one per row.
 //
 // Run:  npx tsx scripts/import-cbs.ts [--dry-run] [--workbook <path>]
+// With --dry-run, --expect-current fails unless there is nothing to do.
 //
 // --workbook reads a different expanded workbook than prisma/data/CBS.xlsx,
 // for when that file is locked (open in Excel) and `cbs:expand -- --out` had
@@ -116,7 +117,36 @@ async function main() {
         .join("; ");
       console.log(`Changed rows (first 10): ${sample}`);
     }
+    // What deleting the stale codes takes off each project's allow-list.
+    const losing = toDelete.length
+      ? await prisma.project.findMany({
+          where: {
+            allowedFefCbsItems: { some: { costCode: { in: toDelete } } },
+          },
+          orderBy: { id: "asc" },
+          select: {
+            name: true,
+            allowedFefCbsItems: {
+              where: { costCode: { in: toDelete } },
+              orderBy: { displayCode: "asc" },
+              select: { displayCode: true },
+            },
+          },
+        })
+      : [];
+    for (const p of losing) {
+      const codes = p.allowedFefCbsItems.map((c) => c.displayCode);
+      console.log(
+        `Grants removed from ${p.name}: ${codes.length} (${codes.slice(0, 20).join(", ")})`,
+      );
+    }
     console.log("\n--dry-run: no changes written.");
+    if (
+      process.argv.includes("--expect-current") &&
+      toCreate.length + toUpdate.length + toDelete.length > 0
+    ) {
+      throw new Error("The database does not match the workbook.");
+    }
     return;
   }
 

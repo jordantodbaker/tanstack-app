@@ -33,6 +33,9 @@ take-off page per discipline.
 upstream-expanded workbooks; the master is condensed now, and `cbs:expand`
 validates it and generates every code itself.
 
+`npm run cbs:release` runs them all in order, on each database in `.env.cbs`,
+asking before each write. Options are at the top of `cbs-release.ts`.
+
 ## Data migrations
 
 | Script                         | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |

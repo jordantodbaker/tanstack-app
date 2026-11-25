@@ -19,6 +19,31 @@ export function isCbsView(v: unknown): v is CbsView {
   return (CBS_VIEW_KEYS as readonly unknown[]).includes(v);
 }
 
+/**
+ * Which codes the Dictionary lists: the CBS, the retired phase codes from
+ * before it, or one after the other. A choice of list rather than a filter on
+ * one, so Clear filters leaves it alone.
+ */
+export const CBS_CODE_SETS = ["current", "legacy", "both"] as const;
+export type CbsCodeSet = (typeof CBS_CODE_SETS)[number];
+
+export const CBS_CODE_SET_LABELS: Record<
+  CbsCodeSet,
+  { label: string; title: string }
+> = {
+  current: { label: "Current", title: "The CBS, without the legacy codes" },
+  legacy: {
+    label: "Legacy",
+    title:
+      "Only the retired phase codes from before this CBS. Reference only — they cannot be granted or booked to.",
+  },
+  both: { label: "Both", title: "The CBS, then the legacy codes after it" },
+};
+
+export function isCbsCodeSet(v: unknown): v is CbsCodeSet {
+  return (CBS_CODE_SETS as readonly unknown[]).includes(v);
+}
+
 /** A row as far as choosing rows for a view goes. */
 type ViewRow = { displayCode: string; status: string | null };
 
@@ -41,7 +66,7 @@ export type CbsViewDef = {
   statusFilter: boolean;
   /** Offer All / Original / Generated. */
   rowTypeFilter: boolean;
-  /** Offer "Show legacy", the retired pre-CBS phase codes. */
+  /** Offer Current / Legacy / Both — see `CBS_CODE_SETS`. */
   legacyFilter: boolean;
   /** The grayed-out parents: what the toggle that hides them says, and what
    *  the export's Scope line adds when they are hidden. */

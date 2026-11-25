@@ -135,19 +135,30 @@ describe("legacy codes", () => {
     );
   };
 
-  it("hides them until Show legacy is ticked, and only in the Dictionary", () => {
+  const pick = (name: string) =>
+    fireEvent.click(screen.getByRole("radio", { name }));
+  // Cost Accounts does not offer the control, so there is only ever one.
+  const trees = () => screen.getAllByRole("tree");
+
+  it("lists current codes, then only legacy, then both, in the Dictionary alone", () => {
     renderWithLegacy();
     expect(screen.queryByText("Old Indirects")).toBeNull();
-    // One toggle: Cost Accounts does not offer it.
-    fireEvent.click(screen.getByRole("button", { name: "Show legacy" }));
-    const [accounts, dictionary] = screen.getAllByRole("tree");
-    expect(within(dictionary).getByText("Old Indirects")).toBeInTheDocument();
-    expect(within(accounts).queryByText("Old Indirects")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Show legacy" }));
+
+    pick("Legacy");
+    expect(within(trees()[1]).getByText("Old Indirects")).toBeInTheDocument();
+    expect(within(trees()[1]).queryByText("Civil")).toBeNull();
+    expect(within(trees()[0]).getByText("Civil")).toBeInTheDocument();
+    expect(within(trees()[0]).queryByText("Old Indirects")).toBeNull();
+
+    pick("Both");
+    expect(within(trees()[1]).getByText("Old Indirects")).toBeInTheDocument();
+    expect(within(trees()[1]).getByText("Civil")).toBeInTheDocument();
+
+    pick("Current");
     expect(screen.queryByText("Old Indirects")).toBeNull();
   });
 
-  it("stay hidden under the Retired filter while the toggle is off", () => {
+  it("stay hidden under the Retired filter while on Current", () => {
     renderWithLegacy();
     fireEvent.click(screen.getByRole("button", { name: /^Retired/ }));
     expect(screen.queryByText("Old Indirects")).toBeNull();
@@ -155,10 +166,25 @@ describe("legacy codes", () => {
 
   it("are shown on arrival by a link to one", () => {
     renderWithLegacy("00XXXXX");
-    expect(screen.getByRole("button", { name: "Show legacy" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(screen.getByRole("radio", { name: "Both" })).toBeChecked();
+  });
+
+  it("closes the detail of a row the new list does not have", () => {
+    renderWithLegacy();
+    fireEvent.click(within(trees()[1]).getByText("Civil"));
+    expect(screen.getByLabelText("Close details")).toBeInTheDocument();
+    pick("Legacy");
+    expect(screen.queryByLabelText("Close details")).toBeNull();
+  });
+
+  it("moves with the arrow keys", () => {
+    renderWithLegacy();
+    const group = screen.getByRole("radiogroup", {
+      name: "Which codes to list",
+    });
+    fireEvent.keyDown(group, { key: "ArrowRight" });
+    expect(screen.getByRole("radio", { name: "Legacy" })).toHaveFocus();
+    expect(screen.getByRole("radio", { name: "Legacy" })).toBeChecked();
   });
 });
 

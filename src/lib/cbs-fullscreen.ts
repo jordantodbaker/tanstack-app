@@ -13,7 +13,12 @@ import {
   type CbsStatusKey,
   type CbsValueFilterKey,
 } from "./cbs-tree";
-import { isCbsView, type CbsView } from "./cbs-views";
+import {
+  isCbsCodeSet,
+  isCbsView,
+  type CbsCodeSet,
+  type CbsView,
+} from "./cbs-views";
 
 /**
  * The full-screen CBS tab: one route, `/cbs-fullscreen`, that renders a CBS
@@ -47,8 +52,8 @@ export type CbsFullscreenSearch = {
   rowType?: CbsRowTypeFilter;
   /** "Hide … parents". */
   hideContext?: boolean;
-  /** "Show legacy" (Dictionary only). */
-  legacy?: boolean;
+  /** Legacy or Both (Dictionary only); Current is left out. */
+  codes?: CbsCodeSet;
   /** The selected row — opened as the `?code=` deep link is. */
   code?: string;
 } & Partial<Record<CbsValueFilterKey, string[]>>;
@@ -102,7 +107,12 @@ export function parseCbsFullscreenSearch(
     if (picked) out[picker.key] = picked;
   }
   if (search.hideContext === true) out.hideContext = true;
-  if (search.legacy === true) out.legacy = true;
+  if (isCbsCodeSet(search.codes) && search.codes !== "current") {
+    out.codes = search.codes;
+  } else if (search.legacy === true) {
+    // A link from before the three-way choice, when this was "Show legacy".
+    out.codes = "both";
+  }
   const code = text(search.code);
   if (code !== undefined) out.code = code;
   return out;
@@ -117,7 +127,7 @@ export function cbsFullscreenSearch(
   state: CbsRowFilterState,
   extras: {
     hideContext?: boolean;
-    legacy?: boolean;
+    codeSet?: CbsCodeSet;
     code?: string | null;
   } = {},
 ): CbsFullscreenSearch {
@@ -137,7 +147,9 @@ export function cbsFullscreenSearch(
     if (picked.length > 0) out[picker.key] = [...picked];
   }
   if (extras.hideContext) out.hideContext = true;
-  if (extras.legacy) out.legacy = true;
+  if (extras.codeSet && extras.codeSet !== "current") {
+    out.codes = extras.codeSet;
+  }
   if (extras.code) out.code = extras.code;
   return out;
 }

@@ -12,7 +12,12 @@ import {
   type CbsTreeItem,
 } from "~/lib/cbs-tree";
 import { cbsProjectTitle, flattenCbsForExport } from "~/lib/cbs-export";
-import { CBS_VIEWS, CBS_VIEW_KEYS, type CbsView } from "~/lib/cbs-views";
+import {
+  CBS_CODE_SETS,
+  CBS_VIEWS,
+  CBS_VIEW_KEYS,
+  type CbsView,
+} from "~/lib/cbs-views";
 import {
   cbsCatalogRows,
   cbsLegacyRows,
@@ -45,8 +50,8 @@ const ExportInput = z.object({
    * "Hide ungranted parents" toggle. Only the project view has any.
    */
   hideContext: z.boolean().default(false),
-  /** Mirrors the Dictionary's "Show legacy"; ignored by the other views. */
-  showLegacy: z.boolean().default(false),
+  /** The Dictionary's Current / Legacy / Both; ignored by the other views. */
+  codeSet: z.enum(CBS_CODE_SETS).default("current"),
   filter: z
     .object({
       query: z.string().max(200).default(""),
@@ -135,13 +140,15 @@ async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
     source = await cbsCatalogRows();
   }
   let rows = def.rows(source);
-  const withLegacy = def.legacyFilter && input.showLegacy;
+  const codeSet = def.legacyFilter ? input.codeSet : "current";
+  if (codeSet === "legacy") rows = [];
   const hidden = input.hideContext && rows.some((r) => r.context);
   if (hidden) rows = rows.filter((r) => !r.context);
   const scope = [
     def.export.scope,
     hidden && def.context.hiddenNote,
-    withLegacy && "legacy codes included",
+    codeSet === "both" && "legacy codes included",
+    codeSet === "legacy" && "legacy codes only",
   ]
     .filter(Boolean)
     .join(" — ");
@@ -158,7 +165,9 @@ async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
 
   const tree = buildCbsTree<CbsTreeItem>([
     ...rows.map(withCbsLevels),
-    ...(withLegacy ? (await cbsLegacyRows()).map(cbsLegacyTreeRow) : []),
+    ...(codeSet !== "current"
+      ? (await cbsLegacyRows()).map(cbsLegacyTreeRow)
+      : []),
   ]);
   // Every view lists cost lines, so a row is judged on its own cost type —
   // mirrored from the page, or the file stops matching the screen.

@@ -166,11 +166,15 @@ describe("which rows each catalog view exports", () => {
     const data = { view: "dictionary" as const, projectId: null };
     await exportCbsCatalog({ data });
     expect(written().names).not.toContain("Old");
-    await exportCbsCatalog({ data: { ...data, showLegacy: true } });
+    await exportCbsCatalog({ data: { ...data, codeSet: "legacy" } });
+    expect(written().names).toEqual(["Old"]);
+    expect(written().meta.scope).toContain("legacy codes only");
+    await exportCbsCatalog({ data: { ...data, codeSet: "both" } });
+    expect(written().names).toHaveLength(CATALOG.length + 1);
     expect(written().names).toContain("Old");
     expect(written().meta.scope).toContain("legacy codes included");
     await exportCbsCatalog({
-      data: { view: "accounts", projectId: null, showLegacy: true },
+      data: { view: "accounts", projectId: null, codeSet: "legacy" },
     });
     expect(written().names).not.toContain("Old");
   });

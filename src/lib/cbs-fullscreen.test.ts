@@ -142,3 +142,22 @@ describe("isCbsFullscreenPath", () => {
     expect(isCbsFullscreenPath("/project-cost-codes")).toBe(false);
   });
 });
+
+describe("the code set in the URL", () => {
+  const state = cbsRowFilterStateFromSearch({ view: "dictionary" });
+
+  it("round-trips, leaving Current out", () => {
+    for (const codeSet of ["legacy", "both"] as const) {
+      const search = cbsFullscreenSearch("dictionary", state, { codeSet });
+      expect(parseCbsFullscreenSearch({ ...search }).codes).toBe(codeSet);
+    }
+    expect(
+      cbsFullscreenSearch("dictionary", state, { codeSet: "current" }),
+    ).toEqual({ view: "dictionary" });
+  });
+
+  it("reads an older link's legacy flag as Both, and drops nonsense", () => {
+    expect(parseCbsFullscreenSearch({ legacy: true }).codes).toBe("both");
+    expect(parseCbsFullscreenSearch({ codes: "all" }).codes).toBeUndefined();
+  });
+});

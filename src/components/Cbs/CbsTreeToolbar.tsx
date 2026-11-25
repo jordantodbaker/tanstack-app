@@ -23,6 +23,11 @@ import {
   type CbsCostTypeKey,
   type CbsStatusKey,
 } from "~/lib/cbs-tree";
+import {
+  CBS_CODE_SETS,
+  CBS_CODE_SET_LABELS,
+  type CbsCodeSet,
+} from "~/lib/cbs-views";
 
 /** "(none)" for the blank cell. */
 const valueLabel = ({ value }: Pick<CbsValueOption, "value">) =>
@@ -172,6 +177,69 @@ function RowTypeToggle({
   );
 }
 
+/**
+ * Current / Legacy / Both, as one joined control: the others narrow a list,
+ * this one says which list, so it comes first and reads as a single choice.
+ * The arrow keys move it, as in any radio group.
+ */
+function CodeSetControl({
+  value,
+  onChange,
+}: {
+  value: CbsCodeSet;
+  onChange: (next: CbsCodeSet) => void;
+}) {
+  const move = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const step =
+      e.key === "ArrowRight" || e.key === "ArrowDown"
+        ? 1
+        : e.key === "ArrowLeft" || e.key === "ArrowUp"
+          ? -1
+          : 0;
+    if (step === 0) return;
+    e.preventDefault();
+    const n = CBS_CODE_SETS.length;
+    const next = (CBS_CODE_SETS.indexOf(value) + step + n) % n;
+    onChange(CBS_CODE_SETS[next]);
+    e.currentTarget
+      .querySelectorAll<HTMLElement>("[role=radio]")
+      [next]?.focus();
+  };
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-slate-500">Codes:</span>
+      <div
+        role="radiogroup"
+        aria-label="Which codes to list"
+        onKeyDown={move}
+        className="inline-flex rounded-md border border-slate-300 bg-slate-100 p-px"
+      >
+        {CBS_CODE_SETS.map((key) => {
+          const on = key === value;
+          return (
+            <button
+              key={key}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              tabIndex={on ? 0 : -1}
+              onClick={() => onChange(key)}
+              title={CBS_CODE_SET_LABELS[key].title}
+              className={`cursor-pointer rounded-sm px-2.5 py-0.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:outline-none ${
+                on
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-slate-600 hover:bg-white hover:text-slate-900"
+              }`}
+            >
+              {CBS_CODE_SET_LABELS[key].label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /** A labeled row of on/off buttons — the cost types, the statuses. */
 function ToggleGroup<K extends string>({
   label,
@@ -274,16 +342,16 @@ export function CbsTreeToolbar({
   onRowTypeChange,
   filter,
   onClearFilters,
-  showLegacy = false,
-  onToggleLegacy,
+  codeSet = "current",
+  onCodeSetChange,
   children,
 }: CbsTreeFilterControls & {
   placeholder?: string;
   onExpandAll: () => void;
   onCollapseAll: () => void;
-  /** Whether legacy codes are listed. Omit the handler to leave it out. */
-  showLegacy?: boolean;
-  onToggleLegacy?: () => void;
+  /** Current / Legacy / Both. Omit the handler to leave it out. */
+  codeSet?: CbsCodeSet;
+  onCodeSetChange?: (next: CbsCodeSet) => void;
   children?: React.ReactNode;
 }) {
   // A picker that belongs to a cost type (Material Type to Materials) is
@@ -318,6 +386,9 @@ export function CbsTreeToolbar({
   return (
     <div className="mb-3 flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        {onCodeSetChange && (
+          <CodeSetControl value={codeSet} onChange={onCodeSetChange} />
+        )}
         {pickers("before-cost-types")}
         {onToggleCostType && (
           <ToggleGroup
@@ -347,18 +418,6 @@ export function CbsTreeToolbar({
         )}
         {onRowTypeChange && (
           <RowTypeToggle value={rowType} onChange={onRowTypeChange} />
-        )}
-        {onToggleLegacy && (
-          <ToggleGroup
-            label="Legacy:"
-            ariaLabel="Legacy codes"
-            options={[{ key: "legacy", label: "Show legacy" }]}
-            on={{ legacy: showLegacy }}
-            onToggle={onToggleLegacy}
-            title={() =>
-              "List the retired phase codes from before this CBS, after the CBS itself. Reference only — they cannot be granted or booked to."
-            }
-          />
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2">

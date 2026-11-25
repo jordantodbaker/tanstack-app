@@ -4,7 +4,7 @@ import { Button } from "~/components/ui/button";
 import { useXlsxExport } from "~/lib/use-xlsx-export";
 import { useSelectedProject } from "~/lib/selected-project";
 import { cbsExporterFor } from "~/utils/cbsExport";
-import type { CbsView } from "~/lib/cbs-views";
+import type { CbsCodeSet, CbsView } from "~/lib/cbs-views";
 import type { CbsRowFilter } from "~/lib/cbs-tree";
 
 /**
@@ -19,15 +19,15 @@ export function ExportCbsXlsxButton({
   view,
   filter,
   hideContext = false,
-  showLegacy = false,
+  codeSet = "current",
   disabled,
 }: {
   view: CbsView;
   filter: CbsRowFilter;
   /** Mirrors the page's "Hide ungranted parents" toggle. */
   hideContext?: boolean;
-  /** Mirrors the Dictionary's "Show legacy" toggle. */
-  showLegacy?: boolean;
+  /** Mirrors the Dictionary's Current / Legacy / Both. */
+  codeSet?: CbsCodeSet;
   disabled?: boolean;
 }) {
   // The selected project scopes the project view's rows, and labels the
@@ -39,7 +39,7 @@ export function ExportCbsXlsxButton({
   const { busy, failed, start } = useXlsxExport(
     () =>
       cbsExporterFor(view)({
-        data: { view, projectId, filter, hideContext, showLegacy },
+        data: { view, projectId, filter, hideContext, codeSet },
       }),
     { export: "cbs-tree", view, projectId },
   );

@@ -363,9 +363,10 @@ this note. Below it, two sections:
 - **CBS Dictionary** — every row, each cost type on its own line, **Active**,
   **Inactive** and **Retired** alike, with the **Status** and **Row type**
   filters to narrow them. This is the one view that hides nothing, so a code you
-  cannot find anywhere else is findable here. Press **Show legacy** to list the
-  retired phase codes from before this CBS as well, after the CBS itself. They
-  are hidden by default and appear nowhere else in the app.
+  cannot find anywhere else is findable here. **Codes** chooses the
+  list: **Current** (the CBS, where it starts), **Legacy** (only the retired
+  phase codes from before this CBS) or **Both**. Legacy codes appear nowhere
+  else in the app.
 
 Both sections filter the way every other CBS tree does; the Dictionary simply
 adds Status and Row type. Each section's **Export Excel** follows its own

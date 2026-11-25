@@ -12,7 +12,7 @@ import {
   type CbsTreeNode,
 } from "~/lib/cbs-tree";
 import { cbsFullscreenHref, cbsFullscreenSearch } from "~/lib/cbs-fullscreen";
-import { CBS_VIEWS, type CbsView } from "~/lib/cbs-views";
+import { CBS_VIEWS, type CbsCodeSet, type CbsView } from "~/lib/cbs-views";
 import {
   CbsLevelLegend,
   CbsTreePanel,
@@ -156,7 +156,7 @@ export function CbsDictionaryBrowser({
   view,
   items: sourceItems,
   focusCode = null,
-  initialShowLegacy = false,
+  initialCodeSet = "current",
   fill = false,
   initialFilter,
   initialHideContext = false,
@@ -175,10 +175,10 @@ export function CbsDictionaryBrowser({
   /** Start with "Hide … parents" ticked. */
   initialHideContext?: boolean;
   /**
-   * Start with "Show legacy" ticked. A `?code=` link to a legacy code does
-   * too, or there would be no row to land on.
+   * Which codes to start on. A `?code=` link to a legacy code starts on Both
+   * instead of Current, or there would be no row to land on.
    */
-  initialShowLegacy?: boolean;
+  initialCodeSet?: CbsCodeSet;
   /**
    * A display code to open on arrival — the `?code=` deep link. Its ancestors
    * are expanded, the row is selected so the detail panel fills, and the list
@@ -192,19 +192,23 @@ export function CbsDictionaryBrowser({
     () => def.rows(sourceItems),
     [def, sourceItems],
   );
-  const [legacyTicked, setLegacyTicked] = React.useState(
-    () =>
-      initialShowLegacy || (focusCode !== null && isCbsLegacyCode(focusCode)),
+  const [chosenSet, setChosenSet] = React.useState<CbsCodeSet>(() =>
+    initialCodeSet === "current" &&
+    focusCode !== null &&
+    isCbsLegacyCode(focusCode)
+      ? "both"
+      : initialCodeSet,
   );
-  const showLegacy = legacyFilter && legacyTicked;
+  const codeSet = legacyFilter ? chosenSet : "current";
+  const showLegacy = codeSet !== "current";
   const legacy = useQuery({ ...cbsLegacyQueryOptions(), enabled: showLegacy });
-  const items = React.useMemo(
-    () =>
-      showLegacy && legacy.data
-        ? [...catalogItems, ...legacy.data]
-        : catalogItems,
-    [catalogItems, showLegacy, legacy.data],
-  );
+  const items = React.useMemo(() => {
+    if (codeSet === "current") return catalogItems;
+    const legacyItems = legacy.data ?? [];
+    return codeSet === "legacy"
+      ? legacyItems
+      : [...catalogItems, ...legacyItems];
+  }, [catalogItems, codeSet, legacy.data]);
 
   // Context rows are ancestors the project was never granted, carried in so
   // the codes under them nest correctly. Hiding them is a view choice, so it
@@ -297,13 +301,18 @@ export function CbsDictionaryBrowser({
         {...controls}
         onExpandAll={expandAll}
         onCollapseAll={collapseAll}
-        showLegacy={legacyTicked}
-        onToggleLegacy={
+        codeSet={codeSet}
+        onCodeSetChange={
           legacyFilter
-            ? () => {
-                setLegacyTicked(!legacyTicked);
-                // Its row is about to leave the tree.
-                if (legacyTicked && selected?.item.legacy) setSelected(null);
+            ? (next) => {
+                setChosenSet(next);
+                // Close the detail of a row that is leaving the tree.
+                if (
+                  selected &&
+                  next === (selected.item.legacy ? "current" : "legacy")
+                ) {
+                  setSelected(null);
+                }
               }
             : undefined
         }
@@ -334,7 +343,7 @@ export function CbsDictionaryBrowser({
           view={view}
           filter={filter}
           hideContext={hideContext && hasContext}
-          showLegacy={showLegacy}
+          codeSet={codeSet}
           disabled={items.length === 0}
         />
         {/* A plain link, not a navigation: the new tab must start from the
@@ -352,7 +361,7 @@ export function CbsDictionaryBrowser({
               href={cbsFullscreenHref(
                 cbsFullscreenSearch(view, state, {
                   hideContext: hideContext && hasContext,
-                  legacy: showLegacy,
+                  codeSet,
                   code: selected?.item.displayCode ?? null,
                 }),
               )}
@@ -382,7 +391,13 @@ export function CbsDictionaryBrowser({
           onToggle={toggle}
           onSelect={setSelected}
           emptyMessage={
-            filtering ? "No rows match this filter." : def.emptyMessage
+            showLegacy && legacy.isPending
+              ? "Loading legacy codes…"
+              : showLegacy && legacy.isError
+                ? "Failed to load the legacy codes."
+                : filtering
+                  ? `No ${codeSet === "legacy" ? "legacy codes" : "rows"} match this filter.`
+                  : def.emptyMessage
           }
           emptyAction={
             filtering && (

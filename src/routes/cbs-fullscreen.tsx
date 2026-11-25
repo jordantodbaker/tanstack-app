@@ -71,7 +71,7 @@ export function CbsFullscreenPage({ search }: { search: CbsFullscreenSearch }) {
     focusCode: search.code ?? null,
     initialFilter,
     initialHideContext,
-    initialShowLegacy: search.legacy === true,
+    initialCodeSet: search.codes,
   };
 
   return (
@@ -101,7 +101,7 @@ export function CbsFullscreenPage({ search }: { search: CbsFullscreenSearch }) {
 /** What the URL asked for, as the browser takes it. */
 type ViewProps = Pick<
   React.ComponentProps<typeof CbsDictionaryBrowser>,
-  "focusCode" | "initialFilter" | "initialHideContext" | "initialShowLegacy"
+  "focusCode" | "initialFilter" | "initialHideContext" | "initialCodeSet"
 >;
 
 /** The selected project's cost codes — the Project Cost Code List's rows. */

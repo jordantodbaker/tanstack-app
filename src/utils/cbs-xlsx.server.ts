@@ -1,11 +1,10 @@
 import ExcelJS from "exceljs";
 import {
   CBS_EXPORT_COLUMNS,
-  CBS_EXPORT_LABELS,
   type CbsExportMetaRow,
   type CbsExportRow,
-  type CbsExportView,
 } from "~/lib/cbs-export";
+import { CBS_VIEWS, type CbsView } from "~/lib/cbs-views";
 import { CBS_HEADER_COLOR, cbsColorForLevel } from "~/config/cbs-level-colors";
 
 /**
@@ -30,7 +29,7 @@ function argb(hex: string): string {
 const MAX_OUTLINE_LEVEL = 7;
 
 export type CbsWorkbookMeta = {
-  view: CbsExportView;
+  view: CbsView;
   /** Project number — `Project.displayId`. "" when none was selected. */
   projectNumber: string;
   /** Project title, number prefix already stripped. "" when none. */
@@ -64,10 +63,10 @@ export async function buildCbsWorkbook(
   rows: readonly CbsExportRow[],
   meta: CbsWorkbookMeta,
 ): Promise<Buffer> {
-  const labels = CBS_EXPORT_LABELS[meta.view];
+  const view = CBS_VIEWS[meta.view];
   const wb = new ExcelJS.Workbook();
   wb.created = new Date();
-  const ws = wb.addWorksheet(labels.sheet, {
+  const ws = wb.addWorksheet(view.export.sheet, {
     properties: { outlineLevelRow: 0 },
     views: [{ state: "frozen", ySplit: CBS_SHEET_LAYOUT.header }],
   });
@@ -81,7 +80,7 @@ export async function buildCbsWorkbook(
   };
 
   // ── Title + metadata block ───────────────────────────────────────────────
-  const title = ws.addRow([labels.sheet]);
+  const title = ws.addRow([view.export.sheet]);
   title.font = { bold: true, size: 14 };
   ws.mergeCells(title.number, 1, title.number, CBS_EXPORT_COLUMNS.length);
 

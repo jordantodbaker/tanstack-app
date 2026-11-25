@@ -4,7 +4,6 @@ import { prisma } from "../server/db";
 import { adminHandler, requireProjectAccess } from "./users.server";
 import {
   buildCbsTree,
-  cbsActiveRows,
   cbsLegacyTreeRow,
   describeCbsFilter,
   pruneCbsTree,
@@ -12,13 +11,8 @@ import {
   type CbsRowFilter,
   type CbsTreeItem,
 } from "~/lib/cbs-tree";
-import {
-  CBS_EXPORT_LABELS,
-  CBS_EXPORT_VIEWS,
-  cbsProjectTitle,
-  flattenCbsForExport,
-  type CbsExportView,
-} from "~/lib/cbs-export";
+import { cbsProjectTitle, flattenCbsForExport } from "~/lib/cbs-export";
+import { CBS_VIEWS, CBS_VIEW_KEYS, type CbsView } from "~/lib/cbs-views";
 import {
   cbsCatalogRows,
   cbsLegacyRows,
@@ -43,7 +37,7 @@ import { buildCbsWorkbook } from "./cbs-xlsx.server";
  */
 
 const ExportInput = z.object({
-  view: z.enum(CBS_EXPORT_VIEWS),
+  view: z.enum(CBS_VIEW_KEYS),
   /** Required for the project-scoped view, ignored by the catalog views. */
   projectId: z.number().int().positive().nullable().default(null),
   /**
@@ -126,35 +120,31 @@ async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
     query: input.filter.query.trim().toLowerCase(),
   };
 
-  let rows: ProjectCostCodeRow[];
-  let scope: string;
-  const withLegacy = input.view === "dictionary" && input.showLegacy;
-
-  if (input.view === "projectCostCodes") {
+  // The view says which rows it lists, here as on the page, or the file stops
+  // matching the screen.
+  const def = CBS_VIEWS[input.view];
+  let source: ProjectCostCodeRow[];
+  if (input.view === "project") {
     if (input.projectId === null) {
       throw new Error("A project must be selected to export its cost codes");
     }
-    rows = await projectCostCodeRows(input.projectId);
-    if (input.hideContext) rows = rows.filter((r) => !r.context);
-    scope = input.hideContext
-      ? "Codes granted to this project on the Setup page — ungranted parents hidden"
-      : "Codes granted to this project on the Setup page";
+    source = await projectCostCodeRows(input.projectId);
   } else {
-    // The Cost Accounts view lists only active rows (inactive parents kept as
-    // context), so the export applies the same cut the page does, or the file
-    // stops matching the screen. The Dictionary deliberately keeps everything,
-    // inactive and retired included.
-    const catalog = await cbsCatalogRows();
-    rows = input.view === "codeBook" ? cbsActiveRows(catalog) : catalog;
-    const hidden = input.hideContext && rows.some((r) => r.context);
-    if (hidden) rows = rows.filter((r) => !r.context);
     // The catalog views ignore the allow-list, so the project below is there
     // for traceability — whose desk the file came from — not as a filter.
-    scope = hidden
-      ? "Whole catalog — no project allow-list applied — inactive parents hidden"
-      : "Whole catalog — no project allow-list applied";
-    if (withLegacy) scope += " — legacy codes included";
+    source = await cbsCatalogRows();
   }
+  let rows = def.rows(source);
+  const withLegacy = def.legacyFilter && input.showLegacy;
+  const hidden = input.hideContext && rows.some((r) => r.context);
+  if (hidden) rows = rows.filter((r) => !r.context);
+  const scope = [
+    def.export.scope,
+    hidden && def.context.hiddenNote,
+    withLegacy && "legacy codes included",
+  ]
+    .filter(Boolean)
+    .join(" — ");
 
   // Looked up rather than taken from the client: it ends up printed on a
   // document people forward, so it should be what the database says.
@@ -191,7 +181,7 @@ async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
   // three files called "cbs-dictionary-2026-10-09.xlsx" are indistinguishable.
   const scopeStem = project ? `-${project.displayId}` : "";
   return {
-    filename: `${CBS_EXPORT_LABELS[input.view].filename}${scopeStem}-${stamp}.xlsx`,
+    filename: `${def.export.filename}${scopeStem}-${stamp}.xlsx`,
     base64: buffer.toString("base64"),
     rowCount: exportRows.length,
   };
@@ -204,7 +194,7 @@ async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
 export const exportProjectCostCodes = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => {
     const parsed = ExportInput.parse(input);
-    if (parsed.view !== "projectCostCodes") {
+    if (parsed.view !== "project") {
       throw new Error("exportProjectCostCodes only exports the project view");
     }
     if (parsed.projectId === null) {
@@ -226,7 +216,7 @@ export const exportProjectCostCodes = createServerFn({ method: "POST" })
 export const exportCbsCatalog = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => {
     const parsed = ExportInput.parse(input);
-    if (parsed.view === "projectCostCodes") {
+    if (parsed.view === "project") {
       throw new Error("exportCbsCatalog only exports the catalog views");
     }
     return parsed;
@@ -234,8 +224,6 @@ export const exportCbsCatalog = createServerFn({ method: "POST" })
   .handler(adminHandler(({ data }) => exportFor(data)));
 
 /** Which server fn backs a view — the client picks with this, not a branch. */
-export function cbsExporterFor(view: CbsExportView) {
-  return view === "projectCostCodes"
-    ? exportProjectCostCodes
-    : exportCbsCatalog;
+export function cbsExporterFor(view: CbsView) {
+  return view === "project" ? exportProjectCostCodes : exportCbsCatalog;
 }

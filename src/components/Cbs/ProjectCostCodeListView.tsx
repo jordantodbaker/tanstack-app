@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSelectedProject } from "~/lib/selected-project";
+import { CBS_VIEWS } from "~/lib/cbs-views";
 import { projectCostCodesQueryOptions } from "~/utils/cbs";
 import {
   CbsDictionaryBrowser,
@@ -17,12 +18,6 @@ import {
  * this page only scopes the rows to one project.
  */
 
-/** Exported for the full-screen tab, which renders this list alone. */
-export const PROJECT_COST_CODES_SOURCE_NOTE =
-  "Source: the CBS Dictionary, limited to the items selected for this project on the Setup page. Colors mirror the source workbook's outline levels.";
-export const PROJECT_COST_CODES_EMPTY =
-  "No cost codes selected for this project.";
-
 function ProjectCostCodes({
   projectId,
   focusCode,
@@ -38,20 +33,16 @@ function ProjectCostCodes({
       <CbsDictionaryStatus
         isPending={query.isPending}
         isError={query.isError}
-        errorMessage="Failed to load this project's cost codes."
+        errorMessage={CBS_VIEWS.project.errorMessage}
       />
     );
   }
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white pt-4 shadow-sm">
       <CbsDictionaryBrowser
+        view="project"
         items={query.data}
-        sourceNote={PROJECT_COST_CODES_SOURCE_NOTE}
-        emptyMessage={PROJECT_COST_CODES_EMPTY}
-        exportView="projectCostCodes"
         focusCode={focusCode}
-        linkPath="/project-cost-codes"
-        fullscreenView="project"
       />
     </div>
   );
@@ -69,7 +60,7 @@ export function ProjectCostCodeListView({
     <div className="mx-auto max-w-7xl px-4 py-6 md:px-8">
       <header className="mb-4">
         <h1 className="text-2xl font-bold text-slate-800">
-          Project Cost Code List
+          {CBS_VIEWS.project.title}
         </h1>
         <p className="mt-1 max-w-3xl text-sm text-slate-500">
           The cost codes available on this project — the CBS rows selected on

@@ -13,6 +13,7 @@ import {
   type CbsStatusKey,
   type CbsValueFilterKey,
 } from "./cbs-tree";
+import { isCbsView, type CbsView } from "./cbs-views";
 
 /**
  * The full-screen CBS tab: one route, `/cbs-fullscreen`, that renders a CBS
@@ -34,25 +35,9 @@ export function isCbsFullscreenPath(pathname: string): boolean {
   return pathname === CBS_FULLSCREEN_PATH;
 }
 
-/**
- * Which tree: the selected project's cost codes, the active Cost Accounts of
- * the whole catalog, or the whole CBS Dictionary with every status. The last
- * two are the Admin → Master CBS sections, so they need an administrator.
- */
-export const CBS_FULLSCREEN_VIEWS = [
-  "project",
-  "accounts",
-  "dictionary",
-] as const;
-export type CbsFullscreenView = (typeof CBS_FULLSCREEN_VIEWS)[number];
-
-export function isCbsFullscreenView(v: unknown): v is CbsFullscreenView {
-  return (CBS_FULLSCREEN_VIEWS as readonly unknown[]).includes(v);
-}
-
 /** The route's search params. Only what differs from the defaults is written. */
 export type CbsFullscreenSearch = {
-  view: CbsFullscreenView;
+  view: CbsView;
   /** The search box, as typed. */
   q?: string;
   /** The cost-type buttons that are on. */
@@ -60,7 +45,7 @@ export type CbsFullscreenSearch = {
   /** The status buttons that are on (Dictionary only). */
   statuses?: CbsStatusKey[];
   rowType?: CbsRowTypeFilter;
-  /** "Hide ungranted parents" (project view only). */
+  /** "Hide … parents". */
   hideContext?: boolean;
   /** "Show legacy" (Dictionary only). */
   legacy?: boolean;
@@ -81,7 +66,7 @@ export function parseCbsFullscreenSearch(
   search: Record<string, unknown>,
 ): CbsFullscreenSearch {
   const out: CbsFullscreenSearch = {
-    view: isCbsFullscreenView(search.view) ? search.view : "project",
+    view: isCbsView(search.view) ? search.view : "project",
   };
   const text = (v: unknown): string | undefined =>
     typeof v === "string" && v !== "" ? v : undefined;
@@ -128,7 +113,7 @@ export function parseCbsFullscreenSearch(
  * out, so a tree with nothing filtering opens with a bare `?view=`.
  */
 export function cbsFullscreenSearch(
-  view: CbsFullscreenView,
+  view: CbsView,
   state: CbsRowFilterState,
   extras: {
     hideContext?: boolean;

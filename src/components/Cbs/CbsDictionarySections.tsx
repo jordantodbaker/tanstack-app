@@ -1,77 +1,32 @@
 import * as React from "react";
 import { ChevronRight } from "lucide-react";
-import type { CbsBrowserRow, CbsTreeRow } from "~/utils/cbs";
-import { cbsActiveRows, isCbsLegacyCode } from "~/lib/cbs-tree";
-import type { CbsExportView } from "~/lib/cbs-export";
-import type { CbsFullscreenView } from "~/lib/cbs-fullscreen";
+import type { CbsTreeRow } from "~/utils/cbs";
+import { isCbsLegacyCode } from "~/lib/cbs-tree";
+import { CBS_VIEWS, type CbsCatalogView } from "~/lib/cbs-views";
 import { CbsDictionaryBrowser } from "~/components/Cbs/CbsDictionaryBrowser";
 
-/**
- * The whole catalog as two collapsible datasets: the active Cost Accounts and
- * the full dictionary with every status. Admin → Master CBS; project-scoped
- * pages render a single `CbsDictionaryBrowser` instead.
- */
-
-/** A collapsible section over one view of a dictionary. */
+/** A collapsible section over one view of the catalog. */
 function CbsSection({
-  title,
-  description,
+  view,
   items,
-  sourceNote,
-  emptyMessage,
-  defaultOpen = false,
-  exportView,
-  focusCode = null,
-  linkPath = null,
-  fullscreenView = null,
-  statusFilter = false,
-  rowTypeFilter = false,
-  legacyFilter = false,
-  contextKind,
+  badgeRows,
+  focusCode,
 }: {
-  title: string;
-  description: string;
-  items: CbsBrowserRow[];
-  sourceNote: string;
-  emptyMessage: string;
-  defaultOpen?: boolean;
-  exportView: CbsExportView;
-  focusCode?: string | null;
-  /** The page the detail panel's "Copy link" points at — see `CbsDictionaryBrowser`. */
-  linkPath?: string | null;
-  /** Which tree the "Full screen" button opens — see `CbsDictionaryBrowser`. */
-  fullscreenView?: CbsFullscreenView | null;
-  /** Offer the Status filter — see `CbsDictionaryBrowser`. */
-  statusFilter?: boolean;
-  /** Offer the Row Type filter — see `CbsDictionaryBrowser`. */
-  rowTypeFilter?: boolean;
-  /** Offer "Show legacy" — see `CbsDictionaryBrowser`. */
-  legacyFilter?: boolean;
-  /** What a muted parent row is here — see `CbsDictionaryBrowser`. */
-  contextKind?: React.ComponentProps<
-    typeof CbsDictionaryBrowser
-  >["contextKind"];
+  view: CbsCatalogView;
+  items: CbsTreeRow[];
+  /** How many rows the view lists. */
+  badgeRows: number;
+  focusCode: string | null;
 }) {
+  const { title, description } = CBS_VIEWS[view];
   return (
     <CbsSectionShell
       title={title}
       description={description}
-      badge={`${items.length.toLocaleString()} rows`}
-      defaultOpen={defaultOpen}
+      badge={`${badgeRows.toLocaleString()} rows`}
+      defaultOpen
     >
-      <CbsDictionaryBrowser
-        items={items}
-        sourceNote={sourceNote}
-        emptyMessage={emptyMessage}
-        exportView={exportView}
-        focusCode={focusCode}
-        linkPath={linkPath}
-        fullscreenView={fullscreenView}
-        statusFilter={statusFilter}
-        rowTypeFilter={rowTypeFilter}
-        legacyFilter={legacyFilter}
-        contextKind={contextKind}
-      />
+      <CbsDictionaryBrowser view={view} items={items} focusCode={focusCode} />
     </CbsSectionShell>
   );
 }
@@ -121,13 +76,6 @@ function CbsSectionShell({
   );
 }
 
-/** Exported for the full-screen tab, which renders one of these sections alone. */
-export const MASTER_SOURCE_NOTE =
-  "Source: the CBS Dictionary, in full — no project allow-list applied. Colors mirror the source workbook's outline levels.";
-export const MASTER_EMPTY = "No CBS items in the catalog.";
-/** The page these sections live on, which reads `?code=` — for "Copy link". */
-export const ADMIN_MASTER_CBS_PATH = "/admin/master-cbs";
-
 /**
  * The whole catalog as two collapsible datasets: the active Cost Accounts and
  * the full dictionary with every status. The Admin → Master CBS page;
@@ -141,13 +89,7 @@ export function CbsDictionarySections({
   /** A display code to open on arrival — the `?code=` deep link. */
   focusCode?: string | null;
 }) {
-  // The same rows as the Dictionary below — every cost line, generated S / M
-  // rows included — minus anything Inactive or Retired. This is the list
-  // people pick codes from, and the Dictionary is the one place that still
-  // shows everything, so nothing becomes unfindable by being hidden here.
-  // Inactive parents of active rows stay, muted, so the hierarchy holds —
-  // see `cbsActiveRows`.
-  const accounts = React.useMemo(() => cbsActiveRows(items), [items]);
+  const accounts = React.useMemo(() => CBS_VIEWS.accounts.rows(items), [items]);
 
   // Both sections are open already, so this decides which one FOLLOWS the
   // deep link. Handing it to both would scroll two trees and select the row
@@ -164,32 +106,16 @@ export function CbsDictionarySections({
   return (
     <div className="flex flex-col gap-4">
       <CbsSection
-        title="Cost Accounts"
-        description="Every active code, each cost type on its own line. Inactive and retired codes are listed in the CBS Dictionary below."
-        items={accounts}
-        sourceNote={MASTER_SOURCE_NOTE}
-        emptyMessage={MASTER_EMPTY}
-        defaultOpen
-        exportView="codeBook"
+        view="accounts"
+        items={items}
+        badgeRows={accounts.length}
         focusCode={inAccounts ? focusCode : null}
-        linkPath={ADMIN_MASTER_CBS_PATH}
-        fullscreenView="accounts"
-        contextKind="inactive"
       />
       <CbsSection
-        title="CBS Dictionary"
-        description="Every row in the CBS, each cost type on its own line — active, inactive and retired, with a Status filter to narrow them."
+        view="dictionary"
         items={items}
-        sourceNote={MASTER_SOURCE_NOTE}
-        emptyMessage={MASTER_EMPTY}
-        defaultOpen
-        exportView="dictionary"
+        badgeRows={items.length}
         focusCode={inDictionary ? focusCode : null}
-        linkPath={ADMIN_MASTER_CBS_PATH}
-        fullscreenView="dictionary"
-        statusFilter
-        rowTypeFilter
-        legacyFilter
       />
     </div>
   );

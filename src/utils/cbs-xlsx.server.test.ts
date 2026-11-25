@@ -44,7 +44,7 @@ const ROWS = flattenCbsForExport(
 );
 
 const META: CbsWorkbookMeta = {
-  view: "projectCostCodes",
+  view: "project",
   projectNumber: "1901",
   projectTitle: "FIME Engineering",
   scope: "Codes granted to this project on the Setup page",
@@ -213,7 +213,7 @@ describe("buildCbsWorkbook", () => {
 
   it("names the sheet for whichever view was exported", async () => {
     for (const [view, sheet] of [
-      ["codeBook", "Cost Accounts"],
+      ["accounts", "Cost Accounts"],
       ["dictionary", "CBS Dictionary"],
     ] as const) {
       const { ws } = await roundTrip(ROWS, { ...META, view });

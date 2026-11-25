@@ -156,25 +156,3 @@ export function cbsProjectTitle(displayId: string, name: string): string {
  * order so the sheet's layout is stable for anyone reading it with a formula.
  */
 export type CbsExportMetaRow = { label: string; value: string | number };
-
-/** The three CBS views that can be exported. */
-export const CBS_EXPORT_VIEWS = [
-  "projectCostCodes",
-  "codeBook",
-  "dictionary",
-] as const;
-
-export type CbsExportView = (typeof CBS_EXPORT_VIEWS)[number];
-
-/** Sheet title and filename stem per view. */
-export const CBS_EXPORT_LABELS: Record<
-  CbsExportView,
-  { sheet: string; filename: string }
-> = {
-  projectCostCodes: {
-    sheet: "Project Cost Codes",
-    filename: "project-cost-code-list",
-  },
-  codeBook: { sheet: "Cost Accounts", filename: "cbs-cost-accounts" },
-  dictionary: { sheet: "CBS Dictionary", filename: "cbs-dictionary" },
-};

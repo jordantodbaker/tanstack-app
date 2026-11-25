@@ -4,7 +4,7 @@ import { Button } from "~/components/ui/button";
 import { useXlsxExport } from "~/lib/use-xlsx-export";
 import { useSelectedProject } from "~/lib/selected-project";
 import { cbsExporterFor } from "~/utils/cbsExport";
-import type { CbsExportView } from "~/lib/cbs-export";
+import type { CbsView } from "~/lib/cbs-views";
 import type { CbsRowFilter } from "~/lib/cbs-tree";
 
 /**
@@ -22,7 +22,7 @@ export function ExportCbsXlsxButton({
   showLegacy = false,
   disabled,
 }: {
-  view: CbsExportView;
+  view: CbsView;
   filter: CbsRowFilter;
   /** Mirrors the page's "Hide ungranted parents" toggle. */
   hideContext?: boolean;
@@ -34,8 +34,7 @@ export function ExportCbsXlsxButton({
   // catalog views so a forwarded file says which desk it came from.
   const { projectId } = useSelectedProject();
 
-  const blocked =
-    disabled || (view === "projectCostCodes" && projectId === null);
+  const blocked = disabled || (view === "project" && projectId === null);
 
   const { busy, failed, start } = useXlsxExport(
     () =>

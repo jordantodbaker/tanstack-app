@@ -138,7 +138,7 @@ beforeEach(() => {
 
 describe("which rows each catalog view exports", () => {
   it("Cost Accounts: every active line, inactive and retired left out", async () => {
-    await exportCbsCatalog({ data: { view: "codeBook", projectId: null } });
+    await exportCbsCatalog({ data: { view: "accounts", projectId: null } });
     const { names } = written();
     expect(names).toEqual(
       expect.arrayContaining([
@@ -170,7 +170,7 @@ describe("which rows each catalog view exports", () => {
     expect(written().names).toContain("Old");
     expect(written().meta.scope).toContain("legacy codes included");
     await exportCbsCatalog({
-      data: { view: "codeBook", projectId: null, showLegacy: true },
+      data: { view: "accounts", projectId: null, showLegacy: true },
     });
     expect(written().names).not.toContain("Old");
   });
@@ -192,7 +192,7 @@ describe("filters reach the file", () => {
   it("reads a cost type off each line's own code, not the account's flags", async () => {
     await exportCbsCatalog({
       data: {
-        view: "codeBook",
+        view: "accounts",
         projectId: null,
         filter: filter({ material: true }),
       },
@@ -222,7 +222,7 @@ describe("filters reach the file", () => {
   it("picks out blank classifications with the (none) entry", async () => {
     await exportCbsCatalog({
       data: {
-        view: "codeBook",
+        view: "accounts",
         projectId: null,
         filter: filter({ classifications: [""] }),
       },
@@ -253,7 +253,7 @@ describe("filters reach the file", () => {
   it("picks out blank disciplines with the (none) entry", async () => {
     await exportCbsCatalog({
       data: {
-        view: "codeBook",
+        view: "accounts",
         projectId: null,
         filter: filter({ disciplines: [""] }),
       },
@@ -362,7 +362,7 @@ describe("the project view", () => {
     requireProjectAccess.mockRejectedValue(new Error("Forbidden"));
     await expect(
       exportProjectCostCodes({
-        data: { view: "projectCostCodes", projectId: 1 },
+        data: { view: "project", projectId: 1 },
       }),
     ).rejects.toThrow("Forbidden");
     expect(buildWorkbook).not.toHaveBeenCalled();
@@ -371,7 +371,7 @@ describe("the project view", () => {
   it("leaves ungranted parents in, uncounted, unless they are hidden", async () => {
     projectRows.mockResolvedValue(PROJECT);
     await exportProjectCostCodes({
-      data: { view: "projectCostCodes", projectId: 1 },
+      data: { view: "project", projectId: 1 },
     });
     expect(written().names).toEqual([
       "Ungranted Parent (*)",
@@ -380,7 +380,7 @@ describe("the project view", () => {
     expect(written().meta.availableRows).toBe(1);
 
     await exportProjectCostCodes({
-      data: { view: "projectCostCodes", projectId: 1, hideContext: true },
+      data: { view: "project", projectId: 1, hideContext: true },
     });
     expect(written().names).toEqual(["Granted Labor (L)"]);
     expect(written().meta.scope).toMatch(/ungranted parents hidden/);
@@ -389,7 +389,7 @@ describe("the project view", () => {
   it("puts the project number in the filename", async () => {
     projectRows.mockResolvedValue(PROJECT);
     const result = await exportProjectCostCodes({
-      data: { view: "projectCostCodes", projectId: 1 },
+      data: { view: "project", projectId: 1 },
     });
     expect(result.filename).toMatch(
       /^project-cost-code-list-1901-\d{4}-\d{2}-\d{2}\.xlsx$/,
@@ -398,7 +398,7 @@ describe("the project view", () => {
 
   it("won't export the project view through the catalog route, or vice versa", async () => {
     await expect(
-      exportCbsCatalog({ data: { view: "projectCostCodes", projectId: 1 } }),
+      exportCbsCatalog({ data: { view: "project", projectId: 1 } }),
     ).rejects.toThrow(/only exports the catalog views/);
     await expect(
       exportProjectCostCodes({ data: { view: "dictionary", projectId: 1 } }),

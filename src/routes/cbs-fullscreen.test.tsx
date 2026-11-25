@@ -98,7 +98,7 @@ const CATALOG: CbsTreeRow[] = [
 
 function renderPage(search: CbsFullscreenSearch) {
   const client = new QueryClient();
-  client.setQueryData(cbsCatalogQueryOptions().queryKey, CATALOG);
+  client.setQueryData(cbsCatalogQueryOptions().queryKey, [...CATALOG]);
   return render(
     <QueryClientProvider client={client}>
       <CbsFullscreenPage search={search} />
@@ -155,6 +155,23 @@ describe("CbsFullscreenPage", () => {
     cleanup();
     renderPage({ view: "dictionary" });
     expect(screen.getByText("5 rows")).toBeTruthy();
+  });
+
+  it("keeps Cost Accounts' hidden inactive parents hidden", () => {
+    const render = (hideContext?: true) => {
+      CATALOG.push(
+        item("040-00-0000-00-0", "Procurement", { status: "Inactive" }),
+        item("044-50-0000-00-0", "Heavy Haul"),
+      );
+      renderPage({ view: "accounts", hideContext });
+      CATALOG.splice(-2);
+    };
+    render();
+    expect(screen.getByText("Procurement")).toBeTruthy();
+    cleanup();
+    render(true);
+    expect(screen.queryByText("Procurement")).toBeNull();
+    expect(screen.getByText("Heavy Haul")).toBeTruthy();
   });
 
   it("opens on the linked row, selected", () => {

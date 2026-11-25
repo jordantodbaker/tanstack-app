@@ -9,29 +9,17 @@ import {
   type CbsBrowserRow,
 } from "~/utils/cbs";
 import { useSelectedProject } from "~/lib/selected-project";
-import { cbsActiveRows } from "~/lib/cbs-tree";
 import {
   cbsRowFilterStateFromSearch,
   parseCbsFullscreenSearch,
   type CbsFullscreenSearch,
-  type CbsFullscreenView,
 } from "~/lib/cbs-fullscreen";
-import type { CbsExportView } from "~/lib/cbs-export";
+import { CBS_VIEWS, type CbsCatalogView, type CbsView } from "~/lib/cbs-views";
 import { ProjectGuard } from "~/components/ProjectGuard";
 import {
   CbsDictionaryBrowser,
   CbsDictionaryStatus,
 } from "~/components/Cbs/CbsDictionaryBrowser";
-import {
-  ADMIN_MASTER_CBS_PATH,
-  MASTER_EMPTY,
-  MASTER_SOURCE_NOTE,
-} from "~/components/Cbs/CbsDictionarySections";
-import {
-  PROJECT_COST_CODES_EMPTY,
-  PROJECT_COST_CODES_SOURCE_NOTE,
-} from "~/components/Cbs/ProjectCostCodeListView";
-
 /**
  * A CBS tree with nothing else on the screen.
  *
@@ -70,12 +58,6 @@ function CbsFullscreenRoute() {
   return <CbsFullscreenPage search={search} />;
 }
 
-const VIEW_TITLES: Record<CbsFullscreenView, string> = {
-  project: "Project Cost Code List",
-  accounts: "Cost Accounts",
-  dictionary: "CBS Dictionary",
-};
-
 export function CbsFullscreenPage({ search }: { search: CbsFullscreenSearch }) {
   // The URL is read once: the toolbar owns the filters from here, as it does
   // on the page the tab came from, and nothing writes them back.
@@ -85,14 +67,19 @@ export function CbsFullscreenPage({ search }: { search: CbsFullscreenSearch }) {
   const [initialHideContext] = React.useState(
     () => search.hideContext === true,
   );
-  const focusCode = search.code ?? null;
+  const viewProps: ViewProps = {
+    focusCode: search.code ?? null,
+    initialFilter,
+    initialHideContext,
+    initialShowLegacy: search.legacy === true,
+  };
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50">
       <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-4 py-2">
         <Maximize2 className="size-4 shrink-0 text-slate-500" />
         <h1 className="text-base font-bold text-slate-800">
-          {VIEW_TITLES[search.view]}
+          {CBS_VIEWS[search.view].title}
         </h1>
         <span className="ml-2 text-xs text-slate-500">
           Full screen — close this tab to go back.
@@ -101,144 +88,62 @@ export function CbsFullscreenPage({ search }: { search: CbsFullscreenSearch }) {
       <div className="bg-white pt-3">
         {search.view === "project" ? (
           <ProjectGuard>
-            <ProjectView
-              focusCode={focusCode}
-              initialFilter={initialFilter}
-              initialHideContext={initialHideContext}
-            />
+            <ProjectView {...viewProps} />
           </ProjectGuard>
         ) : (
-          <CatalogView
-            view={search.view}
-            focusCode={focusCode}
-            initialFilter={initialFilter}
-            initialShowLegacy={search.legacy === true}
-          />
+          <CatalogView view={search.view} {...viewProps} />
         )}
       </div>
     </div>
   );
 }
 
-type ViewProps = {
-  focusCode: string | null;
-  initialFilter: ReturnType<typeof cbsRowFilterStateFromSearch>;
-};
+/** What the URL asked for, as the browser takes it. */
+type ViewProps = Pick<
+  React.ComponentProps<typeof CbsDictionaryBrowser>,
+  "focusCode" | "initialFilter" | "initialHideContext" | "initialShowLegacy"
+>;
 
 /** The selected project's cost codes — the Project Cost Code List's rows. */
-function ProjectView({
-  focusCode,
-  initialFilter,
-  initialHideContext,
-}: ViewProps & { initialHideContext: boolean }) {
+function ProjectView(props: ViewProps) {
   const { projectId } = useSelectedProject();
   if (projectId === null) return null; // ProjectGuard has shown the prompt.
-  return (
-    <ProjectRows
-      key={projectId}
-      projectId={projectId}
-      focusCode={focusCode}
-      initialFilter={initialFilter}
-      initialHideContext={initialHideContext}
-    />
-  );
+  return <ProjectRows key={projectId} projectId={projectId} {...props} />;
 }
 
 function ProjectRows({
   projectId,
-  focusCode,
-  initialFilter,
-  initialHideContext,
-}: ViewProps & { projectId: number; initialHideContext: boolean }) {
+  ...props
+}: ViewProps & { projectId: number }) {
   const query = useQuery(projectCostCodesQueryOptions(projectId));
-  if (query.isPending || query.isError) {
-    return (
-      <CbsDictionaryStatus
-        isPending={query.isPending}
-        isError={query.isError}
-        errorMessage="Failed to load this project's cost codes."
-      />
-    );
-  }
-  return (
-    <FullscreenBrowser
-      items={query.data}
-      sourceNote={PROJECT_COST_CODES_SOURCE_NOTE}
-      emptyMessage={PROJECT_COST_CODES_EMPTY}
-      exportView="projectCostCodes"
-      linkPath="/project-cost-codes"
-      focusCode={focusCode}
-      initialFilter={initialFilter}
-      initialHideContext={initialHideContext}
-    />
-  );
+  return <ViewBody view="project" query={query} {...props} />;
 }
 
 /** One of Admin → Master CBS's two sections, over the whole catalog. */
-function CatalogView({
-  view,
-  focusCode,
-  initialFilter,
-  initialShowLegacy,
-}: ViewProps & {
-  view: Exclude<CbsFullscreenView, "project">;
-  initialShowLegacy: boolean;
-}) {
+function CatalogView({ view, ...props }: ViewProps & { view: CbsCatalogView }) {
   const query = useQuery(cbsCatalogQueryOptions());
-  // Cost Accounts is the Dictionary minus anything Inactive or Retired, with
-  // inactive parents kept as context — the same cut `CbsDictionarySections`
-  // makes.
-  const items = React.useMemo(
-    () =>
-      view === "accounts" && query.data
-        ? cbsActiveRows(query.data)
-        : query.data,
-    [view, query.data],
-  );
-  if (query.isPending || query.isError || !items) {
+  return <ViewBody view={view} query={query} {...props} />;
+}
+
+/** The shared browser filling the window, once its rows are in. */
+function ViewBody({
+  view,
+  query,
+  ...props
+}: ViewProps & {
+  view: CbsView;
+  query: { data?: CbsBrowserRow[]; isPending: boolean; isError: boolean };
+}) {
+  if (!query.data) {
     return (
       <CbsDictionaryStatus
         isPending={query.isPending}
         isError={query.isError}
-        errorMessage="Failed to load the CBS Code Book."
+        errorMessage={CBS_VIEWS[view].errorMessage}
       />
     );
   }
   return (
-    <FullscreenBrowser
-      items={items}
-      sourceNote={MASTER_SOURCE_NOTE}
-      emptyMessage={MASTER_EMPTY}
-      exportView={view === "accounts" ? "codeBook" : "dictionary"}
-      contextKind={view === "accounts" ? "inactive" : undefined}
-      linkPath={ADMIN_MASTER_CBS_PATH}
-      focusCode={focusCode}
-      initialFilter={initialFilter}
-      statusFilter={view === "dictionary"}
-      rowTypeFilter={view === "dictionary"}
-      legacyFilter={view === "dictionary"}
-      initialShowLegacy={initialShowLegacy}
-    />
+    <CbsDictionaryBrowser view={view} items={query.data} {...props} fill />
   );
-}
-
-/** The shared browser in its full-screen shape: filling the window, no button to open another. */
-function FullscreenBrowser(props: {
-  items: CbsBrowserRow[];
-  sourceNote: string;
-  emptyMessage: string;
-  exportView: CbsExportView;
-  linkPath: string;
-  focusCode: string | null;
-  initialFilter: ReturnType<typeof cbsRowFilterStateFromSearch>;
-  initialHideContext?: boolean;
-  statusFilter?: boolean;
-  rowTypeFilter?: boolean;
-  legacyFilter?: boolean;
-  initialShowLegacy?: boolean;
-  contextKind?: React.ComponentProps<
-    typeof CbsDictionaryBrowser
-  >["contextKind"];
-}) {
-  return <CbsDictionaryBrowser {...props} fill />;
 }

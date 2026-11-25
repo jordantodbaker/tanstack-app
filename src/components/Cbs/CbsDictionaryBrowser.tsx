@@ -11,11 +11,8 @@ import {
   type CbsRowFilterState,
   type CbsTreeNode,
 } from "~/lib/cbs-tree";
-import {
-  cbsFullscreenHref,
-  cbsFullscreenSearch,
-  type CbsFullscreenView,
-} from "~/lib/cbs-fullscreen";
+import { cbsFullscreenHref, cbsFullscreenSearch } from "~/lib/cbs-fullscreen";
+import { CBS_VIEWS, type CbsView } from "~/lib/cbs-views";
 import {
   CbsLevelLegend,
   CbsTreePanel,
@@ -24,7 +21,6 @@ import {
 import { CbsDetailPanel } from "~/components/Cbs/CbsDetailPanel";
 import { CbsTreeToolbar } from "~/components/Cbs/CbsTreeToolbar";
 import { ExportCbsXlsxButton } from "~/components/Cbs/ExportCbsXlsxButton";
-import type { CbsExportView } from "~/lib/cbs-export";
 import { useCbsTreeExpansion } from "~/components/Cbs/useCbsTreeExpansion";
 import { useCbsRowFilter } from "~/components/Cbs/useCbsRowFilter";
 import { LoadMask } from "~/components/LoadMask";
@@ -54,20 +50,6 @@ type Node = CbsTreeNode;
  * account roll-ups are `accounts`, and any other trailing segment is counted
  * under `unknown` so the parts still add up to the total.
  */
-/** The "Hide … parents" toggle, worded for what the context rows are. */
-const CONTEXT_WORDING = {
-  ungranted: {
-    label: "Hide ungranted parents",
-    title:
-      "Hide the grayed-out parent summaries this project was not granted. The codes under them move up to the nearest parent it does have.",
-  },
-  inactive: {
-    label: "Hide inactive parents",
-    title:
-      "Hide the grayed-out parent summaries that are Inactive or Retired. The active codes under them move up to the nearest active parent.",
-  },
-} as const;
-
 type Counts = {
   total: number;
   accounts: number;
@@ -171,37 +153,18 @@ function CountsLegend({
  * mounts it lazily still pays for the build only when opened.
  */
 export function CbsDictionaryBrowser({
-  items: catalogItems,
-  sourceNote,
-  emptyMessage,
-  exportView,
+  view,
+  items: sourceItems,
   focusCode = null,
-  linkPath = null,
-  statusFilter = false,
-  rowTypeFilter = false,
-  legacyFilter = false,
   initialShowLegacy = false,
-  fullscreenView = null,
   fill = false,
   initialFilter,
   initialHideContext = false,
-  contextKind = "ungranted",
 }: {
+  /** Which tree this is — its rows, filters and wording are in `CBS_VIEWS`. */
+  view: CbsView;
+  /** The rows the view's query returned; the view decides which it lists. */
   items: CbsBrowserRow[];
-  sourceNote: string;
-  emptyMessage: string;
-  /**
-   * The page the detail panel's "Copy link" points at — one that reads
-   * `?code=`, such as "/project-cost-codes". Omit to leave the button out.
-   */
-  linkPath?: string | null;
-  /**
-   * Which tree this is, for the toolbar's "Full screen" button: it opens
-   * `/cbs-fullscreen` in a new tab on the same view, carrying the filters,
-   * the ungranted-parents choice and the selected row. Omit to leave the
-   * button out. See `~/lib/cbs-fullscreen`.
-   */
-  fullscreenView?: CbsFullscreenView | null;
   /**
    * The full-screen tab itself: the list runs to the bottom of the window,
    * and there is no "Full screen" button since this already is.
@@ -212,31 +175,10 @@ export function CbsDictionaryBrowser({
   /** Start with "Hide … parents" ticked. */
   initialHideContext?: boolean;
   /**
-   * What a context row IS here, for the toggle's wording: a parent the
-   * project was not granted (the Project Cost Code List) or one that is
-   * Inactive / Retired (Cost Accounts). Same muted treatment either way.
+   * Start with "Show legacy" ticked. A `?code=` link to a legacy code does
+   * too, or there would be no row to land on.
    */
-  contextKind?: keyof typeof CONTEXT_WORDING;
-  /**
-   * Offer the Active / Inactive / Retired buttons. Only the CBS Dictionary
-   * does: Cost Accounts and the Project Cost Code List are active-only by
-   * construction. Shown whatever the data holds — a status with no codes
-   * right now simply filters to "No rows match", rather than the control
-   * vanishing whenever the workbook happens to carry a single status.
-   */
-  statusFilter?: boolean;
-  /** Offer All / Original / Generated. The CBS Dictionary only. */
-  rowTypeFilter?: boolean;
-  /**
-   * Offer "Show legacy": the retired pre-CBS phase codes, off by default and
-   * not fetched until asked for. The CBS Dictionary only. A `?code=` link to
-   * a legacy code starts with it on, or there would be no row to land on.
-   */
-  legacyFilter?: boolean;
-  /** Start with "Show legacy" ticked. */
   initialShowLegacy?: boolean;
-  /** Which view to export as Excel. Omit to leave the button out. */
-  exportView?: CbsExportView;
   /**
    * A display code to open on arrival — the `?code=` deep link. Its ancestors
    * are expanded, the row is selected so the detail panel fills, and the list
@@ -244,6 +186,12 @@ export function CbsDictionaryBrowser({
    */
   focusCode?: string | null;
 }) {
+  const def = CBS_VIEWS[view];
+  const { statusFilter, rowTypeFilter, legacyFilter } = def;
+  const catalogItems = React.useMemo(
+    () => def.rows(sourceItems),
+    [def, sourceItems],
+  );
   const [legacyTicked, setLegacyTicked] = React.useState(
     () =>
       initialShowLegacy || (focusCode !== null && isCbsLegacyCode(focusCode)),
@@ -364,14 +312,14 @@ export function CbsDictionaryBrowser({
         {hasContext && (
           <label
             className="flex items-center gap-1.5 text-xs text-slate-600"
-            title={CONTEXT_WORDING[contextKind].title}
+            title={def.context.title}
           >
             <input
               type="checkbox"
               checked={hideContext}
               onChange={(e) => setHideContext(e.target.checked)}
             />
-            {CONTEXT_WORDING[contextKind].label}
+            {def.context.label}
           </label>
         )}
         {showLegacy && legacy.isPending && (
@@ -382,20 +330,18 @@ export function CbsDictionaryBrowser({
             Failed to load the legacy codes.
           </span>
         )}
-        {exportView && (
-          <ExportCbsXlsxButton
-            view={exportView}
-            filter={filter}
-            hideContext={hideContext && hasContext}
-            showLegacy={showLegacy}
-            disabled={items.length === 0}
-          />
-        )}
+        <ExportCbsXlsxButton
+          view={view}
+          filter={filter}
+          hideContext={hideContext && hasContext}
+          showLegacy={showLegacy}
+          disabled={items.length === 0}
+        />
         {/* A plain link, not a navigation: the new tab must start from the
             URL, and a link is what the browser's "open in new tab" and
             middle-click already understand. Left off the full-screen tab
             itself. */}
-        {fullscreenView && !fill && (
+        {!fill && (
           <Button
             asChild
             variant="outline"
@@ -404,7 +350,7 @@ export function CbsDictionaryBrowser({
           >
             <a
               href={cbsFullscreenHref(
-                cbsFullscreenSearch(fullscreenView, state, {
+                cbsFullscreenSearch(view, state, {
                   hideContext: hideContext && hasContext,
                   legacy: showLegacy,
                   code: selected?.item.displayCode ?? null,
@@ -435,7 +381,9 @@ export function CbsDictionaryBrowser({
           selectedKey={selected?.pathKey ?? null}
           onToggle={toggle}
           onSelect={setSelected}
-          emptyMessage={filtering ? "No rows match this filter." : emptyMessage}
+          emptyMessage={
+            filtering ? "No rows match this filter." : def.emptyMessage
+          }
           emptyAction={
             filtering && (
               <Button
@@ -453,12 +401,12 @@ export function CbsDictionaryBrowser({
 
         <CbsDetailPanel
           selected={selected}
-          linkPath={linkPath}
+          linkPath={def.linkPath}
           onClose={() => setSelected(null)}
         />
       </div>
 
-      <p className="mt-2 text-[11px] text-slate-400">{sourceNote}</p>
+      <p className="mt-2 text-[11px] text-slate-400">{def.sourceNote}</p>
     </div>
   );
 }

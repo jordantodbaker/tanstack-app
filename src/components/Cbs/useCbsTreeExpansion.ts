@@ -18,6 +18,19 @@ const keysToLevel = (nodes: CbsTreeNode[], level: number) =>
     : collectKeysToLevel(nodes, level);
 
 /**
+ * The same for a filtered tree, where the cap hides rows past the level: a
+ * parent left with nothing to show stays shut rather than open and empty.
+ */
+function filteredKeysToLevel(nodes: CbsTreeNode[], level: number): string[] {
+  if (level >= DEEPEST_LEVEL) return collectExpandableKeys(nodes);
+  return nodes.flatMap((n) =>
+    n.level < level && n.children.some((c) => c.level <= level)
+      ? [n.pathKey, ...filteredKeysToLevel(n.children, level)]
+      : [],
+  );
+}
+
+/**
  * Expand/collapse state for a CBS tree — shared by the Setup editor and the
  * CBS dictionary viewers. `expandAll` opens every node of the full `nodes` tree
  * (not just the currently filtered view) so a later cleared search shows the
@@ -124,7 +137,7 @@ export function useCbsTreeExpansion(
     (level: number) =>
       setNarrowed({
         filter,
-        expanded: new Set(keysToLevel(filteredNodes, level)),
+        expanded: new Set(filteredKeysToLevel(filteredNodes, level)),
         cap: level >= DEEPEST_LEVEL ? null : { level, opened: new Set() },
         levelShown: level,
       }),

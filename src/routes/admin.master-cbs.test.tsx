@@ -168,7 +168,7 @@ describe("level buttons while filtering", () => {
     const dict = () => within(screen.getAllByRole("tree").at(-1)!);
     const last = (name: string) =>
       screen.getAllByRole("button", { name }).at(-1)!;
-    const search = screen.getAllByRole("textbox").at(-1)!;
+    const search = screen.getAllByRole("searchbox").at(-1)!;
     fireEvent.change(search, { target: { value: "civil" } });
     expect(dict().getByText("Civil Subcontracts")).toBeInTheDocument();
     fireEvent.click(last("L0"));

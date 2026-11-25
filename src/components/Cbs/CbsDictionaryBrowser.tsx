@@ -1,10 +1,12 @@
 import * as React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2, Maximize2 } from "lucide-react";
-import type { CbsBrowserRow } from "~/utils/cbs";
+import { cbsLegacyQueryOptions, type CbsBrowserRow } from "~/utils/cbs";
 import {
   buildCbsTree,
   CBS_COST_TYPES,
   cbsIsBackbone,
+  isCbsLegacyCode,
   pruneCbsTree,
   type CbsRowFilterState,
   type CbsTreeNode,
@@ -169,7 +171,7 @@ function CountsLegend({
  * mounts it lazily still pays for the build only when opened.
  */
 export function CbsDictionaryBrowser({
-  items,
+  items: catalogItems,
   sourceNote,
   emptyMessage,
   exportView,
@@ -177,6 +179,8 @@ export function CbsDictionaryBrowser({
   linkPath = null,
   statusFilter = false,
   rowTypeFilter = false,
+  legacyFilter = false,
+  initialShowLegacy = false,
   fullscreenView = null,
   fill = false,
   initialFilter,
@@ -223,6 +227,14 @@ export function CbsDictionaryBrowser({
   statusFilter?: boolean;
   /** Offer All / Original / Generated. The CBS Dictionary only. */
   rowTypeFilter?: boolean;
+  /**
+   * Offer "Show legacy": the retired pre-CBS phase codes, off by default and
+   * not fetched until asked for. The CBS Dictionary only. A `?code=` link to
+   * a legacy code starts with it on, or there would be no row to land on.
+   */
+  legacyFilter?: boolean;
+  /** Start with "Show legacy" ticked. */
+  initialShowLegacy?: boolean;
   /** Which view to export as Excel. Omit to leave the button out. */
   exportView?: CbsExportView;
   /**
@@ -232,6 +244,20 @@ export function CbsDictionaryBrowser({
    */
   focusCode?: string | null;
 }) {
+  const [legacyTicked, setLegacyTicked] = React.useState(
+    () =>
+      initialShowLegacy || (focusCode !== null && isCbsLegacyCode(focusCode)),
+  );
+  const showLegacy = legacyFilter && legacyTicked;
+  const legacy = useQuery({ ...cbsLegacyQueryOptions(), enabled: showLegacy });
+  const items = React.useMemo(
+    () =>
+      showLegacy && legacy.data
+        ? [...catalogItems, ...legacy.data]
+        : catalogItems,
+    [catalogItems, showLegacy, legacy.data],
+  );
+
   // Context rows are ancestors the project was never granted, carried in so
   // the codes under them nest correctly. Hiding them is a view choice, so it
   // happens before the tree is built: `buildCbsTree` already collapses a row
@@ -244,15 +270,35 @@ export function CbsDictionaryBrowser({
     [items, hideContext, hasContext],
   );
   const nodes = React.useMemo(() => buildCbsTree(shown), [shown]);
+  // Every tree offers the same filters, Status and Row Type apart: those two
+  // belong to the Dictionary, the one view that lists inactive and generated
+  // rows as a matter of course.
+  // The search filters a deferred copy of the text, as Setup does: the
+  // catalog views re-prune ~14,000 rows per keystroke otherwise.
+  const { filter, state, filtering, searchPending, controls } = useCbsRowFilter(
+    {
+      items,
+      statusFilter,
+      rowTypeFilter,
+      deferQuery: true,
+      initial: initialFilter,
+    },
+  );
+  const { nodes: visibleNodes, matches } = React.useMemo(
+    () => pruneCbsTree(nodes, filter),
+    [filter, nodes],
+  );
   const {
     expanded,
+    forceOpen,
+    cap,
     toggle,
     expandAll,
     collapseAll,
     expandToLevel,
     reveal,
     levelShown,
-  } = useCbsTreeExpansion(nodes);
+  } = useCbsTreeExpansion(nodes, { nodes: visibleNodes, filtering, filter });
   const [selected, setSelected] = React.useState<Node | null>(null);
 
   // Deep link: open the path down to the code, then select it.
@@ -284,32 +330,12 @@ export function CbsDictionaryBrowser({
     if (hit) reveal(path.map((n) => n.pathKey));
     setSelected(hit);
   }, [focusCode, nodes, reveal]);
-  // Every tree offers the same filters, Status and Row Type apart: those two
-  // belong to the Dictionary, the one view that lists inactive and generated
-  // rows as a matter of course.
-  // The search filters a deferred copy of the text, as Setup does: the
-  // catalog views re-prune ~14,000 rows per keystroke otherwise.
-  const { filter, state, filtering, searchPending, controls } = useCbsRowFilter(
-    {
-      items,
-      statusFilter,
-      rowTypeFilter,
-      deferQuery: true,
-      initial: initialFilter,
-    },
-  );
-  const { nodes: visibleNodes, matches } = React.useMemo(
-    () => pruneCbsTree(nodes, filter),
-    [filter, nodes],
-  );
 
   const counts = React.useMemo(() => countRows(items), [items]);
 
-  // While filtering, open everything that survived — the matches are the point,
-  // and leaving them behind collapsed parents hides the result.
   const flat = React.useMemo(
-    () => flattenVisibleCbsNodes(visibleNodes, expanded, filtering),
-    [visibleNodes, expanded, filtering],
+    () => flattenVisibleCbsNodes(visibleNodes, expanded, forceOpen, cap),
+    [visibleNodes, expanded, forceOpen, cap],
   );
 
   return (
@@ -323,6 +349,16 @@ export function CbsDictionaryBrowser({
         {...controls}
         onExpandAll={expandAll}
         onCollapseAll={collapseAll}
+        showLegacy={legacyTicked}
+        onToggleLegacy={
+          legacyFilter
+            ? () => {
+                setLegacyTicked(!legacyTicked);
+                // Its row is about to leave the tree.
+                if (legacyTicked && selected?.item.legacy) setSelected(null);
+              }
+            : undefined
+        }
       >
         {/* Offered only where there are any — the catalog views have none. */}
         {hasContext && (
@@ -338,11 +374,20 @@ export function CbsDictionaryBrowser({
             {CONTEXT_WORDING[contextKind].label}
           </label>
         )}
+        {showLegacy && legacy.isPending && (
+          <span className="text-xs text-slate-500">Loading legacy codes…</span>
+        )}
+        {showLegacy && legacy.isError && (
+          <span className="text-xs text-red-600">
+            Failed to load the legacy codes.
+          </span>
+        )}
         {exportView && (
           <ExportCbsXlsxButton
             view={exportView}
             filter={filter}
             hideContext={hideContext && hasContext}
+            showLegacy={showLegacy}
             disabled={items.length === 0}
           />
         )}
@@ -361,6 +406,7 @@ export function CbsDictionaryBrowser({
               href={cbsFullscreenHref(
                 cbsFullscreenSearch(fullscreenView, state, {
                   hideContext: hideContext && hasContext,
+                  legacy: showLegacy,
                   code: selected?.item.displayCode ?? null,
                 }),
               )}
@@ -383,13 +429,19 @@ export function CbsDictionaryBrowser({
         <CbsTreePanel
           flat={flat}
           expanded={expanded}
-          forceOpen={filtering}
+          forceOpen={forceOpen}
           scrollToKey={focusCode}
           fill={fill}
           selectedKey={selected?.pathKey ?? null}
           onToggle={toggle}
           onSelect={setSelected}
-          emptyMessage={filtering ? "No rows match this filter." : emptyMessage}
+          emptyMessage={
+            visibleNodes.length > 0 && cap
+              ? `No matching rows at L${cap.level} or above — pick a deeper level.`
+              : filtering
+                ? "No rows match this filter."
+                : emptyMessage
+          }
           emptyAction={
             filtering && (
               <Button

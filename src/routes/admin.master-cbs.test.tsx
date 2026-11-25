@@ -41,10 +41,11 @@ import { AdminMasterCbsPage } from "./admin.master-cbs";
 import {
   cbsCatalogQueryOptions,
   cbsLastImportQueryOptions,
+  cbsLegacyQueryOptions,
   type CbsLastImport,
   type CbsTreeRow,
 } from "~/utils/cbs";
-import { parseCbsDisplayCode } from "~/lib/cbs-tree";
+import { cbsLegacyTreeRow, parseCbsDisplayCode } from "~/lib/cbs-tree";
 
 afterEach(cleanup);
 
@@ -108,6 +109,94 @@ function renderPage(lastImport?: CbsLastImport | null) {
     </QueryClientProvider>,
   );
 }
+
+describe("legacy codes", () => {
+  const renderWithLegacy = (focusCode?: string) => {
+    const qc = seeded();
+    qc.setQueryData(cbsLegacyQueryOptions().queryKey, [
+      cbsLegacyTreeRow({
+        id: 1,
+        code: "00XXXXX",
+        name: "Old Indirects",
+        uom: "",
+        status: "Retired",
+        laborCode: false,
+        subReporting: false,
+        materialCode: false,
+        equipmentCode: false,
+        otherCode: false,
+        rentalCode: false,
+      }),
+    ]);
+    return render(
+      <QueryClientProvider client={qc}>
+        <AdminMasterCbsPage focusCode={focusCode ?? null} />
+      </QueryClientProvider>,
+    );
+  };
+
+  it("hides them until Show legacy is ticked, and only in the Dictionary", () => {
+    renderWithLegacy();
+    expect(screen.queryByText("Old Indirects")).toBeNull();
+    // One toggle: Cost Accounts does not offer it.
+    fireEvent.click(screen.getByRole("button", { name: "Show legacy" }));
+    const [accounts, dictionary] = screen.getAllByRole("tree");
+    expect(within(dictionary).getByText("Old Indirects")).toBeInTheDocument();
+    expect(within(accounts).queryByText("Old Indirects")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Show legacy" }));
+    expect(screen.queryByText("Old Indirects")).toBeNull();
+  });
+
+  it("stay hidden under the Retired filter while the toggle is off", () => {
+    renderWithLegacy();
+    fireEvent.click(screen.getByRole("button", { name: /^Retired/ }));
+    expect(screen.queryByText("Old Indirects")).toBeNull();
+  });
+
+  it("are shown on arrival by a link to one", () => {
+    renderWithLegacy("00XXXXX");
+    expect(screen.getByRole("button", { name: "Show legacy" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+});
+
+describe("level buttons while filtering", () => {
+  it("narrow a filtered tree to the level, and reopen on a new filter", () => {
+    renderPage();
+    const dict = () => within(screen.getAllByRole("tree").at(-1)!);
+    const last = (name: string) =>
+      screen.getAllByRole("button", { name }).at(-1)!;
+    const search = screen.getAllByRole("textbox").at(-1)!;
+    fireEvent.change(search, { target: { value: "civil" } });
+    expect(dict().getByText("Civil Subcontracts")).toBeInTheDocument();
+    fireEvent.click(last("L0"));
+    expect(dict().queryByText("Civil Subcontracts")).toBeNull();
+    expect(dict().getByText("Civil")).toBeInTheDocument();
+    expect(last("L0")).toHaveAttribute("aria-pressed", "true");
+    // A row can be opened by hand from there.
+    fireEvent.click(dict().getByRole("button", { name: "Expand" }));
+    expect(dict().getByText("Civil Subcontracts")).toBeInTheDocument();
+    fireEvent.click(last("Collapse all"));
+    expect(dict().queryByText("Civil Subcontracts")).toBeNull();
+    fireEvent.change(search, { target: { value: "civil sub" } });
+    expect(dict().getByText("Civil Subcontracts")).toBeInTheDocument();
+  });
+
+  it("hide lifted rows deeper than the level under a strict filter", () => {
+    renderPage();
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Subcontracts" }).at(-1)!,
+    );
+    const l = (n: number) =>
+      screen.getAllByRole("button", { name: `L${n}` }).at(-1)!;
+    fireEvent.click(l(0));
+    expect(screen.getByText(/No matching rows at L0/)).toBeInTheDocument();
+    fireEvent.click(l(1));
+    expect(screen.getByText("Civil Subcontracts")).toBeInTheDocument();
+  });
+});
 
 describe("CBS Code Book", () => {
   it("lists every cost line in Cost Accounts, as the dictionary does", () => {

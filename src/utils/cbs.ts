@@ -6,14 +6,19 @@ import { prisma } from "../server/db";
 import { z } from "zod";
 import { Id, parseProjectIdInput } from "~/lib/validators";
 import {
+  adminHandler,
   adminHandlerNoInput,
   projectIdScopedHandler,
   requireProjectAccess,
   requireUser,
   signedInHandler,
 } from "./users.server";
-import { withCbsLevels } from "~/lib/cbs-tree";
-import { cbsCatalogRows, projectCostCodeRows } from "./cbs-rows.server";
+import { cbsLegacyTreeRow, withCbsLevels } from "~/lib/cbs-tree";
+import {
+  cbsCatalogRows,
+  cbsLegacyRows,
+  projectCostCodeRows,
+} from "./cbs-rows.server";
 
 const StringArr = z.array(z.string());
 const StringArrParser = (input: unknown) => StringArr.parse(input);
@@ -275,7 +280,10 @@ export type CbsTreeRow = ReturnType<typeof withCbsLevels<CbsWireRow>>;
  * A tree row as the shared browser receives it. The whole-catalog views pass
  * plain `CbsTreeRow`s; the project-scoped view flags pulled-in ancestors.
  */
-export type CbsBrowserRow = CbsTreeRow & { context?: boolean };
+export type CbsBrowserRow = CbsTreeRow & {
+  context?: boolean;
+  legacy?: boolean;
+};
 
 /**
  * The cost codes a project may use: the ORIGINAL Master CBS rows it has been
@@ -318,6 +326,40 @@ export const cbsCatalogQueryOptions = () =>
     queryKey: qk.cbs.catalog(),
     queryFn: async () => (await fetchCbsCatalog()).map(withCbsLevels),
     // The catalog changes only on a CBS re-import.
+    staleTime: Infinity,
+  });
+
+/**
+ * The retired pre-CBS phase codes. Their own query, fetched only once someone
+ * asks the Dictionary to show them. Admin-guarded like the catalog.
+ */
+export const fetchCbsLegacy = createServerFn({ method: "GET" }).handler(
+  adminHandlerNoInput(() => cbsLegacyRows()),
+);
+
+export const cbsLegacyQueryOptions = () =>
+  queryOptions({
+    queryKey: qk.cbs.legacy(),
+    queryFn: async (): Promise<CbsBrowserRow[]> =>
+      (await fetchCbsLegacy()).map(cbsLegacyTreeRow),
+    staleTime: Infinity,
+  });
+
+/** Every column of one legacy row — the detail panel. */
+export const fetchCbsLegacyDetail = createServerFn({ method: "GET" })
+  .inputValidator((input: unknown) => Id.parse(input))
+  .handler(
+    adminHandler(({ data: id }) =>
+      prisma.cbsLegacyItem.findUniqueOrThrow({ where: { id } }),
+    ),
+  );
+
+export type CbsLegacyDetail = Awaited<ReturnType<typeof fetchCbsLegacyDetail>>;
+
+export const cbsLegacyDetailQueryOptions = (id: number) =>
+  queryOptions({
+    queryKey: qk.cbs.legacyDetail(id),
+    queryFn: () => fetchCbsLegacyDetail({ data: id }),
     staleTime: Infinity,
   });
 

@@ -19,12 +19,15 @@ export function ExportCbsXlsxButton({
   view,
   filter,
   hideContext = false,
+  showLegacy = false,
   disabled,
 }: {
   view: CbsExportView;
   filter: CbsRowFilter;
   /** Mirrors the page's "Hide ungranted parents" toggle. */
   hideContext?: boolean;
+  /** Mirrors the Dictionary's "Show legacy" toggle. */
+  showLegacy?: boolean;
   disabled?: boolean;
 }) {
   // The selected project scopes the project view's rows, and labels the
@@ -37,7 +40,7 @@ export function ExportCbsXlsxButton({
   const { busy, failed, start } = useXlsxExport(
     () =>
       cbsExporterFor(view)({
-        data: { view, projectId, filter, hideContext },
+        data: { view, projectId, filter, hideContext, showLegacy },
       }),
     { export: "cbs-tree", view, projectId },
   );

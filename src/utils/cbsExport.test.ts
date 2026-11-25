@@ -13,12 +13,14 @@ import type { CbsExportRow } from "~/lib/cbs-export";
  */
 const {
   catalogRows,
+  legacyRows,
   projectRows,
   buildWorkbook,
   requireProjectAccess,
   findProject,
 } = vi.hoisted(() => ({
   catalogRows: vi.fn(),
+  legacyRows: vi.fn(),
   projectRows: vi.fn(),
   buildWorkbook: vi.fn(),
   requireProjectAccess: vi.fn(),
@@ -35,6 +37,7 @@ vi.mock("./users.server", () => ({
 }));
 vi.mock("./cbs-rows.server", () => ({
   cbsCatalogRows: catalogRows,
+  cbsLegacyRows: legacyRows,
   projectCostCodeRows: projectRows,
 }));
 vi.mock("./cbs-xlsx.server", () => ({ buildCbsWorkbook: buildWorkbook }));
@@ -154,6 +157,22 @@ describe("which rows each catalog view exports", () => {
   it("CBS Dictionary: everything, whatever its status", async () => {
     await exportCbsCatalog({ data: { view: "dictionary", projectId: null } });
     expect(written().names).toHaveLength(CATALOG.length);
+  });
+
+  it("legacy codes: only the Dictionary, and only when shown", async () => {
+    legacyRows.mockResolvedValue([
+      { id: 1, code: "00XXXXX", name: "Old", uom: "", status: "Retired" },
+    ]);
+    const data = { view: "dictionary" as const, projectId: null };
+    await exportCbsCatalog({ data });
+    expect(written().names).not.toContain("Old");
+    await exportCbsCatalog({ data: { ...data, showLegacy: true } });
+    expect(written().names).toContain("Old");
+    expect(written().meta.scope).toContain("legacy codes included");
+    await exportCbsCatalog({
+      data: { view: "codeBook", projectId: null, showLegacy: true },
+    });
+    expect(written().names).not.toContain("Old");
   });
 
   it("CBS Dictionary honors the Status filter", async () => {

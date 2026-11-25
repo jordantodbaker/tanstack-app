@@ -592,6 +592,8 @@ When a new master arrives:
    allow-lists). Brand-new codes, including the typed lines `cbs:expand`
    produces for a newly flagged account, are NOT auto-added to any project —
    grant them on the Setup page.
+   `DATABASE_URL=<env-url> npm run cbs:import-legacy` reloads the retired
+   phase codes, and is only needed when `LegacyCBS.xlsx` itself changes.
 4. `DATABASE_URL=<env-url> npm run piping:sync-codes` (preview with
    `-- --dry-run`) — pushes the piping metallurgy codes from
    `prisma/data/piping_groups.csv` into `PipingGroup.installCode` /

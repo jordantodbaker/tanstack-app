@@ -112,6 +112,7 @@ export function CbsFullscreenPage({ search }: { search: CbsFullscreenSearch }) {
             view={search.view}
             focusCode={focusCode}
             initialFilter={initialFilter}
+            initialShowLegacy={search.legacy === true}
           />
         )}
       </div>
@@ -178,7 +179,11 @@ function CatalogView({
   view,
   focusCode,
   initialFilter,
-}: ViewProps & { view: Exclude<CbsFullscreenView, "project"> }) {
+  initialShowLegacy,
+}: ViewProps & {
+  view: Exclude<CbsFullscreenView, "project">;
+  initialShowLegacy: boolean;
+}) {
   const query = useQuery(cbsCatalogQueryOptions());
   // Cost Accounts is the Dictionary minus anything Inactive or Retired, with
   // inactive parents kept as context — the same cut `CbsDictionarySections`
@@ -211,6 +216,8 @@ function CatalogView({
       initialFilter={initialFilter}
       statusFilter={view === "dictionary"}
       rowTypeFilter={view === "dictionary"}
+      legacyFilter={view === "dictionary"}
+      initialShowLegacy={initialShowLegacy}
     />
   );
 }
@@ -227,6 +234,8 @@ function FullscreenBrowser(props: {
   initialHideContext?: boolean;
   statusFilter?: boolean;
   rowTypeFilter?: boolean;
+  legacyFilter?: boolean;
+  initialShowLegacy?: boolean;
   contextKind?: React.ComponentProps<
     typeof CbsDictionaryBrowser
   >["contextKind"];

@@ -20,10 +20,21 @@
 import { BACKBONE_TYPE, type CbsTreeItem, type CbsTreeNode } from "./types";
 import { costType, lineage, sortCbsItems } from "./codes";
 import { cbsSearchHaystack } from "./filter";
+import { buildCbsLegacyTree } from "./legacy";
 
 export function buildCbsTree<T extends CbsTreeItem>(
   items: readonly T[],
 ): CbsTreeNode<T>[] {
+  // Legacy phase codes have no `XXX-YY-ZZWW-VV-T` ancestry to read, so they
+  // nest by their own rule and follow the CBS proper.
+  const legacy = items.filter((i) => i.legacy);
+  if (legacy.length > 0) {
+    return [
+      ...buildCbsTree(items.filter((i) => !i.legacy)),
+      ...buildCbsLegacyTree(legacy),
+    ];
+  }
+
   type Build = { depth: number; level: number; item: T; children: Build[] };
 
   const roots: Build[] = [];

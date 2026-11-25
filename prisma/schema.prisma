@@ -1429,3 +1429,38 @@ model CbsImport {
 
   @@index([importedAt])
 }
+
+/// The retired phase codes that predate the CBS, from
+/// `prisma/data/LegacyCBS.xlsx` (`cbs:import-legacy`). Reference only: the CBS
+/// Dictionary lists them behind its "Show legacy" toggle and nothing else
+/// reads them. A table of their own rather than a flag on `CbsItem`, so the
+/// allow-lists, code pickers, searches and reports built on `CbsItem` cannot
+/// offer one. They are a different code anyway — seven characters, no dashes
+/// ("0011000", summaries padded with X: "00110XX") — and seven of them repeat.
+model CbsLegacyItem {
+  /// Follows the sheet's order, which is what the hierarchy is read from.
+  id             Int      @id @default(autoincrement())
+  code           String
+  name           String
+  uom            String
+  /// "Summary" or "Detail".
+  rowType        String
+  laborCode      Boolean?
+  subReporting   Boolean?
+  materialCode   Boolean?
+  equipmentCode  Boolean?
+  otherCode      Boolean?
+  rentalCode     Boolean?
+  legacyCostType String?
+  l1Description  String?
+  l2Description  String?
+  l3Description  String?
+  notes          String?
+  status         String?
+  sourceRow      Int?
+  /// The sheet's own flags: Phase L1 filled from the row above; code repeats.
+  l1Filled       Boolean?
+  duplicateCode  Boolean?
+
+  @@index([code])
+}

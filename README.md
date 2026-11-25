@@ -84,6 +84,7 @@ point it anywhere real.
 | `npm run check:client-leak`     | Fails if a client-reachable module pulls in Prisma. Run it in CI.                |
 | `npm run cbs:expand`            | Expand `prisma/data/CBS.master.xlsx` into `CBS.xlsx` — run **before** importing  |
 | `npm run cbs:import`            | Re-import `prisma/data/CBS.xlsx` into `CbsItem`                                  |
+| `npm run cbs:import-legacy`     | Reload `prisma/data/LegacyCBS.xlsx` into `CbsLegacyItem` (Dictionary only)       |
 | `npm run cbs:rename`            | Re-apply account renames the workbook doesn't carry yet                          |
 | `npm run piping:sync-codes`     | Push piping metallurgy codes into `PipingGroup`                                  |
 | `npm run seed-test`             | Full demo dataset (destructive)                                                  |

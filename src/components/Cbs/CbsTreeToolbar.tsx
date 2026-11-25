@@ -274,11 +274,16 @@ export function CbsTreeToolbar({
   onRowTypeChange,
   filter,
   onClearFilters,
+  showLegacy = false,
+  onToggleLegacy,
   children,
 }: CbsTreeFilterControls & {
   placeholder?: string;
   onExpandAll: () => void;
   onCollapseAll: () => void;
+  /** Whether legacy codes are listed. Omit the handler to leave it out. */
+  showLegacy?: boolean;
+  onToggleLegacy?: () => void;
   children?: React.ReactNode;
 }) {
   // A picker that belongs to a cost type (Material Type to Materials) is
@@ -342,6 +347,18 @@ export function CbsTreeToolbar({
         )}
         {onRowTypeChange && (
           <RowTypeToggle value={rowType} onChange={onRowTypeChange} />
+        )}
+        {onToggleLegacy && (
+          <ToggleGroup
+            label="Legacy:"
+            ariaLabel="Legacy codes"
+            options={[{ key: "legacy", label: "Show legacy" }]}
+            on={{ legacy: showLegacy }}
+            onToggle={onToggleLegacy}
+            title={() =>
+              "List the retired phase codes from before this CBS, after the CBS itself. Reference only — they cannot be granted or booked to."
+            }
+          />
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2">

@@ -5,10 +5,12 @@ import { adminHandler, requireProjectAccess } from "./users.server";
 import {
   buildCbsTree,
   cbsActiveRows,
+  cbsLegacyTreeRow,
   describeCbsFilter,
   pruneCbsTree,
   withCbsLevels,
   type CbsRowFilter,
+  type CbsTreeItem,
 } from "~/lib/cbs-tree";
 import {
   CBS_EXPORT_LABELS,
@@ -19,6 +21,7 @@ import {
 } from "~/lib/cbs-export";
 import {
   cbsCatalogRows,
+  cbsLegacyRows,
   projectCostCodeRows,
   type ProjectCostCodeRow,
 } from "./cbs-rows.server";
@@ -48,6 +51,8 @@ const ExportInput = z.object({
    * "Hide ungranted parents" toggle. Only the project view has any.
    */
   hideContext: z.boolean().default(false),
+  /** Mirrors the Dictionary's "Show legacy"; ignored by the other views. */
+  showLegacy: z.boolean().default(false),
   filter: z
     .object({
       query: z.string().max(200).default(""),
@@ -123,6 +128,7 @@ async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
 
   let rows: ProjectCostCodeRow[];
   let scope: string;
+  const withLegacy = input.view === "dictionary" && input.showLegacy;
 
   if (input.view === "projectCostCodes") {
     if (input.projectId === null) {
@@ -147,6 +153,7 @@ async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
     scope = hidden
       ? "Whole catalog — no project allow-list applied — inactive parents hidden"
       : "Whole catalog — no project allow-list applied";
+    if (withLegacy) scope += " — legacy codes included";
   }
 
   // Looked up rather than taken from the client: it ends up printed on a
@@ -159,7 +166,10 @@ async function exportFor(input: CbsExportInput): Promise<CbsExportResult> {
           select: { displayId: true, name: true },
         });
 
-  const tree = buildCbsTree(rows.map(withCbsLevels));
+  const tree = buildCbsTree<CbsTreeItem>([
+    ...rows.map(withCbsLevels),
+    ...(withLegacy ? (await cbsLegacyRows()).map(cbsLegacyTreeRow) : []),
+  ]);
   // Every view lists cost lines, so a row is judged on its own cost type —
   // mirrored from the page, or the file stops matching the screen.
   const visible = pruneCbsTree(tree, filter).nodes;

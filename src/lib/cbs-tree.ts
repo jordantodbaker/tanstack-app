@@ -35,6 +35,12 @@ export {
 export { buildCbsTree } from "./cbs/build";
 
 export {
+  cbsLegacyTreeRow,
+  isCbsLegacyCode,
+  type CbsLegacyWireRow,
+} from "./cbs/legacy";
+
+export {
   getNodeSelectionState,
   computeCbsSelectionCounts,
   selectionStateFromCounts,

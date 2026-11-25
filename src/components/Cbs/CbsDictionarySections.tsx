@@ -1,7 +1,7 @@
 import * as React from "react";
 import { ChevronRight } from "lucide-react";
 import type { CbsBrowserRow, CbsTreeRow } from "~/utils/cbs";
-import { cbsActiveRows } from "~/lib/cbs-tree";
+import { cbsActiveRows, isCbsLegacyCode } from "~/lib/cbs-tree";
 import type { CbsExportView } from "~/lib/cbs-export";
 import type { CbsFullscreenView } from "~/lib/cbs-fullscreen";
 import { CbsDictionaryBrowser } from "~/components/Cbs/CbsDictionaryBrowser";
@@ -26,6 +26,7 @@ function CbsSection({
   fullscreenView = null,
   statusFilter = false,
   rowTypeFilter = false,
+  legacyFilter = false,
   contextKind,
 }: {
   title: string;
@@ -44,6 +45,8 @@ function CbsSection({
   statusFilter?: boolean;
   /** Offer the Row Type filter — see `CbsDictionaryBrowser`. */
   rowTypeFilter?: boolean;
+  /** Offer "Show legacy" — see `CbsDictionaryBrowser`. */
+  legacyFilter?: boolean;
   /** What a muted parent row is here — see `CbsDictionaryBrowser`. */
   contextKind?: React.ComponentProps<
     typeof CbsDictionaryBrowser
@@ -66,6 +69,7 @@ function CbsSection({
         fullscreenView={fullscreenView}
         statusFilter={statusFilter}
         rowTypeFilter={rowTypeFilter}
+        legacyFilter={legacyFilter}
         contextKind={contextKind}
       />
     </CbsSectionShell>
@@ -154,7 +158,8 @@ export function CbsDictionarySections({
   const inDictionary =
     focusCode !== null &&
     !inAccounts &&
-    items.some((r) => r.displayCode === focusCode);
+    (isCbsLegacyCode(focusCode) ||
+      items.some((r) => r.displayCode === focusCode));
 
   return (
     <div className="flex flex-col gap-4">
@@ -184,6 +189,7 @@ export function CbsDictionarySections({
         fullscreenView="dictionary"
         statusFilter
         rowTypeFilter
+        legacyFilter
       />
     </div>
   );

@@ -1,7 +1,12 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Link2, Loader2, X } from "lucide-react";
-import { cbsItemDetailQueryOptions, type CbsItemDetail } from "~/utils/cbs";
+import {
+  cbsItemDetailQueryOptions,
+  cbsLegacyDetailQueryOptions,
+  type CbsItemDetail,
+  type CbsLegacyDetail,
+} from "~/utils/cbs";
 import { cbsIsGenerated, type CbsTreeNode } from "~/lib/cbs-tree";
 import {
   cbsColorForLevel,
@@ -51,6 +56,26 @@ const DETAIL_FIELDS: {
   // a line number instead; a generated twin shared its account's.
   { label: "Original Row #", get: (i) => i.originalRow?.toString() },
   { label: "Expanded Row", get: (i) => i.expandedRow?.toString() },
+];
+
+/** The same for a legacy phase code, from its own sheet. */
+const LEGACY_FIELDS: {
+  label: string;
+  get: (i: CbsLegacyDetail) => string | null | undefined;
+}[] = [
+  { label: "Legacy", get: () => "TRUE" },
+  { label: "Status", get: (i) => i.status },
+  { label: "Cost Code", get: (i) => i.code },
+  { label: "UOM", get: (i) => i.uom },
+  { label: "Legacy Cost Type", get: (i) => i.legacyCostType },
+  { label: "Row Type", get: (i) => i.rowType },
+  { label: "L1 Description", get: (i) => i.l1Description },
+  { label: "L2 Description", get: (i) => i.l2Description },
+  { label: "L3 Description", get: (i) => i.l3Description },
+  { label: "Notes", get: (i) => i.notes },
+  { label: "L1 Filled", get: (i) => (i.l1Filled ? "YES" : null) },
+  { label: "Duplicate Code", get: (i) => (i.duplicateCode ? "YES" : null) },
+  { label: "Source Row", get: (i) => i.sourceRow?.toString() },
 ];
 
 function yesNo(v: boolean | null): string | null {
@@ -124,13 +149,29 @@ function DetailBody({
   onClose: () => void;
 }) {
   const { item } = node;
-  const detail = useQuery(cbsItemDetailQueryOptions(item.id));
-  const rows = detail.data
-    ? DETAIL_FIELDS.map((f) => ({
+  const isLegacy = item.legacy === true;
+  const current = useQuery({
+    ...cbsItemDetailQueryOptions(item.id),
+    enabled: !isLegacy,
+  });
+  // A legacy tree row's id is its stored id negated — see cbsLegacyTreeRow.
+  const legacy = useQuery({
+    ...cbsLegacyDetailQueryOptions(-item.id),
+    enabled: isLegacy,
+  });
+  const detail = isLegacy ? legacy : current;
+  const fields = isLegacy
+    ? LEGACY_FIELDS.map((f) => ({
         label: f.label,
-        value: f.get(detail.data),
-      })).filter((r): r is { label: string; value: string } => !!r.value)
-    : [];
+        value: legacy.data && f.get(legacy.data),
+      }))
+    : DETAIL_FIELDS.map((f) => ({
+        label: f.label,
+        value: current.data && f.get(current.data),
+      }));
+  const rows = fields.filter(
+    (r): r is { label: string; value: string } => !!r.value,
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -145,7 +186,11 @@ function DetailBody({
           <div className="text-sm font-semibold break-words">{item.name}</div>
           <div className="mt-0.5 text-[11px] opacity-70">
             Level {node.level} ·{" "}
-            {cbsIsGenerated(item) ? "Generated" : "Original"}
+            {isLegacy
+              ? "Legacy"
+              : cbsIsGenerated(item)
+                ? "Generated"
+                : "Original"}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">

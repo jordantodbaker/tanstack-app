@@ -141,14 +141,6 @@ function CbsTreeEditor({
   const [selectedIds, setSelectedIds] = React.useState<Set<number>>(
     () => new Set(initialAllowedIds),
   );
-  const {
-    expanded,
-    toggle,
-    expandAll,
-    collapseAll,
-    expandToLevel,
-    levelShown,
-  } = useCbsTreeExpansion(tree);
   const [selected, setSelected] = React.useState<CbsTreeNode | null>(null);
   // Every CBS tree filters the same way, except that Status and Row Type
   // belong to the Dictionary alone: Setup grants codes rather than reporting
@@ -190,11 +182,25 @@ function CbsTreeEditor({
     () => filterCbsTree(tree, filter),
     [tree, filter],
   );
+  const {
+    expanded,
+    forceOpen,
+    cap,
+    toggle,
+    expandAll,
+    collapseAll,
+    expandToLevel,
+    levelShown,
+  } = useCbsTreeExpansion(tree, {
+    nodes: filteredTree,
+    filtering: isFiltered,
+    filter,
+  });
   // Only the visible rows are flattened; the panel virtualizes those, so
   // "Expand all" over the whole catalog stays cheap.
   const flat = React.useMemo(
-    () => flattenVisibleCbsNodes(filteredTree, expanded, isFiltered),
-    [filteredTree, expanded, isFiltered],
+    () => flattenVisibleCbsNodes(filteredTree, expanded, forceOpen, cap),
+    [filteredTree, expanded, forceOpen, cap],
   );
 
   const totalSelected = selectedIds.size;
@@ -292,12 +298,16 @@ function CbsTreeEditor({
         <CbsTreePanel
           flat={flat}
           expanded={expanded}
-          forceOpen={isFiltered}
+          forceOpen={forceOpen}
           selectedKey={selected?.pathKey ?? null}
           onToggle={toggle}
           onSelect={setSelected}
           renderLeading={renderCheckbox}
-          emptyMessage="No matches."
+          emptyMessage={
+            filteredTree.length > 0 && cap
+              ? `No matching rows at L${cap.level} or above — pick a deeper level.`
+              : "No matches."
+          }
           emptyAction={
             isFiltered && (
               <Button

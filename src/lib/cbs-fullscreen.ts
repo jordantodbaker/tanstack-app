@@ -62,6 +62,8 @@ export type CbsFullscreenSearch = {
   rowType?: CbsRowTypeFilter;
   /** "Hide ungranted parents" (project view only). */
   hideContext?: boolean;
+  /** "Show legacy" (Dictionary only). */
+  legacy?: boolean;
   /** The selected row — opened as the `?code=` deep link is. */
   code?: string;
 } & Partial<Record<CbsValueFilterKey, string[]>>;
@@ -115,6 +117,7 @@ export function parseCbsFullscreenSearch(
     if (picked) out[picker.key] = picked;
   }
   if (search.hideContext === true) out.hideContext = true;
+  if (search.legacy === true) out.legacy = true;
   const code = text(search.code);
   if (code !== undefined) out.code = code;
   return out;
@@ -127,7 +130,11 @@ export function parseCbsFullscreenSearch(
 export function cbsFullscreenSearch(
   view: CbsFullscreenView,
   state: CbsRowFilterState,
-  extras: { hideContext?: boolean; code?: string | null } = {},
+  extras: {
+    hideContext?: boolean;
+    legacy?: boolean;
+    code?: string | null;
+  } = {},
 ): CbsFullscreenSearch {
   const out: CbsFullscreenSearch = { view };
   if (state.query.trim() !== "") out.q = state.query;
@@ -145,6 +152,7 @@ export function cbsFullscreenSearch(
     if (picked.length > 0) out[picker.key] = [...picked];
   }
   if (extras.hideContext) out.hideContext = true;
+  if (extras.legacy) out.legacy = true;
   if (extras.code) out.code = extras.code;
   return out;
 }

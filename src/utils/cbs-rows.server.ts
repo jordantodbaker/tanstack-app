@@ -1,5 +1,9 @@
 import { prisma } from "../server/db";
-import { cbsAncestorCodes, cbsIsActive } from "~/lib/cbs-tree";
+import {
+  cbsAncestorCodes,
+  cbsIsActive,
+  type CbsLegacyWireRow,
+} from "~/lib/cbs-tree";
 import { cbsTreeRowSelect, type CbsWireRow } from "./cbs";
 
 /**
@@ -58,6 +62,29 @@ export async function projectCostCodeRows(
   // can pick — `context: true` rows are muted, uncounted and unselectable —
   // and dropping it would strand its active children at the top level.
   return [...granted, ...ancestors.map((a) => ({ ...a, context: true }))];
+}
+
+/**
+ * The retired pre-CBS phase codes, in sheet order (which is what nests them).
+ * Only the CBS Dictionary and its export read these.
+ */
+export function cbsLegacyRows(): Promise<CbsLegacyWireRow[]> {
+  return prisma.cbsLegacyItem.findMany({
+    orderBy: { id: "asc" },
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      uom: true,
+      status: true,
+      subReporting: true,
+      materialCode: true,
+      laborCode: true,
+      equipmentCode: true,
+      otherCode: true,
+      rentalCode: true,
+    },
+  });
 }
 
 /** Every catalog row — the Admin → CBS sections narrow it on the client. */

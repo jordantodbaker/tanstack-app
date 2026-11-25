@@ -19,7 +19,9 @@ export function collectKeysToLevel(
     for (const n of list) {
       // A node at or past the target stays shut, and nothing under it can be
       // visible, so there is no reason to walk into it.
-      if (n.children.length > 0 && n.level < level) {
+      // So does one whose children all sit past it — a strict filter lifts deep
+      // rows up under a shallow parent — or it would look open and empty.
+      if (n.level < level && n.children.some((c) => c.level <= level)) {
         keys.push(n.pathKey);
         walk(n.children);
       }

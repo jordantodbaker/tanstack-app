@@ -24,23 +24,32 @@ import {
  * accepted as plain `CbsTreeNode`s.
  */
 
+/**
+ * A level picked while filtering: rows deeper than `level` stay hidden, except
+ * under a parent opened by hand since. Expansion alone cannot do this, because
+ * a strict filter lifts rows out from under parents that did not match.
+ */
+export type CbsLevelCap = { level: number; opened: ReadonlySet<string> };
+
 /** Depth-first flatten of the nodes that are currently visible: a node's
  *  children are included only when it's expanded (or a search forces it open). */
 export function flattenVisibleCbsNodes<T extends CbsTreeItem>(
   nodes: CbsTreeNode<T>[],
   expanded: Set<string>,
   forceExpand: boolean,
+  cap: CbsLevelCap | null = null,
 ): CbsTreeNode<T>[] {
   const out: CbsTreeNode<T>[] = [];
-  const walk = (list: CbsTreeNode<T>[]) => {
+  const walk = (list: CbsTreeNode<T>[], capped: boolean) => {
     for (const n of list) {
+      if (cap && capped && n.level > cap.level) continue;
       out.push(n);
       if (n.children.length > 0 && (forceExpand || expanded.has(n.pathKey))) {
-        walk(n.children);
+        walk(n.children, capped && !cap?.opened.has(n.pathKey));
       }
     }
   };
-  walk(nodes);
+  walk(nodes, true);
   return out;
 }
 
@@ -125,6 +134,14 @@ const CbsRow = React.memo(function CbsRow({
         {item.displayCode}
       </span>
       <CostTypeChip item={item} />
+      {item.legacy && (
+        <span
+          title="A retired phase code from before this CBS"
+          className="shrink-0 rounded border border-rose-300 bg-rose-100 px-1 text-[10px] leading-4 font-semibold text-rose-900"
+        >
+          Legacy
+        </span>
+      )}
       <span className="truncate font-medium">{label}</span>
       {item.uom && (
         <span className="ml-auto shrink-0 font-mono text-[11px] opacity-70">

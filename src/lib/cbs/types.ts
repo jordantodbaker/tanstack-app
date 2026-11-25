@@ -49,6 +49,8 @@ export type CbsTreeItem = {
    * granted itself. Rendered muted and badge-less, and left out of row counts.
    */
   context?: boolean;
+  /** True for a retired pre-CBS phase code — see `cbs/legacy`. */
+  legacy?: boolean;
 };
 
 export type CbsTreeNode<T extends CbsTreeItem = CbsTreeItem> = {

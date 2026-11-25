@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -47,7 +48,29 @@ import {
 } from "~/utils/cbs";
 import { cbsLegacyTreeRow, parseCbsDisplayCode } from "~/lib/cbs-tree";
 
-afterEach(cleanup);
+/**
+ * happy-dom lays nothing out, so nothing ever intersects. Report the Dictionary
+ * as on screen unless a test says otherwise.
+ */
+let onScreen = true;
+let scrollTo: (() => void) | null = null;
+vi.stubGlobal(
+  "IntersectionObserver",
+  class {
+    constructor(cb: (entries: { isIntersecting: boolean }[]) => void) {
+      scrollTo = () => cb([{ isIntersecting: true }]);
+    }
+    observe() {
+      if (onScreen) scrollTo?.();
+    }
+    disconnect() {}
+  },
+);
+
+afterEach(() => {
+  cleanup();
+  onScreen = true;
+});
 
 let nextId = 1;
 function item(
@@ -185,6 +208,31 @@ describe("legacy codes", () => {
     fireEvent.keyDown(group, { key: "ArrowRight" });
     expect(screen.getByRole("radio", { name: "Legacy" })).toHaveFocus();
     expect(screen.getByRole("radio", { name: "Legacy" })).toBeChecked();
+  });
+});
+
+describe("deferred Dictionary", () => {
+  it("waits to be scrolled near, then builds its tree", () => {
+    onScreen = false;
+    renderPage();
+    expect(screen.getAllByRole("tree")).toHaveLength(1);
+    // Its heading and count are there from the start.
+    expect(
+      screen.getByRole("heading", { name: "CBS Dictionary" }),
+    ).toBeInTheDocument();
+    act(() => scrollTo?.());
+    expect(screen.getAllByRole("tree")).toHaveLength(2);
+  });
+
+  it("is there at once for a link into it", () => {
+    onScreen = false;
+    const qc = seeded();
+    render(
+      <QueryClientProvider client={qc}>
+        <AdminMasterCbsPage focusCode="600-10-0000-00-0" />
+      </QueryClientProvider>,
+    );
+    expect(screen.getAllByRole("tree")).toHaveLength(2);
   });
 });
 

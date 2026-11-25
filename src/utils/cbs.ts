@@ -14,6 +14,7 @@ import {
   signedInHandler,
 } from "./users.server";
 import { cbsLegacyTreeRow, withCbsLevels } from "~/lib/cbs-tree";
+import { packCbsRows, unpackCbsRows } from "~/lib/cbs/wire";
 import {
   cbsCatalogRows,
   cbsLegacyRows,
@@ -243,13 +244,19 @@ export const fetchProjectCostCodes = createServerFn({ method: "GET" })
  * granted, and both callers are admin-only routes anyway.
  */
 export const fetchCbsCatalog = createServerFn({ method: "GET" }).handler(
-  adminHandlerNoInput(() => cbsCatalogRows()),
+  // Packed: 1 MB on the wire instead of 7.7. See `packCbsRows`.
+  adminHandlerNoInput(async () => packCbsRows(await cbsCatalogRows())),
 );
 
 export const cbsCatalogQueryOptions = () =>
   queryOptions({
     queryKey: qk.cbs.catalog(),
-    queryFn: async () => (await fetchCbsCatalog()).map(withCbsLevels),
+    queryFn: async () => {
+      // Typed as the wire row, so a column the packing does not carry is a
+      // compile error here.
+      const rows: CbsWireRow[] = unpackCbsRows(await fetchCbsCatalog());
+      return rows.map(withCbsLevels);
+    },
     // The catalog changes only on a CBS re-import.
     staleTime: Infinity,
   });

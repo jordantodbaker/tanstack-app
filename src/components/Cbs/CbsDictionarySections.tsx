@@ -11,12 +11,15 @@ function CbsSection({
   items,
   badgeRows,
   focusCode,
+  deferred = false,
 }: {
   view: CbsCatalogView;
   items: CbsTreeRow[];
   /** How many rows the view lists. */
   badgeRows: number;
   focusCode: string | null;
+  /** Wait until the section is near the screen before building its tree. */
+  deferred?: boolean;
 }) {
   const { title, description } = CBS_VIEWS[view];
   return (
@@ -26,8 +29,54 @@ function CbsSection({
       badge={`${badgeRows.toLocaleString()} rows`}
       defaultOpen
     >
-      <CbsDictionaryBrowser view={view} items={items} focusCode={focusCode} />
+      <WhenNear at={!deferred}>
+        <CbsDictionaryBrowser view={view} items={items} focusCode={focusCode} />
+      </WhenNear>
     </CbsSectionShell>
+  );
+}
+
+/**
+ * Mounts its children once they are within a screen of being visible, or at
+ * once when `at` is true, and then keeps them. The Code Book's second tree
+ * costs as much to build as the first and starts below it, so it waits. The
+ * placeholder keeps the page about as long as it will be.
+ */
+function WhenNear({
+  at,
+  children,
+}: {
+  at: boolean;
+  children: React.ReactNode;
+}) {
+  const [near, setNear] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement | null>(null);
+  const show = at || near;
+  React.useEffect(() => {
+    if (show || !ref.current) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setNear(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setNear(true);
+      },
+      { rootMargin: "100% 0px" },
+    );
+    observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, [show]);
+  // Latched: losing the reason to show it must not unmount a tree in use.
+  React.useEffect(() => {
+    if (at) setNear(true);
+  }, [at]);
+
+  if (show) return <>{children}</>;
+  return (
+    <div ref={ref} className="min-h-[70vh] px-4 py-10 text-sm text-slate-500">
+      Loading…
+    </div>
   );
 }
 
@@ -116,6 +165,8 @@ export function CbsDictionarySections({
         items={items}
         badgeRows={items.length}
         focusCode={inDictionary ? focusCode : null}
+        // A link into it needs the tree there to scroll to.
+        deferred={!inDictionary}
       />
     </div>
   );

@@ -150,3 +150,27 @@ export function pruneCbsTree<T extends CbsTreeItem>(
     : searchCbsTree(nodes, criteria, false, onMatch);
   return { nodes: kept, matches };
 }
+
+/**
+ * The rows a strict filter keeps, nested under their real parents, with the
+ * parents that do not match flagged `unmatched`. What a tree shows once a
+ * LEVEL is picked: levels are a hierarchy question, and the report
+ * `pruneCbsTree` gives has the hierarchy taken out.
+ *
+ * Null when the filter is not a strict one — a bare text search keeps its
+ * ancestors already.
+ */
+export function cbsTreeWithParents<T extends CbsTreeItem>(
+  nodes: CbsTreeNode<T>[],
+  filter: CbsRowFilter,
+): CbsTreeNode<T>[] | null {
+  if (!isStrictFilter(filter)) return null;
+  const criteria = criteriaFor(filter);
+  const walk = (list: CbsTreeNode<T>[]): CbsTreeNode<T>[] =>
+    list.flatMap((n) => {
+      const children = walk(n.children);
+      if (rowMatches(n, criteria)) return [{ ...n, children }];
+      return children.length > 0 ? [{ ...n, children, unmatched: true }] : [];
+    });
+  return walk(nodes);
+}

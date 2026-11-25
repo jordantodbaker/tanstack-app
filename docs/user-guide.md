@@ -203,7 +203,8 @@ click one to open the whole tree to that level and no deeper — **L0** collapse
 to the discipline roots, **L5** is the same as **Expand all**. The swatch in
 force is outlined, and the outline clears once you open or close a row
 yourself. The swatches work with filters on too. A filtered tree starts fully
-open; click a level to show only the matches down to that level. Changing a
+open; click a level to show the matches down to that level, with their parents.
+Parents the filter does not match are grayed out. Changing a
 filter opens the tree again.
 
 **The toolbar** has two rows. The first holds everything that decides which

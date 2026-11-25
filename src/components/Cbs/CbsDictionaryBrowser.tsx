@@ -291,7 +291,7 @@ export function CbsDictionaryBrowser({
   const {
     expanded,
     forceOpen,
-    cap,
+    shownNodes,
     toggle,
     expandAll,
     collapseAll,
@@ -334,8 +334,8 @@ export function CbsDictionaryBrowser({
   const counts = React.useMemo(() => countRows(items), [items]);
 
   const flat = React.useMemo(
-    () => flattenVisibleCbsNodes(visibleNodes, expanded, forceOpen, cap),
-    [visibleNodes, expanded, forceOpen, cap],
+    () => flattenVisibleCbsNodes(shownNodes, expanded, forceOpen),
+    [shownNodes, expanded, forceOpen],
   );
 
   return (
@@ -435,13 +435,7 @@ export function CbsDictionaryBrowser({
           selectedKey={selected?.pathKey ?? null}
           onToggle={toggle}
           onSelect={setSelected}
-          emptyMessage={
-            visibleNodes.length > 0 && cap
-              ? `No matching rows at L${cap.level} or above — pick a deeper level.`
-              : filtering
-                ? "No rows match this filter."
-                : emptyMessage
-          }
+          emptyMessage={filtering ? "No rows match this filter." : emptyMessage}
           emptyAction={
             filtering && (
               <Button

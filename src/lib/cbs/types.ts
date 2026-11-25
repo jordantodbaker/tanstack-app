@@ -65,6 +65,9 @@ export type CbsTreeNode<T extends CbsTreeItem = CbsTreeItem> = {
   level: number;
   item: T;
   children: CbsTreeNode<T>[];
+  /** Kept only as the parent of rows the filter matches — see
+   *  `cbsTreeWithParents`. Rendered muted; not a match itself. */
+  unmatched?: boolean;
   /** This node's item id followed by every descendant's. */
   descendantItemIds: number[];
   /** Pre-lowercased searchable text for this node (own item only). Subtree

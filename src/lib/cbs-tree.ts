@@ -92,6 +92,6 @@ export {
   type CbsStatusKey,
 } from "./cbs/filter";
 
-export { filterCbsTree, pruneCbsTree } from "./cbs/prune";
+export { cbsTreeWithParents, filterCbsTree, pruneCbsTree } from "./cbs/prune";
 
 export { collectKeysToLevel, collectExpandableKeys } from "./cbs/expansion";

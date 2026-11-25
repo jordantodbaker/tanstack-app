@@ -24,32 +24,23 @@ import {
  * accepted as plain `CbsTreeNode`s.
  */
 
-/**
- * A level picked while filtering: rows deeper than `level` stay hidden, except
- * under a parent opened by hand since. Expansion alone cannot do this, because
- * a strict filter lifts rows out from under parents that did not match.
- */
-export type CbsLevelCap = { level: number; opened: ReadonlySet<string> };
-
 /** Depth-first flatten of the nodes that are currently visible: a node's
  *  children are included only when it's expanded (or a search forces it open). */
 export function flattenVisibleCbsNodes<T extends CbsTreeItem>(
   nodes: CbsTreeNode<T>[],
   expanded: Set<string>,
   forceExpand: boolean,
-  cap: CbsLevelCap | null = null,
 ): CbsTreeNode<T>[] {
   const out: CbsTreeNode<T>[] = [];
-  const walk = (list: CbsTreeNode<T>[], capped: boolean) => {
+  const walk = (list: CbsTreeNode<T>[]) => {
     for (const n of list) {
-      if (cap && capped && n.level > cap.level) continue;
       out.push(n);
       if (n.children.length > 0 && (forceExpand || expanded.has(n.pathKey))) {
-        walk(n.children, capped && !cap?.opened.has(n.pathKey));
+        walk(n.children);
       }
     }
   };
-  walk(nodes, true);
+  walk(nodes);
   return out;
 }
 
@@ -101,11 +92,13 @@ const CbsRow = React.memo(function CbsRow({
       title={
         isContext
           ? "Not selected for this project — shown so its selected codes nest correctly."
-          : undefined
+          : node.unmatched
+            ? "Does not match the filter — shown as the parent of rows that do."
+            : undefined
       }
       className={`flex items-center gap-2 border-b border-black/5 py-1 pr-3 text-sm transition-[filter] hover:brightness-95 ${
         onSelect ? "cursor-pointer" : ""
-      } ${isContext ? "opacity-55 italic" : ""} ${
+      } ${isContext || node.unmatched ? "opacity-55 italic" : ""} ${
         isSelected ? "ring-2 ring-inset ring-sky-900/60" : ""
       }`}
     >

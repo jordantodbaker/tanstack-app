@@ -1,8 +1,8 @@
 import { CBS_LEGEND_LEVELS } from "~/config/cbs-level-colors";
-import type { CbsLevelCap } from "~/components/Cbs/CbsTreePanel";
 import { toggleInSet } from "~/lib/utils";
 import * as React from "react";
 import {
+  cbsTreeWithParents,
   collectExpandableKeys,
   collectKeysToLevel,
   type CbsRowFilter,
@@ -18,19 +18,6 @@ const keysToLevel = (nodes: CbsTreeNode[], level: number) =>
     : collectKeysToLevel(nodes, level);
 
 /**
- * The same for a filtered tree, where the cap hides rows past the level: a
- * parent left with nothing to show stays shut rather than open and empty.
- */
-function filteredKeysToLevel(nodes: CbsTreeNode[], level: number): string[] {
-  if (level >= DEEPEST_LEVEL) return collectExpandableKeys(nodes);
-  return nodes.flatMap((n) =>
-    n.level < level && n.children.some((c) => c.level <= level)
-      ? [n.pathKey, ...filteredKeysToLevel(n.children, level)]
-      : [],
-  );
-}
-
-/**
  * Expand/collapse state for a CBS tree — shared by the Setup editor and the
  * CBS dictionary viewers. `expandAll` opens every node of the full `nodes` tree
  * (not just the currently filtered view) so a later cleared search shows the
@@ -44,21 +31,22 @@ function filteredKeysToLevel(nodes: CbsTreeNode[], level: number): string[] {
  * While a filter is on, the filtered tree has an expansion of its own. It
  * starts fully open, since the matches are the point, and every control acts
  * on it from there. Changing the filter opens it again so no new match is
- * hidden; clearing the filter returns to the expansion the full tree had.
+ * hidden. Picking a level brings back the parents of the matches, so the levels
+ * above it are all there. Clearing the filter returns to the expansion the full tree had.
  */
 export function useCbsTreeExpansion(
   nodes: CbsTreeNode[],
   view: { nodes: CbsTreeNode[]; filtering: boolean; filter: CbsRowFilter },
 ) {
-  // Belongs to the one filter it was set under; null is "fully open".
+  // Belongs to the one filtered tree it was set on; null is "fully open".
   const [narrowed, setNarrowed] = React.useState<{
-    filter: CbsRowFilter;
+    source: CbsTreeNode[];
+    nodes: CbsTreeNode[];
     expanded: Set<string>;
-    cap: CbsLevelCap | null;
     levelShown: number | null;
   } | null>(null);
   const current =
-    view.filtering && narrowed?.filter === view.filter ? narrowed : null;
+    view.filtering && narrowed?.source === view.nodes ? narrowed : null;
 
   const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set());
   const [levelShown, setLevelShown] = React.useState<number | null>(null);
@@ -112,44 +100,51 @@ export function useCbsTreeExpansion(
   const toggleFiltered = React.useCallback(
     (pathKey: string) =>
       setNarrowed((prev) => {
-        const base = prev?.filter === filter ? prev : null;
-        const open =
-          base?.expanded ?? new Set(collectExpandableKeys(filteredNodes));
-        const next = toggleInSet(open, pathKey);
-        let cap = base?.cap ?? null;
-        if (cap) {
-          const opened = new Set(cap.opened);
-          if (next.has(pathKey)) opened.add(pathKey);
-          else opened.delete(pathKey);
-          cap = { level: cap.level, opened };
-        }
-        return { filter, expanded: next, cap, levelShown: null };
+        const base = prev?.source === filteredNodes ? prev : null;
+        const shown = base?.nodes ?? filteredNodes;
+        return {
+          source: filteredNodes,
+          nodes: shown,
+          expanded: toggleInSet(
+            base?.expanded ?? new Set(collectExpandableKeys(shown)),
+            pathKey,
+          ),
+          levelShown: null,
+        };
       }),
-    [filter, filteredNodes],
+    [filteredNodes],
   );
   const expandAllFiltered = React.useCallback(() => setNarrowed(null), []);
   const collapseAllFiltered = React.useCallback(
     () =>
-      setNarrowed({ filter, expanded: new Set(), cap: null, levelShown: null }),
-    [filter],
+      setNarrowed({
+        source: filteredNodes,
+        nodes: filteredNodes,
+        expanded: new Set(),
+        levelShown: null,
+      }),
+    [filteredNodes],
   );
   const expandFilteredToLevel = React.useCallback(
-    (level: number) =>
+    (level: number) => {
+      const shown = cbsTreeWithParents(nodes, filter) ?? filteredNodes;
       setNarrowed({
-        filter,
-        expanded: new Set(filteredKeysToLevel(filteredNodes, level)),
-        cap: level >= DEEPEST_LEVEL ? null : { level, opened: new Set() },
+        source: filteredNodes,
+        nodes: shown,
+        expanded: new Set(keysToLevel(shown, level)),
         levelShown: level,
-      }),
-    [filter, filteredNodes],
+      });
+    },
+    [nodes, filter, filteredNodes],
   );
 
   if (view.filtering) {
     return {
+      /** The rows to list: the filtered ones, with parents once a level is picked. */
+      shownNodes: current?.nodes ?? filteredNodes,
       expanded: current?.expanded ?? expanded,
       /** Treat every row as open: a filter whose expansion is untouched. */
       forceOpen: current === null,
-      cap: current?.cap ?? null,
       toggle: toggleFiltered,
       expandAll: expandAllFiltered,
       collapseAll: collapseAllFiltered,
@@ -159,9 +154,9 @@ export function useCbsTreeExpansion(
     };
   }
   return {
+    shownNodes: filteredNodes,
     expanded,
     forceOpen: false,
-    cap: null,
     toggle,
     expandAll,
     collapseAll,

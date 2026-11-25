@@ -185,7 +185,7 @@ function CbsTreeEditor({
   const {
     expanded,
     forceOpen,
-    cap,
+    shownNodes,
     toggle,
     expandAll,
     collapseAll,
@@ -199,8 +199,8 @@ function CbsTreeEditor({
   // Only the visible rows are flattened; the panel virtualizes those, so
   // "Expand all" over the whole catalog stays cheap.
   const flat = React.useMemo(
-    () => flattenVisibleCbsNodes(filteredTree, expanded, forceOpen, cap),
-    [filteredTree, expanded, forceOpen, cap],
+    () => flattenVisibleCbsNodes(shownNodes, expanded, forceOpen),
+    [shownNodes, expanded, forceOpen],
   );
 
   const totalSelected = selectedIds.size;
@@ -245,6 +245,9 @@ function CbsTreeEditor({
 
   const renderCheckbox = React.useCallback(
     (node: CbsTreeNode) => {
+      // A parent the filter does not match is here for shape. Ticking it would
+      // grant everything beneath it, the filtered-out rows included.
+      if (node.unmatched) return null;
       const state = selectionStateFromCounts(node, selectionCounts);
       const item = node.item;
       const label = item.name || item.accountDescription || item.displayCode;
@@ -303,11 +306,7 @@ function CbsTreeEditor({
           onToggle={toggle}
           onSelect={setSelected}
           renderLeading={renderCheckbox}
-          emptyMessage={
-            filteredTree.length > 0 && cap
-              ? `No matching rows at L${cap.level} or above — pick a deeper level.`
-              : "No matches."
-          }
+          emptyMessage="No matches."
           emptyAction={
             isFiltered && (
               <Button

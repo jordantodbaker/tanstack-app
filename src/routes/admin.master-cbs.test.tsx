@@ -184,17 +184,27 @@ describe("level buttons while filtering", () => {
     expect(dict().getByText("Civil Subcontracts")).toBeInTheDocument();
   });
 
-  it("hide lifted rows deeper than the level under a strict filter", () => {
+  it("keep the parents of the matches under a strict filter", () => {
     renderPage();
-    fireEvent.click(
-      screen.getAllByRole("button", { name: "Subcontracts" }).at(-1)!,
-    );
-    const l = (n: number) =>
-      screen.getAllByRole("button", { name: `L${n}` }).at(-1)!;
-    fireEvent.click(l(0));
-    expect(screen.getByText(/No matching rows at L0/)).toBeInTheDocument();
-    fireEvent.click(l(1));
-    expect(screen.getByText("Civil Subcontracts")).toBeInTheDocument();
+    const dict = () => within(screen.getAllByRole("tree").at(-1)!);
+    const rows = () =>
+      dict()
+        .getAllByRole("treeitem")
+        .map((r) => r.textContent);
+    const last = (name: string) =>
+      screen.getAllByRole("button", { name }).at(-1)!;
+    fireEvent.click(last("Subcontracts"));
+    expect(rows()).toHaveLength(1);
+    fireEvent.click(last("L0"));
+    // Civil is not a subcontract line, but its S row hangs under it.
+    expect(rows()).toHaveLength(1);
+    expect(dict().getByText("Civil")).toBeInTheDocument();
+    expect(dict().getByTitle(/Does not match the filter/)).toBeInTheDocument();
+    fireEvent.click(last("L1"));
+    expect(rows()).toHaveLength(2);
+    expect(dict().getByText("Civil Subcontracts")).toBeInTheDocument();
+    fireEvent.click(last("Expand all"));
+    expect(rows()).toHaveLength(1);
   });
 });
 
